@@ -12,4 +12,5 @@ gem "sentry-ruby"
 group :development do
   gem "irb"
   gem "minitest"
+  gem "rack-test"
 end
