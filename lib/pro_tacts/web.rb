@@ -3,6 +3,8 @@
 require "roda"
 require "sentry-ruby"
 
+require "roda/plugins/dav_verbs"
+
 Sentry.init do |config|
   # TODO: Consolidate configuration
   config.dsn = ENV.fetch("SENTRY_DSN")
@@ -20,6 +22,9 @@ end
 
 module ProTacts
   class Web < Roda
+    plugin :all_verbs
+    plugin :dav_verbs
+
     plugin :not_found do
       Sentry.capture_message("404 Not Found", level: :warning, extra: {
         path: request.path,
@@ -29,33 +34,37 @@ module ProTacts
     end
 
     route do |r|
-      # GET / request
-      r.root do
-        r.redirect "/hello"
+      r.options do
+        response["DAV"] = "1, 3, addressbook"
+        response["Allow"] = "OPTIONS, PROPFIND, REPORT"
+        ""
       end
 
-      # /hello branch
-      r.on "hello" do
-        # Set variable for all routes in /hello branch
-        @greeting = "Hello"
+      r.get ".well-known/carddav" do
+        r.redirect "/principal/", 301
+      end
 
-        # GET /hello/world request
-        r.get "world" do
-          "#{@greeting} world!"
-        end
+      r.on "principal" do
+        r.propfind do
+          response["Content-Type"] = "text/xml"
+          response.status = 207
 
-        # /hello request
-        r.is do
-          # GET /hello request
-          r.get do
-            "#{@greeting}!"
-          end
-
-          # POST /hello request
-          r.post do
-            puts "Someone said #{@greeting}!"
-            r.redirect
-          end
+          <<~XML
+            <?xml version="1.0" encoding="UTF-8"?>
+            <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
+              <d:response>
+                <d:href>/principal/</d:href>
+                <d:propstat>
+                  <d:prop>
+                    <card:addressbook-home-set>
+                      <d:href>/addressbook/</d:href>
+                    </card:addressbook-home-set>
+                  </d:prop>
+                  <d:status>HTTP/1.1 200 OK</d:status>
+                </d:propstat>
+              </d:response>
+            </d:multistatus>
+          XML
         end
       end
     end

@@ -1,2 +1,4 @@
+- [ ] Authentication
 - [ ] Disable Sentry in tests
 - [ ] Add type checking
+- [ ] Hide warnings when requiring Sentry (CGI)
