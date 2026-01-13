@@ -29,7 +29,8 @@ module ProTacts
     plugin :not_found do
       Sentry.capture_message("404 Not Found", level: :warning, extra: {
         path: request.path,
-        method: request.request_method
+        method: request.request_method,
+        body: request.body.read
       })
       "Not Found"
     end
