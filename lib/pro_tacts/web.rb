@@ -17,21 +17,24 @@ Sentry.init do |config|
   config.traces_sample_rate = 1.0
 end
 
+require "rack/rewindable_input"
 require "roda"
 
 require "roda/plugins/dav_verbs"
 
 module ProTacts
   class Web < Roda
+    # RewindableInput allows us to read the request body for Sentry logging
+    # and then rewind it so the application can still access it.
+    use Rack::RewindableInput::Middleware
+    use Sentry::Rack::CaptureExceptions
+
     plugin :all_verbs
     plugin :dav_verbs
+    plugin :common_logger
 
     plugin :not_found do
-      Sentry.capture_message("404 Not Found", level: :warning, extra: {
-        path: request.path,
-        method: request.request_method,
-        body: request.body.read
-      })
+      Sentry.capture_message("404 Not Found", level: :warning)
       "Not Found"
     end
 
