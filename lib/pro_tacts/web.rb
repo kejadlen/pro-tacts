@@ -67,6 +67,40 @@ module ProTacts
           XML
         end
       end
+
+      r.on "addressbook" do
+        r.propfind do
+          response["Content-Type"] = "text/xml"
+          response.status = 207
+
+          <<~XML
+            <?xml version="1.0" encoding="UTF-8"?>
+            <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
+              <d:response>
+                <d:href>/addressbook/test-contact.vcf</d:href>
+                <d:propstat>
+                  <d:prop>
+                    <d:getetag>"etag-123"</d:getetag>
+                  </d:prop>
+                  <d:status>HTTP/1.1 200 OK</d:status>
+                </d:propstat>
+              </d:response>
+            </d:multistatus>
+          XML
+        end
+
+        r.get String do |uid|
+          response["Content-Type"] = "text/vcard"
+
+          <<~VCARD
+            BEGIN:VCARD
+            VERSION:3.0
+            FN:Test Contact
+            N:Contact;Test;;;
+            END:VCARD
+          VCARD
+        end
+      end
     end
   end
 end

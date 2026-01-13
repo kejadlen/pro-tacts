@@ -36,4 +36,22 @@ class WebTest < Minitest::Test
     assert_includes last_response.body, "multistatus"
     assert_includes last_response.body, "/addressbook/"
   end
+
+  def test_propfind_addressbook
+    request "/addressbook/", method: "PROPFIND"
+
+    assert_equal 207, last_response.status
+    assert_equal "text/xml", last_response["Content-Type"]
+    assert_includes last_response.body, "multistatus"
+    assert_includes last_response.body, ".vcf"
+  end
+
+  def test_get_contact
+    get "/addressbook/test-contact.vcf"
+
+    assert_equal 200, last_response.status
+    assert_equal "text/vcard", last_response["Content-Type"]
+    assert_includes last_response.body, "BEGIN:VCARD"
+    assert_includes last_response.body, "END:VCARD"
+  end
 end
