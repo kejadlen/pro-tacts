@@ -1,0 +1,2 @@
+- [ ] Disable Sentry in tests
+- [ ] Add type checking
