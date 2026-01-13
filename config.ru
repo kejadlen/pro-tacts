@@ -5,15 +5,26 @@ Sentry.init do |config|
   # TODO: Consolidate configuration
   config.dsn = ENV.fetch("SENTRY_DSN")
 
-  # get breadcrumbs from logs
+  # Get breadcrumbs from logs
   config.breadcrumbs_logger = [:sentry_logger, :http_logger]
 
   # Add data like request headers and IP for users, if applicable;
   # see https://docs.sentry.io/platforms/ruby/data-management/data-collected/ for more info
   config.send_default_pii = true
+
+  # Trace all the things!
+  config.traces_sample_rate = 1.0
 end
 
 class App < Roda
+  plugin :not_found do
+    Sentry.capture_message("404 Not Found", level: :warning, extra: {
+      path: request.path,
+      method: request.request_method
+    })
+    "Not Found"
+  end
+
   route do |r|
     # GET / request
     r.root do
