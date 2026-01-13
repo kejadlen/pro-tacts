@@ -13,7 +13,7 @@ class WebTest < Minitest::Test
   end
 
   def test_options_returns_dav_headers
-    options "/"
+    options "/dav/"
 
     assert_equal 200, last_response.status
     assert_equal "1, 3, addressbook", last_response["DAV"]
@@ -21,24 +21,33 @@ class WebTest < Minitest::Test
     assert_includes last_response["Allow"], "PROPFIND"
   end
 
+  def test_propfind_root
+    request "/", method: "PROPFIND"
+
+    assert_equal 207, last_response.status
+    assert_equal "text/xml", last_response["Content-Type"]
+    assert_includes last_response.body, "current-user-principal"
+    assert_includes last_response.body, "/dav/principal/"
+  end
+
   def test_well_known_carddav_redirects_to_principal
     get "/.well-known/carddav"
 
     assert_equal 301, last_response.status
-    assert_equal "/principal/", last_response["Location"]
+    assert_equal "/dav/principal/", last_response["Location"]
   end
 
   def test_propfind_principal
-    request "/principal/", method: "PROPFIND"
+    request "/dav/principal/", method: "PROPFIND"
 
     assert_equal 207, last_response.status
     assert_equal "text/xml", last_response["Content-Type"]
     assert_includes last_response.body, "multistatus"
-    assert_includes last_response.body, "/addressbook/"
+    assert_includes last_response.body, "/dav/addressbook/"
   end
 
   def test_propfind_addressbook
-    request "/addressbook/", method: "PROPFIND"
+    request "/dav/addressbook/", method: "PROPFIND"
 
     assert_equal 207, last_response.status
     assert_equal "text/xml", last_response["Content-Type"]
@@ -47,7 +56,7 @@ class WebTest < Minitest::Test
   end
 
   def test_get_contact
-    get "/addressbook/test-contact.vcf"
+    get "/dav/addressbook/test-contact.vcf"
 
     assert_equal 200, last_response.status
     assert_equal "text/vcard", last_response["Content-Type"]

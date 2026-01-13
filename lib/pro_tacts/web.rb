@@ -36,71 +36,103 @@ module ProTacts
     end
 
     route do |r|
-      r.options do
-        response["DAV"] = "1, 3, addressbook"
-        response["Allow"] = "OPTIONS, PROPFIND, REPORT"
-        ""
+      r.is "" do
+        r.propfind do
+          response["Content-Type"] = "text/xml"
+          response.status = 207
+
+          <<~XML
+            <?xml version="1.0" encoding="UTF-8"?>
+            <d:multistatus xmlns:d="DAV:">
+              <d:response>
+                <d:href>/</d:href>
+                <d:propstat>
+                  <d:prop>
+                    <d:current-user-principal>
+                      <d:href>/dav/principal/</d:href>
+                    </d:current-user-principal>
+                    <d:principal-URL>
+                      <d:href>/dav/principal/</d:href>
+                    </d:principal-URL>
+                    <d:resourcetype>
+                      <d:collection/>
+                    </d:resourcetype>
+                  </d:prop>
+                  <d:status>HTTP/1.1 200 OK</d:status>
+                </d:propstat>
+              </d:response>
+            </d:multistatus>
+          XML
+        end
       end
 
       r.get ".well-known/carddav" do
-        r.redirect "/principal/", 301
+        r.redirect "/dav/principal/", 301
       end
 
-      r.on "principal" do
-        r.propfind do
-          response["Content-Type"] = "text/xml"
-          response.status = 207
-
-          <<~XML
-            <?xml version="1.0" encoding="UTF-8"?>
-            <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
-              <d:response>
-                <d:href>/principal/</d:href>
-                <d:propstat>
-                  <d:prop>
-                    <card:addressbook-home-set>
-                      <d:href>/addressbook/</d:href>
-                    </card:addressbook-home-set>
-                  </d:prop>
-                  <d:status>HTTP/1.1 200 OK</d:status>
-                </d:propstat>
-              </d:response>
-            </d:multistatus>
-          XML
-        end
-      end
-
-      r.on "addressbook" do
-        r.propfind do
-          response["Content-Type"] = "text/xml"
-          response.status = 207
-
-          <<~XML
-            <?xml version="1.0" encoding="UTF-8"?>
-            <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
-              <d:response>
-                <d:href>/addressbook/test-contact.vcf</d:href>
-                <d:propstat>
-                  <d:prop>
-                    <d:getetag>"etag-123"</d:getetag>
-                  </d:prop>
-                  <d:status>HTTP/1.1 200 OK</d:status>
-                </d:propstat>
-              </d:response>
-            </d:multistatus>
-          XML
+      r.on "dav" do
+        r.options do
+          response["DAV"] = "1, 3, addressbook"
+          response["Allow"] = "OPTIONS, PROPFIND, REPORT"
+          ""
         end
 
-        r.get String do |uid|
-          response["Content-Type"] = "text/vcard"
+        r.on "principal" do
+          r.propfind do
+            response["Content-Type"] = "text/xml"
+            response.status = 207
 
-          <<~VCARD
-            BEGIN:VCARD
-            VERSION:3.0
-            FN:Test Contact
-            N:Contact;Test;;;
-            END:VCARD
-          VCARD
+            <<~XML
+              <?xml version="1.0" encoding="UTF-8"?>
+              <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
+                <d:response>
+                  <d:href>/dav/principal/</d:href>
+                  <d:propstat>
+                    <d:prop>
+                      <card:addressbook-home-set>
+                        <d:href>/dav/addressbook/</d:href>
+                      </card:addressbook-home-set>
+                    </d:prop>
+                    <d:status>HTTP/1.1 200 OK</d:status>
+                  </d:propstat>
+                </d:response>
+              </d:multistatus>
+            XML
+          end
+        end
+
+        r.on "addressbook" do
+          r.propfind do
+            response["Content-Type"] = "text/xml"
+            response.status = 207
+
+            <<~XML
+              <?xml version="1.0" encoding="UTF-8"?>
+              <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
+                <d:response>
+                  <d:href>/dav/addressbook/test-contact.vcf</d:href>
+                  <d:propstat>
+                    <d:prop>
+                      <d:getetag>"etag-123"</d:getetag>
+                    </d:prop>
+                    <d:status>HTTP/1.1 200 OK</d:status>
+                  </d:propstat>
+                </d:response>
+              </d:multistatus>
+            XML
+          end
+
+          r.get String do |uid|
+            response["Content-Type"] = "text/vcard"
+
+            <<~VCARD
+              BEGIN:VCARD
+              VERSION:3.0
+              FN:Test Contact
+              N:Contact;Test;;;
+              END:VCARD
+            VCARD
+          end
         end
       end
     end
