@@ -2,6 +2,7 @@
 
 source "https://rubygems.org"
 
+gem "logger"
 gem "puma"
 gem "rackup"
 gem "rake"
