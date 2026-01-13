@@ -1,9 +1,6 @@
 # frozen_string_literal: true
 
-require "roda"
 require "sentry-ruby"
-
-require "roda/plugins/dav_verbs"
 
 Sentry.init do |config|
   # TODO: Consolidate configuration
@@ -19,6 +16,10 @@ Sentry.init do |config|
   # Trace all the things!
   config.traces_sample_rate = 1.0
 end
+
+require "roda"
+
+require "roda/plugins/dav_verbs"
 
 module ProTacts
   class Web < Roda
