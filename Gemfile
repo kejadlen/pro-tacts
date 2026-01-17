@@ -3,6 +3,7 @@
 source "https://rubygems.org"
 
 gem "logger"
+gem "nokogiri"
 gem "puma"
 gem "rackup"
 gem "rake"
