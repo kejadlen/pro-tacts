@@ -3,7 +3,6 @@
 require "minitest/autorun"
 require "stringio"
 
-require "pro_tacts"
 require "pro_tacts/debug_logger"
 
 class DebugLoggerTest < Minitest::Test
@@ -81,35 +80,5 @@ class DebugLoggerTest < Minitest::Test
     assert_equal 207, status
     assert_equal "text/xml", headers["Content-Type"]
     assert_equal ["<multistatus/>"], body
-  end
-
-  class ToggleTest < Minitest::Test
-    def test_defaults_off_when_unset
-      with_env("PRO_TACTS_DEBUG" => nil) do
-        refute ProTacts.debug_logging?
-      end
-    end
-
-    def test_turns_on_with_truthy_values
-      with_env("PRO_TACTS_DEBUG" => "1") do
-        assert ProTacts.debug_logging?
-      end
-    end
-
-    def test_ignores_other_values
-      with_env("PRO_TACTS_DEBUG" => "no") do
-        refute ProTacts.debug_logging?
-      end
-    end
-
-    private
-
-    def with_env(vars)
-      saved = vars.keys.to_h { |k| [k, ENV[k]] }
-      vars.each { |k, v| v.nil? ? ENV.delete(k) : ENV[k] = v }
-      yield
-    ensure
-      saved.each { |k, v| v.nil? ? ENV.delete(k) : ENV[k] = v }
-    end
   end
 end

@@ -1,26 +1,25 @@
 # frozen_string_literal: true
 
+require "pro_tacts"
 require "sentry-ruby"
 
-Sentry.init do |config|
-  # TODO: Consolidate configuration
-  config.dsn = ENV.fetch("SENTRY_DSN")
+Sentry.init do |sentry|
+  sentry.dsn = ProTacts.config.sentry_dsn
 
   # Get breadcrumbs from logs
-  config.breadcrumbs_logger = [:sentry_logger, :http_logger]
+  sentry.breadcrumbs_logger = [:sentry_logger, :http_logger]
 
   # Add data like request headers and IP for users, if applicable;
   # see https://docs.sentry.io/platforms/ruby/data-management/data-collected/ for more info
-  config.send_default_pii = true
+  sentry.send_default_pii = true
 
   # Trace all the things!
-  config.traces_sample_rate = 1.0
+  sentry.traces_sample_rate = 1.0
 end
 
 require "rack/rewindable_input"
 require "roda"
 
-require "pro_tacts"
 require "pro_tacts/debug_logger"
 require "roda/plugins/dav_verbs"
 
@@ -30,7 +29,7 @@ module ProTacts
     # and then rewind it so the application can still access it.
     use Rack::RewindableInput::Middleware
     use Sentry::Rack::CaptureExceptions
-    use ProTacts::DebugLogger if ProTacts.debug_logging?
+    use ProTacts::DebugLogger if ProTacts.config.debug?
 
     plugin :all_verbs
     plugin :dav_verbs

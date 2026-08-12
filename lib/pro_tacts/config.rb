@@ -1,0 +1,26 @@
+# frozen_string_literal: true
+
+module ProTacts
+  # Single source of truth for configuration read from the environment.
+  # Nothing else in the app should read ENV directly; add a method here and
+  # read it through ProTacts.config instead.
+  class Config
+    TRUTHY = /\A(1|true|yes)\z/i
+
+    def initialize(env = ENV)
+      @env = env
+    end
+
+    # Sentry DSN. Required at boot; raises if unset so the failure is loud.
+    def sentry_dsn
+      @env.fetch("SENTRY_DSN")
+    end
+
+    # Whether to dump full request/response exchanges to the log. Off by
+    # default because it logs contact data. See ProTacts::DebugLogger.
+    def debug?
+      value = @env.fetch("PRO_TACTS_DEBUG", nil)
+      !value.nil? && value.match?(TRUTHY)
+    end
+  end
+end
