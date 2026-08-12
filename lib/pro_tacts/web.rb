@@ -20,6 +20,8 @@ end
 require "rack/rewindable_input"
 require "roda"
 
+require "pro_tacts"
+require "pro_tacts/debug_logger"
 require "roda/plugins/dav_verbs"
 
 module ProTacts
@@ -28,6 +30,7 @@ module ProTacts
     # and then rewind it so the application can still access it.
     use Rack::RewindableInput::Middleware
     use Sentry::Rack::CaptureExceptions
+    use ProTacts::DebugLogger if ProTacts.debug_logging?
 
     plugin :all_verbs
     plugin :dav_verbs
