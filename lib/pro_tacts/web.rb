@@ -284,6 +284,16 @@ module ProTacts
             response["Content-Type"] = "text/xml"
             response.status = 207
             contact_etag = %("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+            vcard = <<~VCARD.chomp
+              BEGIN:VCARD
+              VERSION:3.0
+              PRODID:-//Apple Inc.//macOS 14.6.1//EN
+              N:Contact;Test;;;
+              FN:Test Contact
+              REV:2026-01-14T00:00:00Z
+              UID:AB12C345-6789-0DEF-1234-567890ABCDEF
+              END:VCARD
+            VCARD
 
             <<~XML
               <?xml version="1.0" encoding="UTF-8"?>
@@ -293,14 +303,7 @@ module ProTacts
                   <d:propstat>
                     <d:prop>
                       <d:getetag>#{contact_etag}</d:getetag>
-                      <card:address-data>BEGIN:VCARD
-VERSION:3.0
-PRODID:-//Apple Inc.//macOS 14.6.1//EN
-N:Contact;Test;;;
-FN:Test Contact
-REV:2026-01-14T00:00:00Z
-UID:AB12C345-6789-0DEF-1234-567890ABCDEF
-END:VCARD</card:address-data>
+                      <card:address-data>#{vcard}</card:address-data>
                     </d:prop>
                     <d:status>HTTP/1.1 200 OK</d:status>
                   </d:propstat>
