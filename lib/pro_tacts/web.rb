@@ -29,7 +29,10 @@ module ProTacts
     # and then rewind it so the application can still access it.
     use Rack::RewindableInput::Middleware
     use Sentry::Rack::CaptureExceptions
-    use ProTacts::DebugLogger if ProTacts.config.debug?
+    if ProTacts.config.debug?
+      logger = ProTacts::DebugLogger.open_log(ProTacts.config.debug_log_path)
+      use ProTacts::DebugLogger, logger: logger
+    end
 
     plugin :all_verbs
     plugin :dav_verbs

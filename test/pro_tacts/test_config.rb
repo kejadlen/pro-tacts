@@ -28,4 +28,13 @@ class ConfigTest < Minitest::Test
     refute ProTacts::Config.new("PRO_TACTS_DEBUG" => "no").debug?
     refute ProTacts::Config.new("PRO_TACTS_DEBUG" => "0").debug?
   end
+
+  def test_debug_log_path_defaults_to_a_file
+    assert_equal "log/debug.log", ProTacts::Config.new({}).debug_log_path
+  end
+
+  def test_debug_log_path_is_overridable
+    assert_equal "/tmp/dav.log", ProTacts::Config.new("PRO_TACTS_DEBUG_LOG" => "/tmp/dav.log").debug_log_path
+    assert_equal "stderr", ProTacts::Config.new("PRO_TACTS_DEBUG_LOG" => "stderr").debug_log_path
+  end
 end

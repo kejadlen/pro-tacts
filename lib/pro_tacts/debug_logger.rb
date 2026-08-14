@@ -1,18 +1,41 @@
 # frozen_string_literal: true
 
+require "fileutils"
+require "logger"
 require "rack"
 
 module ProTacts
   # Rack middleware that dumps the full request and response exchange to a
-  # log stream: method, path, every header, and the full body on both sides.
+  # Logger: method, path, every header, and the full body on both sides.
+  # Every line is prefixed ">>" (request) or "<<" (response) so multi-line
+  # XML/vCard bodies stay readable.
   #
   # Off by default because it logs contact data. The only card right now is
   # fictional, so the debug path stays verbose while the normal one-line path
   # (Roda's common_logger) can be narrowed later without losing this.
   class DebugLogger
-    def initialize(app, io: $stderr)
+    # Builds the Logger the middleware writes to: appended and unbuffered
+    # (Logger syncs its own device), one timestamped line per dump. path
+    # "stderr" writes to the process's stderr.
+    def self.open_log(path)
+      target = if path == "stderr"
+                 $stderr
+               else
+                 FileUtils.mkdir_p(File.dirname(path))
+                 path
+               end
+
+      Logger.new(target).tap do |logger|
+        logger.level = :debug
+        logger.formatter = proc do |_severity, datetime, _progname, msg|
+          "#{datetime.strftime('%Y-%m-%dT%H:%M:%S.%3N')} #{msg}\n"
+        end
+      end
+    end
+
+    def initialize(app, logger:)
       @app = app
-      @io = io
+      @logger = logger
     end
 
     def call(env)
@@ -78,7 +101,7 @@ module ProTacts
     end
 
     def write(prefix, text)
-      text.to_s.each_line(chomp: true) { |line| @io.puts("#{prefix} #{line}") }
+      text.to_s.each_line(chomp: true) { |line| @logger.debug("#{prefix} #{line}") }
     end
   end
 end

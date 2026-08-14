@@ -22,5 +22,11 @@ module ProTacts
       value = @env.fetch("PRO_TACTS_DEBUG", nil)
       !value.nil? && value.match?(TRUTHY)
     end
+
+    # Where the debug logger writes. A path, overridable with
+    # PRO_TACTS_DEBUG_LOG; "stderr" keeps it on the process's stderr.
+    def debug_log_path
+      @env.fetch("PRO_TACTS_DEBUG_LOG", "log/debug.log")
+    end
   end
 end

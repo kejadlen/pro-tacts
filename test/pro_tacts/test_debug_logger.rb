@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
+require "logger"
 require "stringio"
 
 require "pro_tacts/debug_logger"
@@ -8,7 +9,8 @@ require "pro_tacts/debug_logger"
 class DebugLoggerTest < Minitest::Test
   def setup
     @io = StringIO.new
-    @app = ProTacts::DebugLogger.new(echo_app, io: @io)
+    @logger = Logger.new(@io)
+    @app = ProTacts::DebugLogger.new(echo_app, logger: @logger)
   end
 
   # Echoes a fixed response so assertions can target what the logger adds.
@@ -51,7 +53,7 @@ class DebugLoggerTest < Minitest::Test
     read = nil
     app = ProTacts::DebugLogger.new(
       ->(e) { read = e["rack.input"].read; [200, {}, [""]] },
-      io: StringIO.new
+      logger: Logger.new(StringIO.new)
     )
 
     app.call(env(body: "<x/>"))
@@ -80,5 +82,18 @@ class DebugLoggerTest < Minitest::Test
     assert_equal 207, status
     assert_equal "text/xml", headers["Content-Type"]
     assert_equal ["<multistatus/>"], body
+  end
+
+  class OpenLogTest < Minitest::Test
+    def test_appends_timestamped_lines_to_a_file_it_creates
+      require "tmpdir"
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "nested", "debug.log")
+        logger = ProTacts::DebugLogger.open_log(path)
+        logger.debug(">> PROPFIND / HTTP/1.1")
+
+        assert_match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3} >> PROPFIND \/ HTTP\/1.1\n/, File.read(path))
+      end
+    end
   end
 end
