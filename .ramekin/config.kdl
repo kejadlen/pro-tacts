@@ -1,0 +1,5 @@
+// The workspace .envrc is shadowed by /dev/null in the user config, so the
+// backlog name it exports has to be restated here to reach the agent.
+env {
+  RANGER_DEFAULT_BACKLOG "pro-tacts"
+}
