@@ -120,9 +120,16 @@ minimum.
 
 ## Open questions
 
-- Does Tailscale serve rewrite or drop `PROPFIND` and `REPORT`, or pass
-  unknown methods through untouched?
-- Does the client accept an account with Server Path empty, or does it need
-  the principal URL spelled out? Reports conflict; this milestone answers it
-  for our setup.
-- Does anything break when the same hostname serves both `/` and `/dav/`?
+Answered 2026-08-14, when the milestone landed:
+
+- Tailscale serve passes `PROPFIND` and `REPORT` through untouched. Every
+  request in the debug log arrived with its method and body intact, and
+  nothing was rewritten on the way back.
+- The client accepts an account with Server Path empty. Discovery from the
+  bare hostname completed and the card displayed.
+- Nothing breaks when the same hostname serves both `/` and `/dav/`.
+
+One deviation from the constraints above: `/.well-known/carddav` never
+redirects for the client's `PROPFIND` — it answers directly with a 207,
+which sidesteps the redirect-downgrade trap entirely. Only `GET` on it
+redirects, and the client never issues one during discovery or sync.

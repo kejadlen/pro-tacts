@@ -19,8 +19,10 @@ A CardDAV server for my family.
 
 A read-only skeleton. Every response in `lib/pro_tacts/web.rb` is hardcoded:
 one principal, one address book, one vCard. Nothing is parsed, stored, or
-looked up yet. The goal of this stage is to get macOS Contacts to display a
-single card, so that later work has a known-good baseline to change.
+looked up yet. macOS Contacts displays the hardcoded card over Tailscale
+serve as of 2026-08-14, so later work has a known-good baseline to change.
+See `docs/plans/2026-08-12-one-card-on-macos.md` for what that milestone
+established.
 
 The hardcoded responses are **not** the minimal set macOS needs. They were
 assembled from what working servers send, so some properties are certainly
