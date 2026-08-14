@@ -1,0 +1,23 @@
+207
+Content-Type: text/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
+  <d:response>
+    <d:href>/dav/addressbook/AB12C345-6789-0DEF-1234-567890ABCDEF.vcf</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"</d:getetag>
+        <card:address-data>BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//macOS 14.6.1//EN
+N:Contact;Test;;;
+FN:Test Contact
+REV:2026-01-14T00:00:00Z
+UID:AB12C345-6789-0DEF-1234-567890ABCDEF
+END:VCARD</card:address-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>

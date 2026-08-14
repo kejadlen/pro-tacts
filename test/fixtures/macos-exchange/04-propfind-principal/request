@@ -1,0 +1,19 @@
+PROPFIND /dav/principal/ HTTP/1.1
+Brief: t
+Content-Type: text/xml
+Depth: 0
+Prefer: return=minimal
+
+<?xml version="1.0" encoding="UTF-8"?>
+<A:propfind xmlns:A="DAV:">
+  <A:prop>
+    <C:addressbook-home-set xmlns:C="urn:ietf:params:xml:ns:carddav"/>
+    <C:directory-gateway xmlns:C="urn:ietf:params:xml:ns:carddav"/>
+    <A:displayname/>
+    <D:email-address-set xmlns:D="http://calendarserver.org/ns/"/>
+    <A:principal-collection-set/>
+    <A:principal-URL/>
+    <A:resource-id/>
+    <A:supported-report-set/>
+  </A:prop>
+</A:propfind>

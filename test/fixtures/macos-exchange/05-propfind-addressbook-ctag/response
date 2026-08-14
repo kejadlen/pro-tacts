@@ -1,0 +1,57 @@
+207
+Content-Type: text/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav" xmlns:cs="http://calendarserver.org/ns/">
+  <d:response>
+  <d:href>/dav/addressbook/</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:displayname>Contacts</d:displayname>
+<d:resourcetype>
+  <d:collection/>
+  <card:addressbook/>
+</d:resourcetype>
+<d:supported-report-set>
+  <d:supported-report>
+    <d:report><card:addressbook-multiget/></d:report>
+  </d:supported-report>
+  <d:supported-report>
+    <d:report><card:addressbook-query/></d:report>
+  </d:supported-report>
+  <d:supported-report>
+    <d:report><d:sync-collection/></d:report>
+  </d:supported-report>
+</d:supported-report-set>
+<d:sync-token>http://pro-tacts/sync/1</d:sync-token>
+<d:current-user-privilege-set>
+  <d:privilege><d:read/></d:privilege>
+  <d:privilege><d:write/></d:privilege>
+</d:current-user-privilege-set>
+<d:owner>
+  <d:href>/dav/principal/</d:href>
+</d:owner>
+<card:max-resource-size>102400</card:max-resource-size>
+<cs:getctag>ctag-1</cs:getctag>
+
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+  <d:propstat>
+    <d:prop>
+      <d:add-member/>
+<d:quota-available-bytes/>
+<d:quota-used-bytes/>
+<d:resource-id/>
+<card:max-image-size/>
+<cs:me-card/>
+<cs:push-transports/>
+<cs:pushkey/>
+
+    </d:prop>
+    <d:status>HTTP/1.1 404 Not Found</d:status>
+  </d:propstat>
+</d:response>
+
+  
+</d:multistatus>

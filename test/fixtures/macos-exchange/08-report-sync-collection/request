@@ -1,0 +1,14 @@
+REPORT /dav/addressbook/ HTTP/1.1
+Brief: t
+Content-Type: text/xml
+Depth: 1
+Prefer: return=minimal
+
+<?xml version="1.0" encoding="UTF-8"?>
+<A:sync-collection xmlns:A="DAV:">
+  <A:sync-token>http://pro-tacts/sync/1</A:sync-token>
+  <A:sync-level>1</A:sync-level>
+  <A:prop>
+    <A:getetag/>
+  </A:prop>
+</A:sync-collection>

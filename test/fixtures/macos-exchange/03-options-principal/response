@@ -1,0 +1,5 @@
+200
+Content-Type: text/html
+DAV: 1, 3, access-control, addressbook
+Allow: OPTIONS, PROPFIND, REPORT
+

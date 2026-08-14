@@ -1,0 +1,14 @@
+PROPFIND /.well-known/carddav HTTP/1.1
+Brief: t
+Content-Type: text/xml
+Depth: 0
+Prefer: return=minimal
+
+<?xml version="1.0" encoding="UTF-8"?>
+<A:propfind xmlns:A="DAV:">
+  <A:prop>
+    <A:current-user-principal/>
+    <A:principal-URL/>
+    <A:resourcetype/>
+  </A:prop>
+</A:propfind>
