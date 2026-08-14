@@ -4,9 +4,9 @@ require "minitest/test_task"
 
 Minitest::TestTask.create
 
-desc "Start development server"
+desc "Start development server, reloading on changes"
 task :dev do
-  sh "rackup", "-o", "localhost"
+  sh "fd -e rb . lib | entr -r rackup -o localhost"
 end
 
 task default: :test
