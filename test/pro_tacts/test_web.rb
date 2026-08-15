@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "minitest/autorun"
+require_relative "../test_helper"
 require "rack/test"
 
 require "pro_tacts/web"

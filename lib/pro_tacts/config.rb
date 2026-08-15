@@ -11,6 +11,16 @@ module ProTacts
       @env = env
     end
 
+    # The deployment environment: APP_ENV wins, then RACK_ENV, then
+    # "development".
+    def environment
+      @env.fetch("APP_ENV") { @env.fetch("RACK_ENV", "development") }
+    end
+
+    def test?
+      environment == "test"
+    end
+
     # Sentry DSN. Required at boot; raises if unset so the failure is loud.
     def sentry_dsn
       @env.fetch("SENTRY_DSN")

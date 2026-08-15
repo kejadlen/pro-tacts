@@ -3,18 +3,22 @@
 require "pro_tacts"
 require "sentry-ruby"
 
-Sentry.init do |sentry|
-  sentry.dsn = ProTacts.config.sentry_dsn
+# Tests skip Sentry entirely: capture_message and the rack middleware are
+# no-ops while Sentry is uninitialized, so no DSN is needed there.
+unless ProTacts.config.test?
+  Sentry.init do |sentry|
+    sentry.dsn = ProTacts.config.sentry_dsn
 
-  # Get breadcrumbs from logs
-  sentry.breadcrumbs_logger = [:sentry_logger, :http_logger]
+    # Get breadcrumbs from logs
+    sentry.breadcrumbs_logger = [:sentry_logger, :http_logger]
 
-  # Add data like request headers and IP for users, if applicable;
-  # see https://docs.sentry.io/platforms/ruby/data-management/data-collected/ for more info
-  sentry.send_default_pii = true
+    # Add data like request headers and IP for users, if applicable;
+    # see https://docs.sentry.io/platforms/ruby/data-management/data-collected/ for more info
+    sentry.send_default_pii = true
 
-  # Trace all the things!
-  sentry.traces_sample_rate = 1.0
+    # Trace all the things!
+    sentry.traces_sample_rate = 1.0
+  end
 end
 
 require "rack/rewindable_input"

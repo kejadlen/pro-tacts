@@ -5,6 +5,19 @@ require "minitest/autorun"
 require "pro_tacts/config"
 
 class ConfigTest < Minitest::Test
+  def test_environment_defaults_to_development
+    assert_equal "development", ProTacts::Config.new({}).environment
+    assert_equal "production", ProTacts::Config.new("RACK_ENV" => "production").environment
+    assert_equal "production", ProTacts::Config.new("RACK_ENV" => "development", "APP_ENV" => "production").environment
+  end
+
+  def test_testenv
+    assert ProTacts::Config.new("RACK_ENV" => "test").test?
+    assert ProTacts::Config.new("APP_ENV" => "test").test?
+    refute ProTacts::Config.new({}).test?
+    refute ProTacts::Config.new("RACK_ENV" => "production").test?
+  end
+
   def test_sentry_dsn_is_passed_through
     assert_equal "https://example/1", ProTacts::Config.new("SENTRY_DSN" => "https://example/1").sentry_dsn
   end
