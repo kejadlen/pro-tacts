@@ -200,60 +200,15 @@ module ProTacts
               XML
             else
               # Full property request (Depth:0 collection info)
-              supported_props = <<~XML
-                <d:displayname>Contacts</d:displayname>
-                <d:resourcetype>
-                  <d:collection/>
-                  <card:addressbook/>
-                </d:resourcetype>
-                <d:supported-report-set>
-                  <d:supported-report>
-                    <d:report><card:addressbook-multiget/></d:report>
-                  </d:supported-report>
-                  <d:supported-report>
-                    <d:report><card:addressbook-query/></d:report>
-                  </d:supported-report>
-                  <d:supported-report>
-                    <d:report><d:sync-collection/></d:report>
-                  </d:supported-report>
-                </d:supported-report-set>
-                <d:sync-token>http://pro-tacts/sync/1</d:sync-token>
-                <d:current-user-privilege-set>
-                  <d:privilege><d:read/></d:privilege>
-                  <d:privilege><d:write/></d:privilege>
-                </d:current-user-privilege-set>
-                <d:owner>
-                  <d:href>/dav/principal/</d:href>
-                </d:owner>
-                <card:max-resource-size>102400</card:max-resource-size>
-                <cs:getctag>#{collection_ctag}</cs:getctag>
-              XML
-
-              unsupported_props = <<~XML
-                <d:add-member/>
-                <d:quota-available-bytes/>
-                <d:quota-used-bytes/>
-                <d:resource-id/>
-                <card:max-image-size/>
-                <cs:me-card/>
-                <cs:push-transports/>
-                <cs:pushkey/>
-              XML
-
               collection_response = <<~XML
                 <d:response>
                   <d:href>/dav/addressbook/</d:href>
                   <d:propstat>
                     <d:prop>
-                      #{supported_props}
+                      <cs:getctag>#{collection_ctag}</cs:getctag>
+                      <d:sync-token>http://pro-tacts/sync/1</d:sync-token>
                     </d:prop>
                     <d:status>HTTP/1.1 200 OK</d:status>
-                  </d:propstat>
-                  <d:propstat>
-                    <d:prop>
-                      #{unsupported_props}
-                    </d:prop>
-                    <d:status>HTTP/1.1 404 Not Found</d:status>
                   </d:propstat>
                 </d:response>
               XML
@@ -264,7 +219,6 @@ module ProTacts
                   <d:propstat>
                     <d:prop>
                       <d:getetag>#{contact_etag}</d:getetag>
-                      <d:resourcetype/>
                     </d:prop>
                     <d:status>HTTP/1.1 200 OK</d:status>
                   </d:propstat>
