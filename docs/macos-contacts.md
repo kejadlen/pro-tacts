@@ -26,6 +26,24 @@ refusing a redirect) that never reach the server at all.
 
 ## The account setup path
 
+The fastest path is a configuration profile: `rake profile` (with
+`PRO_TACTS_HOSTNAME` set) writes `carddav.mobileconfig`, then
+
+```sh
+sudo profiles install -type configuration -path carddav.mobileconfig
+sudo profiles remove -identifier dev.kejadlen.pro-tacts.carddav
+```
+
+adds and removes the account. The profile carries the hostname,
+credentials, and SSL — `CardDAVPrincipalURL` is deliberately omitted so the
+account gets an empty Server Path, exercising discovery. Fixed payload
+identifiers mean a reinstall replaces the account in place, and removal is
+what resets the client's cached discovery results. Recent macOS may stage
+the profile as pending until you approve it once in System Settings →
+Profiles. Apple's device-management reference marks the CardDAV payload as
+allowing manual install, so no MDM is involved.
+
+The manual alternative, for cross-checking when the profile path misbehaves:
 In System Settings, add the account under Internet Accounts, Add Other
 Account, CardDAV account, with Account Type set to Manual. Manual matters:
 automatic setup runs its own discovery and fails in ways that are harder to

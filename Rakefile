@@ -18,4 +18,24 @@ task :fixtures do
   ExchangeFixtures.record_responses(ProTacts::Web)
 end
 
+desc "Generate carddav.mobileconfig to provision the macOS account"
+task :profile do
+  $LOAD_PATH.unshift(File.expand_path("lib", __dir__))
+  require "pro_tacts/profile"
+
+  File.write("carddav.mobileconfig", ProTacts::Profile.render(
+    hostname: ENV.fetch("PRO_TACTS_HOSTNAME"),
+    username: ENV.fetch("PRO_TACTS_USERNAME", "a@b.com"),
+    password: ENV.fetch("PRO_TACTS_PASSWORD", "a")
+  ))
+  identifier = ProTacts::Profile::PAYLOAD_IDENTIFIER
+  puts <<~MESSAGE
+    Wrote carddav.mobileconfig. Install:
+      sudo profiles install -type configuration -path carddav.mobileconfig
+    Remove:
+      sudo profiles remove -identifier #{identifier}
+    Recent macOS may ask you to approve the profile in System Settings → Profiles.
+  MESSAGE
+end
+
 task default: :test
