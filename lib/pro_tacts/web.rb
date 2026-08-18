@@ -40,7 +40,7 @@ module ProTacts
 
     plugin :all_verbs
     plugin :dav_verbs
-    plugin :common_logger
+    plugin :common_logger unless ProTacts.config.test?
 
     plugin :not_found do
       Sentry.capture_message("404 Not Found", level: :warning)
