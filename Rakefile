@@ -33,12 +33,12 @@ file "carddav.mobileconfig" => "lib/pro_tacts/profile.rb" do |task|
 end
 
 namespace :profile do
-  desc "Install the configuration profile (sudo)"
+  desc "Stage the configuration profile for install; approve it in System Settings → Profiles"
   task install: "carddav.mobileconfig" do |task|
-    sh "sudo", "profiles", "install", "-type", "configuration", "-path", task.prerequisites.first
+    sh "open", task.prerequisites.first
   end
 
-  desc "Remove the configuration profile (sudo)"
+  desc "Remove the configuration profile (sudo); if the CLI refuses, remove it in System Settings → Profiles"
   task :remove do
     require "pro_tacts/profile"
     sh "sudo", "profiles", "remove", "-identifier", ProTacts::Profile::PAYLOAD_IDENTIFIER
