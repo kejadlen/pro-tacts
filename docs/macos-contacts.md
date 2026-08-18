@@ -27,12 +27,13 @@ refusing a redirect) that never reach the server at all.
 ## The account setup path
 
 The fastest path is a configuration profile: `rake profile:install` (with
-`PRO_TACTS_HOSTNAME` set) renders `carddav.mobileconfig` and opens it —
-the profiles CLI no longer supports installs, so the profile lands in
-System Settings → Profiles as pending until you click Install. That click
-is the whole manual step. `rake profile:remove` still tries
-`sudo profiles remove`; if the CLI refuses that too, remove it in the same
-Settings pane.
+`PRO_TACTS_HOSTNAME` set) renders `carddav.mobileconfig`, opens it, and
+opens System Settings on the Profiles pane (via the
+`x-apple.systempreferences:` deep link) — the profiles CLI no longer
+supports installs, so the profile lands there as pending until you click
+Install. That click is the whole manual step. `rake profile:remove` still
+tries `sudo profiles remove`; if the CLI refuses that too, remove it in the
+same Settings pane.
 
 The profile carries the hostname, fixed dev credentials, and SSL —
 `CardDAVPrincipalURL` is deliberately omitted so the
@@ -103,6 +104,17 @@ The client requires the proprietary `{http://calendarserver.org/ns/}getctag`
 property on the address book collection. Without it, the client completes
 discovery and then never requests a single vCard, which presents as an
 account that connects successfully and stays empty.
+
+## The collection must claim to be an address book
+
+Discovery is not the only gate. After it, the client sends a `Depth: 1`
+`PROPFIND` against the address book asking a long list of properties
+(`resourcetype`, `supported-report-set`, `sync-token`, quotas, push — see
+fixture `09-propfind-addressbook-bootstrap`). If the answer carries `getctag`
+and `sync-token` but the collection's `resourcetype` does not include
+`card:addressbook`, the client retries the `PROPFIND` once and then stops —
+no `REPORT`, no card requests, an empty account. Verified by minimization
+rounds 1–2 on 2026-08-17.
 
 ## One address book per account
 

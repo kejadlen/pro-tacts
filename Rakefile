@@ -33,9 +33,10 @@ file "carddav.mobileconfig" => "lib/pro_tacts/profile.rb" do |task|
 end
 
 namespace :profile do
-  desc "Stage the configuration profile for install; approve it in System Settings → Profiles"
+  desc "Stage the configuration profile and open Settings → Profiles; click Install there"
   task install: "carddav.mobileconfig" do |task|
     sh "open", task.prerequisites.first
+    sh "open", "x-apple.systempreferences:com.apple.preferences.configurationprofiles"
   end
 
   desc "Remove the configuration profile (sudo); if the CLI refuses, remove it in System Settings → Profiles"
