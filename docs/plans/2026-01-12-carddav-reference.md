@@ -252,17 +252,35 @@ contact {
 }
 ```
 
+`name` derives `N` from the display string (last token family, the rest
+given). Component children override that heuristic entirely — when any
+is present, `N` is built from exactly those, with missing components
+empty:
+
+```kdl
+name "Ludwig van Beethoven" {
+    family "van Beethoven"
+    given "Ludwig"
+}
+```
+
+Values are escaped per RFC 2426 section 2.4.2 (`\\`, `;`, `,`, newlines)
+and lines fold at 75 octets (section 2.6). Property order in the output
+follows the renderer: `BEGIN`, `VERSION`, `N`, `FN`, `TEL`, `EMAIL`,
+`ADR`, `UID`, `END`.
+
 ### vCard Output
 
 ```
 BEGIN:VCARD
-VERSION:4.0
-UID:kqmtnwpxlrvszoyp
+VERSION:3.0
+N:Smith;John;;;
 FN:John Smith
 TEL;TYPE=mobile:+1-555-1234
 TEL;TYPE=work:+1-555-5678
 EMAIL;TYPE=home:john@example.com
 ADR;TYPE=home:;;123 Main St;Springfield;IL;62701;USA
+UID:kqmtnwpxlrvszoyp
 END:VCARD
 ```
 

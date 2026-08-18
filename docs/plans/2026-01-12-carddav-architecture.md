@@ -170,4 +170,5 @@ end
 
 ## Translation
 
-KDL → vCard on read. Server parses KDL contact files and generates vCard 4.0 output.
+KDL → vCard on read. The server parses KDL contact files into vCard 3.0
+(`lib/pro_tacts/vcard.rb`), the version Apple clients speak.
