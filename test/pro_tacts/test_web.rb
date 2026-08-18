@@ -16,7 +16,7 @@ class WebTest < Minitest::Test
     options "/dav/"
 
     assert_equal 200, last_response.status
-    assert_equal "1, 3, access-control, addressbook", last_response["DAV"]
+    assert_equal "addressbook", last_response["DAV"]
     assert_includes last_response["Allow"], "OPTIONS"
     assert_includes last_response["Allow"], "PROPFIND"
   end

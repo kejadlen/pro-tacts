@@ -102,7 +102,7 @@ module ProTacts
 
       r.on "dav" do
         r.options do
-          response["DAV"] = "1, 3, access-control, addressbook"
+          response["DAV"] = "addressbook"
           response["Allow"] = "OPTIONS, PROPFIND, REPORT"
           ""
         end
