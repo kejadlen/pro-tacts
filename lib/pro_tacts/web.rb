@@ -221,19 +221,30 @@ module ProTacts
           end
 
           r.report do
+            body = request.body.read
+            request.body.rewind
+
             response["Content-Type"] = "text/xml"
             response.status = 207
             contact_etag = %("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
-            vcard = <<~VCARD.chomp
-              BEGIN:VCARD
-              VERSION:3.0
-              PRODID:-//Apple Inc.//macOS 14.6.1//EN
-              N:Contact;Test;;;
-              FN:Test Contact
-              REV:2026-01-14T00:00:00Z
-              UID:AB12C345-6789-0DEF-1234-567890ABCDEF
-              END:VCARD
-            VCARD
+
+            if body.include?("sync-collection")
+              # The warm-sync ask is etag-only; a changed etag sends the
+              # client back through multiget, so no address-data here.
+              card_data = ""
+            else
+              vcard = <<~VCARD.chomp
+                BEGIN:VCARD
+                VERSION:3.0
+                PRODID:-//Apple Inc.//macOS 14.6.1//EN
+                N:Contact;Test;;;
+                FN:Test Contact
+                REV:2026-01-14T00:00:00Z
+                UID:AB12C345-6789-0DEF-1234-567890ABCDEF
+                END:VCARD
+              VCARD
+              card_data = "<card:address-data>#{vcard}</card:address-data>"
+            end
 
             <<~XML
               <?xml version="1.0" encoding="UTF-8"?>
@@ -243,7 +254,7 @@ module ProTacts
                   <d:propstat>
                     <d:prop>
                       <d:getetag>#{contact_etag}</d:getetag>
-                      <card:address-data>#{vcard}</card:address-data>
+                      #{card_data unless card_data.empty?}
                     </d:prop>
                     <d:status>HTTP/1.1 200 OK</d:status>
                   </d:propstat>
