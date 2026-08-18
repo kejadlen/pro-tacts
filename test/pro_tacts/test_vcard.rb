@@ -109,10 +109,10 @@ class VCardTest < Minitest::Test
 
     physical = vcard.split("\r\n")
     assert_operator physical.length, :>, 1, "expected folding"
-    physical.each { |line| assert_operator line.bytesize, :<=, 75 }
+    physical.each { assert_operator it.bytesize, :<=, 75 }
 
     logical = unfold(physical)
-    assert_equal "FN:#{"x" * 30}#{("é" * 60)}", logical.find { |l| l.start_with?("FN:") }
+    assert_equal "FN:#{"x" * 30}#{("é" * 60)}", logical.find { it.start_with?("FN:") }
   end
 
   def test_properties_without_type
@@ -224,7 +224,7 @@ class VCardTest < Minitest::Test
 
   def unfold(lines)
     lines.slice_when { |_line, next_line| !next_line.start_with?(" ") }
-      .map { |group| group.first + group.drop(1).map { |line| line[1..] }.join }
+      .map { |group| group.first + group.drop(1).map { it[1..] }.join }
   end
 
   # Reverses RFC 2426 section 2.4.2 escaping.
@@ -264,12 +264,12 @@ class VCardTest < Minitest::Test
     logical_lines(vcard).each do |line|
       head, value = line.split(":", 2)
       name, raw_params = head.split(";", 2)
-      type = raw_params&.then { |params| params[/\ATYPE=(.*)\z/, 1] }
+      type = raw_params&.then { it[/\ATYPE=(.*)\z/, 1] }
       case name
       when "FN" then fields[:fn] = unescape(value)
       when "UID" then fields[:uid] = unescape(value)
       when "N", "ADR"
-        components = split_unescaped(value, ";").map { |part| unescape(part) }
+        components = split_unescaped(value, ";").map { unescape(it) }
         fields[:n] = components if name == "N"
         fields[:adr] << [components, type] if name == "ADR"
       when "TEL" then fields[:tel] << [unescape(value), type]
@@ -298,7 +298,7 @@ class VCardTest < Minitest::Test
     if name_children.empty?
       contact << "  name #{kdl_string(display)}\n"
     else
-      contact << "  name #{kdl_string(display)} {\n#{name_children.map { |c| "    #{c}\n" }.join}  }\n"
+      contact << "  name #{kdl_string(display)} {\n#{name_children.map { "    #{it}\n" }.join}  }\n"
     end
     phones.each do |value, type|
       suffix = type ? " type=\"#{type}\"" : ""
@@ -339,7 +339,7 @@ class VCardTest < Minitest::Test
       )
 
       physical = vcard.split("\r\n")
-      too_long = physical.find { |line| line.bytesize > 75 }
+      too_long = physical.find { it.bytesize > 75 }
       raise "line exceeds 75 octets: #{too_long&.bytesize}" if too_long
       raise "folded away the terminators" unless physical.first == "BEGIN:VCARD" && physical.last == "END:VCARD"
       raise "UID did not survive folding" unless parse_vcard(vcard).fetch(:uid) == normalize(uid)
@@ -386,7 +386,7 @@ class VCardTest < Minitest::Test
       expected_n = if components.values.none?
         derived_n(display)
       else
-        %i[family given additional prefix suffix].map { |part| normalize(components.fetch(part) || "") }
+        %i[family given additional prefix suffix].map { normalize(components.fetch(it) || "") }
       end
       raise "N mismatch" unless parsed.fetch(:n) == expected_n
 

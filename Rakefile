@@ -6,7 +6,7 @@ require "minitest/test_task"
 
 Minitest::TestTask.create
 
-Dir.glob("tasks/*.rake").sort.each { |path| import path }
+Dir.glob("tasks/*.rake").sort.each { import it }
 
 desc "Start development server, reloading on changes"
 task :dev do
@@ -54,7 +54,7 @@ namespace :profile do
     if identifiers.empty?
       puts "No pro-tacts profiles found; remove by hand in System Settings → Profiles if one lingers."
     else
-      identifiers.each { |identifier| sh "profiles", "remove", "-identifier", identifier }
+      identifiers.each { sh "profiles", "remove", "-identifier", it }
     end
   end
 end

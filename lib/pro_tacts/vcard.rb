@@ -27,7 +27,7 @@ module ProTacts
     module_function
 
     def render(contact, uid:)
-      name = contact.children.find { |node| node.name == "name" }
+      name = contact.children.find { it.name == "name" }
       raise ArgumentError, "contact requires a name" unless name
 
       lines = [
@@ -52,10 +52,10 @@ module ProTacts
     # every missing component renders empty.
     def structured_name(name)
       overrides = name.children
-        .select { |child| NAME_COMPONENTS.include?(child.name) }
-        .to_h { |child| [child.name, string_argument(child)] }
+        .select { NAME_COMPONENTS.include?(it.name) }
+        .to_h { [it.name, string_argument(it)] }
 
-      return components(NAME_COMPONENTS.map { |component| overrides.fetch(component, "") }) unless overrides.empty?
+      return components(NAME_COMPONENTS.map { overrides.fetch(it, "") }) unless overrides.empty?
 
       display = display_name(name)
       tokens = display.split
@@ -65,7 +65,7 @@ module ProTacts
     end
 
     def typed_property_lines(contact, kdl_name, vcard_name)
-      contact.children.select { |node| node.name == kdl_name }.map do |node|
+      contact.children.select { it.name == kdl_name }.map do |node|
         type = node.properties["type"]&.value
         prefix = type ? "#{vcard_name};TYPE=#{type}" : vcard_name
         "#{prefix}:#{escape(string_argument(node))}"
@@ -76,12 +76,12 @@ module ProTacts
     # locality, region, postal code, country. The first two have no KDL
     # counterpart and stay empty.
     def address_lines(contact)
-      contact.children.select { |node| node.name == "address" }.map do |node|
+      contact.children.select { it.name == "address" }.map do |node|
         parts = node.children
-          .select { |child| ADDRESS_PARTS.include?(child.name) }
-          .to_h { |child| [child.name, string_argument(child)] }
+          .select { ADDRESS_PARTS.include?(it.name) }
+          .to_h { [it.name, string_argument(it)] }
 
-        components = ["", "", *ADDRESS_PARTS.map { |part| parts.fetch(part, "") }]
+        components = ["", "", *ADDRESS_PARTS.map { parts.fetch(it, "") }]
         type = node.properties["type"]&.value
         prefix = type ? "ADR;TYPE=#{type}" : "ADR"
         "#{prefix}:#{components(components)}"
@@ -93,12 +93,12 @@ module ProTacts
     # normalized to the `\n` escape because a raw line break would end
     # the property line.
     def escape(text)
-      text.gsub(/\r\n|\r/, "\n").gsub(/[\\;,\n]/) { |char| TEXT_ESCAPES.fetch(char) }
+      text.gsub(/\r\n|\r/, "\n").gsub(/[\\;,\n]/) { TEXT_ESCAPES.fetch(it) }
     end
 
     # Escapes each component, then joins with the component separator.
     def components(values)
-      values.map { |value| escape(value) }.join(";")
+      values.map { escape(it) }.join(";")
     end
 
     # Folds a logical line into physical lines of at most LINE_LIMIT
