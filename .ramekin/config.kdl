@@ -1,5 +1,13 @@
 // The workspace .envrc is shadowed by /dev/null in the user config, so the
-// backlog name it exports has to be restated here to reach the agent.
+// vars it exports have to be restated here to reach the agent.
 env {
   RANGER_DEFAULT_BACKLOG "pro-tacts"
+
+  // hegeltest's native engine, staged by `rake libhegel:fetch`. Relative
+  // because env values take no interpolation and the workspace mount point
+  // is slugged per host path; it resolves against the agent's cwd, which is
+  // the workspace root.
+  HEGEL_LIBHEGEL_PATH "tmp/libhegel/0.32.5"
+
+  RUBYOPT "--enable-frozen-string-literal"
 }
