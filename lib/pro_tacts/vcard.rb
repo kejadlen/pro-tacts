@@ -30,11 +30,13 @@ module ProTacts
       name = contact.children.find { it.name == "name" }
       raise ArgumentError, "contact requires a name" unless name
 
+      n, fn = name_fields(name)
+
       lines = [
         "BEGIN:VCARD",
         "VERSION:3.0",
-        "N:#{structured_name(name)}",
-        "FN:#{escape(display_name(name))}",
+        "N:#{components(n)}",
+        "FN:#{escape(fn)}",
         *typed_property_lines(contact, "phone", "TEL"),
         *typed_property_lines(contact, "email", "EMAIL"),
         *address_lines(contact),
@@ -46,22 +48,38 @@ module ProTacts
       lines.map { fold(it) }.join("\r\n")
     end
 
-    # `name "John Smith"` derives N:Smith;John;;; (last token family, the
-    # rest given). Component children override the heuristic entirely:
-    # when any of them is present, N is built from exactly those, and
-    # every missing component renders empty.
-    def structured_name(name)
-      overrides = name.children
-        .select { NAME_COMPONENTS.include?(it.name) }
-        .to_h { [it.name, string_argument(it)] }
+    # A name is either a display string — `name "John Smith"`, where N
+    # is derived (last token family, the rest given) and FN is the string
+    # itself — or component children, where N is exactly those components
+    # and FN is derived from them (prefix, given, additional, family,
+    # suffix; empty parts skipped). Providing both is an error: they are
+    # two spellings of the same truth, and silently preferring one would
+    # hide the disagreement. Returns [N components, FN].
+    def name_fields(name)
+      overrides = name.children.select { NAME_COMPONENTS.include?(it.name) }
 
-      return components(NAME_COMPONENTS.map { overrides.fetch(it, "") }) unless overrides.empty?
+      case [name.arguments, overrides]
+      in [Array[_, *], Array[_, *]]
+        raise ArgumentError, "name takes a display string or component children, not both"
+      in [Array[_, *], []]
+        display = display_name(name)
+        tokens = display.split
+        family = tokens.last || ""
+        given = tokens.length > 1 ? tokens.first(tokens.length - 1).join(" ") : ""
+        [[family, given, "", "", ""], display]
+      in [[], []]
+        raise ArgumentError, "name requires a display string or component children"
+      in [[], _]
+        values = overrides.to_h { [it.name, string_argument(it)] }
+        n = NAME_COMPONENTS.map { values.fetch(it, "") }
+        fn = %w[prefix given additional family suffix]
+          .map { values.fetch(it, "") }.reject(&:empty?).join(" ")
+        # FN is required (RFC 2426 section 4.1.1), so components that are
+        # all empty have nothing to render it from.
+        raise ArgumentError, "name components cannot all be empty" if fn.empty?
 
-      display = display_name(name)
-      tokens = display.split
-      family = tokens.last || ""
-      given = tokens.length > 1 ? tokens.first(tokens.length - 1).join(" ") : ""
-      components([family, given, "", "", ""])
+        [n, fn]
+      end
     end
 
     def typed_property_lines(contact, kdl_name, vcard_name)
@@ -122,10 +140,7 @@ module ProTacts
     end
 
     def display_name(name)
-      argument = name.arguments.first
-      raise ArgumentError, "name requires a display string" unless argument
-
-      argument.value.to_s
+      name.arguments.first.value.to_s
     end
 
     def string_argument(node)

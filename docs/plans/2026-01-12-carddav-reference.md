@@ -252,13 +252,15 @@ contact {
 }
 ```
 
-`name` derives `N` from the display string (last token family, the rest
-given). Component children override that heuristic entirely — when any
-is present, `N` is built from exactly those, with missing components
-empty:
+`name` is either a display string or exact components — never both.
+A display string derives `N` from its tokens (last token family, the
+rest given) and becomes `FN` verbatim; components build `N` exactly
+(missing parts empty) and derive `FN` from prefix, given, additional,
+family, and suffix, joined in that order with empty parts skipped.
+Providing both raises, since the two spellings could disagree:
 
 ```kdl
-name "Ludwig van Beethoven" {
+name {
     family "van Beethoven"
     given "Ludwig"
 }

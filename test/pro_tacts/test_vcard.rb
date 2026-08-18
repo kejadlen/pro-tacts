@@ -55,10 +55,10 @@ class VCardTest < Minitest::Test
     assert_includes vcard, "N:Cher;;;;"
   end
 
-  def test_name_components_override_the_heuristic
+  def test_components_only_name
     vcard = render(<<~KDL)
       contact {
-        name "Ludwig van Beethoven" {
+        name {
           family "van Beethoven"
           given "Ludwig"
         }
@@ -66,18 +66,36 @@ class VCardTest < Minitest::Test
     KDL
 
     assert_includes vcard, "N:van Beethoven;Ludwig;;;"
+    assert_includes vcard, "FN:Ludwig van Beethoven"
   end
 
-  def test_one_component_override_leaves_the_rest_empty
+  def test_one_component_leaves_the_rest_empty
     vcard = render(<<~KDL)
       contact {
-        name "Bach" {
+        name {
           family "Bach"
         }
       }
     KDL
 
     assert_includes vcard, "N:Bach;;;;"
+    assert_includes vcard, "FN:Bach"
+  end
+
+  def test_fn_joins_components_in_display_order
+    vcard = render(<<~KDL)
+      contact {
+        name {
+          prefix "Dr."
+          given "John"
+          additional "Jacob"
+          family "Smith"
+          suffix "Jr."
+        }
+      }
+    KDL
+
+    assert_includes vcard, "FN:Dr. John Jacob Smith Jr."
   end
 
   def test_values_are_escaped
@@ -158,18 +176,44 @@ class VCardTest < Minitest::Test
     assert_equal "contact requires a name", error.message
   end
 
-  def test_name_without_display_string_raises
+  def test_name_with_both_display_and_components_raises
     error = assert_raises(ArgumentError) do
       render(<<~KDL)
         contact {
-          name {
-            family "Bach"
+          name "Ludwig van Beethoven" {
+            family "van Beethoven"
           }
         }
       KDL
     end
 
-    assert_equal "name requires a display string", error.message
+    assert_equal "name takes a display string or component children, not both", error.message
+  end
+
+  def test_name_with_neither_display_nor_components_raises
+    error = assert_raises(ArgumentError) do
+      render(<<~KDL)
+        contact {
+          name
+        }
+      KDL
+    end
+
+    assert_equal "name requires a display string or component children", error.message
+  end
+
+  def test_all_empty_components_raise
+    error = assert_raises(ArgumentError) do
+      render(<<~KDL)
+        contact {
+          name {
+            family ""
+          }
+        }
+      KDL
+    end
+
+    assert_equal "name components cannot all be empty", error.message
   end
 
   def test_property_without_value_raises
@@ -279,6 +323,17 @@ class VCardTest < Minitest::Test
     fields
   end
 
+  # The expected FN: the display string for a display-only name, or the
+  # components joined in display order for a components-only name.
+  # Values are normalized (CR/CRLF → LF) the way the renderer's escape
+  # step normalizes them before writing.
+  def expected_fn(display, components)
+    return normalize(display) if components.values.none?
+
+    %w[prefix given additional family suffix]
+      .map { normalize(components.fetch(it.to_sym) || "") }.reject(&:empty?).join(" ")
+  end
+
   # The display-name heuristic, reimplemented: last token family, the
   # rest given.
   def derived_n(display)
@@ -298,7 +353,7 @@ class VCardTest < Minitest::Test
     if name_children.empty?
       contact << "  name #{kdl_string(display)}\n"
     else
-      contact << "  name #{kdl_string(display)} {\n#{name_children.map { "    #{it}\n" }.join}  }\n"
+      contact << "  name {\n#{name_children.map { "    #{it}\n" }.join}  }\n"
     end
     phones.each do |value, type|
       suffix = type ? " type=\"#{type}\"" : ""
@@ -367,6 +422,10 @@ class VCardTest < Minitest::Test
         max_size: 3
       ))
       uid = tc.draw(uuids)
+      # The renderer rejects a components-only name whose parts are all
+      # empty (FN would have nothing to draw from), so the generator
+      # honors that contract.
+      tc.assume(components.values.any? { !it.nil? && !it.empty? })
 
       kdl = kdl_contact(
         display:,
@@ -380,7 +439,7 @@ class VCardTest < Minitest::Test
       vcard = ProTacts::VCard.render(KDL.parse(kdl).nodes.first, uid:)
       parsed = parse_vcard(vcard)
 
-      raise "FN mismatch" unless parsed.fetch(:fn) == normalize(display)
+      raise "FN mismatch" unless parsed.fetch(:fn) == expected_fn(display, components)
       raise "UID mismatch" unless parsed.fetch(:uid) == uid
 
       expected_n = if components.values.none?
