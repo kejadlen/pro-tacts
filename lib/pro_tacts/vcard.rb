@@ -39,10 +39,11 @@ module ProTacts
         *typed_property_lines(contact, "email", "EMAIL"),
         *address_lines(contact),
         "UID:#{escape(uid)}",
-        "END:VCARD"
+        "END:VCARD",
+        "", # trailing newline
       ]
 
-      "#{lines.map { |line| fold(line) }.join("\r\n")}\r\n"
+      lines.map { fold(it) }.join("\r\n")
     end
 
     # `name "John Smith"` derives N:Smith;John;;; (last token family, the
@@ -50,11 +51,9 @@ module ProTacts
     # when any of them is present, N is built from exactly those, and
     # every missing component renders empty.
     def structured_name(name)
-      overrides = name.children.each.with_object({}) do |child, acc|
-        next unless NAME_COMPONENTS.include?(child.name)
-
-        acc[child.name] = string_argument(child)
-      end
+      overrides = name.children
+        .select { |child| NAME_COMPONENTS.include?(child.name) }
+        .to_h { |child| [child.name, string_argument(child)] }
 
       return components(NAME_COMPONENTS.map { |component| overrides.fetch(component, "") }) unless overrides.empty?
 
@@ -78,11 +77,9 @@ module ProTacts
     # counterpart and stay empty.
     def address_lines(contact)
       contact.children.select { |node| node.name == "address" }.map do |node|
-        parts = node.children.each.with_object({}) do |child, acc|
-          next unless ADDRESS_PARTS.include?(child.name)
-
-          acc[child.name] = string_argument(child)
-        end
+        parts = node.children
+          .select { |child| ADDRESS_PARTS.include?(child.name) }
+          .to_h { |child| [child.name, string_argument(child)] }
 
         components = ["", "", *ADDRESS_PARTS.map { |part| parts.fetch(part, "") }]
         type = node.properties["type"]&.value

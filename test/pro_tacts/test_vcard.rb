@@ -111,9 +111,7 @@ class VCardTest < Minitest::Test
     assert_operator physical.length, :>, 1, "expected folding"
     physical.each { |line| assert_operator line.bytesize, :<=, 75 }
 
-    logical = physical.each.with_object([]) do |line, acc|
-      line.start_with?(" ") ? acc.last << line[1..] : acc << line.dup
-    end
+    logical = unfold(physical)
     assert_equal "FN:#{"x" * 30}#{("é" * 60)}", logical.find { |l| l.start_with?("FN:") }
   end
 
@@ -217,12 +215,16 @@ class VCardTest < Minitest::Test
     "\"#{escaped}\""
   end
 
-  # Joins physical lines back into logical ones by removing the folding
-  # break: CRLF followed by a single space.
+  # Joins physical lines back into logical ones: a line starting with a
+  # single space continues the previous one. slice_when starts a new
+  # group wherever the next line is not a continuation.
   def logical_lines(vcard)
-    vcard.split("\r\n").each.with_object([]) do |line, acc|
-      line.start_with?(" ") ? acc.last << line[1..] : acc << line.dup
-    end
+    unfold(vcard.split("\r\n"))
+  end
+
+  def unfold(lines)
+    lines.slice_when { |_line, next_line| !next_line.start_with?(" ") }
+      .map { |group| group.first + group.drop(1).map { |line| line[1..] }.join }
   end
 
   # Reverses RFC 2426 section 2.4.2 escaping.
