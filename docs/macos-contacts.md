@@ -37,9 +37,12 @@ same Settings pane.
 
 The profile carries the hostname, fixed dev credentials, and SSL —
 `CardDAVPrincipalURL` is deliberately omitted so the
-account gets an empty Server Path, exercising discovery. Fixed payload
-identifiers mean a reinstall replaces the account in place, and removal is
-what resets the client's cached discovery results. Apple's device-management
+account gets an empty Server Path, exercising discovery. Every render gets a
+fresh identifier and UUIDs, so each install provisions a cold account with
+no cached sync state — that is deliberate for the experiment loop. The flip
+side: installing without removing first orphans the previous account, so
+`rake profile:remove` sweeps every profile carrying the pro-tacts prefix
+by parsing `profiles list`. Apple's device-management
 reference marks the CardDAV payload as allowing manual install, so no MDM is
 involved.
 

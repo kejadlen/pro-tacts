@@ -33,16 +33,29 @@ file "carddav.mobileconfig" => "lib/pro_tacts/profile.rb" do |task|
 end
 
 namespace :profile do
-  desc "Stage the configuration profile and open Settings → Profiles; click Install there"
-  task install: "carddav.mobileconfig" do |task|
-    sh "open", task.prerequisites.first
+  # A fresh identity per install is the point, so this renders directly
+  # instead of going through the mtime-based file task.
+  desc "Stage a fresh configuration profile; approve it in System Settings → Profiles"
+  task :install do
+    require "pro_tacts/profile"
+
+    File.write("carddav.mobileconfig", ProTacts::Profile.render(
+      hostname: ENV.fetch("PRO_TACTS_HOSTNAME")
+    ))
+    sh "open", "carddav.mobileconfig"
     sh "open", "x-apple.systempreferences:com.apple.preferences.configurationprofiles"
   end
 
-  desc "Remove the configuration profile"
+  desc "Remove every installed pro-tacts configuration profile"
   task :remove do
     require "pro_tacts/profile"
-    sh "profiles", "remove", "-identifier", ProTacts::Profile::PAYLOAD_IDENTIFIER
+
+    identifiers = ProTacts::Profile.installed_identifiers(`profiles list`)
+    if identifiers.empty?
+      puts "No pro-tacts profiles found; remove by hand in System Settings → Profiles if one lingers."
+    else
+      identifiers.each { |identifier| sh "profiles", "remove", "-identifier", identifier }
+    end
   end
 end
 

@@ -4,21 +4,39 @@ require "nokogiri"
 
 module ProTacts
   # Renders the configuration profile that provisions the pro-tacts CardDAV
-  # account on macOS, so the resync loop is `rake profile` plus one
-  # `profiles install` instead of the Internet Accounts dance. Payload keys
-  # per Apple's Device Management reference for com.apple.carddav.account.
+  # account on macOS, so the resync loop is one rake command instead of the
+  # Internet Accounts dance. Payload keys per Apple's Device Management
+  # reference for com.apple.carddav.account.
   #
-  # UUIDs are fixed so reinstalling replaces the profile in place and
-  # `profiles remove -identifier` always targets the same one.
+  # Every render carries a fresh identifier and fresh UUIDs: the account
+  # identity follows the profile, so each install provisions a cold account
+  # with no cached sync state — exactly what the experiment loop needs. The
+  # cost is that reinstalling without removing first orphans the old account;
+  # rake profile:remove sweeps every profile carrying our prefix.
   class Profile
-    PAYLOAD_IDENTIFIER = "dev.kejadlen.pro-tacts.carddav"
-    TOP_LEVEL_UUID = "6F1E2D3C-4B5A-4E7F-8C9D-0A1B2C3D4E5F"
-    PAYLOAD_UUID = "7A2F3E4D-5C6B-4F80-9DAE-1B2C3D4E5F6A"
+    IDENTIFIER_PREFIX = "dev.kejadlen.pro-tacts.carddav"
+    HEX = "0123456789abcdef"
 
     # Username and password are a throwaway fictional pair, inlined in the
     # template. Real auth is its own backlog task.
     def self.render(hostname:)
-      template % { hostname: escape(hostname) }
+      identifier = "#{IDENTIFIER_PREFIX}-#{unique_hex}"
+
+      template % {
+        hostname: escape(hostname),
+        identifier:,
+        account_identifier: "#{identifier}.account",
+        top_level_uuid: uuid,
+        payload_uuid: uuid
+      }
+    end
+
+    # Picks our profile identifiers out of `profiles list` output so
+    # profile:remove can sweep every pro-tacts profile, not just the latest.
+    def self.installed_identifiers(list_output)
+      list_output.scan(/^\s*identifier:\s*(\S+)/).flatten
+        .select { |identifier| identifier.start_with?(IDENTIFIER_PREFIX) }
+        .uniq
     end
 
     def self.template
@@ -35,9 +53,9 @@ module ProTacts
               <key>PayloadVersion</key>
               <integer>1</integer>
               <key>PayloadIdentifier</key>
-              <string>#{PAYLOAD_IDENTIFIER}.account</string>
+              <string>%{account_identifier}</string>
               <key>PayloadUUID</key>
-              <string>#{PAYLOAD_UUID}</string>
+              <string>%{payload_uuid}</string>
               <key>PayloadDisplayName</key>
               <string>pro-tacts</string>
               <key>PayloadOrganization</key>
@@ -57,7 +75,7 @@ module ProTacts
           <key>PayloadDisplayName</key>
           <string>pro-tacts CardDAV</string>
           <key>PayloadIdentifier</key>
-          <string>#{PAYLOAD_IDENTIFIER}</string>
+          <string>%{identifier}</string>
           <key>PayloadOrganization</key>
           <string>pro-tacts</string>
           <key>PayloadRemovalDisallowed</key>
@@ -67,7 +85,7 @@ module ProTacts
           <key>PayloadType</key>
           <string>Configuration</string>
           <key>PayloadUUID</key>
-          <string>#{TOP_LEVEL_UUID}</string>
+          <string>%{top_level_uuid}</string>
           <key>PayloadVersion</key>
           <integer>1</integer>
         </dict>
@@ -80,6 +98,14 @@ module ProTacts
 
     def self.escape(text)
       text.gsub("&", "&amp;").gsub("<", "&lt;").gsub(">", "&gt;")
+    end
+
+    def self.unique_hex
+      "#{Time.now.utc.strftime('%Y%m%d%H%M%S%L')}#{rand(1 << 16).to_s(16)}"
+    end
+
+    def self.uuid
+      [8, 4, 4, 4, 12].map { |n| Array.new(n) { HEX[rand(16)] }.join }.join("-")
     end
   end
 end
