@@ -66,6 +66,35 @@ class ProfileTest < Minitest::Test
     ], ProTacts::Profile.installed_identifiers(list_output)
   end
 
+  def test_installed_identifiers_reads_attribute_format_output
+    list_output = <<~OUTPUT
+      alpha[1] attribute: profileIdentifier: #{ProTacts::Profile::IDENTIFIER_PREFIX}-20260818155835720a9db
+      There are 1 user configuration profiles installed for 'alpha'
+    OUTPUT
+
+    assert_equal ["#{ProTacts::Profile::IDENTIFIER_PREFIX}-20260818155835720a9db"],
+      ProTacts::Profile.installed_identifiers(list_output)
+  end
+
+  def test_installed_identifiers_reads_table_format_output
+    list_output = <<~OUTPUT
+      Profiles:
+          identifier                             display name
+          ------------------------------------   --------------
+          #{ProTacts::Profile::IDENTIFIER_PREFIX}-20260818ab12   pro-tacts CardDAV
+          com.example.unrelated                  Work
+      OUTPUT
+
+    assert_equal ["#{ProTacts::Profile::IDENTIFIER_PREFIX}-20260818ab12"],
+      ProTacts::Profile.installed_identifiers(list_output)
+  end
+
+  def test_installed_identifiers_ignores_longer_identifiers_containing_the_prefix
+    list_output = "com.example.#{ProTacts::Profile::IDENTIFIER_PREFIX}-fake\n"
+
+    assert_empty ProTacts::Profile.installed_identifiers(list_output)
+  end
+
   def test_installed_identifiers_is_empty_without_ours
     list_output = "  identifier: com.example.unrelated\n"
 

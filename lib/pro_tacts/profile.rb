@@ -33,10 +33,11 @@ module ProTacts
 
     # Picks our profile identifiers out of `profiles list` output so
     # profile:remove can sweep every pro-tacts profile, not just the latest.
+    # Scans for the prefix anywhere in the output rather than assuming a
+    # key-value layout, since the listing format has changed across macOS
+    # versions (key-value today, table under later releases).
     def self.installed_identifiers(list_output)
-      list_output.scan(/^\s*identifier:\s*(\S+)/).flatten
-        .select { |identifier| identifier.start_with?(IDENTIFIER_PREFIX) }
-        .uniq
+      list_output.scan(/(?<![\w.-])#{Regexp.escape(IDENTIFIER_PREFIX)}-[\w.-]+/).uniq
     end
 
     def self.template
