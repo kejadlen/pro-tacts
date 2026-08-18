@@ -15,12 +15,10 @@ module ProTacts
     TOP_LEVEL_UUID = "6F1E2D3C-4B5A-4E7F-8C9D-0A1B2C3D4E5F"
     PAYLOAD_UUID = "7A2F3E4D-5C6B-4F80-9DAE-1B2C3D4E5F6A"
 
-    def self.render(hostname:, username:, password:)
-      template % {
-        hostname: escape(hostname),
-        username: escape(username),
-        password: escape(password)
-      }
+    # Username and password are a throwaway fictional pair, inlined in the
+    # template. Real auth is its own backlog task.
+    def self.render(hostname:)
+      template % { hostname: escape(hostname) }
     end
 
     def self.template
@@ -49,9 +47,9 @@ module ProTacts
               <key>CardDAVHostName</key>
               <string>%{hostname}</string>
               <key>CardDAVUsername</key>
-              <string>%{username}</string>
+              <string>alpha@example.com</string>
               <key>CardDAVPassword</key>
-              <string>%{password}</string>
+              <string>carddav-dev</string>
               <key>CardDAVUseSSL</key>
               <true/>
             </dict>

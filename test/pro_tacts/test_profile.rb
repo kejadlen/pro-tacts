@@ -5,8 +5,8 @@ require_relative "../test_helper"
 require "pro_tacts/profile"
 
 class ProfileTest < Minitest::Test
-  def render(hostname: "example.ts.net", username: "a@b.com", password: "a")
-    ProTacts::Profile.render(hostname:, username:, password:)
+  def render(hostname: "example.ts.net")
+    ProTacts::Profile.render(hostname:)
   end
 
   def test_is_well_formed_xml
@@ -17,12 +17,12 @@ class ProfileTest < Minitest::Test
     assert_includes render, "<string>com.apple.carddav.account</string>"
   end
 
-  def test_embeds_credentials_and_hostname
+  def test_embeds_hostname_and_fixed_dev_credentials
     xml = render
 
     assert_includes xml, "<string>example.ts.net</string>"
-    assert_includes xml, "<string>a@b.com</string>"
-    assert_includes xml, "<string>a</string>"
+    assert_includes xml, "<string>alpha@example.com</string>"
+    assert_includes xml, "<string>carddav-dev</string>"
   end
 
   def test_enables_ssl

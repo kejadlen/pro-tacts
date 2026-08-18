@@ -19,24 +19,30 @@ task :fixtures do
   ExchangeFixtures.record_responses(ProTacts::Web)
 end
 
-desc "Generate carddav.mobileconfig to provision the macOS account"
-task :profile do
+desc "Render the macOS configuration profile (carddav.mobileconfig)"
+task profile: "carddav.mobileconfig"
+
+# Rebuilds when the template changes but not when PRO_TACTS_HOSTNAME does;
+# delete carddav.mobileconfig to force a rerender.
+file "carddav.mobileconfig" => "lib/pro_tacts/profile.rb" do |task|
   require "pro_tacts/profile"
 
-  # Throwaway credentials for the dev loop; real auth is its own backlog task.
-  File.write("carddav.mobileconfig", ProTacts::Profile.render(
-    hostname: ENV.fetch("PRO_TACTS_HOSTNAME"),
-    username: "a@b.com",
-    password: "a"
+  File.write(task.name, ProTacts::Profile.render(
+    hostname: ENV.fetch("PRO_TACTS_HOSTNAME")
   ))
-  identifier = ProTacts::Profile::PAYLOAD_IDENTIFIER
-  puts <<~MESSAGE
-    Wrote carddav.mobileconfig. Install:
-      sudo profiles install -type configuration -path carddav.mobileconfig
-    Remove:
-      sudo profiles remove -identifier #{identifier}
-    Recent macOS may ask you to approve the profile in System Settings → Profiles.
-  MESSAGE
+end
+
+namespace :profile do
+  desc "Install the configuration profile (sudo)"
+  task install: "carddav.mobileconfig" do |task|
+    sh "sudo", "profiles", "install", "-type", "configuration", "-path", task.prerequisites.first
+  end
+
+  desc "Remove the configuration profile (sudo)"
+  task :remove do
+    require "pro_tacts/profile"
+    sh "sudo", "profiles", "remove", "-identifier", ProTacts::Profile::PAYLOAD_IDENTIFIER
+  end
 end
 
 task default: :test

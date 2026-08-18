@@ -26,16 +26,12 @@ refusing a redirect) that never reach the server at all.
 
 ## The account setup path
 
-The fastest path is a configuration profile: `rake profile` (with
-`PRO_TACTS_HOSTNAME` set) writes `carddav.mobileconfig`, then
+The fastest path is a configuration profile: `rake profile:install` (with
+`PRO_TACTS_HOSTNAME` set) renders `carddav.mobileconfig` and installs it;
+`rake profile:remove` removes it. Both shell out to sudo.
 
-```sh
-sudo profiles install -type configuration -path carddav.mobileconfig
-sudo profiles remove -identifier dev.kejadlen.pro-tacts.carddav
-```
-
-adds and removes the account. The profile carries the hostname,
-credentials, and SSL — `CardDAVPrincipalURL` is deliberately omitted so the
+The profile carries the hostname, fixed dev credentials, and SSL —
+`CardDAVPrincipalURL` is deliberately omitted so the
 account gets an empty Server Path, exercising discovery. Fixed payload
 identifiers mean a reinstall replaces the account in place, and removal is
 what resets the client's cached discovery results. Recent macOS may stage
