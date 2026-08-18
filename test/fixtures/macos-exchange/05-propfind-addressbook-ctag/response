@@ -11,8 +11,8 @@ Content-Type: text/xml
         <d:collection/>
         <card:addressbook/>
       </d:resourcetype>
-      <cs:getctag>ctag-1</cs:getctag>
-      <d:sync-token>http://pro-tacts/sync/1</d:sync-token>
+      <cs:getctag>ctag-2</cs:getctag>
+      <d:sync-token>http://pro-tacts/sync/2</d:sync-token>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>

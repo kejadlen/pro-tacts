@@ -152,7 +152,7 @@ module ProTacts
             response.status = 207
 
             contact_etag = %("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
-            collection_ctag = "ctag-1"
+            collection_ctag = "ctag-2"
             depth = request.env["HTTP_DEPTH"] || "infinity"
 
             # Check if this is an etag-only request (Depth:1 listing)
@@ -195,7 +195,7 @@ module ProTacts
                         <card:addressbook/>
                       </d:resourcetype>
                       <cs:getctag>#{collection_ctag}</cs:getctag>
-                      <d:sync-token>http://pro-tacts/sync/1</d:sync-token>
+                      <d:sync-token>http://pro-tacts/sync/2</d:sync-token>
                     </d:prop>
                     <d:status>HTTP/1.1 200 OK</d:status>
                   </d:propstat>
