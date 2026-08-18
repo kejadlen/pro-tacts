@@ -3,16 +3,7 @@ Content-Type: text/xml
 
 <?xml version="1.0" encoding="UTF-8"?>
 <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav" xmlns:cs="http://calendarserver.org/ns/">
-  <d:response>
-  <d:href>/dav/addressbook/</d:href>
-  <d:propstat>
-    <d:prop>
-      <d:getetag>"ctag-2"</d:getetag>
-    </d:prop>
-    <d:status>HTTP/1.1 200 OK</d:status>
-  </d:propstat>
-</d:response>
-
+  
   <d:response>
   <d:href>/dav/addressbook/AB12C345-6789-0DEF-1234-567890ABCDEF.vcf</d:href>
   <d:propstat>

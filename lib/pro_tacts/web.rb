@@ -147,18 +147,9 @@ module ProTacts
             etag_only = body.include?("getetag") && !body.include?("displayname") && !body.include?("resourcetype")
 
             if etag_only
-              # Simple etag listing for sync
-              collection_response = <<~XML
-                <d:response>
-                  <d:href>/dav/addressbook/</d:href>
-                  <d:propstat>
-                    <d:prop>
-                      <d:getetag>"#{collection_ctag}"</d:getetag>
-                    </d:prop>
-                    <d:status>HTTP/1.1 200 OK</d:status>
-                  </d:propstat>
-                </d:response>
-              XML
+              # Etag-only ask wants the members; the collection self-entry
+              # is omitted until a client is found to need it.
+              collection_response = ""
 
               contact_response = <<~XML
                 <d:response>
