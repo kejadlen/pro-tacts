@@ -6,6 +6,7 @@ require "digest"
 require "net/http"
 require "rbconfig"
 require "fileutils"
+require "hegel/libhegel_version"
 
 require "minitest/test_task"
 
@@ -13,12 +14,14 @@ Minitest::TestTask.create
 
 # The hegeltest gem drives a native libhegel engine that ships separately
 # (the gem is pre-release and bundles no binary yet). This task stages it
-# for the host platform, mirroring hegel-ruby's own libhegel:fetch: pinned
-# release asset from hegeldev/hegel-rust, verified against its published
-# SHA-256, installed under tmp/libhegel/<version>/ (gitignored). The
-# directory form of HEGEL_LIBHEGEL_PATH in .envrc resolves whichever
-# platform's asset landed there.
-LIBHEGEL_VERSION = "0.32.5"
+# for the host platform, mirroring hegel-ruby's own libhegel:fetch: the
+# release asset matching the gem's engine version, verified against its
+# published SHA-256, installed under tmp/libhegel/<version>/ (gitignored).
+# The version comes from the gem — the binding targets a specific engine
+# ABI, so the gem is the source of truth, not this file. The directory form
+# of HEGEL_LIBHEGEL_PATH in .envrc resolves whichever platform's asset
+# landed there.
+LIBHEGEL_VERSION = Hegel::LIBHEGEL_VERSION
 LIBHEGEL_ASSETS = {
   "arm64-darwin" => "libhegel-darwin-arm64.dylib",
   "aarch64-linux" => "libhegel-linux-arm64.so",
