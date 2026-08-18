@@ -194,6 +194,11 @@ module ProTacts
                         <d:collection/>
                         <card:addressbook/>
                       </d:resourcetype>
+                      <d:supported-report-set>
+                        <d:supported-report>
+                          <d:report><d:sync-collection/></d:report>
+                        </d:supported-report>
+                      </d:supported-report-set>
                       <cs:getctag>#{collection_ctag}</cs:getctag>
                       <d:sync-token>http://pro-tacts/sync/2</d:sync-token>
                     </d:prop>
