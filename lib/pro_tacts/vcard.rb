@@ -16,6 +16,15 @@ module ProTacts
 
     NAME_COMPONENTS = %w[family given additional prefix suffix].freeze
     ADDRESS_PARTS = %w[street city state zip country].freeze
+    CONTACT_FIELDS = %w[name phone email address].freeze
+
+    # Properties each node accepts; anything else is a typo silently
+    # dropping data, so it raises.
+    ALLOWED_PROPERTIES = {
+      "phone" => %w[type],
+      "email" => %w[type],
+      "address" => %w[type]
+    }.freeze
 
     TEXT_ESCAPES = {
       "\\" => "\\\\",
@@ -27,6 +36,9 @@ module ProTacts
     module_function
 
     def render(contact, uid:)
+      validate_children(contact, CONTACT_FIELDS, "contact")
+      validate_properties(contact)
+
       name = contact.children.find { it.name == "name" }
       raise ArgumentError, "contact requires a name" unless name
 
@@ -56,24 +68,29 @@ module ProTacts
     # two spellings of the same truth, and silently preferring one would
     # hide the disagreement. Returns [N components, FN].
     def name_fields(name)
+      validate_children(name, NAME_COMPONENTS, "name")
+      validate_properties(name)
+
       overrides = name.children.select { NAME_COMPONENTS.include?(it.name) }
 
       case [name.arguments, overrides]
+      in [[], []]
+        raise ArgumentError, "name requires a display string or component children"
       in [Array[_, *], Array[_, *]]
         raise ArgumentError, "name takes a display string or component children, not both"
       in [Array[_, *], []]
-        display = display_name(name)
+        display = name.arguments.first.value.to_s
         tokens = display.split
         family = tokens.last || ""
         given = tokens.length > 1 ? tokens.first(tokens.length - 1).join(" ") : ""
         [[family, given, "", "", ""], display]
-      in [[], []]
-        raise ArgumentError, "name requires a display string or component children"
       in [[], _]
         values = overrides.to_h { [it.name, string_argument(it)] }
         n = NAME_COMPONENTS.map { values.fetch(it, "") }
         fn = %w[prefix given additional family suffix]
-          .map { values.fetch(it, "") }.reject(&:empty?).join(" ")
+          .map { values.fetch(it, "") }
+          .reject(&:empty?)
+          .join(" ")
         # FN is required (RFC 2426 section 4.1.1), so components that are
         # all empty have nothing to render it from.
         raise ArgumentError, "name components cannot all be empty" if fn.empty?
@@ -84,6 +101,7 @@ module ProTacts
 
     def typed_property_lines(contact, kdl_name, vcard_name)
       contact.children.select { it.name == kdl_name }.map do |node|
+        validate_properties(node)
         type = node.properties["type"]&.value
         prefix = type ? "#{vcard_name};TYPE=#{type}" : vcard_name
         "#{prefix}:#{escape(string_argument(node))}"
@@ -95,6 +113,8 @@ module ProTacts
     # counterpart and stay empty.
     def address_lines(contact)
       contact.children.select { it.name == "address" }.map do |node|
+        validate_children(node, ADDRESS_PARTS, "address")
+        validate_properties(node)
         parts = node.children
           .select { ADDRESS_PARTS.include?(it.name) }
           .to_h { [it.name, string_argument(it)] }
@@ -128,7 +148,7 @@ module ProTacts
 
       folded = +""
       width = 0
-      line.each_char do |char|
+      line.chars.each do |char|
         if width + char.bytesize > LINE_LIMIT
           folded << "\r\n "
           width = 1
@@ -139,15 +159,26 @@ module ProTacts
       folded
     end
 
-    def display_name(name)
-      name.arguments.first.value.to_s
-    end
-
     def string_argument(node)
       argument = node.arguments.first
       raise ArgumentError, "#{node.name} requires a string argument" if argument.nil?
 
       argument.value.to_s
+    end
+
+    def validate_children(node, known, context)
+      unknown = node.children.reject { known.include?(it.name) }
+      return if unknown.empty?
+
+      raise ArgumentError, "unknown key in #{context}: #{unknown.first.name}"
+    end
+
+    def validate_properties(node)
+      allowed = ALLOWED_PROPERTIES.fetch(node.name, [])
+      unknown = node.properties.keys - allowed
+      return if unknown.empty?
+
+      raise ArgumentError, "unknown property on #{node.name}: #{unknown.first}"
     end
   end
 end

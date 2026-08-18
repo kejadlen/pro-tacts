@@ -229,6 +229,63 @@ class VCardTest < Minitest::Test
     assert_equal "phone requires a string argument", error.message
   end
 
+  def test_unknown_contact_key_raises
+    error = assert_raises(ArgumentError) do
+      render(<<~KDL)
+        contact {
+          name "John"
+          emial "john@example.com"
+        }
+      KDL
+    end
+
+    assert_equal "unknown key in contact: emial", error.message
+  end
+
+  def test_unknown_name_component_raises
+    error = assert_raises(ArgumentError) do
+      render(<<~KDL)
+        contact {
+          name {
+            family "Smith"
+            middle "Q"
+          }
+        }
+      KDL
+    end
+
+    assert_equal "unknown key in name: middle", error.message
+  end
+
+  def test_unknown_address_key_raises
+    error = assert_raises(ArgumentError) do
+      render(<<~KDL)
+        contact {
+          name "John"
+          address {
+            street "123 Main St"
+            province "IL"
+          }
+        }
+      KDL
+    end
+
+    assert_equal "unknown key in address: province", error.message
+  end
+
+  def test_unknown_property_raises
+    error = assert_raises(ArgumentError) do
+      render(<<~KDL)
+        contact {
+          name "John"
+          phone "+1-555-1234" tpye="mobile"
+        }
+      KDL
+    end
+
+    assert_equal "unknown property on phone: tpye", error.message
+  end
+
   ## Property tests
   #
   # The oracles are deliberately independent of the renderer: an
