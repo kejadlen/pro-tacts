@@ -16,4 +16,5 @@ group :development do
   gem "irb"
   gem "minitest"
   gem "rack-test"
+  gem "ruby-lsp"
 end
