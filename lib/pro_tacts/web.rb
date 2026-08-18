@@ -205,6 +205,10 @@ module ProTacts
                   <d:href>/dav/addressbook/</d:href>
                   <d:propstat>
                     <d:prop>
+                      <d:resourcetype>
+                        <d:collection/>
+                        <card:addressbook/>
+                      </d:resourcetype>
                       <cs:getctag>#{collection_ctag}</cs:getctag>
                       <d:sync-token>http://pro-tacts/sync/1</d:sync-token>
                     </d:prop>
