@@ -45,7 +45,7 @@ file LIBHEGEL_PATH do |task|
     sh "gh", "release", "download", "v#{LIBHEGEL_VERSION}",
       "--repo", "hegeldev/hegel-rust",
       "--pattern", asset, "--pattern", "#{asset}.sha256",
-      "--dir", staging
+      "--dir", staging, verbose: false
 
     expected = File.read(File.join(staging, "#{asset}.sha256")).split.first
     actual = Digest::SHA256.hexdigest(File.binread(File.join(staging, asset)))
