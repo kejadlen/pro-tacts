@@ -24,10 +24,37 @@ serve as of 2026-08-14, so later work has a known-good baseline to change.
 See `docs/plans/2026-08-12-one-card-on-macos.md` for what that milestone
 established.
 
-The hardcoded responses are **not** the minimal set macOS needs. They were
-assembled from what working servers send, so some properties are certainly
-unnecessary. Reducing them to the minimum is its own task, and until that
-happens, do not read the current output as a specification.
+## The minimal set macOS Contacts needs
+
+The responses are the verified minimum for macOS 26.5.1 Contacts, found
+by removing properties and re-provisioning until the card stopped
+appearing (August 2026; per-round evidence in the task comments). This is
+a per-client property, not a universal spec: iOS and other macOS versions
+are untested and may need more — the fixture replay in `test/fixtures/`
+is the harness to run when one of them misbehaves. What each response must
+carry:
+
+- `PROPFIND /` and `/.well-known/carddav`: `current-user-principal` only.
+- `OPTIONS` under `/dav/`: `DAV: addressbook` — the class 1, 3, and
+  access-control claims are unnecessary — plus the `Allow` list.
+- `PROPFIND` on the principal: `addressbook-home-set` only.
+- `PROPFIND` on the address book collection: `resourcetype` (collection +
+  addressbook), `supported-report-set` advertising `sync-collection`,
+  `getctag`, and `sync-token`. At `Depth: 1`, member `getetag` entries —
+  the collection itself needs no self-entry.
+- `REPORT addressbook-multiget`: `getetag` plus `address-data` for each
+  requested href.
+- `REPORT sync-collection`: `getetag` only — the client refetches changed
+  cards through multiget or `GET` on its own.
+- `GET` a card: the vCard body plus an `ETag` header.
+
+Three properties are load-bearing in non-obvious ways, documented in
+`docs/macos-contacts.md`: the collection's `resourcetype` (without
+`card:addressbook` the client drops the account data), the
+`sync-collection` advertisement (without it the warm sync never runs), and
+`getctag` (without it no vCard is ever requested). Everything else the
+client asks for — displayname, privileges, owner, quotas, push transports,
+me-card, principal-URL, the multiget/query advertisements — is optional.
 
 ## Protocol references
 
