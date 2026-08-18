@@ -39,10 +39,10 @@ namespace :profile do
     sh "open", "x-apple.systempreferences:com.apple.preferences.configurationprofiles"
   end
 
-  desc "Remove the configuration profile (sudo); if the CLI refuses, remove it in System Settings → Profiles"
+  desc "Remove the configuration profile"
   task :remove do
     require "pro_tacts/profile"
-    sh "sudo", "profiles", "remove", "-identifier", ProTacts::Profile::PAYLOAD_IDENTIFIER
+    sh "profiles", "remove", "-identifier", ProTacts::Profile::PAYLOAD_IDENTIFIER
   end
 end
 
