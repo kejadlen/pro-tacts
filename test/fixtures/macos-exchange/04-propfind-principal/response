@@ -7,24 +7,9 @@ Content-Type: text/xml
     <d:href>/dav/principal/</d:href>
     <d:propstat>
       <d:prop>
-        <d:displayname>Default Principal</d:displayname>
-        <d:principal-URL>
-          <d:href>/dav/principal/</d:href>
-        </d:principal-URL>
-        <d:resourcetype>
-          <d:principal/>
-        </d:resourcetype>
         <card:addressbook-home-set>
           <d:href>/dav/addressbook/</d:href>
         </card:addressbook-home-set>
-        <d:supported-report-set>
-          <d:supported-report>
-            <d:report><card:addressbook-multiget/></d:report>
-          </d:supported-report>
-          <d:supported-report>
-            <d:report><card:addressbook-query/></d:report>
-          </d:supported-report>
-        </d:supported-report-set>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
