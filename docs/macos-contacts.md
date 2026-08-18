@@ -119,6 +119,17 @@ and `sync-token` but the collection's `resourcetype` does not include
 no `REPORT`, no card requests, an empty account. Verified by minimization
 rounds 1–2 on 2026-08-17.
 
+## Warm sync gates on the collection advertising its reports
+
+An incremental sync (`sync-collection` REPORT with a stored token) only
+happens if the collection's `PROPFIND` answer advertises `sync-collection`
+in `supported-report-set`, per RFC 3253 report discovery. Without the
+advertisement the client does not fall back or rescan — it simply polls,
+sees the ctag, and never fetches, which presents as changes silently not
+arriving. A cold account does not hit this: first sync uses the etag
+listing plus `multiget`, which needs no advertisement. Verified by
+minimization rounds 3b/3c on 2026-08-18.
+
 ## One address book per account
 
 Through at least macOS 10.10, Contacts binds one address book per account
