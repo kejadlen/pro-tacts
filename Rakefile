@@ -33,10 +33,8 @@ file "carddav.mobileconfig" => "lib/pro_tacts/profile.rb" do |task|
 end
 
 namespace :profile do
-  # A fresh identity per install is the point, so this renders directly
-  # instead of going through the mtime-based file task.
-  desc "Stage a fresh configuration profile; approve it in System Settings → Profiles"
-  task :install do
+  desc "Remove installed pro-tacts profiles, then stage a fresh one for approval"
+  task install: :remove do
     require "pro_tacts/profile"
 
     File.write("carddav.mobileconfig", ProTacts::Profile.render(
