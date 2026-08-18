@@ -1,12 +1,15 @@
-# frozen_string_literal: true
 
-$LOAD_PATH.unshift(File.expand_path("lib", __dir__))
+require "pathname"
+
+$LOAD_PATH.unshift(Pathname.new(__dir__) / "lib")
 
 require "minitest/test_task"
 
 Minitest::TestTask.create
 
-Dir.glob("tasks/*.rake").sort.each { import it }
+Dir.glob("tasks/*.rake").sort.each do
+  import it
+end
 
 desc "Start development server, reloading on changes"
 task :dev do
@@ -54,7 +57,9 @@ namespace :profile do
     if identifiers.empty?
       puts "No pro-tacts profiles found; remove by hand in System Settings → Profiles if one lingers."
     else
-      identifiers.each { sh "profiles", "remove", "-identifier", it }
+      identifiers.each do
+        sh "profiles", "remove", "-identifier", it
+      end
     end
   end
 end

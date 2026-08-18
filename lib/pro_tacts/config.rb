@@ -1,4 +1,3 @@
-# frozen_string_literal: true
 
 module ProTacts
   # Single source of truth for configuration read from the environment.

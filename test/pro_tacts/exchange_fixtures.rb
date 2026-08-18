@@ -1,12 +1,12 @@
-# frozen_string_literal: true
 
+require "pathname"
 require "rack/test"
 
 # Loads and replays the recorded macOS Contacts exchange in
 # test/fixtures/macos-exchange. See that directory's README for provenance
 # and the request/response file format.
 module ExchangeFixtures
-  DIRECTORY = File.expand_path("../fixtures/macos-exchange", __dir__)
+  DIRECTORY = Pathname.new(__dir__).parent / "fixtures" / "macos-exchange"
 
   Step = Struct.new(:name, :method, :path, :headers, :body, keyword_init: true)
   Response = Struct.new(:status, :headers, :body, keyword_init: true)
@@ -18,7 +18,7 @@ module ExchangeFixtures
   class << self
     def steps
       Dir.children(DIRECTORY)
-        .select { |child| File.directory?(File.join(DIRECTORY, child)) }
+        .select { (DIRECTORY / it).directory? }
         .sort
         .map { |name| Step.new(name:, **parse_request(name)) }
     end
@@ -37,10 +37,10 @@ module ExchangeFixtures
     # Rack env for the recorded headers: Content-Type and Depth are the only
     # ones the app reads, but replaying all of them keeps the fidelity.
     def env_for(step)
-      step.headers.to_h do |name, value|
+      step.headers.to_h { |name, value|
         key = name == "Content-Type" ? "CONTENT_TYPE" : "HTTP_#{name.tr('-', '_').upcase}"
         [key, value]
-      end
+      }
     end
 
     # Replays every recorded request against the app and rewrites the
@@ -57,7 +57,7 @@ module ExchangeFixtures
     private
 
     def read(name, file)
-      File.read(File.join(DIRECTORY, name, file))
+      File.read(DIRECTORY / name / file)
     end
 
     def split_message(raw)
@@ -76,7 +76,7 @@ module ExchangeFixtures
       content = ([response.status.to_s] + headers).join("\n") + "\n\n"
       body = response.body.chomp
       content = "#{content}#{body}\n" unless body.empty?
-      File.write(File.join(DIRECTORY, step.name, "response"), content)
+      File.write(DIRECTORY / step.name / "response", content)
     end
   end
 end

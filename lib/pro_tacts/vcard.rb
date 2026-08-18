@@ -1,4 +1,3 @@
-# frozen_string_literal: true
 
 require "kdl"
 
@@ -23,14 +22,14 @@ module ProTacts
     ALLOWED_PROPERTIES = {
       "phone" => %w[type],
       "email" => %w[type],
-      "address" => %w[type]
+      "address" => %w[type],
     }.freeze
 
     TEXT_ESCAPES = {
       "\\" => "\\\\",
       ";" => "\\;",
       "," => "\\,",
-      "\n" => "\\n"
+      "\n" => "\\n",
     }.freeze
 
     module_function
@@ -100,19 +99,19 @@ module ProTacts
     end
 
     def typed_property_lines(contact, kdl_name, vcard_name)
-      contact.children.select { it.name == kdl_name }.map do |node|
+      contact.children.select { it.name == kdl_name }.map { |node|
         validate_properties(node)
         type = node.properties["type"]&.value
         prefix = type ? "#{vcard_name};TYPE=#{type}" : vcard_name
         "#{prefix}:#{escape(string_argument(node))}"
-      end
+      }
     end
 
     # ADR's seven components in order: pobox, extended address, street,
     # locality, region, postal code, country. The first two have no KDL
     # counterpart and stay empty.
     def address_lines(contact)
-      contact.children.select { it.name == "address" }.map do |node|
+      contact.children.select { it.name == "address" }.map { |node|
         validate_children(node, ADDRESS_PARTS, "address")
         validate_properties(node)
         parts = node.children
@@ -123,7 +122,7 @@ module ProTacts
         type = node.properties["type"]&.value
         prefix = type ? "ADR;TYPE=#{type}" : "ADR"
         "#{prefix}:#{components(components)}"
-      end
+      }
     end
 
     # Text values escape backslash, the component separator, and the

@@ -1,4 +1,3 @@
-# frozen_string_literal: true
 
 require_relative "../test_helper"
 
@@ -127,7 +126,9 @@ class VCardTest < Minitest::Test
 
     physical = vcard.split("\r\n")
     assert_operator physical.length, :>, 1, "expected folding"
-    physical.each { assert_operator it.bytesize, :<=, 75 }
+    physical.each do
+      assert_operator it.bytesize, :<=, 75
+    end
 
     logical = unfold(physical)
     assert_equal "FN:#{"x" * 30}#{("é" * 60)}", logical.find { it.start_with?("FN:") }
@@ -304,7 +305,7 @@ class VCardTest < Minitest::Test
   # control characters that KDL forbids raw inside a string become \u
   # escapes.
   def kdl_string(text)
-    escaped = normalize(text).chars.map do |char|
+    escaped = normalize(text).chars.map { |char|
       case char
       when "\\" then "\\\\"
       when '"' then '\\"'
@@ -312,7 +313,7 @@ class VCardTest < Minitest::Test
       when /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/ then format('\u{%02x}', char.ord)
       else char
       end
-    end.join
+    }.join
     "\"#{escaped}\""
   end
 
@@ -467,16 +468,16 @@ class VCardTest < Minitest::Test
         given: tc.draw(optional(text(max_size: 20))),
         additional: tc.draw(optional(text(max_size: 20))),
         prefix: tc.draw(optional(text(max_size: 20))),
-        suffix: tc.draw(optional(text(max_size: 20)))
+        suffix: tc.draw(optional(text(max_size: 20))),
       }
       phones = tc.draw(arrays(tuples(text(max_size: 30), optional(type)), max_size: 5))
       emails = tc.draw(arrays(tuples(text(max_size: 30), optional(type)), max_size: 5))
       addresses = tc.draw(arrays(
         tuples(
           text(max_size: 20), text(max_size: 20), text(max_size: 20),
-          text(max_size: 20), text(max_size: 20), optional(type)
+          text(max_size: 20), text(max_size: 20), optional(type),
         ),
-        max_size: 3
+        max_size: 3,
       ))
       uid = tc.draw(uuids)
       # The renderer rejects a components-only name whose parts are all

@@ -1,4 +1,3 @@
-# frozen_string_literal: true
 
 require_relative "../test_helper"
 
@@ -62,7 +61,7 @@ class ProfileTest < Minitest::Test
 
     assert_equal [
       "#{ProTacts::Profile::IDENTIFIER_PREFIX}-20260818ab12",
-      "#{ProTacts::Profile::IDENTIFIER_PREFIX}-20260818cd34"
+      "#{ProTacts::Profile::IDENTIFIER_PREFIX}-20260818cd34",
     ], ProTacts::Profile.installed_identifiers(list_output)
   end
 

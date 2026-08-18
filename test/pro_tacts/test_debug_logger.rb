@@ -1,4 +1,3 @@
-# frozen_string_literal: true
 
 require "minitest/autorun"
 require "logger"
@@ -25,8 +24,8 @@ class DebugLoggerTest < Minitest::Test
       "PATH_INFO" => "/dav/addressbook/",
       "QUERY_STRING" => "",
       "SERVER_PROTOCOL" => "HTTP/1.1",
-      "rack.input" => StringIO.new(body)
-    }.merge(headers.transform_keys { |k| "HTTP_#{k.to_s.upcase.tr('-', '_')}" })
+      "rack.input" => StringIO.new(body),
+    }.merge(headers.transform_keys { "HTTP_#{it.to_s.upcase.tr('-', '_')}" })
   end
 
   def test_dumps_request_line_with_method_path_and_protocol
@@ -53,7 +52,7 @@ class DebugLoggerTest < Minitest::Test
     read = nil
     app = ProTacts::DebugLogger.new(
       ->(e) { read = e["rack.input"].read; [200, {}, [""]] },
-      logger: Logger.new(StringIO.new)
+      logger: Logger.new(StringIO.new),
     )
 
     app.call(env(body: "<x/>"))
@@ -86,9 +85,10 @@ class DebugLoggerTest < Minitest::Test
 
   class OpenLogTest < Minitest::Test
     def test_appends_timestamped_lines_to_a_file_it_creates
+      require "pathname"
       require "tmpdir"
       Dir.mktmpdir do |dir|
-        path = File.join(dir, "nested", "debug.log")
+        path = Pathname.new(dir) / "nested" / "debug.log"
         logger = ProTacts::DebugLogger.open_log(path)
         logger.debug(">> PROPFIND / HTTP/1.1")
 

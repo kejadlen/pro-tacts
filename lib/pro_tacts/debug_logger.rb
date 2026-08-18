@@ -1,7 +1,7 @@
-# frozen_string_literal: true
 
 require "fileutils"
 require "logger"
+require "pathname"
 require "rack"
 
 module ProTacts
@@ -18,10 +18,10 @@ module ProTacts
     # (Logger syncs its own device), one timestamped line per dump. path
     # "stderr" writes to the process's stderr.
     def self.open_log(path)
-      target = if path == "stderr"
+      target = if path.to_s == "stderr"
                  $stderr
                else
-                 FileUtils.mkdir_p(File.dirname(path))
+                 FileUtils.mkdir_p(Pathname.new(path).dirname)
                  path
                end
 
@@ -48,17 +48,23 @@ module ProTacts
     private
 
     def log_request(env)
-      write(">>", "#{env['REQUEST_METHOD']} #{full_path(env)} #{env['SERVER_PROTOCOL']}")
-      each_header(env) { |name, value| write(">>", "#{name}: #{value}") }
+      write(">>", "#{env.fetch('REQUEST_METHOD')} #{full_path(env)} #{env.fetch('SERVER_PROTOCOL')}")
+      each_header(env) do |name, value|
+        write(">>", "#{name}: #{value}")
+      end
       body = read_request_body(env)
       write(">>", body) unless body.empty?
     end
 
     def log_response(status, headers, body)
       write("<<", "#{status}#{reason(status)}")
-      headers.each { |name, value| write("<<", "#{name}: #{value}") }
+      headers.each do |name, value|
+        write("<<", "#{name}: #{value}")
+      end
       parts = []
-      body.each { |part| parts << part }
+      body.each do |part|
+        parts << part
+      end
       body.close if body.respond_to?(:close)
       write("<<", parts.join) unless parts.join.empty?
       parts
@@ -101,7 +107,9 @@ module ProTacts
     end
 
     def write(prefix, text)
-      text.to_s.each_line(chomp: true) { |line| @logger.debug("#{prefix} #{line}") }
+      text.to_s.lines(chomp: true).each do |line|
+        @logger.debug("#{prefix} #{line}")
+      end
     end
   end
 end

@@ -1,4 +1,3 @@
-# frozen_string_literal: true
 
 require "pro_tacts"
 require "sentry-ruby"
@@ -141,7 +140,7 @@ module ProTacts
 
             contact_etag = %("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
             collection_ctag = "ctag-2"
-            depth = request.env["HTTP_DEPTH"] || "infinity"
+            depth = request.env.fetch("HTTP_DEPTH", "infinity")
 
             # Check if this is an etag-only request (Depth:1 listing)
             etag_only = body.include?("getetag") && !body.include?("displayname") && !body.include?("resourcetype")
