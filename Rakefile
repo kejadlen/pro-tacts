@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+$LOAD_PATH.unshift(File.expand_path("lib", __dir__))
+
 require "minitest/test_task"
 
 Minitest::TestTask.create
@@ -12,7 +14,6 @@ end
 desc "Regenerate macOS exchange response fixtures from current responses"
 task :fixtures do
   ENV["RACK_ENV"] = "test"
-  $LOAD_PATH.unshift(File.expand_path("lib", __dir__))
   require "pro_tacts/web"
   require_relative "test/pro_tacts/exchange_fixtures"
   ExchangeFixtures.record_responses(ProTacts::Web)
@@ -20,13 +21,13 @@ end
 
 desc "Generate carddav.mobileconfig to provision the macOS account"
 task :profile do
-  $LOAD_PATH.unshift(File.expand_path("lib", __dir__))
   require "pro_tacts/profile"
 
+  # Throwaway credentials for the dev loop; real auth is its own backlog task.
   File.write("carddav.mobileconfig", ProTacts::Profile.render(
     hostname: ENV.fetch("PRO_TACTS_HOSTNAME"),
-    username: ENV.fetch("PRO_TACTS_USERNAME", "a@b.com"),
-    password: ENV.fetch("PRO_TACTS_PASSWORD", "a")
+    username: "a@b.com",
+    password: "a"
   ))
   identifier = ProTacts::Profile::PAYLOAD_IDENTIFIER
   puts <<~MESSAGE
