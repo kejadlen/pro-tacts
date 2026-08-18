@@ -63,12 +63,6 @@ module ProTacts
                     <d:current-user-principal>
                       <d:href>/dav/principal/</d:href>
                     </d:current-user-principal>
-                    <d:principal-URL>
-                      <d:href>/dav/principal/</d:href>
-                    </d:principal-URL>
-                    <d:resourcetype>
-                      <d:collection/>
-                    </d:resourcetype>
                   </d:prop>
                   <d:status>HTTP/1.1 200 OK</d:status>
                 </d:propstat>
@@ -93,12 +87,6 @@ module ProTacts
                     <d:current-user-principal>
                       <d:href>/dav/principal/</d:href>
                     </d:current-user-principal>
-                    <d:principal-URL>
-                      <d:href>/dav/principal/</d:href>
-                    </d:principal-URL>
-                    <d:resourcetype>
-                      <d:collection/>
-                    </d:resourcetype>
                   </d:prop>
                   <d:status>HTTP/1.1 200 OK</d:status>
                 </d:propstat>
