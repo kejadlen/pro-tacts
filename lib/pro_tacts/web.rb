@@ -21,9 +21,11 @@ unless ProTacts.config.test?
 end
 
 require "rack/rewindable_input"
+require "nokogiri"
 require "roda"
 
 require "pro_tacts/debug_logger"
+require "pro_tacts/contacts"
 require "roda/plugins/dav_verbs"
 
 module ProTacts
@@ -45,6 +47,12 @@ module ProTacts
       Sentry.capture_message("404 Not Found", level: :warning)
       "Not Found"
     end
+
+    # Placeholder until etags and ctags are derived from file state; the
+    # constants only need to be present and stable within a session.
+    CONTACT_ETAG = %("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+    COLLECTION_CTAG = "ctag-2"
+    SYNC_TOKEN = "http://pro-tacts/sync/2"
 
     route do |r|
       r.is "" do
@@ -138,31 +146,16 @@ module ProTacts
             response["Content-Type"] = "text/xml"
             response.status = 207
 
-            contact_etag = %("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
-            collection_ctag = "ctag-2"
             depth = request.env.fetch("HTTP_DEPTH", "infinity")
 
             # Check if this is an etag-only request (Depth:1 listing)
             etag_only = body.include?("getetag") && !body.include?("displayname") && !body.include?("resourcetype")
 
-            if etag_only
-              # Etag-only ask wants the members; the collection self-entry
-              # is omitted until a client is found to need it.
-              collection_response = ""
-
-              contact_response = <<~XML
-                <d:response>
-                  <d:href>/dav/addressbook/AB12C345-6789-0DEF-1234-567890ABCDEF.vcf</d:href>
-                  <d:propstat>
-                    <d:prop>
-                      <d:getetag>#{contact_etag}</d:getetag>
-                    </d:prop>
-                    <d:status>HTTP/1.1 200 OK</d:status>
-                  </d:propstat>
-                </d:response>
-              XML
-            else
-              # Full property request (Depth:0 collection info)
+            # Etag-only asks want the members; the collection self-entry
+            # is omitted until a client is found to need it. Full property
+            # requests (Depth:0 collection info) get the collection entry.
+            collection_response = ""
+            unless etag_only
               collection_response = <<~XML
                 <d:response>
                   <d:href>/dav/addressbook/</d:href>
@@ -177,20 +170,8 @@ module ProTacts
                           <d:report><d:sync-collection/></d:report>
                         </d:supported-report>
                       </d:supported-report-set>
-                      <cs:getctag>#{collection_ctag}</cs:getctag>
-                      <d:sync-token>http://pro-tacts/sync/2</d:sync-token>
-                    </d:prop>
-                    <d:status>HTTP/1.1 200 OK</d:status>
-                  </d:propstat>
-                </d:response>
-              XML
-
-              contact_response = <<~XML
-                <d:response>
-                  <d:href>/dav/addressbook/AB12C345-6789-0DEF-1234-567890ABCDEF.vcf</d:href>
-                  <d:propstat>
-                    <d:prop>
-                      <d:getetag>#{contact_etag}</d:getetag>
+                      <cs:getctag>#{COLLECTION_CTAG}</cs:getctag>
+                      <d:sync-token>#{SYNC_TOKEN}</d:sync-token>
                     </d:prop>
                     <d:status>HTTP/1.1 200 OK</d:status>
                   </d:propstat>
@@ -199,7 +180,7 @@ module ProTacts
             end
 
             # Depth: 0 returns only collection, Depth: 1 includes members
-            members = depth == "0" ? "" : contact_response
+            members = depth == "0" ? "" : contacts.all.map { etag_response(it.id) }.join
 
             <<~XML
               <?xml version="1.0" encoding="UTF-8"?>
@@ -216,60 +197,106 @@ module ProTacts
 
             response["Content-Type"] = "text/xml"
             response.status = 207
-            contact_etag = %("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
 
-            if body.include?("sync-collection")
+            doc = Nokogiri::XML(body)
+            doc.remove_namespaces!
+
+            if doc.root.name == "sync-collection"
               # The warm-sync ask is etag-only; a changed etag sends the
               # client back through multiget, so no address-data here.
-              card_data = ""
+              responses = contacts.all.map { etag_response(it.id) }
             else
-              vcard = <<~VCARD.chomp
-                BEGIN:VCARD
-                VERSION:3.0
-                PRODID:-//Apple Inc.//macOS 14.6.1//EN
-                N:Contact;Test;;;
-                FN:Test Contact
-                REV:2026-01-14T00:00:00Z
-                UID:AB12C345-6789-0DEF-1234-567890ABCDEF
-                END:VCARD
-              VCARD
-              card_data = "<card:address-data>#{vcard}</card:address-data>"
+              wants_cards = doc.xpath("//address-data").any?
+
+              responses = doc.xpath("//href").map { it.text }.map { |requested|
+                id = requested[%r{\A/dav/addressbook/([^/]+)\.vcf\z}, 1]
+                contact = id && contacts.find(id)
+
+                if contact
+                  wants_cards ? card_response(contact) : etag_response(contact.id)
+                else
+                  missing_response(requested)
+                end
+              }
             end
 
             <<~XML
               <?xml version="1.0" encoding="UTF-8"?>
               <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
-                <d:response>
-                  <d:href>/dav/addressbook/AB12C345-6789-0DEF-1234-567890ABCDEF.vcf</d:href>
-                  <d:propstat>
-                    <d:prop>
-                      <d:getetag>#{contact_etag}</d:getetag>
-                      #{card_data unless card_data.empty?}
-                    </d:prop>
-                    <d:status>HTTP/1.1 200 OK</d:status>
-                  </d:propstat>
-                </d:response>
+                #{responses.join}
               </d:multistatus>
             XML
           end
 
-          r.get String do |uid|
-            response["Content-Type"] = "text/vcard; charset=utf-8"
-            response["ETag"] = %("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
+          r.get String do |filename|
+            contact = contacts.find(filename.delete_suffix(".vcf"))
 
-            <<~VCARD.gsub(/^ +/, "")
-              BEGIN:VCARD
-              VERSION:3.0
-              PRODID:-//Apple Inc.//macOS 14.6.1//EN
-              N:Contact;Test;;;
-              FN:Test Contact
-              REV:2026-01-14T00:00:00Z
-              UID:AB12C345-6789-0DEF-1234-567890ABCDEF
-              END:VCARD
-            VCARD
+            # No match falls through to the empty-body 404 that the
+            # not_found handler fills in.
+            if contact
+              response["Content-Type"] = "text/vcard; charset=utf-8"
+              response["ETag"] = CONTACT_ETAG
+              contact.vcard
+            end
           end
         end
       end
+    end
+
+    private
+
+    # Instantiated per request so tests can point it at a fixture
+    # directory through ProTacts.config=; caching belongs with real etags.
+    def contacts
+      @contacts ||= Contacts.new(ProTacts.config.contacts_dir)
+    end
+
+    def contact_href(id)
+      "/dav/addressbook/#{id}.vcf"
+    end
+
+    def etag_response(id)
+      <<~XML
+        <d:response>
+          <d:href>#{contact_href(id)}</d:href>
+          <d:propstat>
+            <d:prop>
+              <d:getetag>#{CONTACT_ETAG}</d:getetag>
+            </d:prop>
+            <d:status>HTTP/1.1 200 OK</d:status>
+          </d:propstat>
+        </d:response>
+      XML
+    end
+
+    def card_response(contact)
+      <<~XML
+        <d:response>
+          <d:href>#{contact_href(contact.id)}</d:href>
+          <d:propstat>
+            <d:prop>
+              <d:getetag>#{CONTACT_ETAG}</d:getetag>
+              <card:address-data>#{xml_escape(contact.vcard.chomp)}</card:address-data>
+            </d:prop>
+            <d:status>HTTP/1.1 200 OK</d:status>
+          </d:propstat>
+        </d:response>
+      XML
+    end
+
+    def missing_response(requested)
+      <<~XML
+        <d:response>
+          <d:href>#{xml_escape(requested)}</d:href>
+          <d:status>HTTP/1.1 404 Not Found</d:status>
+        </d:response>
+      XML
+    end
+
+    # Text nodes in XML built by interpolation; hrefs and vCard content
+    # can all contain &, <, or >.
+    def xml_escape(text)
+      text.gsub(/[&<>]/, "&" => "&amp;", "<" => "&lt;", ">" => "&gt;")
     end
   end
 end

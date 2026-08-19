@@ -19,6 +19,9 @@ end
 desc "Regenerate macOS exchange response fixtures from current responses"
 task :fixtures do
   ENV["RACK_ENV"] = "test"
+  # Mirrors test/test_helper.rb, which cannot be required here without
+  # minitest/autorun running its at_exit hook inside rake.
+  ENV["PRO_TACTS_CONTACTS_DIR"] = File.expand_path("test/fixtures/contacts", __dir__)
   require "pro_tacts/web"
   require_relative "test/pro_tacts/exchange_fixtures"
   ExchangeFixtures.record_responses(ProTacts::Web)

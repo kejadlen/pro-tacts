@@ -25,6 +25,14 @@ class ConfigTest < Minitest::Test
     assert_raises(KeyError) { ProTacts::Config.new({}).sentry_dsn }
   end
 
+  def test_contacts_dir_defaults_to_data_contacts
+    assert_equal "data/contacts", ProTacts::Config.new({}).contacts_dir
+  end
+
+  def test_contacts_dir_is_overridable
+    assert_equal "/tmp/kdl", ProTacts::Config.new("PRO_TACTS_CONTACTS_DIR" => "/tmp/kdl").contacts_dir
+  end
+
   def test_debug_defaults_off
     refute ProTacts::Config.new({}).debug?
     refute ProTacts::Config.new("PRO_TACTS_DEBUG" => nil).debug?

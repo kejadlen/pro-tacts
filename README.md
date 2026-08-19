@@ -17,12 +17,23 @@ A CardDAV server for my family.
 
 ## Status
 
-A read-only skeleton. Every response in `lib/pro_tacts/web.rb` is hardcoded:
-one principal, one address book, one vCard. Nothing is parsed, stored, or
-looked up yet. macOS Contacts displays the hardcoded card over Tailscale
-serve as of 2026-08-14, so later work has a known-good baseline to change.
-See `docs/plans/2026-08-12-one-card-on-macos.md` for what that milestone
-established.
+Read-only and serving real data. Contacts live as KDL files under
+`data/contacts` (override with `PRO_TACTS_CONTACTS_DIR`), one contact per
+file, the filename doubling as the contact ID and the vCard UID:
+
+```kdl
+contact {
+    name "John Smith"
+    phone "+1-555-1234" type="mobile"
+    email "john@example.com"
+}
+```
+
+macOS Contacts displays them over Tailscale serve as of 2026-08-14, so
+later work has a known-good baseline to change. See
+`docs/plans/2026-08-12-one-card-on-macos.md` for what that milestone
+established. Still placeholders: etags and ctags are constants rather
+than derived from file state, and there is no authentication yet.
 
 ## The minimal set macOS Contacts needs
 
@@ -82,7 +93,7 @@ implementing it means reading several RFCs together:
 [rfc6350]: https://datatracker.ietf.org/doc/html/rfc6350
 
 RFC 6352 requires an address book collection to support vCard 3.0 and treats
-4.0 as optional, which is why the hardcoded card here is `VERSION:3.0` even
+4.0 as optional, which is why contacts are rendered as `VERSION:3.0` even
 though `docs/plans/2026-01-12-carddav-reference.md` shows 4.0 examples.
 
 Two properties macOS depends on are not in any RFC. They come from Apple's

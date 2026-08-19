@@ -32,6 +32,12 @@ module ProTacts
       !value.nil? && value.match?(TRUTHY)
     end
 
+    # Directory of contact KDL files, one contact per file; the filename
+    # is the contact ID. See docs/plans/2026-01-12-carddav-architecture.md.
+    def contacts_dir
+      @env.fetch("PRO_TACTS_CONTACTS_DIR", "data/contacts")
+    end
+
     # Where the debug logger writes. A path, overridable with
     # PRO_TACTS_DEBUG_LOG; "stderr" keeps it on the process's stderr.
     def debug_log_path
