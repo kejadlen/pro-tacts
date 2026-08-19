@@ -2,7 +2,6 @@
 require "pathname"
 
 $LOAD_PATH.unshift(Pathname.new(__dir__) / "lib")
-
 require "minitest/test_task"
 
 Minitest::TestTask.create
@@ -21,7 +20,7 @@ task :fixtures do
   ENV["RACK_ENV"] = "test"
   # Mirrors test/test_helper.rb, which cannot be required here without
   # minitest/autorun running its at_exit hook inside rake.
-  ENV["PRO_TACTS_CONTACTS_DIR"] = File.expand_path("test/fixtures/contacts", __dir__)
+  ENV["PRO_TACTS_DATA_DIR"] = (Pathname.new(__dir__) / "test/fixtures").to_s
   require "pro_tacts/web"
   require_relative "test/pro_tacts/exchange_fixtures"
   ExchangeFixtures.record_responses(ProTacts::Web)

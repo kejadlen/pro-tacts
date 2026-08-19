@@ -25,12 +25,17 @@ class ConfigTest < Minitest::Test
     assert_raises(KeyError) { ProTacts::Config.new({}).sentry_dsn }
   end
 
-  def test_contacts_dir_defaults_to_data_contacts
-    assert_equal "data/contacts", ProTacts::Config.new({}).contacts_dir
+  def test_data_dir_defaults_to_data
+    assert_equal Pathname.new("data"), ProTacts::Config.new({}).data_dir
   end
 
-  def test_contacts_dir_is_overridable
-    assert_equal "/tmp/kdl", ProTacts::Config.new("PRO_TACTS_CONTACTS_DIR" => "/tmp/kdl").contacts_dir
+  def test_data_dir_is_overridable
+    assert_equal Pathname.new("/tmp/state"), ProTacts::Config.new("PRO_TACTS_DATA_DIR" => "/tmp/state").data_dir
+  end
+
+  def test_contacts_dir_lives_under_the_data_dir
+    assert_equal Pathname.new("data/contacts"), ProTacts::Config.new({}).contacts_dir
+    assert_equal Pathname.new("/tmp/state/contacts"), ProTacts::Config.new("PRO_TACTS_DATA_DIR" => "/tmp/state").contacts_dir
   end
 
   def test_debug_defaults_off

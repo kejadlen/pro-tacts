@@ -1,4 +1,6 @@
 
+require "pathname"
+
 module ProTacts
   # Single source of truth for configuration read from the environment.
   # Nothing else in the app should read ENV directly; add a method here and
@@ -32,10 +34,17 @@ module ProTacts
       !value.nil? && value.match?(TRUTHY)
     end
 
-    # Directory of contact KDL files, one contact per file; the filename
-    # is the contact ID. See docs/plans/2026-01-12-carddav-architecture.md.
+    # Root data directory: holds the contacts directory and, later, the
+    # database. Overridable with PRO_TACTS_DATA_DIR.
+    def data_dir
+      Pathname.new(@env.fetch("PRO_TACTS_DATA_DIR", "data"))
+    end
+
+    # Contacts live at data/contacts, one KDL file per contact; the
+    # filename is the contact ID. See
+    # docs/plans/2026-01-12-carddav-architecture.md.
     def contacts_dir
-      @env.fetch("PRO_TACTS_CONTACTS_DIR", "data/contacts")
+      data_dir / "contacts"
     end
 
     # Where the debug logger writes. A path, overridable with

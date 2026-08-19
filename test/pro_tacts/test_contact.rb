@@ -1,5 +1,6 @@
 require_relative "../test_helper"
 
+require "pathname"
 require "tmpdir"
 
 require "pro_tacts/contact"
@@ -7,8 +8,9 @@ require "pro_tacts/contact"
 class ContactTest < Minitest::Test
   def with_contacts(files)
     Dir.mktmpdir do |dir|
-      files.each { |name, content| File.write(File.join(dir, name), content) }
-      yield ProTacts::Contact.all(dir)
+      directory = Pathname.new(dir)
+      files.each { |name, content| File.write(directory / name, content) }
+      yield ProTacts::Contact.all(directory)
     end
   end
 
@@ -46,7 +48,7 @@ class ContactTest < Minitest::Test
 
   def test_non_kdl_files_raise
     Dir.mktmpdir do |dir|
-      File.write(File.join(dir, "notes.txt"), "hello")
+      File.write(Pathname.new(dir) / "notes.txt", "hello")
 
       error = assert_raises(ArgumentError) { ProTacts::Contact.all(dir) }
 

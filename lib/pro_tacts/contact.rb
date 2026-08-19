@@ -18,7 +18,7 @@ module ProTacts
     # Every contact in the directory, one file per contact. An empty
     # directory is a valid empty address book, but any non-hidden
     # non-.kdl file raises — a misplaced file or a wrong
-    # PRO_TACTS_CONTACTS_DIR should not quietly serve a partial address
+    # PRO_TACTS_DATA_DIR should not quietly serve a partial address
     # book. Files that fail to parse or render are reported and skipped;
     # Sentry is a no-op while uninitialized, so tests need no DSN.
     def self.all(directory = ProTacts.config.contacts_dir)

@@ -1,5 +1,6 @@
 
 require_relative "../test_helper"
+require "pathname"
 require "rack/test"
 require "tmpdir"
 
@@ -106,15 +107,17 @@ class WebTest < Minitest::Test
     assert_equal "Not Found", last_response.body
   end
 
-  # Swaps in a throwaway contacts directory so the multi-contact routes
-  # can be exercised without touching the exchange fixture data.
+  # Swaps in a throwaway data directory so the multi-contact routes can
+  # be exercised without touching the exchange fixture data.
   def with_contacts(files)
     Dir.mktmpdir do |dir|
-      files.each { |name, content| File.write(File.join(dir, name), content) }
+      contacts_dir = Pathname.new(dir) / "contacts"
+      Dir.mkdir(contacts_dir)
+      files.each { |name, content| File.write(contacts_dir / name, content) }
       original = ProTacts.config
       ProTacts.config = ProTacts::Config.new({
         "RACK_ENV" => "test",
-        "PRO_TACTS_CONTACTS_DIR" => dir,
+        "PRO_TACTS_DATA_DIR" => dir,
       })
       begin
         yield
