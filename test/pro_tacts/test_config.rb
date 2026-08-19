@@ -1,28 +1,18 @@
 
+require "logger"
+
 require "minitest/autorun"
 
 require "pro_tacts/config"
 
 class ConfigTest < Minitest::Test
-  def test_environment_defaults_to_development
-    assert_equal "development", ProTacts::Config.new({}).environment
-    assert_equal "production", ProTacts::Config.new("RACK_ENV" => "production").environment
-    assert_equal "production", ProTacts::Config.new("RACK_ENV" => "development", "APP_ENV" => "production").environment
-  end
-
-  def test_testenv
-    assert ProTacts::Config.new("RACK_ENV" => "test").test?
-    assert ProTacts::Config.new("APP_ENV" => "test").test?
-    refute ProTacts::Config.new({}).test?
-    refute ProTacts::Config.new("RACK_ENV" => "production").test?
-  end
-
   def test_sentry_dsn_is_passed_through
     assert_equal "https://example/1", ProTacts::Config.new("SENTRY_DSN" => "https://example/1").sentry_dsn
   end
 
-  def test_sentry_dsn_is_required
-    assert_raises(KeyError) { ProTacts::Config.new({}).sentry_dsn }
+  def test_sentry_dsn_is_nil_when_unset
+    assert_nil ProTacts::Config.new({}).sentry_dsn
+    assert_nil ProTacts::Config.new("SENTRY_DSN" => nil).sentry_dsn
   end
 
   def test_data_dir_defaults_to_data
@@ -52,6 +42,19 @@ class ConfigTest < Minitest::Test
   def test_debug_ignores_other_values
     refute ProTacts::Config.new("PRO_TACTS_DEBUG" => "no").debug?
     refute ProTacts::Config.new("PRO_TACTS_DEBUG" => "0").debug?
+  end
+
+  def test_access_logger_defaults_to_nil
+    assert_nil ProTacts::Config.new({}).access_logger
+  end
+
+  def test_access_logger_is_overridable
+    config = ProTacts::Config.new({})
+    null_logger = Logger.new(IO::NULL)
+
+    config.access_logger = null_logger
+
+    assert_same null_logger, config.access_logger
   end
 
   def test_debug_log_path_defaults_to_a_file

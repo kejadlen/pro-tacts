@@ -2,9 +2,9 @@
 require "pro_tacts"
 require "sentry-ruby"
 
-# Tests skip Sentry entirely: capture_message and the rack middleware are
-# no-ops while Sentry is uninitialized, so no DSN is needed there.
-unless ProTacts.config.test?
+# Without a DSN, Sentry stays uninitialized and capture_message and
+# the rack middleware are no-ops, so there is nothing to skip in tests.
+if ProTacts.config.sentry_dsn
   Sentry.init do |sentry|
     sentry.dsn = ProTacts.config.sentry_dsn
 
@@ -41,7 +41,7 @@ module ProTacts
 
     plugin :all_verbs
     plugin :dav_verbs
-    plugin :common_logger unless ProTacts.config.test?
+    plugin :common_logger, ProTacts.config.access_logger
 
     plugin :not_found do
       Sentry.capture_message("404 Not Found", level: :warning)

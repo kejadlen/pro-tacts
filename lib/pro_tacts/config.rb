@@ -12,19 +12,11 @@ module ProTacts
       @env = env
     end
 
-    # The deployment environment: APP_ENV wins, then RACK_ENV, then
-    # "development".
-    def environment
-      @env.fetch("APP_ENV") { @env.fetch("RACK_ENV", "development") }
-    end
-
-    def test?
-      environment == "test"
-    end
-
-    # Sentry DSN. Required at boot; raises if unset so the failure is loud.
+    # Sentry DSN; nil when unset. Presence is the switch for Sentry:
+    # without it the app runs uninitialized, where capture_message and
+    # the rack middleware are no-ops.
     def sentry_dsn
-      @env.fetch("SENTRY_DSN")
+      @env.fetch("SENTRY_DSN", nil)
     end
 
     # Whether to dump full request/response exchanges to the log. Off by
@@ -46,6 +38,10 @@ module ProTacts
     def contacts_dir
       data_dir / "contacts"
     end
+
+    # Override for Roda's common_logger target; nil keeps the plugin's
+    # stderr default. Tests swap in a null logger for quiet runs.
+    attr_accessor :access_logger
 
     # Where the debug logger writes. A path, overridable with
     # PRO_TACTS_DEBUG_LOG; "stderr" keeps it on the process's stderr.
