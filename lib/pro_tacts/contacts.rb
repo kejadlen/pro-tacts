@@ -12,7 +12,8 @@ module ProTacts
     Contact = Data.define(:id, :vcard)
 
     # IDs end up in paths, and they arrive from client-supplied hrefs, so
-    # anything outside this charset simply does not exist.
+    # anything outside this charset simply does not exist. Enforced at
+    # load too, so everything listed is fetchable by that id.
     ID_FORMAT = /\A[\w-]+\z/
 
     attr_reader :directory
@@ -24,7 +25,19 @@ module ProTacts
       end
     end
 
+    # An empty directory is a valid empty address book. Anything in it
+    # that is not a .kdl file means a misplaced file or a wrong
+    # PRO_TACTS_CONTACTS_DIR, so it raises rather than quietly serving a
+    # partial address book. Dotfiles are exempt: Finder drops .DS_Store
+    # into any directory it opens.
     def all
+      unexpected = directory.children
+        .reject { it.basename.to_s.start_with?(".") }
+        .reject { it.extname == ".kdl" }
+      unless unexpected.empty?
+        raise ArgumentError, "unexpected non-KDL file in contacts directory: #{unexpected.first}"
+      end
+
       directory.glob("*.kdl").map { load(it) }.compact
     end
 
@@ -43,6 +56,10 @@ module ProTacts
     # so tests need no DSN.
     def load(path)
       id = path.basename(".kdl").to_s
+      unless id.match?(ID_FORMAT)
+        raise ArgumentError, "invalid contact id: #{id}"
+      end
+
       nodes = KDL.parse(path.read).nodes
       unless nodes.length == 1 && nodes.first.name == "contact"
         raise ArgumentError, "expected exactly one contact node"

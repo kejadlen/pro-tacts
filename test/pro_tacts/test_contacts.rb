@@ -68,6 +68,36 @@ class ContactsTest < Minitest::Test
     end
   end
 
+  def test_non_kdl_files_raise
+    with_contacts({
+      "aiden.kdl" => "contact { name \"Aiden\" }",
+      "notes.txt" => "hello",
+    }) do |contacts|
+      error = assert_raises(ArgumentError) { contacts.all }
+
+      assert_match(/non-KDL file/, error.message)
+      assert_match(/notes\.txt/, error.message)
+    end
+  end
+
+  def test_dotfiles_are_ignored
+    with_contacts({
+      ".DS_Store" => "junk",
+      "aiden.kdl" => "contact { name \"Aiden\" }",
+    }) do |contacts|
+      assert_equal %w[aiden], contacts.all.map { it.id }
+    end
+  end
+
+  def test_files_whose_id_cannot_be_fetched_are_skipped
+    with_contacts({
+      "John Smith.kdl" => "contact { name \"John\" }",
+      "aiden.kdl" => "contact { name \"Aiden\" }",
+    }) do |contacts|
+      assert_equal %w[aiden], contacts.all.map { it.id }
+    end
+  end
+
   def test_unparseable_files_are_skipped
     with_contacts({
       "broken.kdl" => "contact {",
