@@ -10,7 +10,7 @@ class ContactTest < Minitest::Test
     Dir.mktmpdir do |dir|
       directory = Pathname.new(dir)
       files.each { |name, content| File.write(directory / name, content) }
-      yield ProTacts::Contact.all(directory)
+      yield directory
     end
   end
 
@@ -18,8 +18,8 @@ class ContactTest < Minitest::Test
     with_contacts({
       "znorth.kdl" => "name \"Zed\"",
       "aiden.kdl" => "name \"Aiden\"",
-    }) do |contacts|
-      ids = contacts.map { it.id }
+    }) do |directory|
+      ids = ProTacts::Contact.all(directory).map { it.id }
 
       assert_includes ids, "aiden"
       assert_includes ids, "znorth"
@@ -27,14 +27,23 @@ class ContactTest < Minitest::Test
   end
 
   def test_the_uid_comes_from_the_filename
-    with_contacts({"kqmtnwpxlrvszoyp.kdl" => "name \"Aiden\""}) do |contacts|
-      assert_includes contacts.first.vcard, "UID:kqmtnwpxlrvszoyp"
+    with_contacts({"kqmtnwpxlrvszoyp.kdl" => "name \"Aiden\""}) do |directory|
+      assert_includes ProTacts::Contact.all(directory).first.vcard, "UID:kqmtnwpxlrvszoyp"
     end
   end
 
   def test_an_empty_directory_lists_no_contacts
-    with_contacts({}) do |contacts|
-      assert_empty contacts
+    with_contacts({}) do |directory|
+      assert_empty ProTacts::Contact.all(directory)
+    end
+  end
+
+  def test_dotfiles_are_ignored
+    with_contacts({
+      ".DS_Store" => "junk",
+      "aiden.kdl" => "name \"Aiden\"",
+    }) do |directory|
+      assert_equal %w[aiden], ProTacts::Contact.all(directory).map { it.id }
     end
   end
 
@@ -47,59 +56,48 @@ class ContactTest < Minitest::Test
   end
 
   def test_non_kdl_files_raise
-    Dir.mktmpdir do |dir|
-      File.write(Pathname.new(dir) / "notes.txt", "hello")
+    with_contacts({"notes.txt" => "hello"}) do |directory|
+      error = assert_raises(ArgumentError) { ProTacts::Contact.all(directory) }
 
-      error = assert_raises(ArgumentError) { ProTacts::Contact.all(dir) }
-
-      assert_match(/non-KDL file/, error.message)
-      assert_match(/notes\.txt/, error.message)
+      assert_equal "invalid contact id: notes.txt", error.message
     end
   end
 
-  def test_dotfiles_are_ignored
-    with_contacts({
-      ".DS_Store" => "junk",
-      "aiden.kdl" => "name \"Aiden\"",
-    }) do |contacts|
-      assert_equal %w[aiden], contacts.map { it.id }
+  def test_filenames_that_are_not_ids_raise
+    with_contacts({"John Smith.kdl" => "name \"John\""}) do |directory|
+      error = assert_raises(ArgumentError) { ProTacts::Contact.all(directory) }
+
+      assert_equal "invalid contact id: John Smith", error.message
     end
   end
 
-  def test_files_whose_id_cannot_be_fetched_are_skipped
-    with_contacts({
-      "John Smith.kdl" => "name \"John\"",
-      "aiden.kdl" => "name \"Aiden\"",
-    }) do |contacts|
-      assert_equal %w[aiden], contacts.map { it.id }
+  def test_unparseable_files_raise
+    with_contacts({"broken.kdl" => "contact {"}) do |directory|
+      assert_raises(KDL::ParseError) { ProTacts::Contact.all(directory) }
     end
   end
 
-  def test_unparseable_files_are_skipped
-    with_contacts({
-      "broken.kdl" => "contact {",
-      "aiden.kdl" => "name \"Aiden\"",
-    }) do |contacts|
-      assert_equal %w[aiden], contacts.map { it.id }
+  def test_files_whose_keys_are_not_contact_fields_raise
+    with_contacts({"person.kdl" => "person { name \"A\" }"}) do |directory|
+      error = assert_raises(ArgumentError) { ProTacts::Contact.all(directory) }
+
+      assert_equal "unknown key in contact: person", error.message
     end
   end
 
-  def test_files_whose_keys_are_not_contact_fields_are_skipped
-    with_contacts({
-      "person.kdl" => "person { name \"A\" }",
-      "empty.kdl" => "",
-      "aiden.kdl" => "name \"Aiden\"",
-    }) do |contacts|
-      assert_equal %w[aiden], contacts.map { it.id }
+  def test_empty_files_raise
+    with_contacts({"empty.kdl" => ""}) do |directory|
+      error = assert_raises(ArgumentError) { ProTacts::Contact.all(directory) }
+
+      assert_equal "contact requires a name", error.message
     end
   end
 
-  def test_files_whose_card_cannot_render_are_skipped
-    with_contacts({
-      "nameless.kdl" => "phone \"+1-555-1234\"",
-      "aiden.kdl" => "name \"Aiden\"",
-    }) do |contacts|
-      assert_equal %w[aiden], contacts.map { it.id }
+  def test_files_whose_card_cannot_render_raise
+    with_contacts({"nameless.kdl" => "phone \"+1-555-1234\""}) do |directory|
+      error = assert_raises(ArgumentError) { ProTacts::Contact.all(directory) }
+
+      assert_equal "contact requires a name", error.message
     end
   end
 end
