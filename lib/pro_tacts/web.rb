@@ -25,7 +25,7 @@ require "nokogiri"
 require "roda"
 
 require "pro_tacts/debug_logger"
-require "pro_tacts/contacts"
+require "pro_tacts/contact"
 require "roda/plugins/dav_verbs"
 
 module ProTacts
@@ -180,7 +180,7 @@ module ProTacts
             end
 
             # Depth: 0 returns only collection, Depth: 1 includes members
-            members = depth == "0" ? "" : contacts.all.map { etag_response(it.id) }.join
+            members = depth == "0" ? "" : contacts.map { etag_response(it.id) }.join
 
             <<~XML
               <?xml version="1.0" encoding="UTF-8"?>
@@ -204,13 +204,13 @@ module ProTacts
             if doc.root.name == "sync-collection"
               # The warm-sync ask is etag-only; a changed etag sends the
               # client back through multiget, so no address-data here.
-              responses = contacts.all.map { etag_response(it.id) }
+              responses = contacts.map { etag_response(it.id) }
             else
               wants_cards = doc.xpath("//address-data").any?
 
               responses = doc.xpath("//href").map { it.text }.map { |requested|
                 id = requested[%r{\A/dav/addressbook/([^/]+)\.vcf\z}, 1]
-                contact = id && contacts.find(id)
+                contact = id && contacts.find { it.id == id }
 
                 if contact
                   wants_cards ? card_response(contact) : etag_response(contact.id)
@@ -229,7 +229,7 @@ module ProTacts
           end
 
           r.get String do |filename|
-            contact = contacts.find(filename.delete_suffix(".vcf"))
+            contact = contacts.find { it.id == filename.delete_suffix(".vcf") }
 
             # No match falls through to the empty-body 404 that the
             # not_found handler fills in.
@@ -245,10 +245,11 @@ module ProTacts
 
     private
 
-    # Instantiated per request so tests can point it at a fixture
-    # directory through ProTacts.config=; caching belongs with real etags.
+    # Parsed once per request — Roda builds a fresh app instance for each
+    # one — with the directory coming from config. Caching belongs with
+    # real etags.
     def contacts
-      @contacts ||= Contacts.new(ProTacts.config.contacts_dir)
+      @contacts ||= Contact.all
     end
 
     def contact_href(id)

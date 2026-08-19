@@ -2,78 +2,53 @@ require_relative "../test_helper"
 
 require "tmpdir"
 
-require "pro_tacts/contacts"
+require "pro_tacts/contact"
 
-class ContactsTest < Minitest::Test
+class ContactTest < Minitest::Test
   def with_contacts(files)
     Dir.mktmpdir do |dir|
-      directory = Pathname.new(dir)
-      files.each { |name, content| (directory / name).write(content) }
-      yield ProTacts::Contacts.new(directory)
+      files.each { |name, content| File.write(File.join(dir, name), content) }
+      yield ProTacts::Contact.all(dir)
     end
   end
 
-  def test_all_lists_every_contact
+  def test_all_parses_every_contact
     with_contacts({
       "znorth.kdl" => "contact { name \"Zed\" }",
       "aiden.kdl" => "contact { name \"Aiden\" }",
     }) do |contacts|
-      ids = contacts.all.map { it.id }
+      ids = contacts.map { it.id }
 
       assert_includes ids, "aiden"
       assert_includes ids, "znorth"
     end
   end
 
-  def test_find_returns_the_contact_by_id
-    with_contacts({"aiden.kdl" => "contact { name \"Aiden\" }"}) do |contacts|
-      contact = contacts.find("aiden")
-
-      assert_equal "aiden", contact.id
-      assert_includes contact.vcard, "FN:Aiden"
-    end
-  end
-
   def test_the_uid_comes_from_the_filename
     with_contacts({"kqmtnwpxlrvszoyp.kdl" => "contact { name \"Aiden\" }"}) do |contacts|
-      assert_includes contacts.find("kqmtnwpxlrvszoyp").vcard, "UID:kqmtnwpxlrvszoyp"
+      assert_includes contacts.first.vcard, "UID:kqmtnwpxlrvszoyp"
     end
   end
 
-  def test_find_returns_nil_for_unknown_ids
-    with_contacts({"aiden.kdl" => "contact { name \"Aiden\" }"}) do |contacts|
-      assert_nil contacts.find("nope")
-    end
-  end
-
-  def test_find_rejects_ids_outside_the_charset
+  def test_an_empty_directory_lists_no_contacts
     with_contacts({}) do |contacts|
-      assert_nil contacts.find("../secrets")
-      assert_nil contacts.find("a/b")
-      assert_nil contacts.find("a.vcf")
+      assert_empty contacts
     end
   end
 
   def test_a_missing_directory_raises
     error = assert_raises(ArgumentError) do
-      ProTacts::Contacts.new(Pathname.new(Dir.mktmpdir) / "nonexistent")
+      ProTacts::Contact.all(Pathname.new(Dir.mktmpdir) / "nonexistent")
     end
 
     assert_match(/contacts directory not found/, error.message)
   end
 
-  def test_an_empty_directory_lists_no_contacts
-    with_contacts({}) do |contacts|
-      assert_empty contacts.all
-    end
-  end
-
   def test_non_kdl_files_raise
-    with_contacts({
-      "aiden.kdl" => "contact { name \"Aiden\" }",
-      "notes.txt" => "hello",
-    }) do |contacts|
-      error = assert_raises(ArgumentError) { contacts.all }
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "notes.txt"), "hello")
+
+      error = assert_raises(ArgumentError) { ProTacts::Contact.all(dir) }
 
       assert_match(/non-KDL file/, error.message)
       assert_match(/notes\.txt/, error.message)
@@ -85,7 +60,7 @@ class ContactsTest < Minitest::Test
       ".DS_Store" => "junk",
       "aiden.kdl" => "contact { name \"Aiden\" }",
     }) do |contacts|
-      assert_equal %w[aiden], contacts.all.map { it.id }
+      assert_equal %w[aiden], contacts.map { it.id }
     end
   end
 
@@ -94,7 +69,7 @@ class ContactsTest < Minitest::Test
       "John Smith.kdl" => "contact { name \"John\" }",
       "aiden.kdl" => "contact { name \"Aiden\" }",
     }) do |contacts|
-      assert_equal %w[aiden], contacts.all.map { it.id }
+      assert_equal %w[aiden], contacts.map { it.id }
     end
   end
 
@@ -103,8 +78,7 @@ class ContactsTest < Minitest::Test
       "broken.kdl" => "contact {",
       "aiden.kdl" => "contact { name \"Aiden\" }",
     }) do |contacts|
-      assert_equal %w[aiden], contacts.all.map { it.id }
-      assert_nil contacts.find("broken")
+      assert_equal %w[aiden], contacts.map { it.id }
     end
   end
 
@@ -114,7 +88,7 @@ class ContactsTest < Minitest::Test
       "two.kdl" => "contact { name \"A\" }\ncontact { name \"B\" }",
       "other.kdl" => "person { name \"A\" }",
     }) do |contacts|
-      assert_empty contacts.all
+      assert_empty contacts
     end
   end
 
@@ -123,8 +97,7 @@ class ContactsTest < Minitest::Test
       "nameless.kdl" => "contact { phone \"+1-555-1234\" }",
       "aiden.kdl" => "contact { name \"Aiden\" }",
     }) do |contacts|
-      assert_equal %w[aiden], contacts.all.map { it.id }
-      assert_nil contacts.find("nameless")
+      assert_equal %w[aiden], contacts.map { it.id }
     end
   end
 end
