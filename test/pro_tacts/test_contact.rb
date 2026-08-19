@@ -14,8 +14,8 @@ class ContactTest < Minitest::Test
 
   def test_all_parses_every_contact
     with_contacts({
-      "znorth.kdl" => "contact { name \"Zed\" }",
-      "aiden.kdl" => "contact { name \"Aiden\" }",
+      "znorth.kdl" => "name \"Zed\"",
+      "aiden.kdl" => "name \"Aiden\"",
     }) do |contacts|
       ids = contacts.map { it.id }
 
@@ -25,7 +25,7 @@ class ContactTest < Minitest::Test
   end
 
   def test_the_uid_comes_from_the_filename
-    with_contacts({"kqmtnwpxlrvszoyp.kdl" => "contact { name \"Aiden\" }"}) do |contacts|
+    with_contacts({"kqmtnwpxlrvszoyp.kdl" => "name \"Aiden\""}) do |contacts|
       assert_includes contacts.first.vcard, "UID:kqmtnwpxlrvszoyp"
     end
   end
@@ -58,7 +58,7 @@ class ContactTest < Minitest::Test
   def test_dotfiles_are_ignored
     with_contacts({
       ".DS_Store" => "junk",
-      "aiden.kdl" => "contact { name \"Aiden\" }",
+      "aiden.kdl" => "name \"Aiden\"",
     }) do |contacts|
       assert_equal %w[aiden], contacts.map { it.id }
     end
@@ -66,8 +66,8 @@ class ContactTest < Minitest::Test
 
   def test_files_whose_id_cannot_be_fetched_are_skipped
     with_contacts({
-      "John Smith.kdl" => "contact { name \"John\" }",
-      "aiden.kdl" => "contact { name \"Aiden\" }",
+      "John Smith.kdl" => "name \"John\"",
+      "aiden.kdl" => "name \"Aiden\"",
     }) do |contacts|
       assert_equal %w[aiden], contacts.map { it.id }
     end
@@ -76,26 +76,26 @@ class ContactTest < Minitest::Test
   def test_unparseable_files_are_skipped
     with_contacts({
       "broken.kdl" => "contact {",
-      "aiden.kdl" => "contact { name \"Aiden\" }",
+      "aiden.kdl" => "name \"Aiden\"",
     }) do |contacts|
       assert_equal %w[aiden], contacts.map { it.id }
     end
   end
 
-  def test_files_without_exactly_one_contact_node_are_skipped
+  def test_files_whose_keys_are_not_contact_fields_are_skipped
     with_contacts({
+      "person.kdl" => "person { name \"A\" }",
       "empty.kdl" => "",
-      "two.kdl" => "contact { name \"A\" }\ncontact { name \"B\" }",
-      "other.kdl" => "person { name \"A\" }",
+      "aiden.kdl" => "name \"Aiden\"",
     }) do |contacts|
-      assert_empty contacts
+      assert_equal %w[aiden], contacts.map { it.id }
     end
   end
 
   def test_files_whose_card_cannot_render_are_skipped
     with_contacts({
-      "nameless.kdl" => "contact { phone \"+1-555-1234\" }",
-      "aiden.kdl" => "contact { name \"Aiden\" }",
+      "nameless.kdl" => "phone \"+1-555-1234\"",
+      "aiden.kdl" => "name \"Aiden\"",
     }) do |contacts|
       assert_equal %w[aiden], contacts.map { it.id }
     end

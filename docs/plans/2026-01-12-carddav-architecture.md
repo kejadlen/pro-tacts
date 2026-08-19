@@ -89,12 +89,13 @@ data/
 
 ### Contact File Format (KDL)
 
+One bare KDL document per file — no `contact {}` wrapper, since the
+file itself is the contact:
+
 ```kdl
-contact {
-    name "John Smith"
-    phone "+1-555-1234" type="mobile"
-    email "john@example.com"
-}
+name "John Smith"
+phone "+1-555-1234" type="mobile"
+email "john@example.com"
 ```
 
 ### Contact IDs

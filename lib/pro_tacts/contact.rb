@@ -7,8 +7,8 @@ require "pro_tacts/vcard"
 
 module ProTacts
   # A contact parsed from one KDL file under the contacts directory; the
-  # filename is the id, which maps to the vCard UID (see
-  # docs/plans/2026-01-12-carddav-architecture.md).
+  # file is a bare KDL document, and the filename is the id, which maps
+  # to the vCard UID (see docs/plans/2026-01-12-carddav-architecture.md).
   class Contact < Data.define(:id, :vcard)
     # Ids end up in paths and arrive from client-supplied hrefs, so a
     # filename outside this charset is skipped at load; everything
@@ -48,12 +48,7 @@ module ProTacts
         raise ArgumentError, "invalid contact id: #{id}"
       end
 
-      nodes = KDL.parse(path.read).nodes
-      unless nodes.length == 1 && nodes.first.name == "contact"
-        raise ArgumentError, "expected exactly one contact node"
-      end
-
-      new(id:, vcard: VCard.render(nodes.first, uid: id))
+      new(id:, vcard: VCard.render(KDL.parse(path.read), uid: id))
     end
   end
 end

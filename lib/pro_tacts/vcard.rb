@@ -2,7 +2,8 @@
 require "kdl"
 
 module ProTacts
-  # Translates a parsed `contact` KDL node into a vCard 3.0 (RFC 2426).
+  # Translates a parsed contact file — a bare KDL document — into a
+  # vCard 3.0 (RFC 2426).
   #
   # The UID is passed separately because it lives in the filename rather
   # than the file (see docs/plans/2026-01-12-carddav-architecture.md).
@@ -34,23 +35,24 @@ module ProTacts
 
     module_function
 
-    def render(contact, uid:)
-      validate_children(contact, CONTACT_FIELDS, "contact")
-      validate_properties(contact)
+    def render(document, uid:)
+      nodes = document.nodes
+      validate_children(nodes, CONTACT_FIELDS, "contact")
 
-      name = contact.children.find { it.name == "name" }
-      raise ArgumentError, "contact requires a name" unless name
+      names = nodes.select { it.name == "name" }
+      raise ArgumentError, "contact requires a name" if names.empty?
+      raise ArgumentError, "contact takes a single name" if names.length > 1
 
-      n, fn = name_fields(name)
+      n, fn = name_fields(names.first)
 
       lines = [
         "BEGIN:VCARD",
         "VERSION:3.0",
         "N:#{components(n)}",
         "FN:#{escape(fn)}",
-        *typed_property_lines(contact, "phone", "TEL"),
-        *typed_property_lines(contact, "email", "EMAIL"),
-        *address_lines(contact),
+        *typed_property_lines(nodes, "phone", "TEL"),
+        *typed_property_lines(nodes, "email", "EMAIL"),
+        *address_lines(nodes),
         "UID:#{escape(uid)}",
         "END:VCARD",
         "", # trailing newline
@@ -98,8 +100,8 @@ module ProTacts
       end
     end
 
-    def typed_property_lines(contact, kdl_name, vcard_name)
-      contact.children.select { it.name == kdl_name }.map { |node|
+    def typed_property_lines(nodes, kdl_name, vcard_name)
+      nodes.select { it.name == kdl_name }.map { |node|
         validate_properties(node)
         type = node.properties["type"]&.value
         prefix = type ? "#{vcard_name};TYPE=#{type}" : vcard_name
@@ -110,8 +112,8 @@ module ProTacts
     # ADR's seven components in order: pobox, extended address, street,
     # locality, region, postal code, country. The first two have no KDL
     # counterpart and stay empty.
-    def address_lines(contact)
-      contact.children.select { it.name == "address" }.map { |node|
+    def address_lines(nodes)
+      nodes.select { it.name == "address" }.map { |node|
         validate_children(node, ADDRESS_PARTS, "address")
         validate_properties(node)
         parts = node.children
@@ -165,8 +167,8 @@ module ProTacts
       argument.value.to_s
     end
 
-    def validate_children(node, known, context)
-      unknown = node.children.reject { known.include?(it.name) }
+    def validate_children(nodes, known, context)
+      unknown = nodes.reject { known.include?(it.name) }
       return if unknown.empty?
 
       raise ArgumentError, "unknown key in #{context}: #{unknown.first.name}"

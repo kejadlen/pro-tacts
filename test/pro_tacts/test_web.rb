@@ -152,8 +152,8 @@ class WebTest < Minitest::Test
 
   def test_listing_and_multiget_serve_every_contact_on_disk
     with_contacts({
-      "aiden.kdl" => "contact { name \"Aiden\" }",
-      "znorth.kdl" => "contact { name \"Zed\" }",
+      "aiden.kdl" => "name \"Aiden\"",
+      "znorth.kdl" => "name \"Zed\"",
     }) do
       request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
 
@@ -172,7 +172,7 @@ class WebTest < Minitest::Test
   end
 
   def test_multiget_reports_unknown_hrefs_as_404
-    with_contacts({"aiden.kdl" => "contact { name \"Aiden\" }"}) do
+    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do
       request "/dav/addressbook/", method: "REPORT", input: multiget("aiden", "nope")
 
       assert_equal 207, last_response.status
@@ -183,7 +183,7 @@ class WebTest < Minitest::Test
   end
 
   def test_multiget_escapes_vcard_content_for_xml
-    with_contacts({"aiden.kdl" => "contact { name \"A & B <Team>\" }"}) do
+    with_contacts({"aiden.kdl" => "name \"A & B <Team>\""}) do
       request "/dav/addressbook/", method: "REPORT", input: multiget("aiden")
 
       assert_equal 207, last_response.status
@@ -192,7 +192,7 @@ class WebTest < Minitest::Test
   end
 
   def test_sync_collection_returns_etags_only
-    with_contacts({"aiden.kdl" => "contact { name \"Aiden\" }"}) do
+    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do
       request "/dav/addressbook/", method: "REPORT", input: <<~XML
         <?xml version="1.0" encoding="UTF-8"?>
         <A:sync-collection xmlns:A="DAV:">

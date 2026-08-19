@@ -10,25 +10,23 @@ class VCardTest < Minitest::Test
   include Hegel::Syntax::Methods
 
   def render(kdl, uid: "test-uid")
-    ProTacts::VCard.render(KDL.parse(kdl).nodes.first, uid:)
+    ProTacts::VCard.render(KDL.parse(kdl), uid:)
   end
 
   ## Unit tests
 
   def test_simple_contact
     vcard = render(<<~KDL)
-      contact {
-        name "John Smith"
-        phone "+1-555-1234" type="mobile"
-        email "john@example.com" type="home"
-        address type="home" {
-          street "123 Main St"
-          city "Springfield"
-          state "IL"
-          zip "62701"
-          country "USA"
-        }
-      }
+    name "John Smith"
+    phone "+1-555-1234" type="mobile"
+    email "john@example.com" type="home"
+    address type="home" {
+      street "123 Main St"
+      city "Springfield"
+      state "IL"
+      zip "62701"
+      country "USA"
+    }
     KDL
 
     assert_equal <<~VCARD.gsub("\n", "\r\n"), vcard
@@ -46,9 +44,7 @@ class VCardTest < Minitest::Test
 
   def test_single_token_name_gets_empty_given
     vcard = render(<<~KDL)
-      contact {
-        name "Cher"
-      }
+    name "Cher"
     KDL
 
     assert_includes vcard, "N:Cher;;;;"
@@ -56,12 +52,10 @@ class VCardTest < Minitest::Test
 
   def test_components_only_name
     vcard = render(<<~KDL)
-      contact {
-        name {
-          family "van Beethoven"
-          given "Ludwig"
-        }
-      }
+    name {
+      family "van Beethoven"
+      given "Ludwig"
+    }
     KDL
 
     assert_includes vcard, "N:van Beethoven;Ludwig;;;"
@@ -70,11 +64,9 @@ class VCardTest < Minitest::Test
 
   def test_one_component_leaves_the_rest_empty
     vcard = render(<<~KDL)
-      contact {
-        name {
-          family "Bach"
-        }
-      }
+    name {
+      family "Bach"
+    }
     KDL
 
     assert_includes vcard, "N:Bach;;;;"
@@ -83,15 +75,13 @@ class VCardTest < Minitest::Test
 
   def test_fn_joins_components_in_display_order
     vcard = render(<<~KDL)
-      contact {
-        name {
-          prefix "Dr."
-          given "John"
-          additional "Jacob"
-          family "Smith"
-          suffix "Jr."
-        }
-      }
+    name {
+      prefix "Dr."
+      given "John"
+      additional "Jacob"
+      family "Smith"
+      suffix "Jr."
+    }
     KDL
 
     assert_includes vcard, "FN:Dr. John Jacob Smith Jr."
@@ -99,9 +89,7 @@ class VCardTest < Minitest::Test
 
   def test_values_are_escaped
     vcard = render(<<~KDL)
-      contact {
-        name "semi;colon, comma back\\\\slash"
-      }
+    name "semi;colon, comma back\\\\slash"
     KDL
 
     assert_includes vcard, "FN:semi\\;colon\\, comma back\\\\slash"
@@ -109,9 +97,7 @@ class VCardTest < Minitest::Test
 
   def test_newlines_escape_as_literal_n
     vcard = render(<<~KDL)
-      contact {
-        name "two\\nlines"
-      }
+    name "two\\nlines"
     KDL
 
     assert_includes vcard, "FN:two\\nlines"
@@ -119,9 +105,7 @@ class VCardTest < Minitest::Test
 
   def test_long_lines_fold_and_unfold_intact
     vcard = render(<<~KDL)
-      contact {
-        name "#{"x" * 30}#{("é" * 60)}"
-      }
+    name "#{"x" * 30}#{("é" * 60)}"
     KDL
 
     physical = vcard.split("\r\n")
@@ -136,13 +120,11 @@ class VCardTest < Minitest::Test
 
   def test_properties_without_type
     vcard = render(<<~KDL)
-      contact {
-        name "John"
-        phone "+1-555-1234"
-        address {
-          street "123 Main St"
-        }
-      }
+    name "John"
+    phone "+1-555-1234"
+    address {
+      street "123 Main St"
+    }
     KDL
 
     assert_includes vcard, "TEL:+1-555-1234"
@@ -151,13 +133,11 @@ class VCardTest < Minitest::Test
 
   def test_order_is_preserved
     vcard = render(<<~KDL)
-      contact {
-        name "John"
-        phone "+1-555-1"
-        phone "+1-555-2"
-        email "a@example.com"
-        phone "+1-555-3"
-      }
+    name "John"
+    phone "+1-555-1"
+    phone "+1-555-2"
+    email "a@example.com"
+    phone "+1-555-3"
     KDL
 
     lines = vcard.split("\r\n")
@@ -168,23 +148,30 @@ class VCardTest < Minitest::Test
   def test_missing_name_raises
     error = assert_raises(ArgumentError) do
       render(<<~KDL)
-        contact {
-          phone "+1-555-1234"
-        }
+      phone "+1-555-1234"
       KDL
     end
 
     assert_equal "contact requires a name", error.message
   end
 
+  def test_duplicate_names_raise
+    error = assert_raises(ArgumentError) do
+      render(<<~KDL)
+        name "One"
+        name "Two"
+      KDL
+    end
+
+    assert_equal "contact takes a single name", error.message
+  end
+
   def test_name_with_both_display_and_components_raises
     error = assert_raises(ArgumentError) do
       render(<<~KDL)
-        contact {
-          name "Ludwig van Beethoven" {
-            family "van Beethoven"
-          }
-        }
+      name "Ludwig van Beethoven" {
+        family "van Beethoven"
+      }
       KDL
     end
 
@@ -194,9 +181,7 @@ class VCardTest < Minitest::Test
   def test_name_with_neither_display_nor_components_raises
     error = assert_raises(ArgumentError) do
       render(<<~KDL)
-        contact {
-          name
-        }
+      name
       KDL
     end
 
@@ -206,11 +191,9 @@ class VCardTest < Minitest::Test
   def test_all_empty_components_raise
     error = assert_raises(ArgumentError) do
       render(<<~KDL)
-        contact {
-          name {
-            family ""
-          }
-        }
+      name {
+        family ""
+      }
       KDL
     end
 
@@ -220,10 +203,8 @@ class VCardTest < Minitest::Test
   def test_property_without_value_raises
     error = assert_raises(ArgumentError) do
       render(<<~KDL)
-        contact {
-          name "John"
-          phone type="mobile"
-        }
+      name "John"
+      phone type="mobile"
       KDL
     end
 
@@ -233,10 +214,8 @@ class VCardTest < Minitest::Test
   def test_unknown_contact_key_raises
     error = assert_raises(ArgumentError) do
       render(<<~KDL)
-        contact {
-          name "John"
-          emial "john@example.com"
-        }
+      name "John"
+      emial "john@example.com"
       KDL
     end
 
@@ -246,12 +225,10 @@ class VCardTest < Minitest::Test
   def test_unknown_name_component_raises
     error = assert_raises(ArgumentError) do
       render(<<~KDL)
-        contact {
-          name {
-            family "Smith"
-            middle "Q"
-          }
-        }
+      name {
+        family "Smith"
+        middle "Q"
+      }
       KDL
     end
 
@@ -261,13 +238,11 @@ class VCardTest < Minitest::Test
   def test_unknown_address_key_raises
     error = assert_raises(ArgumentError) do
       render(<<~KDL)
-        contact {
-          name "John"
-          address {
-            street "123 Main St"
-            province "IL"
-          }
-        }
+      name "John"
+      address {
+        street "123 Main St"
+        province "IL"
+      }
       KDL
     end
 
@@ -277,10 +252,8 @@ class VCardTest < Minitest::Test
   def test_unknown_property_raises
     error = assert_raises(ArgumentError) do
       render(<<~KDL)
-        contact {
-          name "John"
-          phone "+1-555-1234" tpye="mobile"
-        }
+      name "John"
+      phone "+1-555-1234" tpye="mobile"
       KDL
     end
 
@@ -407,7 +380,7 @@ class VCardTest < Minitest::Test
     name_children = {family:, given:, additional:, prefix:, suffix:}
       .filter_map { |part, value| "#{part} #{kdl_string(value)}" unless value.nil? }
 
-    contact = +"contact {\n"
+    contact = +""
     if name_children.empty?
       contact << "  name #{kdl_string(display)}\n"
     else
@@ -426,14 +399,14 @@ class VCardTest < Minitest::Test
       inner = parts.map { |part, value| "    #{part} #{kdl_string(value)}\n" }.join
       contact << "  address#{suffix} {\n#{inner}  }\n"
     end
-    contact << "}\n"
+    contact
   end
 
   def test_escaped_fn_survives_round_trip
     Hegel.test do |tc|
       display = tc.draw(text(min_size: 1, max_size: 200))
       vcard = ProTacts::VCard.render(
-        KDL.parse(kdl_contact(display:)).nodes.first,
+        KDL.parse(kdl_contact(display:)),
         uid: "uid"
       )
 
@@ -447,7 +420,7 @@ class VCardTest < Minitest::Test
       display = tc.draw(text(min_size: 1, max_size: 300))
       uid = tc.draw(text(min_size: 1, max_size: 300))
       vcard = ProTacts::VCard.render(
-        KDL.parse(kdl_contact(display:)).nodes.first,
+        KDL.parse(kdl_contact(display:)),
         uid:
       )
 
@@ -494,7 +467,7 @@ class VCardTest < Minitest::Test
           [%w[street city state zip country].zip([street, city, state, zip, country]).to_h, addr_type]
         }
       )
-      vcard = ProTacts::VCard.render(KDL.parse(kdl).nodes.first, uid:)
+      vcard = ProTacts::VCard.render(KDL.parse(kdl), uid:)
       parsed = parse_vcard(vcard)
 
       raise "FN mismatch" unless parsed.fetch(:fn) == expected_fn(display, components)

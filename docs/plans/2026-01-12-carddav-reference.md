@@ -236,19 +236,19 @@ END:VCARD
 
 ### KDL Input
 
+One bare KDL document per file — no `contact {}` wrapper:
+
 ```kdl
-contact {
-    name "John Smith"
-    phone "+1-555-1234" type="mobile"
-    phone "+1-555-5678" type="work"
-    email "john@example.com" type="home"
-    address type="home" {
-        street "123 Main St"
-        city "Springfield"
-        state "IL"
-        zip "62701"
-        country "USA"
-    }
+name "John Smith"
+phone "+1-555-1234" type="mobile"
+phone "+1-555-5678" type="work"
+email "john@example.com" type="home"
+address type="home" {
+    street "123 Main St"
+    city "Springfield"
+    state "IL"
+    zip "62701"
+    country "USA"
 }
 ```
 

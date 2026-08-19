@@ -22,11 +22,9 @@ Read-only and serving real data. Contacts live as KDL files under
 file, the filename doubling as the contact ID and the vCard UID:
 
 ```kdl
-contact {
-    name "John Smith"
-    phone "+1-555-1234" type="mobile"
-    email "john@example.com"
-}
+name "John Smith"
+phone "+1-555-1234" type="mobile"
+email "john@example.com"
 ```
 
 macOS Contacts displays them over Tailscale serve as of 2026-08-14, so
