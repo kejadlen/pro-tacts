@@ -249,7 +249,7 @@ module ProTacts
     # one — with the directory coming from config. Caching belongs with
     # real etags.
     def contacts
-      @contacts ||= Contact.all
+      @contacts ||= Contact.all(ProTacts.config.contacts_dir)
     end
 
     def contact_href(id)

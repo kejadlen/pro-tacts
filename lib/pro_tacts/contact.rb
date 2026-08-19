@@ -1,7 +1,6 @@
 require "kdl"
 require "pathname"
 
-require "pro_tacts"
 require "pro_tacts/vcard"
 
 module ProTacts
@@ -19,7 +18,7 @@ module ProTacts
     # else raises: a bad file 500s the request and lands in Sentry
     # rather than quietly serving a partial address book. A missing
     # directory surfaces as Errno::ENOENT from Pathname#children.
-    def self.all(directory = ProTacts.config.contacts_dir)
+    def self.all(directory)
       Pathname.new(directory).children
         .reject { it.basename.to_s.start_with?(".") }
         .map { parse(it) }
