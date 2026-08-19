@@ -13,12 +13,15 @@ class ContactsTest < Minitest::Test
     end
   end
 
-  def test_all_lists_contacts_sorted_by_id
+  def test_all_lists_every_contact
     with_contacts({
       "znorth.kdl" => "contact { name \"Zed\" }",
       "aiden.kdl" => "contact { name \"Aiden\" }",
     }) do |contacts|
-      assert_equal %w[aiden znorth], contacts.all.map { it.id }
+      ids = contacts.all.map { it.id }
+
+      assert_includes ids, "aiden"
+      assert_includes ids, "znorth"
     end
   end
 

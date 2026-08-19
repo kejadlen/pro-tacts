@@ -25,7 +25,7 @@ module ProTacts
     end
 
     def all
-      directory.glob("*.kdl").sort.map { load(it) }.compact
+      directory.glob("*.kdl").map { load(it) }.compact
     end
 
     def find(id)
