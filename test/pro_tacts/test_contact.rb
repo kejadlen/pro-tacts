@@ -48,11 +48,11 @@ class ContactTest < Minitest::Test
   end
 
   def test_a_missing_directory_raises
-    error = assert_raises(ArgumentError) do
+    error = assert_raises(Errno::ENOENT) do
       ProTacts::Contact.all(Pathname.new(Dir.mktmpdir) / "nonexistent")
     end
 
-    assert_match(/contacts directory not found/, error.message)
+    assert_match(/nonexistent/, error.message)
   end
 
   def test_non_kdl_files_raise

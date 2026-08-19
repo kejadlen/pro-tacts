@@ -17,12 +17,10 @@ module ProTacts
     # directory is a valid empty address book, and dotfiles are skipped
     # (Finder drops .DS_Store into any directory it opens). Anything
     # else raises: a bad file 500s the request and lands in Sentry
-    # rather than quietly serving a partial address book.
+    # rather than quietly serving a partial address book. A missing
+    # directory surfaces as Errno::ENOENT from Pathname#children.
     def self.all(directory = ProTacts.config.contacts_dir)
-      directory = Pathname.new(directory)
-      raise ArgumentError, "contacts directory not found: #{directory}" unless directory.directory?
-
-      directory.children
+      Pathname.new(directory).children
         .reject { it.basename.to_s.start_with?(".") }
         .map { parse(it) }
     end
