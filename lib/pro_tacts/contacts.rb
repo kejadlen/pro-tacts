@@ -9,7 +9,7 @@ module ProTacts
   # The filename minus extension is the contact ID, which maps to the
   # vCard UID (see docs/plans/2026-01-12-carddav-architecture.md).
   class Contacts
-    Contact = Struct.new(:id, :vcard, keyword_init: true)
+    Contact = Data.define(:id, :vcard)
 
     # IDs end up in paths, and they arrive from client-supplied hrefs, so
     # anything outside this charset simply does not exist.

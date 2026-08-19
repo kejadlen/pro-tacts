@@ -8,8 +8,8 @@ require "rack/test"
 module ExchangeFixtures
   DIRECTORY = Pathname.new(__dir__).parent / "fixtures" / "macos-exchange"
 
-  Step = Struct.new(:name, :method, :path, :headers, :body, keyword_init: true)
-  Response = Struct.new(:status, :headers, :body, keyword_init: true)
+  Step = Data.define(:name, :method, :path, :headers, :body)
+  Response = Data.define(:status, :headers, :body)
 
   # Response headers worth snapshotting; everything else (Content-Length,
   # Date, server) is plumbing.
