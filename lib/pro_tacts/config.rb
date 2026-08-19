@@ -12,9 +12,9 @@ module ProTacts
       @env = env
     end
 
-    # Sentry DSN; nil when unset. Presence is the switch for Sentry:
-    # without it the app runs uninitialized, where capture_message and
-    # the rack middleware are no-ops.
+    # Sentry DSN; nil when unset. A nil DSN is passed straight to
+    # Sentry.init, which leaves the client inert — capture_message and
+    # the rack middleware become no-ops.
     def sentry_dsn
       @env.fetch("SENTRY_DSN", nil)
     end
@@ -38,10 +38,6 @@ module ProTacts
     def contacts_dir
       data_dir / "contacts"
     end
-
-    # Override for Roda's common_logger target; nil keeps the plugin's
-    # stderr default. Tests swap in a null logger for quiet runs.
-    attr_accessor :access_logger
 
     # Where the debug logger writes. A path, overridable with
     # PRO_TACTS_DEBUG_LOG; "stderr" keeps it on the process's stderr.

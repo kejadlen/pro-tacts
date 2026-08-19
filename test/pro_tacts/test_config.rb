@@ -1,6 +1,4 @@
 
-require "logger"
-
 require "minitest/autorun"
 
 require "pro_tacts/config"
@@ -42,19 +40,6 @@ class ConfigTest < Minitest::Test
   def test_debug_ignores_other_values
     refute ProTacts::Config.new("PRO_TACTS_DEBUG" => "no").debug?
     refute ProTacts::Config.new("PRO_TACTS_DEBUG" => "0").debug?
-  end
-
-  def test_access_logger_defaults_to_nil
-    assert_nil ProTacts::Config.new({}).access_logger
-  end
-
-  def test_access_logger_is_overridable
-    config = ProTacts::Config.new({})
-    null_logger = Logger.new(IO::NULL)
-
-    config.access_logger = null_logger
-
-    assert_same null_logger, config.access_logger
   end
 
   def test_debug_log_path_defaults_to_a_file
