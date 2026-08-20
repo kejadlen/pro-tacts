@@ -14,9 +14,9 @@ module ProTacts
     # character.
     LINE_LIMIT = 75
 
-    NAME_COMPONENTS = %w[family given additional prefix suffix].freeze
-    ADDRESS_PARTS = %w[street city state zip country].freeze
-    CONTACT_FIELDS = %w[name phone email address].freeze
+    NAME_COMPONENTS = %w[family given additional prefix suffix].freeze #: Array[String]
+    ADDRESS_PARTS = %w[street city state zip country].freeze #: Array[String]
+    CONTACT_FIELDS = %w[name phone email address].freeze #: Array[String]
 
     # Properties each node accepts; anything else is a typo silently
     # dropping data, so it raises.
@@ -24,26 +24,28 @@ module ProTacts
       "phone" => %w[type],
       "email" => %w[type],
       "address" => %w[type],
-    }.freeze
+    }.freeze #: Hash[String, Array[String]]
 
     TEXT_ESCAPES = {
       "\\" => "\\\\",
       ";" => "\\;",
       "," => "\\,",
       "\n" => "\\n",
-    }.freeze
+    }.freeze #: Hash[String, String]
 
     module_function
 
+    #: (KDL::Document document, uid: String) -> String
     def render(document, uid:)
       nodes = document.nodes
       validate_children(nodes, CONTACT_FIELDS, "contact")
 
       names = nodes.select { it.name == "name" }
-      raise ArgumentError, "contact requires a name" if names.empty?
+      name = names.first
+      raise ArgumentError, "contact requires a name" if name.nil?
       raise ArgumentError, "contact takes a single name" if names.length > 1
 
-      n, fn = name_fields(names.first)
+      n, fn = name_fields(name)
 
       lines = [
         "BEGIN:VCARD",
@@ -68,6 +70,7 @@ module ProTacts
     # suffix; empty parts skipped). Providing both is an error: they are
     # two spellings of the same truth, and silently preferring one would
     # hide the disagreement. Returns [N components, FN].
+    #: (KDL::Node name) -> [Array[String], String]
     def name_fields(name)
       validate_children(name, NAME_COMPONENTS, "name")
       validate_properties(name)
@@ -100,6 +103,7 @@ module ProTacts
       end
     end
 
+    #: (Array[KDL::Node] nodes, String kdl_name, String vcard_name) -> Array[String]
     def typed_property_lines(nodes, kdl_name, vcard_name)
       nodes.select { it.name == kdl_name }.map { |node|
         validate_properties(node)
@@ -112,13 +116,18 @@ module ProTacts
     # ADR's seven components in order: pobox, extended address, street,
     # locality, region, postal code, country. The first two have no KDL
     # counterpart and stay empty.
+    #: (Array[KDL::Node] nodes) -> Array[String]
     def address_lines(nodes)
       nodes.select { it.name == "address" }.map { |node|
         validate_children(node, ADDRESS_PARTS, "address")
         validate_properties(node)
         parts = node.children
           .select { ADDRESS_PARTS.include?(it.name) }
-          .to_h { [it.name, string_argument(it)] }
+          .to_h do |part|
+            # A two-element literal is an Array until something says
+            # otherwise, and to_h takes pairs.
+            [part.name, string_argument(part)] #: [String, String]
+          end
 
         components = ["", "", *ADDRESS_PARTS.map { parts.fetch(it, "") }]
         type = node.properties["type"]&.value
@@ -131,11 +140,13 @@ module ProTacts
     # sub-component separator (RFC 2426 section 2.4.2); CRLF and CR are
     # normalized to the `\n` escape because a raw line break would end
     # the property line.
+    #: (String text) -> String
     def escape(text)
       text.gsub(/\r\n|\r/, "\n").gsub(/[\\;,\n]/) { TEXT_ESCAPES.fetch(it) }
     end
 
     # Escapes each component, then joins with the component separator.
+    #: (Array[String] values) -> String
     def components(values)
       values.map { escape(it) }.join(";")
     end
@@ -144,6 +155,7 @@ module ProTacts
     # octets, each continuation starting with a single space (RFC 2426
     # section 2.6). The walk is character-wise so a multibyte character
     # is never split mid-sequence.
+    #: (String line) -> String
     def fold(line)
       return line if line.bytesize <= LINE_LIMIT
 
@@ -160,6 +172,7 @@ module ProTacts
       folded
     end
 
+    #: (KDL::Node node) -> String
     def string_argument(node)
       argument = node.arguments.first
       raise ArgumentError, "#{node.name} requires a string argument" if argument.nil?
@@ -167,13 +180,16 @@ module ProTacts
       argument.value.to_s
     end
 
+    # Takes a node list or a single node, whose children it walks.
+    #: (Array[KDL::Node] | KDL::Node nodes, Array[String] known, String context) -> void
     def validate_children(nodes, known, context)
-      unknown = nodes.reject { known.include?(it.name) }
-      return if unknown.empty?
+      unknown = nodes.find { !known.include?(it.name) }
+      return if unknown.nil?
 
-      raise ArgumentError, "unknown key in #{context}: #{unknown.first.name}"
+      raise ArgumentError, "unknown key in #{context}: #{unknown.name}"
     end
 
+    #: (KDL::Node node) -> void
     def validate_properties(node)
       allowed = ALLOWED_PROPERTIES.fetch(node.name, [])
       unknown = node.properties.keys - allowed

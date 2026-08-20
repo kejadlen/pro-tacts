@@ -14,6 +14,8 @@ require "roda/plugins/dav_verbs"
 
 module ProTacts
   class Web < Roda
+    # @rbs @addressbook: Addressbook?
+
     # RewindableInput allows us to read the request body for Sentry logging
     # and then rewind it so the application can still access it.
     use Rack::RewindableInput::Middleware
@@ -212,7 +214,13 @@ module ProTacts
             doc = Nokogiri::XML(body)
             doc.remove_namespaces!
 
-            if doc.root.name == "sync-collection"
+            # A body that is not XML parses to a document with no root.
+            # There is no report to dispatch on, so raise and let it 500
+            # rather than answer as though nothing was asked for.
+            root = doc.root
+            raise ArgumentError, "REPORT body is not XML" if root.nil?
+
+            if root.name == "sync-collection"
               # DAV:sync-collection (RFC 6578 section 3.2). The warm-sync ask
               # is etag-only; a changed etag sends the client back through
               # multiget, so no address-data here.
@@ -272,15 +280,18 @@ module ProTacts
     # one — with the directory coming from config. Real etags and ctags
     # make an mtime-keyed cache possible, but re-parsing a family address
     # book per request is cheap and can never serve a stale change tag.
+    #: () -> Addressbook
     def addressbook
       @addressbook ||= Addressbook.load(ProTacts.config.contacts_dir)
     end
 
+    #: (String id) -> String
     def contact_href(id)
       "/dav/addressbook/#{id}.vcf"
     end
 
     # DAV:getetag (RFC 4918 section 15.6).
+    #: (Contact contact) -> String
     def etag_response(contact)
       <<~XML
         <d:response>
@@ -295,6 +306,7 @@ module ProTacts
       XML
     end
 
+    #: (Contact contact) -> String
     def card_response(contact)
       <<~XML
         <d:response>
@@ -312,6 +324,7 @@ module ProTacts
 
     # An href with no match is reported as a 404 inside the 207 rather than
     # failing the request (RFC 6352 section 8.7).
+    #: (String requested) -> String
     def missing_response(requested)
       <<~XML
         <d:response>
@@ -323,6 +336,7 @@ module ProTacts
 
     # Text nodes in XML built by interpolation; hrefs and vCard content
     # can all contain &, <, or >.
+    #: (String text) -> String
     def xml_escape(text)
       text.gsub(/[&<>]/, "&" => "&amp;", "<" => "&lt;", ">" => "&gt;")
     end

@@ -25,6 +25,15 @@ task :fixtures do
   ExchangeFixtures.record_responses(ProTacts::Web)
 end
 
+desc "Type check lib against the RBS comments in it"
+task :steep do
+  # RBS reads source with the default external encoding, so under a C
+  # locale every em dash in a comment is an invalid byte rather than a
+  # character and the check dies parsing them. The same footgun the
+  # ASCII-only rule in config.ru exists for.
+  sh({"RUBYOPT" => "#{ENV.fetch('RUBYOPT', '')} -EUTF-8"}, "steep", "check")
+end
+
 desc "Render the macOS configuration profile (carddav.mobileconfig)"
 task profile: "carddav.mobileconfig"
 

@@ -1,0 +1,8 @@
+# `module_function` copies every method onto the module itself, and
+# inline RBS has no syntax for that. Extending the module is how RBS
+# says the same thing, so the method types can stay inline in vcard.rb.
+module ProTacts
+  module VCard
+    extend VCard
+  end
+end

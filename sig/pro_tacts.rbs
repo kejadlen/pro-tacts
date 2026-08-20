@@ -1,0 +1,9 @@
+# `class << self` is outside what inline RBS reads, so the module-level
+# config accessors are declared here.
+module ProTacts
+  self.@config: Config?
+
+  def self.config: () -> Config
+
+  def self.config=: (Config config) -> Config
+end

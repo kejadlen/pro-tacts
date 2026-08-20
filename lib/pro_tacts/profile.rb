@@ -21,6 +21,7 @@ module ProTacts
     # injects (see ProTacts::TailscaleAuth). They stay in the template
     # because the account form expects the fields; dropping them is
     # untested.
+    #: (hostname: String) -> String
     def self.render(hostname:)
       identifier = "#{IDENTIFIER_PREFIX}-#{unique_hex}"
 
@@ -38,10 +39,14 @@ module ProTacts
     # Scans for the prefix anywhere in the output rather than assuming a
     # key-value layout, since the listing format has changed across macOS
     # versions (key-value today, table under later releases).
+    #: (String list_output) -> Array[String]
     def self.installed_identifiers(list_output)
-      list_output.scan(/(?<![\w.-])#{Regexp.escape(IDENTIFIER_PREFIX)}-[\w.-]+/).uniq
+      # A pattern with no groups scans to whole matches, which is
+      # narrower than the signature of String#scan can say.
+      list_output.scan(/(?<![\w.-])#{Regexp.escape(IDENTIFIER_PREFIX)}-[\w.-]+/).uniq #: Array[String]
     end
 
+    #: () -> String
     def self.template
       <<~XML
         <?xml version="1.0" encoding="UTF-8"?>
@@ -99,14 +104,17 @@ module ProTacts
     # CardDAVPrincipalURL is omitted on purpose: no Server Path, matching
     # the bare-hostname setup the working session used.
 
+    #: (String text) -> String
     def self.escape(text)
       text.gsub("&", "&amp;").gsub("<", "&lt;").gsub(">", "&gt;")
     end
 
+    #: () -> String
     def self.unique_hex
       "#{Time.now.utc.strftime('%Y%m%d%H%M%S%L')}#{rand(1 << 16).to_s(16)}"
     end
 
+    #: () -> String
     def self.uuid
       [8, 4, 4, 4, 12].map { |n| Array.new(n) { HEX[rand(16)] }.join }.join("-")
     end

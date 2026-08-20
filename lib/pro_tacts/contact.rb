@@ -15,6 +15,10 @@ module ProTacts
   # changes the bytes without changing the card. It is stored in the
   # entity-tag's quoted form (RFC 7232 section 2.3), which is what both
   # the ETag header and getetag properties carry.
+  #
+  # The signature lives in sig/pro_tacts/contact.rbs: a Data class has
+  # no constant super class for the inline syntax to read.
+  # @rbs skip
   class Contact < Data.define(:id, :vcard, :etag)
     # Ids end up in paths and arrive from client-supplied hrefs, so a
     # filename outside this charset cannot be served.

@@ -14,6 +14,8 @@ module ProTacts
   # Any tailnet identity is accepted. Getting onto the tailnet is the access
   # control; the address book has no per-user view to protect.
   class TailscaleAuth
+    # @rbs @app: Rack::_App
+
     LOGIN_HEADER = "HTTP_TAILSCALE_USER_LOGIN"
     NAME_HEADER = "HTTP_TAILSCALE_USER_NAME"
 
@@ -21,10 +23,12 @@ module ProTacts
     # to know who is asking.
     IDENTITY = "pro_tacts.user"
 
+    #: (Rack::_App app) -> void
     def initialize(app)
       @app = app
     end
 
+    #: (Rack::env env) -> Rack::response
     def call(env)
       login = env[LOGIN_HEADER].to_s.strip
 
@@ -38,6 +42,7 @@ module ProTacts
 
     private
 
+    #: () -> Rack::response
     def forbidden
       body = "Forbidden: no Tailscale identity on this request.\n"
       [403, { "Content-Type" => "text/plain", "Content-Length" => body.bytesize.to_s }, [body]]

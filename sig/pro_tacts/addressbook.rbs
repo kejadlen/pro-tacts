@@ -1,0 +1,15 @@
+# A Data class, like Contact: see sig/pro_tacts/contact.rbs for why the
+# signature is here rather than in the Ruby.
+module ProTacts
+  class Addressbook
+    attr_reader contacts: Array[Contact]
+
+    def self.new: (contacts: Array[Contact]) -> instance
+
+    def self.load: (Pathname | String directory) -> Addressbook
+
+    def ctag: () -> String
+
+    def sync_token: () -> String
+  end
+end

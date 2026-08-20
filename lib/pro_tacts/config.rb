@@ -6,8 +6,11 @@ module ProTacts
   # Nothing else in the app should read ENV directly; add a method here and
   # read it through ProTacts.config instead.
   class Config
-    TRUTHY = /\A(1|true|yes)\z/i
+    # @rbs @env: Hash[String, String]
 
+    TRUTHY = /\A(1|true|yes)\z/i #: Regexp
+
+    #: (?Hash[String, String] env) -> void
     def initialize(env = ENV)
       @env = env
     end
@@ -15,12 +18,14 @@ module ProTacts
     # Sentry DSN; nil when unset. A nil DSN is passed straight to
     # Sentry.init, which leaves the client inert — capture_message and
     # the rack middleware become no-ops.
+    #: () -> String?
     def sentry_dsn
       @env.fetch("SENTRY_DSN", nil)
     end
 
     # Whether to dump full request/response exchanges to the log. Off by
     # default because it logs contact data. See ProTacts::DebugLogger.
+    #: () -> bool
     def debug?
       value = @env.fetch("PRO_TACTS_DEBUG", nil)
       !value.nil? && value.match?(TRUTHY)
@@ -28,6 +33,7 @@ module ProTacts
 
     # Root data directory: holds the contacts directory and, later, the
     # database. Overridable with PRO_TACTS_DATA_DIR.
+    #: () -> Pathname
     def data_dir
       Pathname.new(@env.fetch("PRO_TACTS_DATA_DIR", "data"))
     end
@@ -35,6 +41,7 @@ module ProTacts
     # Contacts live at data/contacts, one KDL file per contact; the
     # filename is the contact ID. See
     # docs/plans/2026-01-12-carddav-architecture.md.
+    #: () -> Pathname
     def contacts_dir
       data_dir / "contacts"
     end
@@ -42,12 +49,14 @@ module ProTacts
     # Where requests the app could not answer are kept, one directory per
     # distinct request. Under log/ because it holds request data and is not
     # meant to be committed. See ProTacts::UnhandledRequests.
+    #: () -> Pathname
     def unhandled_dir
       Pathname.new(@env.fetch("PRO_TACTS_UNHANDLED_DIR", "log/unhandled"))
     end
 
     # Where the debug logger writes. A path, overridable with
     # PRO_TACTS_DEBUG_LOG; "stderr" keeps it on the process's stderr.
+    #: () -> String
     def debug_log_path
       @env.fetch("PRO_TACTS_DEBUG_LOG", "log/debug.log")
     end

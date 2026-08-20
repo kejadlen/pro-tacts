@@ -8,6 +8,10 @@ module ProTacts
   # The ctag changes when any card is added, removed, or changed and
   # nothing else, so a client comparing two of them learns whether a
   # resync is needed — never what changed.
+  #
+  # The signature lives in sig/pro_tacts/addressbook.rbs, for the same
+  # reason Contact's does.
+  # @rbs skip
   class Addressbook < Data.define(:contacts)
     def self.load(directory)
       new(contacts: Contact.all(directory))

@@ -11,6 +11,7 @@ response — the shape of those responses is empirical, not arbitrary.
 
 ```bash
 rake                  # Tests (the default task)
+rake steep            # Type check lib against the RBS comments in it
 rake fixtures         # Re-record response fixtures from current behavior
 rake dev              # Dev server, reloading on change (needs fd and entr)
 rake profile:install  # Render and stage carddav.mobileconfig for approval
@@ -36,6 +37,7 @@ lib/pro_tacts/
 ├── profile.rb      # carddav.mobileconfig generation
 └── debug_logger.rb # Full request/response dumps, off by default
 lib/roda/plugins/dav_verbs.rb   # PROPFIND and REPORT routing verbs
+sig/                # RBS for what an inline comment cannot say
 docs/rfcs/          # Vendored spec texts the code cites
 docs/plans/         # Dated design records
 test/fixtures/macos-exchange/   # A real client session, replayed
@@ -89,3 +91,15 @@ before regenerating.
   current set was found by removing properties until the client broke.
 - `docs/plans/` entries are dated records of what was decided then. Write
   a new one rather than editing an old one to match current behavior.
+- Types live in the code, as RBS comments: `#:` above a method for its
+  type, `# @rbs` for instance variables and skips, `#:` at the end of a
+  line for a constant or an assertion. `rake steep` checks them, and
+  `sig/` holds only what that syntax cannot express — the gems, which
+  ship no signatures, and the classes the inline parser refuses. Each
+  file there says which limit put it there; see
+  docs/plans/2026-08-20-type-checking.md.
+- An instance variable declaration has to be the first thing in the
+  class body. Further down it is reported as an unused annotation.
+- `rake steep` runs the check with `-EUTF-8` because RBS reads source
+  in the default external encoding: under a C locale the em dashes in
+  these comments are invalid bytes and the parse dies on them.

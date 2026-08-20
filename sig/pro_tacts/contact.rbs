@@ -1,0 +1,19 @@
+# `class Contact < Data.define(...)` has no constant for a super class,
+# which is what inline RBS needs to read one (RBS docs/data_and_struct.md
+# covers the pattern). The class is marked `@rbs skip` in contact.rb and
+# its signature written out here instead.
+module ProTacts
+  class Contact
+    ID_FORMAT: Regexp
+
+    attr_reader id: String
+    attr_reader vcard: String
+    attr_reader etag: String
+
+    def self.new: (id: String, vcard: String, etag: String) -> instance
+
+    def self.all: (Pathname | String directory) -> Array[Contact]
+
+    def self.parse: (Pathname | String path) -> Contact
+  end
+end

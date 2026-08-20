@@ -1,0 +1,28 @@
+# The nokogiri surface pro-tacts uses to read REPORT bodies: parse, drop
+# the namespaces, and pull elements out by xpath.
+#
+# `root` is declared non-nil because Nokogiri::XML only returns a
+# document without one for input that is not XML at all, and web.rb
+# raises on that case explicitly rather than reading a nil root.
+module Nokogiri
+  def self.XML: (String string_or_io) -> Nokogiri::XML::Document
+
+  module XML
+    class Node
+      def name: () -> String
+      def text: () -> String
+      def xpath: (String) -> NodeSet
+    end
+
+    class Document < Node
+      def root: () -> Node?
+      def remove_namespaces!: () -> Document
+    end
+
+    class NodeSet
+      include Enumerable[Node]
+
+      def each: () { (Node) -> void } -> void
+    end
+  end
+end

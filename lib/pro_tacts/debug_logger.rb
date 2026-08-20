@@ -14,15 +14,19 @@ module ProTacts
   # fictional, so the debug path stays verbose while the normal one-line path
   # (Roda's common_logger) can be narrowed later without losing this.
   class DebugLogger
+    # @rbs @app: Rack::_App
+    # @rbs @logger: Logger
+
     # Builds the Logger the middleware writes to: appended and unbuffered
     # (Logger syncs its own device), one timestamped line per dump. path
     # "stderr" writes to the process's stderr.
+    #: (String | Pathname path) -> Logger
     def self.open_log(path)
       target = if path.to_s == "stderr"
                  $stderr
                else
                  FileUtils.mkdir_p(Pathname.new(path).dirname)
-                 path
+                 path.to_s
                end
 
       Logger.new(target).tap do |logger|
@@ -33,11 +37,13 @@ module ProTacts
       end
     end
 
+    #: (Rack::_App app, logger: Logger) -> void
     def initialize(app, logger:)
       @app = app
       @logger = logger
     end
 
+    #: (Rack::env env) -> Rack::response
     def call(env)
       log_request(env)
       status, headers, body = @app.call(env)
@@ -47,6 +53,7 @@ module ProTacts
 
     private
 
+    #: (Rack::env env) -> void
     def log_request(env)
       write(">>", "#{env.fetch('REQUEST_METHOD')} #{full_path(env)} #{env.fetch('SERVER_PROTOCOL')}")
       each_header(env) do |name, value|
@@ -56,31 +63,39 @@ module ProTacts
       write(">>", body) unless body.empty?
     end
 
+    # Returns the body parts it consumed, for the caller to send on in
+    # place of the body it read.
+    #: (Integer status, Rack::headers headers, Rack::_Body body) -> Array[String]
     def log_response(status, headers, body)
       write("<<", "#{status}#{reason(status)}")
       headers.each do |name, value|
         write("<<", "#{name}: #{value}")
       end
-      parts = []
+      parts = [] #: Array[String]
       body.each do |part|
         parts << part
       end
-      body.close if body.respond_to?(:close)
+      # A body holding a resource closes it. No signature can say
+      # "close if you have one", so the cast carries what respond_to?
+      # has already established.
+      (_ = body).close if body.respond_to?(:close)
       write("<<", parts.join) unless parts.join.empty?
       parts
     end
 
+    #: (Rack::env env) -> String
     def full_path(env)
       path = env["PATH_INFO"].to_s
       query = env["QUERY_STRING"].to_s
       query.empty? ? path : "#{path}?#{query}"
     end
 
+    #: (Rack::env env) { (String, untyped) -> void } -> void
     def each_header(env)
       env.each do |key, value|
         case key
         when /\AHTTP_(.+)\z/
-          yield header_name(Regexp.last_match(1)), value
+          yield header_name(key.delete_prefix("HTTP_")), value
         when "CONTENT_TYPE"
           yield "Content-Type", value
         when "CONTENT_LENGTH"
@@ -89,10 +104,12 @@ module ProTacts
       end
     end
 
+    #: (String name) -> String
     def header_name(name)
       name.split("_").map(&:capitalize).join("-")
     end
 
+    #: (Rack::env env) -> String
     def read_request_body(env)
       input = env["rack.input"]
       return "" if input.nil?
@@ -101,11 +118,13 @@ module ProTacts
       body
     end
 
+    #: (Integer status) -> String
     def reason(status)
       phrase = Rack::Utils::HTTP_STATUS_CODES[status]
       phrase ? " #{phrase}" : ""
     end
 
+    #: (String prefix, String text) -> void
     def write(prefix, text)
       text.to_s.lines(chomp: true).each do |line|
         @logger.debug("#{prefix} #{line}")

@@ -1,0 +1,21 @@
+# The plugin defines its request methods by evaluating a string, which
+# no signature can be derived from, so they are declared here. Their
+# shape matches Roda's own verb methods: match on the request method,
+# and route the block if it matches.
+class Roda
+  module RodaPlugins
+    module DavVerbs
+      module RequestMethods
+        def propfind: (*untyped matchers) { (*untyped) -> untyped } -> void
+
+        def report: (*untyped matchers) { (*untyped) -> untyped } -> void
+      end
+    end
+  end
+
+  class RodaRequest
+    # RBS has no way to say "only once plugin :dav_verbs is loaded", and
+    # web.rb — the only app here — loads it.
+    include RodaPlugins::DavVerbs::RequestMethods
+  end
+end

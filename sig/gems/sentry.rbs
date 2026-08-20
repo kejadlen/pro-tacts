@@ -1,0 +1,14 @@
+# Sentry is reached at exactly two points: the exception-capturing
+# middleware web.rb mounts, and the message the not_found handler sends.
+#
+# Events are left untyped. SentryScrubber walks whatever before_send
+# hands it, feature-detecting as it goes, and typing that shape would
+# claim more about the sentry-ruby internals than the scrubber assumes.
+module Sentry
+  def self.capture_message: (String message, ?level: Symbol) -> untyped
+
+  module Rack
+    class CaptureExceptions
+    end
+  end
+end

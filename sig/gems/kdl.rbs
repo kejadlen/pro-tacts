@@ -1,0 +1,36 @@
+# The kdl gem ships no signatures, so this describes the parts pro-tacts
+# calls: a document is nodes, a node is a name with arguments, properties
+# and children, and every leaf value is wrapped in a KDL::Value.
+#
+# Written against kdl 2.2.0 (lib/kdl/document.rb, node.rb, value.rb).
+module KDL
+  # KDL 2.0 scalars: strings, numbers, booleans, and null.
+  type value = String | Integer | Float | bool | nil
+
+  def self.parse: (String input, **untyped options) -> Document
+
+  class Document
+    include Enumerable[Node]
+
+    attr_accessor nodes: Array[Node]
+
+    def each: () { (Node) -> void } -> void
+  end
+
+  class Node
+    include Enumerable[Node]
+
+    attr_accessor name: String
+    attr_accessor arguments: Array[Value]
+    attr_accessor properties: Hash[String, Value]
+    attr_accessor children: Array[Node]
+
+    # Yields the children, which is what makes a node interchangeable
+    # with a node list wherever pro-tacts walks one.
+    def each: () { (Node) -> void } -> void
+  end
+
+  class Value
+    attr_reader value: KDL::value
+  end
+end

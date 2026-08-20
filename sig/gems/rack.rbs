@@ -1,0 +1,45 @@
+# Rack ships no signatures. This names the vocabulary the middleware in
+# lib/pro_tacts speaks — the environment, the response triple, and an
+# app to delegate to — plus the two constants used directly: the status
+# phrases the debug logger prints, and the middleware config.ru's
+# comment explains (web.rb mounts it so a body can be read twice).
+module Rack
+  # The CGI-ish hash a middleware is called with. Values stay untyped:
+  # anything upstream may put anything in it, which is why the code
+  # reads it through fetch and to_s.
+  type env = Hash[String, untyped]
+
+  type headers = Hash[String, String]
+
+  # What every middleware returns and what every middleware in this app
+  # passes along, rebuilt from parts once the body has been consumed.
+  type response = [Integer, headers, _Body]
+
+  # A response body: enumerable once, and closeable if it holds a
+  # resource — which only respond_to? can tell you, so it is here and
+  # close is not.
+  interface _Body
+    def each: () { (String) -> void } -> void
+    def respond_to?: (Symbol name) -> bool
+  end
+
+  # The request body, as env["rack.input"] carries it.
+  interface _Input
+    def read: () -> String
+    def rewind: () -> void
+  end
+
+  # The app a middleware wraps.
+  interface _App
+    def call: (env) -> response
+  end
+
+  module Utils
+    HTTP_STATUS_CODES: Hash[Integer, String]
+  end
+
+  class RewindableInput
+    class Middleware
+    end
+  end
+end

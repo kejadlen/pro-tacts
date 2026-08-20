@@ -1,0 +1,40 @@
+# Roda ships no signatures. This is the routing surface web.rb uses and
+# no more of it: the class methods that build the app, the request
+# methods that match, and the two response setters.
+#
+# Matchers stay untyped on purpose. Roda's matcher vocabulary — strings,
+# classes, regexps, symbols, hashes, and arrays of those — is open, and
+# the block arguments a match yields depend on which matcher matched.
+class Roda
+  def self.plugin: (Symbol | Module plugin, *untyped args) ?{ () [self: instance] -> untyped } -> void
+
+  def self.use: (untyped middleware, **untyped options) -> void
+
+  # The block is the router, run against a fresh instance per request.
+  def self.route: () { (RodaRequest) [self: instance] -> untyped } -> void
+
+  def request: () -> RodaRequest
+  def response: () -> RodaResponse
+
+  class RodaRequest
+    def env: () -> Rack::env
+    def body: () -> Rack::_Input
+
+    def is: (*untyped matchers) { (*untyped) -> untyped } -> void
+    def on: (*untyped matchers) { (*untyped) -> untyped } -> void
+    def get: (*untyped matchers) ?{ (*untyped) -> untyped } -> void
+    def options: (*untyped matchers) ?{ (*untyped) -> untyped } -> void
+
+    # Halts the request, so nothing after it in a route block runs.
+    def redirect: (String path, ?Integer status) -> bot
+  end
+
+  class RodaResponse
+    def []=: (String header, String value) -> void
+    def status=: (Integer status) -> void
+  end
+
+  module RodaPlugins
+    def self.register_plugin: (Symbol name, Module plugin) -> void
+  end
+end
