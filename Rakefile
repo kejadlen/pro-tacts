@@ -27,11 +27,6 @@ end
 
 desc "Type check lib against the RBS comments in it"
 task :steep do
-  # RBS reads source with the default external encoding, so this needs a
-  # UTF-8 locale: under a C one every em dash in a comment is an invalid
-  # byte rather than a character and the check dies parsing them. LANG is
-  # set in .ramekin/config.kdl for agents and by the login environment
-  # otherwise. The same footgun the ASCII-only rule in config.ru exists for.
   sh "steep", "check"
 end
 

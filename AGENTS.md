@@ -100,6 +100,8 @@ before regenerating.
   docs/plans/2026-08-20-type-checking.md.
 - An instance variable declaration has to be the first thing in the
   class body. Further down it is reported as an unused annotation.
-- `rake steep` runs the check with `-EUTF-8` because RBS reads source
-  in the default external encoding: under a C locale the em dashes in
-  these comments are invalid bytes and the parse dies on them.
+- `rake steep` needs a UTF-8 locale, which comes from the environment
+  rather than anything in this repo. RBS reads source in the default
+  external encoding, so under a C locale the em dashes in these comments
+  are invalid bytes and the parse dies on them. The same footgun the
+  ASCII-only rule in `config.ru` exists for.
