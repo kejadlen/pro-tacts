@@ -16,8 +16,8 @@ Content-Type: text/xml
           <d:report><d:sync-collection/></d:report>
         </d:supported-report>
       </d:supported-report-set>
-      <cs:getctag>ctag-2</cs:getctag>
-      <d:sync-token>http://pro-tacts/sync/2</d:sync-token>
+      <cs:getctag>cfe366324ca3c5bb85010587e5fa778044ee67b5480e45441b562c662b7d1dc5</cs:getctag>
+      <d:sync-token>http://pro-tacts/sync/cfe366324ca3c5bb85010587e5fa778044ee67b5480e45441b562c662b7d1dc5</d:sync-token>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>

@@ -7,7 +7,7 @@ require "nokogiri"
 require "roda"
 
 require "pro_tacts/debug_logger"
-require "pro_tacts/contact"
+require "pro_tacts/addressbook"
 require "roda/plugins/dav_verbs"
 
 module ProTacts
@@ -28,12 +28,6 @@ module ProTacts
       Sentry.capture_message("404 Not Found", level: :warning)
       "Not Found"
     end
-
-    # Placeholder until etags and ctags are derived from file state; the
-    # constants only need to be present and stable within a session.
-    CONTACT_ETAG = %("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
-    COLLECTION_CTAG = "ctag-2"
-    SYNC_TOKEN = "http://pro-tacts/sync/2"
 
     route do |r|
       r.is "" do
@@ -151,8 +145,8 @@ module ProTacts
                           <d:report><d:sync-collection/></d:report>
                         </d:supported-report>
                       </d:supported-report-set>
-                      <cs:getctag>#{COLLECTION_CTAG}</cs:getctag>
-                      <d:sync-token>#{SYNC_TOKEN}</d:sync-token>
+                      <cs:getctag>#{addressbook.ctag}</cs:getctag>
+                      <d:sync-token>#{addressbook.sync_token}</d:sync-token>
                     </d:prop>
                     <d:status>HTTP/1.1 200 OK</d:status>
                   </d:propstat>
@@ -161,7 +155,7 @@ module ProTacts
             end
 
             # Depth: 0 returns only collection, Depth: 1 includes members
-            members = depth == "0" ? "" : contacts.map { etag_response(it.id) }.join
+            members = depth == "0" ? "" : addressbook.contacts.map { etag_response(it) }.join
 
             <<~XML
               <?xml version="1.0" encoding="UTF-8"?>
@@ -185,16 +179,16 @@ module ProTacts
             if doc.root.name == "sync-collection"
               # The warm-sync ask is etag-only; a changed etag sends the
               # client back through multiget, so no address-data here.
-              responses = contacts.map { etag_response(it.id) }
+              responses = addressbook.contacts.map { etag_response(it) }
             else
               wants_cards = doc.xpath("//address-data").any?
 
               responses = doc.xpath("//href").map { it.text }.map { |requested|
                 id = requested[%r{\A/dav/addressbook/([^/]+)\.vcf\z}, 1]
-                contact = id && contacts.find { it.id == id }
+                contact = id && addressbook.contacts.find { it.id == id }
 
                 if contact
-                  wants_cards ? card_response(contact) : etag_response(contact.id)
+                  wants_cards ? card_response(contact) : etag_response(contact)
                 else
                   missing_response(requested)
                 end
@@ -210,13 +204,13 @@ module ProTacts
           end
 
           r.get String do |filename|
-            contact = contacts.find { it.id == filename.delete_suffix(".vcf") }
+            contact = addressbook.contacts.find { it.id == filename.delete_suffix(".vcf") }
 
             # No match falls through to the empty-body 404 that the
             # not_found handler fills in.
             if contact
               response["Content-Type"] = "text/vcard; charset=utf-8"
-              response["ETag"] = CONTACT_ETAG
+              response["ETag"] = contact.etag
               contact.vcard
             end
           end
@@ -226,24 +220,25 @@ module ProTacts
 
     private
 
-    # Parsed once per request — Roda builds a fresh app instance for each
-    # one — with the directory coming from config. Caching belongs with
-    # real etags.
-    def contacts
-      @contacts ||= Contact.all(ProTacts.config.contacts_dir)
+    # Loaded once per request — Roda builds a fresh app instance for each
+    # one — with the directory coming from config. Real etags and ctags
+    # make an mtime-keyed cache possible, but re-parsing a family address
+    # book per request is cheap and can never serve a stale change tag.
+    def addressbook
+      @addressbook ||= Addressbook.load(ProTacts.config.contacts_dir)
     end
 
     def contact_href(id)
       "/dav/addressbook/#{id}.vcf"
     end
 
-    def etag_response(id)
+    def etag_response(contact)
       <<~XML
         <d:response>
-          <d:href>#{contact_href(id)}</d:href>
+          <d:href>#{contact_href(contact.id)}</d:href>
           <d:propstat>
             <d:prop>
-              <d:getetag>#{CONTACT_ETAG}</d:getetag>
+              <d:getetag>#{contact.etag}</d:getetag>
             </d:prop>
             <d:status>HTTP/1.1 200 OK</d:status>
           </d:propstat>
@@ -257,7 +252,7 @@ module ProTacts
           <d:href>#{contact_href(contact.id)}</d:href>
           <d:propstat>
             <d:prop>
-              <d:getetag>#{CONTACT_ETAG}</d:getetag>
+              <d:getetag>#{contact.etag}</d:getetag>
               <card:address-data>#{xml_escape(contact.vcard.chomp)}</card:address-data>
             </d:prop>
             <d:status>HTTP/1.1 200 OK</d:status>

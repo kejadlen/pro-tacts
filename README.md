@@ -30,8 +30,10 @@ email "john@example.com"
 macOS Contacts displays them over Tailscale serve as of 2026-08-14, so
 later work has a known-good baseline to change. See
 `docs/plans/2026-08-12-one-card-on-macos.md` for what that milestone
-established. Still placeholders: etags and ctags are constants rather
-than derived from file state, and there is no authentication yet.
+established. Etags, the ctag, and the sync token are derived from file
+state — a contact's etag hashes its rendered vCard, and the collection
+tags hash the membership — so an edit on disk reaches synced clients on
+their next poll. There is no authentication yet.
 
 ## The minimal set macOS Contacts needs
 

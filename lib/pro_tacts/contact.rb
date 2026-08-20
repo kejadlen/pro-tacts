@@ -1,3 +1,4 @@
+require "digest"
 require "kdl"
 require "pathname"
 
@@ -7,7 +8,14 @@ module ProTacts
   # A contact parsed from one KDL file under the contacts directory; the
   # file is a bare KDL document, and the filename is the id, which maps
   # to the vCard UID (see docs/plans/2026-01-12-carddav-architecture.md).
-  class Contact < Data.define(:id, :vcard)
+  #
+  # The etag hashes the rendered vCard rather than the file's bytes or
+  # mtime, so it changes exactly when what the client downloads changes:
+  # git rewrites mtimes on every checkout, and a reformat-only edit
+  # changes the bytes without changing the card. It is stored in the
+  # entity-tag's quoted form (RFC 7232 section 2.3), which is what both
+  # the ETag header and getetag properties carry.
+  class Contact < Data.define(:id, :vcard, :etag)
     # Ids end up in paths and arrive from client-supplied hrefs, so a
     # filename outside this charset cannot be served.
     ID_FORMAT = /\A[\w-]+\z/
@@ -31,7 +39,8 @@ module ProTacts
       id = path.basename(".kdl").to_s
       raise ArgumentError, "invalid contact id: #{id}" unless id.match?(ID_FORMAT)
 
-      new(id:, vcard: VCard.render(KDL.parse(path.read), uid: id))
+      vcard = VCard.render(KDL.parse(path.read), uid: id)
+      new(id:, vcard:, etag: %("#{Digest::SHA256.hexdigest(vcard)}"))
     end
   end
 end

@@ -1,5 +1,6 @@
 
 require_relative "../test_helper"
+require "digest"
 require "pathname"
 require "rack/test"
 require "tmpdir"
@@ -71,7 +72,7 @@ class WebTest < Minitest::Test
 
     assert_equal 200, last_response.status
     assert_equal "text/vcard; charset=utf-8", last_response["Content-Type"]
-    assert_equal %("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"), last_response["ETag"]
+    assert_equal %("#{Digest::SHA256.hexdigest(last_response.body)}"), last_response["ETag"]
     assert_includes last_response.body, "BEGIN:VCARD"
     assert_includes last_response.body, "END:VCARD"
   end
@@ -120,7 +121,7 @@ class WebTest < Minitest::Test
         "PRO_TACTS_DATA_DIR" => dir,
       })
       begin
-        yield
+        yield contacts_dir
       ensure
         ProTacts.config = original
       end
@@ -211,6 +212,38 @@ class WebTest < Minitest::Test
       assert_includes last_response.body, "/dav/addressbook/aiden.vcf"
       assert_includes last_response.body, "getetag"
       refute_includes last_response.body, "address-data"
+    end
+  end
+
+  def test_etags_agree_across_listing_multiget_and_get
+    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do
+      request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
+      etag = last_response.body[%r{<d:getetag>(.+)</d:getetag>}, 1]
+
+      get "/dav/addressbook/aiden.vcf"
+      assert_equal etag, last_response["ETag"]
+
+      request "/dav/addressbook/", method: "REPORT", input: multiget("aiden")
+      assert_includes last_response.body, "<d:getetag>#{etag}</d:getetag>"
+    end
+  end
+
+  def test_a_changed_card_changes_its_etag_and_the_collection_tags
+    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do |contacts_dir|
+      read_tags = lambda {
+        request "/dav/addressbook/", method: "PROPFIND"
+        [last_response.body[%r{<d:getetag>(.+)</d:getetag>}, 1],
+         last_response.body[%r{<cs:getctag>(.+)</cs:getctag>}, 1],
+         last_response.body[%r{<d:sync-token>(.+)</d:sync-token>}, 1]]
+      }
+
+      before = read_tags.call
+      assert_equal before, read_tags.call # stable across requests
+
+      File.write(contacts_dir / "aiden.kdl", "name \"Aiden Smith\"")
+      after = read_tags.call
+
+      before.zip(after).each { refute_equal it.first, it.last }
     end
   end
 end

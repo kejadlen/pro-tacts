@@ -1,5 +1,6 @@
 require_relative "../test_helper"
 
+require "digest"
 require "pathname"
 require "tmpdir"
 
@@ -29,6 +30,24 @@ class ContactTest < Minitest::Test
   def test_the_uid_comes_from_the_filename
     with_contacts({"kqmtnwpxlrvszoyp.kdl" => "name \"Aiden\""}) do |directory|
       assert_includes ProTacts::Contact.all(directory).first.vcard, "UID:kqmtnwpxlrvszoyp"
+    end
+  end
+
+  def test_the_etag_hashes_the_rendered_card
+    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do |directory|
+      contact = ProTacts::Contact.all(directory).first
+
+      assert_equal %("#{Digest::SHA256.hexdigest(contact.vcard)}"), contact.etag
+    end
+  end
+
+  def test_the_etag_is_stable_across_parses_and_moves_with_content
+    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do |directory|
+      etag = ProTacts::Contact.all(directory).first.etag
+      assert_equal etag, ProTacts::Contact.all(directory).first.etag
+
+      File.write(directory / "aiden.kdl", "name \"Aiden Smith\"")
+      refute_equal etag, ProTacts::Contact.all(directory).first.etag
     end
   end
 

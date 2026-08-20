@@ -7,7 +7,7 @@ Content-Type: text/xml
   <d:href>/dav/addressbook/AB12C345-6789-0DEF-1234-567890ABCDEF.vcf</d:href>
   <d:propstat>
     <d:prop>
-      <d:getetag>"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"</d:getetag>
+      <d:getetag>"ce8bef6ad9abb83e81da4d5aceb7999b43781726f148e2607ed853532f9b8db6"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
