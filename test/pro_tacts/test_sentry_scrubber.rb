@@ -43,6 +43,14 @@ class SentryScrubberTest < Minitest::Test
     assert_includes scrubbed, "<href>/keep/me</href>"
   end
 
+  # (?~) is greedy to the longest run holding no complete END:VCARD, which
+  # runs into the marker and stops at END:VCAR. Without something forcing it
+  # back onto the boundary a stray "D" survives, so assert the exact result
+  # rather than just the absence of card content.
+  def test_no_fragment_of_the_end_marker_survives
+    assert_equal "<d>#{ProTacts::SentryScrubber::REDACTED}</d>TAIL", scrub("<d>#{CARD}</d>TAIL")
+  end
+
   def test_content_between_two_cards_survives
     scrubbed = scrub("#{CARD}\nMIDDLE\n#{CARD.sub('Real Person', 'Other Person')}\nTRAILING")
 

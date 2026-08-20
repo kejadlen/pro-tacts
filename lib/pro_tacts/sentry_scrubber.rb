@@ -7,13 +7,11 @@ module ProTacts
   #
   # Sentry truncates bodies at 16KB (RequestInterface::MAX_BODY_LIMIT), so a
   # card can arrive with its BEGIN and no END. The trailing alternation
-  # redacts to the end of the body in that case rather than missing the
-  # match; a card with an END redacts only to its own END, leaving the rest
-  # of the body intact.
+  # handles that, and is load-bearing for the ordinary case too: (?~) is
+  # greedy up to the longest run with no complete END:VCARD in it, which
+  # runs into the marker and stops at END:VCAR. Requiring END:VCARD or the
+  # end of the body is what backtracks it onto the real boundary.
   module SentryScrubber
-    # (?~exp) is Ruby's absence operator: the run of characters not
-    # containing exp. Says "up to the first END:VCARD" more directly than a
-    # lazy quantifier, whose stopping point depends on alternation order.
     VCARD = /BEGIN:VCARD(?~END:VCARD)(?:END:VCARD|\z)/mi
     VCARD_CONTENT_TYPE = %r{\Atext/vcard}i
     REDACTED = "[vcard redacted]".freeze #: String
