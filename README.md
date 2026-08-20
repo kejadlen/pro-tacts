@@ -47,7 +47,9 @@ Requests the server cannot answer — a 404, or a crash — are kept under
 `test/fixtures/macos-exchange`. A client asking for something unimplemented
 therefore leaves behind enough to implement it, and the capture can be
 promoted to a fixture by copying it and stripping the identifying headers.
-Sentry gets the event without the request body.
+Sentry gets the request body too, minus any card content, which
+`ProTacts::SentryScrubber` redacts on the way out — hrefs and tailnet IPs
+are not secrets, but the cards themselves never leave the machine.
 
 ## The minimal set macOS Contacts needs
 

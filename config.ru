@@ -7,6 +7,7 @@ require "sentry-ruby"
 
 $LOAD_PATH.unshift(Pathname.new(__dir__) / "lib")
 require "pro_tacts/web"
+require "pro_tacts/sentry_scrubber"
 
 config = ProTacts.config
 
@@ -22,14 +23,15 @@ Sentry.init do |sentry|
   # Get breadcrumbs from logs
   sentry.breadcrumbs_logger = [:sentry_logger, :http_logger]
 
-  # Off keeps the request body, query string, cookies, and client IP out of
-  # events. None of that is sensitive today: a read-only server's request
-  # bodies carry opaque contact UIDs, not card content, and the IPs are
-  # tailnet addresses. It is off because log/unhandled keeps the same bodies
-  # in better shape (see ProTacts::UnhandledRequests), and because a write
-  # path would put whole vCards in them. Headers still go, including
-  # Tailscale-User-Login, which says who hit the 404.
-  sentry.send_default_pii = false
+  # On: request bodies are worth having on a 404, and nothing else this
+  # sends is sensitive. Hrefs carry opaque contact UIDs, not names, and the
+  # IPs are tailnet addresses.
+  sentry.send_default_pii = true
+
+  # The one thing that must not leave the machine is card content, which a
+  # write path would put directly in a PUT body. Full bodies are kept
+  # locally either way, see ProTacts::UnhandledRequests.
+  sentry.before_send = ProTacts::SentryScrubber
 
   # Trace all the things!
   sentry.traces_sample_rate = 1.0

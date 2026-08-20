@@ -68,6 +68,9 @@ before regenerating.
   fixture layout. When implementing something a client asked for, look there
   first — and strip the identifying headers before promoting a capture into
   `test/fixtures`.
+- Anything added to a request body must be assumed to reach Sentry. Card
+  content is redacted by `ProTacts::SentryScrubber`; a new kind of sensitive
+  field would need its own rule there.
 - `config.ru` must stay ASCII-only; a test enforces it, because boot crashes
   under a C locale otherwise. Watch for em dashes in comments.
 - `RUBYOPT=--enable-frozen-string-literal` is set in `.ramekin/config.kdl`.
