@@ -29,8 +29,14 @@ module ProTacts
       "Not Found"
     end
 
+    # Four specs meet in this router: WebDAV itself (RFC 4918), the
+    # CardDAV profile on top of it (RFC 6352), collection sync (RFC 6578),
+    # and service discovery (RFC 6764). Each handler cites its section, and
+    # the texts are vendored under docs/rfcs to check them against.
     route do |r|
       r.is "" do
+        # DAV:current-user-principal (RFC 5397 section 3) — what a client
+        # asks the root for to find the principal it is acting as.
         r.propfind do
           response["Content-Type"] = "text/xml"
           response.status = 207
@@ -54,6 +60,8 @@ module ProTacts
         end
       end
 
+      # The "carddav" well-known URI (RFC 6764 section 5, registered in
+      # section 9.1.2), the start of a client's bootstrap.
       r.on ".well-known/carddav" do
         r.propfind do
           response["Content-Type"] = "text/xml"
@@ -77,18 +85,25 @@ module ProTacts
           XML
         end
 
+        # RFC 6764 section 5 forbids putting the service itself here and
+        # requires a redirect to the real context path; 301 is one of the
+        # codes it names.
         r.get do
           r.redirect "/dav/principal/", 301
         end
       end
 
       r.on "dav" do
+        # "addressbook" in the DAV header is how a client detects CardDAV
+        # support (RFC 6352 section 6.1); the header is RFC 4918 section 10.1.
         r.options do
           response["DAV"] = "addressbook"
           response["Allow"] = "OPTIONS, PROPFIND, REPORT"
           ""
         end
 
+        # CARDDAV:addressbook-home-set (RFC 6352 section 7.1.1) is the
+        # hop from principal to collection.
         r.on "principal" do
           r.propfind do
             response["Content-Type"] = "text/xml"
@@ -121,6 +136,8 @@ module ProTacts
             response["Content-Type"] = "text/xml"
             response.status = 207
 
+            # PROPFIND is RFC 4918 section 9.1, its Depth header section
+            # 10.2, and the 207 body it returns section 13.
             depth = request.env.fetch("HTTP_DEPTH", "infinity")
 
             # Check if this is an etag-only request (Depth:1 listing)
@@ -131,6 +148,14 @@ module ProTacts
             # requests (Depth:0 collection info) get the collection entry.
             collection_response = ""
             unless etag_only
+              # Every property in this body and where it comes from:
+              # DAV:resourcetype, which an address book collection MUST report
+              # as both collection and addressbook (RFC 6352 section 5.2);
+              # DAV:supported-report-set (RFC 3253 section 3.1.5), which RFC
+              # 6578 section 3.2 requires list sync-collection; and
+              # DAV:sync-token (RFC 6578 section 4). getctag alone is not
+              # standardized — an Apple CalendarServer extension in the
+              # calendarserver.org namespace, kept because macOS polls it.
               collection_response = <<~XML
                 <d:response>
                   <d:href>/dav/addressbook/</d:href>
@@ -177,10 +202,20 @@ module ProTacts
             doc.remove_namespaces!
 
             if doc.root.name == "sync-collection"
-              # The warm-sync ask is etag-only; a changed etag sends the
-              # client back through multiget, so no address-data here.
+              # DAV:sync-collection (RFC 6578 section 3.2). The warm-sync ask
+              # is etag-only; a changed etag sends the client back through
+              # multiget, so no address-data here.
+              #
+              # Knowingly violates that section twice: it requires the
+              # multistatus to carry a DAV:sync-token and to report only what
+              # changed since the client's token, and this returns every
+              # contact with no token. macOS resyncs the whole collection
+              # anyway, so it works; a client that trusts the token would
+              # break. Fixing it is the incremental-sync work in the backlog.
               responses = addressbook.contacts.map { etag_response(it) }
             else
+              # CARDDAV:addressbook-multiget (RFC 6352 section 8.7); the
+              # address-data the client asks for is section 10.4.
               wants_cards = doc.xpath("//address-data").any?
 
               responses = doc.xpath("//href").map { it.text }.map { |requested|
@@ -210,6 +245,8 @@ module ProTacts
             # not_found handler fills in.
             if contact
               response["Content-Type"] = "text/vcard; charset=utf-8"
+              # RFC 7232 section 2.3; must match the getetag reported for
+              # this contact in PROPFIND and REPORT.
               response["ETag"] = contact.etag
               contact.vcard
             end
@@ -232,6 +269,7 @@ module ProTacts
       "/dav/addressbook/#{id}.vcf"
     end
 
+    # DAV:getetag (RFC 4918 section 15.6).
     def etag_response(contact)
       <<~XML
         <d:response>
@@ -261,6 +299,8 @@ module ProTacts
       XML
     end
 
+    # An href with no match is reported as a 404 inside the 207 rather than
+    # failing the request (RFC 6352 section 8.7).
     def missing_response(requested)
       <<~XML
         <d:response>
