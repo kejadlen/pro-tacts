@@ -18,7 +18,7 @@ A CardDAV server for my family.
 ## Status
 
 Read-only and serving real data. Contacts live as KDL files under
-`data/contacts` (override with `PRO_TACTS_CONTACTS_DIR`), one contact per
+`data/contacts` (override the root with `PRO_TACTS_DATA_DIR`), one contact per
 file, the filename doubling as the contact ID and the vCard UID:
 
 ```kdl
