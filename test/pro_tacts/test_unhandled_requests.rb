@@ -61,6 +61,17 @@ class UnhandledRequestsTest < Minitest::Test
     assert_equal 1, captures.size
   end
 
+  # An unsupported REPORT type. TailscaleAuth refuses unauthenticated
+  # requests above this middleware, so a 403 reaching it is always the app
+  # saying it routed the request and will not serve it.
+  def test_a_403_from_the_app_is_captured
+    @stub.status = 403
+
+    request "/dav/addressbook/", method: "REPORT", input: "<addressbook-query/>"
+
+    assert_equal 1, captures.size
+  end
+
   def test_capture_records_the_request_verbatim
     @stub.status = 404
 

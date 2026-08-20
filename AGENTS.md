@@ -66,10 +66,10 @@ before regenerating.
   a bare `curl` against `rake dev` is refused until you pass one. The
   security of that rests on the app being reachable only through
   `tailscale serve` — never bind it to anything but localhost.
-- Unanswered requests (404s and 5xx) are written to `log/unhandled` in the
-  fixture layout. When implementing something a client asked for, look there
-  first — and strip the identifying headers before promoting a capture into
-  `test/fixtures`.
+- Unanswered requests (404s, app-level 403s, and 5xx) are written to
+  `log/unhandled` in the fixture layout. When implementing something a
+  client asked for, look there first — and strip the identifying headers
+  before promoting a capture into `test/fixtures`.
 - Anything added to a request body must be assumed to reach Sentry. Card
   content is redacted by `ProTacts::SentryScrubber`; a new kind of sensitive
   field would need its own rule there.

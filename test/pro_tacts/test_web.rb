@@ -192,6 +192,17 @@ class WebTest < Minitest::Test
     XML
   end
 
+  def addressbook_query
+    <<~XML
+      <?xml version="1.0" encoding="UTF-8"?>
+      <C:addressbook-query xmlns:C="urn:ietf:params:xml:ns:carddav">
+        <A:prop xmlns:A="DAV:">
+          <A:getetag/>
+        </A:prop>
+      </C:addressbook-query>
+    XML
+  end
+
   def test_listing_and_multiget_serve_every_contact_on_disk
     with_contacts({
       "aiden.kdl" => "name \"Aiden\"",
@@ -251,6 +262,31 @@ class WebTest < Minitest::Test
       assert_includes last_response.body, "getetag"
       refute_includes last_response.body, "address-data"
     end
+  end
+
+  # RFC 6352 section 8.6 defines addressbook-query, which this server does
+  # not implement. Before the DAV:supported-report precondition was enforced
+  # it fell through to the multiget branch, found no hrefs, and answered with
+  # an empty 207 that read as a successful empty address book.
+  def test_unsupported_report_is_refused_rather_than_answered_emptily
+    directory = ProTacts.config.unhandled_dir
+    FileUtils.rm_rf(directory)
+
+    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do
+      request "/dav/addressbook/", method: "REPORT", input: addressbook_query
+
+      assert_equal 403, last_response.status
+      assert_includes last_response.body, "<d:supported-report/>"
+      refute_includes last_response.body, "multistatus"
+
+      # The refusal is what makes the ask visible; an empty 207 left nothing.
+      captured = Pathname.new(directory).glob("*/request").map(&:read)
+
+      assert_equal 1, captured.size
+      assert_includes captured.first, "addressbook-query"
+    end
+  ensure
+    FileUtils.rm_rf(directory)
   end
 
   def test_etags_agree_across_listing_multiget_and_get

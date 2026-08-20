@@ -220,7 +220,11 @@ module ProTacts
             root = doc.root
             raise ArgumentError, "REPORT body is not XML" if root.nil?
 
-            if root.name == "sync-collection"
+            # Each branch renders the whole response body: a Roda route
+            # block cannot return early, so the unsupported case has to be
+            # a value like the others rather than a return.
+            case root.name
+            when "sync-collection"
               # DAV:sync-collection (RFC 6578 section 3.2). The warm-sync ask
               # is etag-only; a changed etag sends the client back through
               # multiget, so no address-data here.
@@ -231,13 +235,13 @@ module ProTacts
               # contact with no token. macOS resyncs the whole collection
               # anyway, so it works; a client that trusts the token would
               # break. Fixing it is the incremental-sync work in the backlog.
-              responses = addressbook.contacts.map { etag_response(it) }
-            else
+              multistatus(addressbook.contacts.map { etag_response(it) })
+            when "addressbook-multiget"
               # CARDDAV:addressbook-multiget (RFC 6352 section 8.7); the
               # address-data the client asks for is section 10.4.
               wants_cards = doc.xpath("//address-data").any?
 
-              responses = doc.xpath("//href").map { it.text }.map { |requested|
+              multistatus(doc.xpath("//href").map { it.text }.map { |requested|
                 id = requested[%r{\A/dav/addressbook/([^/]+)\.vcf\z}, 1]
                 contact = id && addressbook.contacts.find { it.id == id }
 
@@ -246,15 +250,30 @@ module ProTacts
                 else
                   missing_response(requested)
                 end
-              }
-            end
+              })
+            else
+              # The DAV:supported-report precondition on REPORT (RFC 3253
+              # section 3.6) — the report asked for has to be one the
+              # resource supports. Answering an unsupported report with an
+              # empty 207 reads to the client as a successful empty result,
+              # and to us as nothing at all: 207 is not a status
+              # UnhandledRequests captures, so the one signal that a client
+              # wanted something unimplemented never fired.
+              #
+              # 403 with the precondition named in a DAV:error body is the
+              # marshalling RFC 4918 section 16 defines, and 403 is its
+              # "will always fail, do not repeat" case. addressbook-query
+              # (RFC 6352 section 8.6) is the report this rejects today;
+              # macOS Contacts has never sent one.
+              response.status = 403
 
-            <<~XML
-              <?xml version="1.0" encoding="UTF-8"?>
-              <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
-                #{responses.join}
-              </d:multistatus>
-            XML
+              <<~XML
+                <?xml version="1.0" encoding="UTF-8"?>
+                <d:error xmlns:d="DAV:">
+                  <d:supported-report/>
+                </d:error>
+              XML
+            end
           end
 
           r.get String do |filename|
@@ -283,6 +302,16 @@ module ProTacts
     #: () -> Addressbook
     def addressbook
       @addressbook ||= Addressbook.load(ProTacts.config.contacts_dir)
+    end
+
+    #: (Array[String] responses) -> String
+    def multistatus(responses)
+      <<~XML
+        <?xml version="1.0" encoding="UTF-8"?>
+        <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
+          #{responses.join}
+        </d:multistatus>
+      XML
     end
 
     #: (String id) -> String

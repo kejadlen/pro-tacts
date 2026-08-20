@@ -42,11 +42,12 @@ while the app is reachable through serve alone — bind it to localhost.
 Tailscale documents two cases that carry no identity and so cannot get in:
 Funnel traffic, which is public, and traffic from tagged devices.
 
-Requests the server cannot answer — a 404, or a crash — are kept under
-`log/unhandled`, one directory per distinct request, in the same layout as
-`test/fixtures/macos-exchange`. A client asking for something unimplemented
-therefore leaves behind enough to implement it, and the capture can be
-promoted to a fixture by copying it and stripping the identifying headers.
+Requests the server cannot answer — a 404, a refused report, or a crash —
+are kept under `log/unhandled`, one directory per distinct request, in the
+same layout as `test/fixtures/macos-exchange`. A client asking for
+something unimplemented therefore leaves behind enough to implement it, and
+the capture can be promoted to a fixture by copying it and stripping the
+identifying headers.
 Sentry gets the request body too, minus any card content, which
 `ProTacts::SentryScrubber` redacts on the way out — hrefs and tailnet IPs
 are not secrets, but the cards themselves never leave the machine.

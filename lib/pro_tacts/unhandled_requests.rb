@@ -19,10 +19,14 @@ module ProTacts
 
     # 404 is the missing-functionality signal: a client asked for something
     # this server does not route. 5xx is kept because Sentry now reports
-    # those without a body, and a crash is hard to read without one.
+    # those without a body, and a crash is hard to read without one. 403 is
+    # the routed-but-unimplemented case, today an unsupported REPORT type —
+    # safe to capture because TailscaleAuth sits above this middleware and
+    # refuses unauthenticated requests before they reach it, so every 403
+    # arriving here came from the app.
     #: (Integer status) -> bool
     def self.capture?(status)
-      status == 404 || status >= 500
+      status == 403 || status == 404 || status >= 500
     end
 
     #: (Rack::_App app, directory: Pathname | String) -> void
