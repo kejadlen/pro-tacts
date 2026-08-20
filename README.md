@@ -33,7 +33,14 @@ later work has a known-good baseline to change. See
 established. Etags, the ctag, and the sync token are derived from file
 state — a contact's etag hashes its rendered vCard, and the collection
 tags hash the membership — so an edit on disk reaches synced clients on
-their next poll. There is no authentication yet.
+their next poll.
+
+Requests are authenticated by the `Tailscale-User-Login` header that
+`tailscale serve` injects, which it strips from incoming requests so a
+client cannot forge one. A request without it gets a 403. That holds only
+while the app is reachable through serve alone — bind it to localhost.
+Tailscale documents two cases that carry no identity and so cannot get in:
+Funnel traffic, which is public, and traffic from tagged devices.
 
 ## The minimal set macOS Contacts needs
 

@@ -8,6 +8,7 @@ require "roda"
 
 require "pro_tacts/debug_logger"
 require "pro_tacts/addressbook"
+require "pro_tacts/tailscale_auth"
 require "roda/plugins/dav_verbs"
 
 module ProTacts
@@ -16,6 +17,11 @@ module ProTacts
     # and then rewind it so the application can still access it.
     use Rack::RewindableInput::Middleware
     use Sentry::Rack::CaptureExceptions
+
+    # Ahead of the debug logger on purpose: an unauthenticated request should
+    # not get its body dumped to the log.
+    use ProTacts::TailscaleAuth
+
     if ProTacts.config.debug?
       logger = ProTacts::DebugLogger.open_log(ProTacts.config.debug_log_path)
       use ProTacts::DebugLogger, logger: logger

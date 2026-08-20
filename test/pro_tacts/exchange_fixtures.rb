@@ -2,6 +2,8 @@
 require "pathname"
 require "rack/test"
 
+require "pro_tacts/tailscale_auth"
+
 # Loads and replays the recorded macOS Contacts exchange in
 # test/fixtures/macos-exchange. See that directory's README for provenance
 # and the request/response file format.
@@ -34,13 +36,19 @@ module ExchangeFixtures
       Response.new(status: status_line.to_i, headers: parse_headers(header_lines), body:)
     end
 
+    # Stands in for the Tailscale-User-Login the recorded session carried.
+    # It was stripped from the request files because it names a real tailnet
+    # user; the app now refuses requests without one, so the replay has to
+    # put an identity back.
+    REPLAY_LOGIN = "replay@example.com"
+
     # Rack env for the recorded headers: Content-Type and Depth are the only
     # ones the app reads, but replaying all of them keeps the fidelity.
     def env_for(step)
       step.headers.to_h { |name, value|
         key = name == "Content-Type" ? "CONTENT_TYPE" : "HTTP_#{name.tr('-', '_').upcase}"
         [key, value]
-      }
+      }.merge(ProTacts::TailscaleAuth::LOGIN_HEADER => REPLAY_LOGIN)
     end
 
     # Replays every recorded request against the app and rewrites the

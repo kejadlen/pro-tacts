@@ -15,6 +15,12 @@ class WebTest < Minitest::Test
     ProTacts::Web
   end
 
+  # Every request needs a Tailscale identity; the middleware refuses without
+  # one. Tests for that refusal are in TailscaleAuthTest.
+  def setup
+    header "Tailscale-User-Login", "test@example.com"
+  end
+
   def test_options_returns_dav_headers
     options "/dav/"
 

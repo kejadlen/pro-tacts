@@ -60,6 +60,10 @@ before regenerating.
 - Response bodies are built with heredocs in `web.rb`. A comment written
   inside one is sent to the client — keep notes about the code in Ruby
   comments outside the heredoc.
+- Every request needs a `Tailscale-User-Login` header or it gets a 403, so
+  a bare `curl` against `rake dev` is refused until you pass one. The
+  security of that rests on the app being reachable only through
+  `tailscale serve` — never bind it to anything but localhost.
 - `RUBYOPT=--enable-frozen-string-literal` is set in `.ramekin/config.kdl`.
   String literals are frozen; mutating one raises.
 - Application code reads configuration through `ProTacts.config` only; add

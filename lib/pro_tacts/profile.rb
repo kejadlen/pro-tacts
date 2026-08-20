@@ -16,8 +16,11 @@ module ProTacts
     IDENTIFIER_PREFIX = "dev.kejadlen.pro-tacts.carddav"
     HEX = "0123456789abcdef"
 
-    # Username and password are a throwaway fictional pair, inlined in the
-    # template. Real auth is its own backlog task.
+    # The username and password are a throwaway fictional pair and the server
+    # ignores them: identity comes from the Tailscale headers that serve
+    # injects (see ProTacts::TailscaleAuth). They stay in the template
+    # because the account form expects the fields; dropping them is
+    # untested.
     def self.render(hostname:)
       identifier = "#{IDENTIFIER_PREFIX}-#{unique_hex}"
 
