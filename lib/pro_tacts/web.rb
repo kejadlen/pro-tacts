@@ -9,6 +9,7 @@ require "roda"
 require "pro_tacts/debug_logger"
 require "pro_tacts/addressbook"
 require "pro_tacts/tailscale_auth"
+require "pro_tacts/unhandled_requests"
 require "roda/plugins/dav_verbs"
 
 module ProTacts
@@ -21,6 +22,10 @@ module ProTacts
     # Ahead of the debug logger on purpose: an unauthenticated request should
     # not get its body dumped to the log.
     use ProTacts::TailscaleAuth
+
+    # Below the auth gate: a refused request is not missing functionality,
+    # and recording one would write an unauthenticated body to disk.
+    use ProTacts::UnhandledRequests, directory: ProTacts.config.unhandled_dir
 
     if ProTacts.config.debug?
       logger = ProTacts::DebugLogger.open_log(ProTacts.config.debug_log_path)

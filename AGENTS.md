@@ -64,6 +64,12 @@ before regenerating.
   a bare `curl` against `rake dev` is refused until you pass one. The
   security of that rests on the app being reachable only through
   `tailscale serve` — never bind it to anything but localhost.
+- Unanswered requests (404s and 5xx) are written to `log/unhandled` in the
+  fixture layout. When implementing something a client asked for, look there
+  first — and strip the identifying headers before promoting a capture into
+  `test/fixtures`.
+- `config.ru` must stay ASCII-only; a test enforces it, because boot crashes
+  under a C locale otherwise. Watch for em dashes in comments.
 - `RUBYOPT=--enable-frozen-string-literal` is set in `.ramekin/config.kdl`.
   String literals are frozen; mutating one raises.
 - Application code reads configuration through `ProTacts.config` only; add

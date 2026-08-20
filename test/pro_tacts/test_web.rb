@@ -1,6 +1,7 @@
 
 require_relative "../test_helper"
 require "digest"
+require "fileutils"
 require "pathname"
 require "rack/test"
 require "tmpdir"
@@ -105,6 +106,37 @@ class WebTest < Minitest::Test
     assert_equal 207, last_response.status
     assert_includes last_response.body, "getctag"
     assert_includes last_response.body, "AB12C345-6789-0DEF-1234-567890ABCDEF.vcf"
+  end
+
+  # Guards the wiring rather than the middleware: mounted in the stack, below
+  # the auth gate, pointed at the configured directory.
+  def test_an_unhandled_request_is_kept_on_disk
+    directory = ProTacts.config.unhandled_dir
+    FileUtils.rm_rf(directory)
+
+    get "/dav/addressbook/no-such-contact.vcf"
+
+    assert_equal 404, last_response.status
+
+    captured = Pathname.new(directory).glob("*/request").map(&:read)
+
+    assert_equal 1, captured.size
+    assert_includes captured.first, "/dav/addressbook/no-such-contact.vcf"
+  ensure
+    FileUtils.rm_rf(directory)
+  end
+
+  def test_a_refused_request_is_not_kept_on_disk
+    directory = ProTacts.config.unhandled_dir
+    FileUtils.rm_rf(directory)
+
+    header "Tailscale-User-Login", ""
+    get "/dav/addressbook/no-such-contact.vcf"
+
+    assert_equal 403, last_response.status
+    refute Pathname.new(directory).exist?, "a refused request should leave nothing behind"
+  ensure
+    FileUtils.rm_rf(directory)
   end
 
   def test_get_unknown_contact_is_404

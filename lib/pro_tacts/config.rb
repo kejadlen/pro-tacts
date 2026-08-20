@@ -39,6 +39,13 @@ module ProTacts
       data_dir / "contacts"
     end
 
+    # Where requests the app could not answer are kept, one directory per
+    # distinct request. Under log/ because it holds request data and is not
+    # meant to be committed. See ProTacts::UnhandledRequests.
+    def unhandled_dir
+      Pathname.new(@env.fetch("PRO_TACTS_UNHANDLED_DIR", "log/unhandled"))
+    end
+
     # Where the debug logger writes. A path, overridable with
     # PRO_TACTS_DEBUG_LOG; "stderr" keeps it on the process's stderr.
     def debug_log_path

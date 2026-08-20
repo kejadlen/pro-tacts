@@ -22,9 +22,14 @@ Sentry.init do |sentry|
   # Get breadcrumbs from logs
   sentry.breadcrumbs_logger = [:sentry_logger, :http_logger]
 
-  # Add data like request headers and IP for users, if applicable;
-  # see https://docs.sentry.io/platforms/ruby/data-management/data-collected/ for more info
-  sentry.send_default_pii = true
+  # Off keeps the request body, query string, cookies, and client IP out of
+  # events. None of that is sensitive today: a read-only server's request
+  # bodies carry opaque contact UIDs, not card content, and the IPs are
+  # tailnet addresses. It is off because log/unhandled keeps the same bodies
+  # in better shape (see ProTacts::UnhandledRequests), and because a write
+  # path would put whole vCards in them. Headers still go, including
+  # Tailscale-User-Login, which says who hit the 404.
+  sentry.send_default_pii = false
 
   # Trace all the things!
   sentry.traces_sample_rate = 1.0

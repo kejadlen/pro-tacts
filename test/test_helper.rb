@@ -7,4 +7,8 @@ require "pathname"
 
 ENV["PRO_TACTS_DATA_DIR"] = (Pathname.new(__dir__) / "fixtures").to_s
 
+# Several tests provoke 404s. Keep the captures out of log/ and out of the
+# fixtures; UnhandledRequestsTest points the middleware at its own tmpdir.
+ENV["PRO_TACTS_UNHANDLED_DIR"] = (Pathname.new(__dir__).parent / "tmp" / "test-unhandled").to_s
+
 require "minitest/autorun"
