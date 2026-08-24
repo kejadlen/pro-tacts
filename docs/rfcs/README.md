@@ -16,6 +16,7 @@ handler that implements each one, and `lib/pro_tacts/vcard.rb` cites RFC
 | [6764](rfc6764.txt) | Locating Services for CalDAV and CardDAV | The `/.well-known/carddav` bootstrap and its redirect |
 | [5397](rfc5397.txt) | WebDAV Current Principal Extension | `current-user-principal` |
 | [3253](rfc3253.txt) | Versioning Extensions to WebDAV (DeltaV) | `supported-report-set` only; no versioning is implemented |
+| [3744](rfc3744.txt) | WebDAV Access Control Protocol | `current-user-privilege-set` and the privilege names in it; no ACL is implemented |
 | [2426](rfc2426.txt) | vCard 3.0 | The card format itself; the version Apple clients speak |
 | [6350](rfc6350.txt) | vCard 4.0 | Nothing here implements it; kept for comparison |
 

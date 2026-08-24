@@ -18,6 +18,12 @@ Content-Type: text/xml
       </d:supported-report-set>
       <cs:getctag>cfe366324ca3c5bb85010587e5fa778044ee67b5480e45441b562c662b7d1dc5</cs:getctag>
       <d:sync-token>http://pro-tacts/sync/cfe366324ca3c5bb85010587e5fa778044ee67b5480e45441b562c662b7d1dc5</d:sync-token>
+      <d:current-user-privilege-set>
+        <d:privilege><d:read/></d:privilege>
+        <d:privilege><d:write/></d:privilege>
+        <d:privilege><d:bind/></d:privilege>
+        <d:privilege><d:unbind/></d:privilege>
+      </d:current-user-privilege-set>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>

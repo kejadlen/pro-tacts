@@ -165,10 +165,21 @@ module ProTacts
               # DAV:resourcetype, which an address book collection MUST report
               # as both collection and addressbook (RFC 6352 section 5.2);
               # DAV:supported-report-set (RFC 3253 section 3.1.5), which RFC
-              # 6578 section 3.2 requires list sync-collection; and
-              # DAV:sync-token (RFC 6578 section 4). getctag alone is not
-              # standardized — an Apple CalendarServer extension in the
+              # 6578 section 3.2 requires list sync-collection;
+              # DAV:sync-token (RFC 6578 section 4); and
+              # DAV:current-user-privilege-set (RFC 3744 section 5.4), which
+              # RFC 6352 section 7 requires of a CardDAV server. getctag alone
+              # is not standardized — an Apple CalendarServer extension in the
               # calendarserver.org namespace, kept because macOS polls it.
+              #
+              # The privileges are advertised before the methods granting them
+              # exist. macOS Contacts asks for this property on every poll and
+              # attempts no write without it, so claiming the privileges is
+              # what makes the client send a PUT this server can capture in
+              # log/unhandled — the point of the experiment, not an oversight.
+              # DAV:write covers PUT and PROPPATCH (RFC 3744 section 3.2),
+              # DAV:bind adding a member to the collection (section 3.9), and
+              # DAV:unbind removing one (section 3.10).
               collection_response = <<~XML
                 <d:response>
                   <d:href>/dav/addressbook/</d:href>
@@ -185,6 +196,12 @@ module ProTacts
                       </d:supported-report-set>
                       <cs:getctag>#{addressbook.ctag}</cs:getctag>
                       <d:sync-token>#{addressbook.sync_token}</d:sync-token>
+                      <d:current-user-privilege-set>
+                        <d:privilege><d:read/></d:privilege>
+                        <d:privilege><d:write/></d:privilege>
+                        <d:privilege><d:bind/></d:privilege>
+                        <d:privilege><d:unbind/></d:privilege>
+                      </d:current-user-privilege-set>
                     </d:prop>
                     <d:status>HTTP/1.1 200 OK</d:status>
                   </d:propstat>
