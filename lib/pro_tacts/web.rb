@@ -7,14 +7,33 @@ require "nokogiri"
 require "roda"
 
 require "pro_tacts/debug_logger"
-require "pro_tacts/addressbook"
+require "pro_tacts/contact"
+require "pro_tacts/store"
 require "pro_tacts/tailscale_auth"
 require "pro_tacts/unhandled_requests"
 require "roda/plugins/dav_verbs"
 
 module ProTacts
   class Web < Roda
-    # @rbs @addressbook: Addressbook?
+    # @rbs @contacts: Array[Contact]?
+    # @rbs @ctag: String?
+
+    # The store this app serves from. config.ru builds it and hands it in;
+    # nothing here reaches for a global to find one, which is what lets a
+    # test point the app at a throwaway database. Kept in Roda's own opts
+    # rather than a class variable, so it is frozen with the app and a
+    # write after that raises instead of quietly taking effect.
+    #: (Store store) -> void
+    def self.store=(store)
+      opts[:store] = store
+    end
+
+    #: () -> Store
+    def self.store
+      opts.fetch(:store) do
+        raise "no store: hand one to ProTacts::Web.store= before serving"
+      end
+    end
 
     # RewindableInput allows us to read the request body for Sentry logging
     # and then rewind it so the application can still access it.
@@ -194,8 +213,8 @@ module ProTacts
                           <d:report><d:sync-collection/></d:report>
                         </d:supported-report>
                       </d:supported-report-set>
-                      <cs:getctag>#{addressbook.ctag}</cs:getctag>
-                      <d:sync-token>#{addressbook.sync_token}</d:sync-token>
+                      <cs:getctag>#{ctag}</cs:getctag>
+                      <d:sync-token>#{sync_token}</d:sync-token>
                       <d:current-user-privilege-set>
                         <d:privilege><d:read/></d:privilege>
                         <d:privilege><d:write/></d:privilege>
@@ -210,7 +229,7 @@ module ProTacts
             end
 
             # Depth: 0 returns only collection, Depth: 1 includes members
-            members = depth == "0" ? "" : addressbook.contacts.map { etag_response(it) }.join
+            members = depth == "0" ? "" : contacts.map { etag_response(it) }.join
 
             <<~XML
               <?xml version="1.0" encoding="UTF-8"?>
@@ -252,7 +271,7 @@ module ProTacts
               # contact with no token. macOS resyncs the whole collection
               # anyway, so it works; a client that trusts the token would
               # break. Fixing it is the incremental-sync work in the backlog.
-              multistatus(addressbook.contacts.map { etag_response(it) })
+              multistatus(contacts.map { etag_response(it) })
             when "addressbook-multiget"
               # CARDDAV:addressbook-multiget (RFC 6352 section 8.7); the
               # address-data the client asks for is section 10.4.
@@ -260,7 +279,7 @@ module ProTacts
 
               multistatus(doc.xpath("//href").map { it.text }.map { |requested|
                 id = requested[%r{\A/dav/addressbook/([^/]+)\.vcf\z}, 1]
-                contact = id && addressbook.contacts.find { it.id == id }
+                contact = id && contacts.find { it.id == id }
 
                 if contact
                   wants_cards ? card_response(contact) : etag_response(contact)
@@ -293,8 +312,10 @@ module ProTacts
             end
           end
 
+          # Read on its own rather than through the collection: serving
+          # one href has no reason to load every other contact first.
           r.get String do |filename|
-            contact = addressbook.contacts.find { it.id == filename.delete_suffix(".vcf") }
+            contact = store.contact(filename.delete_suffix(".vcf"))
 
             # No match falls through to the empty-body 404 that the
             # not_found handler fills in.
@@ -312,13 +333,30 @@ module ProTacts
 
     private
 
-    # Loaded once per request — Roda builds a fresh app instance for each
-    # one — with the directory coming from config. Real etags and ctags
-    # make an mtime-keyed cache possible, but re-parsing a family address
-    # book per request is cheap and can never serve a stale change tag.
-    #: () -> Addressbook
-    def addressbook
-      @addressbook ||= Addressbook.load(ProTacts.config.contacts_dir)
+    # Read once per request — Roda builds a fresh app instance for each
+    # one — from the store the whole process shares. Reading a family
+    # address book per request is cheap and can never serve a stale one.
+    #: () -> Array[Contact]
+    def contacts
+      @contacts ||= store.contacts
+    end
+
+    #: () -> String
+    def ctag
+      @ctag ||= store.ctag
+    end
+
+    # Sync tokens are opaque to the client (RFC 6578 section 3); the URI
+    # form is conventional. Built on the ctag so a client polling either
+    # one sees changes at the same points.
+    #: () -> String
+    def sync_token
+      "http://pro-tacts/sync/#{ctag}"
+    end
+
+    #: () -> Store
+    def store
+      self.class.store
     end
 
     #: (Array[String] responses) -> String

@@ -1,0 +1,146 @@
+# Sequel ships no signatures, so this describes the parts pro-tacts
+# calls: one SQLite database, four datasets over it, and the schema DSL
+# that creates them. A row is a hash keyed by column, whose values carry
+# whatever type the column held, which is why the store converts them at
+# its edge rather than trusting them.
+#
+# The create_table generator is declared because the block runs against
+# it rather than against the calling object, and `[self: ...]` is how
+# RBS says so; without it every column line in the schema reads as a
+# call on Store.
+#
+# Written against sequel 5.107.0 (lib/sequel/database/, dataset/,
+# adapters/sqlite.rb).
+module Sequel
+  type row = Hash[Symbol, untyped]
+
+  def self.sqlite: (String path, **untyped options) -> Database
+
+  # Loads an extension into Sequel itself; `:migration` is the one this
+  # app asks for, and it is what defines Migrator.
+  def self.extension: (*Symbol names) -> void
+
+  # A qualified or unqualified identifier: `Sequel[:excluded][:vcard]`,
+  # and the comparisons built from one.
+  def self.[]: (Symbol name) -> untyped
+
+  # SQL written out by hand, for the one default expression the schema
+  # DSL has no spelling for.
+  def self.lit: (String sql) -> untyped
+
+  class Database
+    def []: (Symbol table) -> Dataset
+
+    # Loads an extension into this database and the datasets it makes.
+    def extension: (*Symbol names) -> Database
+
+    def extend_datasets: (Module extension) -> void
+
+    def self.register_extension: (Symbol name, ?Module extension) ?{ (Database) -> void } -> void
+
+    # Runs a statement for its effect. Used only for the pragmas Sequel
+    # has no option for.
+    def run: (String sql) -> untyped
+
+    # Wraps a statement whose rows are wanted, as a dataset.
+    def fetch: (String sql) -> Dataset
+
+    # Joins a transaction already open rather than nesting, so a write
+    # inside a write is still one atomic unit.
+    def transaction: [T] () { () -> T } -> T
+
+    def create_table: (Symbol name, **untyped options) { () [self: Schema::CreateTableGenerator] -> void } -> void
+
+    def disconnect: () -> void
+  end
+
+  # The dataset surface lib/sequel/extensions/sole.rb needs of whatever
+  # it is mixed into. A structural interface rather than Dataset itself,
+  # because Dataset includes Sole and naming it here would be circular.
+  interface _Queryable
+    def limit: (Integer count) -> Dataset
+
+    def first_source: () -> Symbol
+  end
+
+  class Dataset
+    include Enumerable[Sequel::row]
+
+    # lib/sequel/extensions/sole.rb. RBS has no way to say "only once
+    # DB.extension(:sole) has run", and Store runs it on every open.
+    include Sole
+
+    def self.register_extension: (Symbol name, Module extension) -> void
+
+    def where: (*untyped conditions) -> Dataset
+    def order: (*untyped columns) -> Dataset
+    def limit: (Integer count) -> Dataset
+    def join: (Symbol table, Array[Symbol] using) -> Dataset
+
+    # The table a dataset selects from; raises when it has no source.
+    def first_source: () -> Symbol
+
+    # An upsert: `target` is the conflicting column, `update` what to set
+    # on the row already there.
+    def insert_conflict: (**untyped options) -> Dataset
+
+    def first: () -> Sequel::row?
+    def all: () -> Array[Sequel::row]
+    def count: () -> Integer
+    def columns: () -> Array[Symbol]
+    def single_value: () -> untyped
+    def select_map: (untyped columns) -> Array[untyped]
+
+    def insert: (Sequel::row values) -> Integer
+    def update: (Sequel::row values) -> Integer
+
+    # Rows removed.
+    def delete: () -> Integer
+
+    def each: () { (Sequel::row) -> void } -> void
+  end
+
+  module Schema
+    # The schema DSL. Each column method takes the column name and the
+    # options for it; `text: true` is what keeps a String a SQLite TEXT
+    # rather than a varchar, which a STRICT table refuses.
+    class CreateTableGenerator
+      def String: (Symbol name, **untyped options) -> void
+      def Integer: (Symbol name, **untyped options) -> void
+
+      # A single argument is the table's own key (an AUTOINCREMENT
+      # integer on SQLite); an array is a composite primary key over
+      # columns already declared.
+      def primary_key: (Symbol | Array[Symbol] name, **untyped options) -> void
+
+      def foreign_key: (Symbol | Array[Symbol] name, ?Symbol table, **untyped options) -> void
+
+      def constraint: (Symbol name, **untyped condition) -> void
+
+      def index: (Symbol | Array[Symbol] columns, **untyped options) -> void
+    end
+  end
+
+  # Applies the migrations in a directory that the database has not run
+  # yet, and does nothing to one that is already current.
+  class Migrator
+    def self.run: (Database database, String directory, **untyped options) -> untyped
+  end
+
+  class Error < StandardError
+  end
+
+  # What `first!` raises on an empty dataset, and `sole` with it.
+  class NoMatchingRow < Error
+    def initialize: (?untyped message_or_dataset) -> void
+  end
+
+  class DatabaseError < Error
+  end
+
+  class ConstraintViolation < DatabaseError
+  end
+
+  class CheckConstraintViolation < ConstraintViolation
+  end
+end

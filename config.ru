@@ -8,12 +8,16 @@ require "sentry-ruby"
 $LOAD_PATH.unshift(Pathname.new(__dir__) / "lib")
 require "pro_tacts/web"
 require "pro_tacts/sentry_scrubber"
+require "pro_tacts/store"
 
 config = ProTacts.config
 
-# A fresh checkout has no contacts dir; an empty address book beats a
-# 500 on every request.
-FileUtils.mkdir_p(config.contacts_dir)
+# A fresh checkout has no database. Opening it here creates and migrates
+# one on this thread, before any request, rather than leaving several
+# request threads to race into an empty schema -- and a migration that
+# fails takes the deploy down rather than someone's first request.
+FileUtils.mkdir_p(config.data_dir)
+ProTacts::Web.store = ProTacts::Store.at(config.database_path)
 
 # A nil DSN initializes Sentry but leaves it inert: capture_message
 # returns nil and the rack middleware reports nothing.

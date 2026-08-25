@@ -1,8 +1,16 @@
-# `module_function` copies every method onto the module itself, and
-# inline RBS has no syntax for that. Extending the module is how RBS
-# says the same thing, so the method types can stay inline in vcard.rb.
+# Property is a Data class, whose members the inline parser cannot read
+# (see sig/pro_tacts/contact.rbs). Everything else about vcard.rb is
+# inline: its methods are singleton methods rather than
+# `module_function`, which is a shape RBS reads without help.
 module ProTacts
   module VCard
-    extend VCard
+    class Property
+      attr_reader group: String?
+      attr_reader name: String
+      attr_reader parameters: Array[[String, String]]
+      attr_reader value: String
+
+      def self.new: (group: String?, name: String, parameters: Array[[String, String]], value: String) -> instance
+    end
   end
 end

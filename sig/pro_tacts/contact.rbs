@@ -12,8 +12,8 @@ module ProTacts
 
     def self.new: (id: String, vcard: String, etag: String) -> instance
 
-    def self.all: (Pathname | String directory) -> Array[Contact]
+    def self.for: (id: String, vcard: String) -> Contact
 
-    def self.parse: (Pathname | String path) -> Contact
+    def self.etag_for: (String vcard) -> String
   end
 end

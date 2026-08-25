@@ -9,31 +9,46 @@ A CardDAV server for my family.
 - Apple devices only (it might happen to work on other CardDAV clients, but
   only accidentally)
 
-## Features
+## Features it is being built for
+
+None of these exist yet; they are what the design is shaped around. What
+does work is under Status below.
 
 - Groups with attributes (e.g., an address shared by all members)
 - Selective sync (choose which contacts to sync rather than all-or-nothing)
-- Plaintext storage in git (version history, human-readable)
+- vCards exported to git after each write (version history, human-readable)
 
 ## Status
 
-Read-only and serving real data. Contacts live as KDL files under
-`data/contacts` (override the root with `PRO_TACTS_DATA_DIR`), one contact per
-file, the filename doubling as the contact ID and the vCard UID:
+Read-only and serving real data. Contacts live in a SQLite database at
+`data/contacts.db` (override the root with `PRO_TACTS_DATA_DIR`, or the
+database path alone with `PRO_TACTS_DATABASE`), one row per contact,
+holding the vCard itself:
 
-```kdl
-name "John Smith"
-phone "+1-555-1234" type="mobile"
-email "john@example.com"
 ```
+BEGIN:VCARD
+VERSION:3.0
+N:Smith;John;;;
+FN:John Smith
+TEL;TYPE=mobile:+1-555-1234
+UID:john-smith
+END:VCARD
+```
+
+Storing the card rather than a parse of it is what lets the server keep
+properties it does not model, which RFC 6352 section 6.3.2.2 requires of
+anything accepting writes; `docs/plans/2026-08-24-vcard-storage-and-groups.md`
+makes the case at length. The same database holds the change log, which
+is the one thing in it that cannot be rebuilt, and an index of parsed
+properties, which can — `rake index:rebuild` derives that again from the
+cards alone.
 
 macOS Contacts displays them over Tailscale serve as of 2026-08-14, so
 later work has a known-good baseline to change. See
 `docs/plans/2026-08-12-one-card-on-macos.md` for what that milestone
-established. Etags, the ctag, and the sync token are derived from file
-state — a contact's etag hashes its rendered vCard, and the collection
-tags hash the membership — so an edit on disk reaches synced clients on
-their next poll.
+established. A contact's etag hashes the card it serves and the
+collection tags hash the membership, so a change to a card reaches synced
+clients on their next poll.
 
 Requests are authenticated by the `Tailscale-User-Login` header that
 `tailscale serve` injects, which it strips from incoming requests so a

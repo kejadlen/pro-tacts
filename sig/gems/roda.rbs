@@ -10,6 +10,10 @@ class Roda
 
   def self.use: (untyped middleware, **untyped options) -> void
 
+  # App-level configuration, which is where web.rb keeps the store handed
+  # to it. Frozen along with the app, so a write after that raises.
+  def self.opts: () -> Hash[Symbol, untyped]
+
   # The block is the router, run against a fresh instance per request.
   def self.route: () { (RodaRequest) [self: instance] -> untyped } -> void
 

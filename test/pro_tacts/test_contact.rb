@@ -1,122 +1,45 @@
 require_relative "../test_helper"
 
 require "digest"
-require "pathname"
-require "tmpdir"
 
 require "pro_tacts/contact"
 
 class ContactTest < Minitest::Test
-  def with_contacts(files)
-    Dir.mktmpdir do |dir|
-      directory = Pathname.new(dir)
-      files.each { |name, content| File.write(directory / name, content) }
-      yield directory
+  CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nEND:VCARD\r\n"
+
+  def test_the_etag_hashes_the_card
+    contact = ProTacts::Contact.for(id: "aiden", vcard: CARD)
+
+    assert_equal %("#{Digest::SHA256.hexdigest(CARD)}"), contact.etag
+  end
+
+  def test_the_etag_moves_with_the_card
+    etag = ProTacts::Contact.for(id: "aiden", vcard: CARD).etag
+
+    assert_equal etag, ProTacts::Contact.for(id: "aiden", vcard: CARD).etag
+    refute_equal etag, ProTacts::Contact.for(id: "aiden", vcard: CARD.sub("Aiden", "Aiden Smith")).etag
+  end
+
+  # The same card under two ids is two contacts with the same etag: the
+  # etag is about the bytes a client downloads, and the id is not in them.
+  def test_the_etag_ignores_the_id
+    assert_equal(
+      ProTacts::Contact.for(id: "aiden", vcard: CARD).etag,
+      ProTacts::Contact.for(id: "znorth", vcard: CARD).etag,
+    )
+  end
+
+  def test_ids_outside_the_href_charset_raise
+    ["John Smith", "../etc/passwd", "a/b", ""].each do |id|
+      error = assert_raises(ArgumentError) { ProTacts::Contact.for(id:, vcard: CARD) }
+
+      assert_equal "invalid contact id: #{id}", error.message
     end
   end
 
-  def test_all_parses_every_contact
-    with_contacts({
-      "znorth.kdl" => "name \"Zed\"",
-      "aiden.kdl" => "name \"Aiden\"",
-    }) do |directory|
-      ids = ProTacts::Contact.all(directory).map { it.id }
-
-      assert_includes ids, "aiden"
-      assert_includes ids, "znorth"
-    end
-  end
-
-  def test_the_uid_comes_from_the_filename
-    with_contacts({"kqmtnwpxlrvszoyp.kdl" => "name \"Aiden\""}) do |directory|
-      assert_includes ProTacts::Contact.all(directory).first.vcard, "UID:kqmtnwpxlrvszoyp"
-    end
-  end
-
-  def test_the_etag_hashes_the_rendered_card
-    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do |directory|
-      contact = ProTacts::Contact.all(directory).first
-
-      assert_equal %("#{Digest::SHA256.hexdigest(contact.vcard)}"), contact.etag
-    end
-  end
-
-  def test_the_etag_is_stable_across_parses_and_moves_with_content
-    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do |directory|
-      etag = ProTacts::Contact.all(directory).first.etag
-      assert_equal etag, ProTacts::Contact.all(directory).first.etag
-
-      File.write(directory / "aiden.kdl", "name \"Aiden Smith\"")
-      refute_equal etag, ProTacts::Contact.all(directory).first.etag
-    end
-  end
-
-  def test_an_empty_directory_lists_no_contacts
-    with_contacts({}) do |directory|
-      assert_empty ProTacts::Contact.all(directory)
-    end
-  end
-
-  def test_dotfiles_are_ignored
-    with_contacts({
-      ".DS_Store" => "junk",
-      "aiden.kdl" => "name \"Aiden\"",
-    }) do |directory|
-      assert_equal %w[aiden], ProTacts::Contact.all(directory).map { it.id }
-    end
-  end
-
-  def test_a_missing_directory_raises
-    error = assert_raises(Errno::ENOENT) do
-      ProTacts::Contact.all(Pathname.new(Dir.mktmpdir) / "nonexistent")
-    end
-
-    assert_match(/nonexistent/, error.message)
-  end
-
-  def test_non_kdl_files_raise
-    with_contacts({"notes.txt" => "hello"}) do |directory|
-      error = assert_raises(ArgumentError) { ProTacts::Contact.all(directory) }
-
-      assert_equal "invalid contact id: notes.txt", error.message
-    end
-  end
-
-  def test_filenames_that_are_not_ids_raise
-    with_contacts({"John Smith.kdl" => "name \"John\""}) do |directory|
-      error = assert_raises(ArgumentError) { ProTacts::Contact.all(directory) }
-
-      assert_equal "invalid contact id: John Smith", error.message
-    end
-  end
-
-  def test_unparseable_files_raise
-    with_contacts({"broken.kdl" => "contact {"}) do |directory|
-      assert_raises(KDL::ParseError) { ProTacts::Contact.all(directory) }
-    end
-  end
-
-  def test_files_whose_keys_are_not_contact_fields_raise
-    with_contacts({"person.kdl" => "person { name \"A\" }"}) do |directory|
-      error = assert_raises(ArgumentError) { ProTacts::Contact.all(directory) }
-
-      assert_equal "unknown key in contact: person", error.message
-    end
-  end
-
-  def test_empty_files_raise
-    with_contacts({"empty.kdl" => ""}) do |directory|
-      error = assert_raises(ArgumentError) { ProTacts::Contact.all(directory) }
-
-      assert_equal "contact requires a name", error.message
-    end
-  end
-
-  def test_files_whose_card_cannot_render_raise
-    with_contacts({"nameless.kdl" => "phone \"+1-555-1234\""}) do |directory|
-      error = assert_raises(ArgumentError) { ProTacts::Contact.all(directory) }
-
-      assert_equal "contact requires a name", error.message
+  def test_uuids_and_slugs_are_ids
+    %w[AB12C345-6789-0DEF-1234-567890ABCDEF aiden znorth_2].each do |id|
+      assert_equal id, ProTacts::Contact.for(id:, vcard: CARD).id
     end
   end
 end

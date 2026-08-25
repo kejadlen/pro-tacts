@@ -1,7 +1,8 @@
 # Project conventions
 
 A read-only CardDAV server for a family address book, in Ruby on Roda.
-Contacts are KDL files on disk, rendered to vCard 3.0 on request.
+Contacts are vCard 3.0 documents in SQLite, served as the bytes that
+were stored.
 
 `README.md` covers the protocol, the minimal property set macOS Contacts
 needs, and the client quirks behind it. Read it before changing any
@@ -13,6 +14,7 @@ response — the shape of those responses is empirical, not arbitrary.
 rake                  # Tests (the default task)
 rake steep            # Type check lib against the RBS comments in it
 rake fixtures         # Re-record response fixtures from current behavior
+rake index:rebuild    # Derive the parsed index again from the stored cards
 rake dev              # Dev server, reloading on change (needs fd and entr)
 rake profile:install  # Render and stage carddav.mobileconfig for approval
 ```
@@ -30,16 +32,20 @@ is already `pro-tacts` — don't pass `--backlog` or verify it.
 ```
 lib/pro_tacts/
 ├── web.rb          # The Roda app: every route and response body
-├── addressbook.rb  # The collection, its ctag, and its sync token
-├── contact.rb      # One KDL file → id, vCard, etag
-├── vcard.rb        # KDL → vCard 3.0 rendering
+├── store.rb        # Sequel over SQLite: cards, change log, derived index
+├── contact.rb      # id and vCard, with the etag derived from the card
+├── vcard.rb        # vCard 3.0 escaping and folding, and what a card is
+├── vcard/parser.rb # One card's bytes into properties
 ├── config.rb       # Every environment read in the app
 ├── profile.rb      # carddav.mobileconfig generation
 └── debug_logger.rb # Full request/response dumps, off by default
-lib/roda/plugins/dav_verbs.rb   # PROPFIND and REPORT routing verbs
+lib/roda/plugins/dav_verbs.rb     # PROPFIND and REPORT routing verbs
+lib/sequel/extensions/sole.rb     # `first`, minus the ambiguity
+db/migrations/      # Sequel migrations, run on every store open
 sig/                # RBS for what an inline comment cannot say
 docs/rfcs/          # Vendored spec texts the code cites
 docs/plans/         # Dated design records
+test/fixtures/cards/            # Seed cards for the test database
 test/fixtures/macos-exchange/   # A real client session, replayed
 ```
 
@@ -56,6 +62,10 @@ standing:
 
 A fixture diff you didn't intend is the test suite doing its job. Read it
 before regenerating.
+
+`test/fixtures/cards/` holds the vCards the test database is seeded from.
+The database itself is built under `tmp/test-data` on every run and is
+not a fixture; edit a `.vcf` to change what the replay serves.
 
 ## Gotchas
 
@@ -94,6 +104,56 @@ before regenerating.
   `push-transports`) are in no RFC at all.
 - Adding a property to a response is a real decision, not a freebie. The
   current set was found by removing properties until the client broke.
+- `cards` and `changes` carry timestamps; the index tables deliberately
+  do not, because their rows are thrown away and rebuilt. SQLite writes
+  the stamps, so nothing in Ruby should set one.
+- Schema changes are Sequel migrations under `db/migrations/`, applied
+  by `Store#migrate` on every open — there is no separate migrate task
+  to forget, and no way to serve from a database a deploy left behind.
+  Never edit a migration that has run anywhere; add the next one.
+- Those tables are `STRICT`, so every string column needs `text: true`:
+  Sequel's plain `String` is a varchar, which STRICT refuses. Sequel
+  also literalizes values into UTF-8 SQL, so a card or an id that
+  arrived as ASCII-8BIT has to go through `Store#text` first or it
+  raises on the first non-ASCII byte.
+- The app is handed its store rather than reaching for one:
+  `config.ru` builds it and sets `ProTacts::Web.store`, and a test does
+  the same with a throwaway. There is no global `ProTacts.store`, so
+  nothing in a request depends on load order or on a lazy memo several
+  threads could race into. `Store.connect` is for a database that is not
+  the one being served — a fixture, a test, a task pointed elsewhere.
+- `test/test_helper.rb` sets `ENV` before it requires the app, and the
+  requires cannot all move to the top because of it: the app reads
+  configuration as it loads, since the unhandled-request middleware is
+  given its directory at class-definition time. Set it afterwards and
+  the 404 captures land in `log/` instead of `tmp/`.
+- Only two things in the database cannot be rebuilt: the cards and the
+  change log. Everything else is a projection of the cards that
+  `rake index:rebuild` will make again, so no repair is ever needed for
+  it. A write that touches a card must land its change-log entry in the
+  same transaction, because a client's sync token silently skips
+  whatever the log missed.
+- A read whose filter is meant to identify one row uses `sole`, not
+  `first` — `first` answers with one of several rather than saying the
+  filter was too loose. `sole` raises either way it is wrong:
+  `Sequel::NoMatchingRow` for none, `Sequel::Sole::TooManyRows` for
+  more. A caller for whom no row is ordinary rescues the first, which is
+  what `Store#contact` does for the 404 path. The store loads the
+  extension on every open.
+- An etag is derived from the card, never stored beside it: `Contact`
+  hashes what it serves, and `Contact.for` is the only way to make one.
+  The etag in `changes` is the exception and is not the same fact — it
+  is what the card hashed to at that write, which nothing can recompute
+  once the card moves on.
+- `vcard.rb` no longer raises on what it does not recognize, and must
+  not start again. It used to render a hand-edited format, where an
+  unknown key meant a typo silently losing data; it now reads stored
+  cards, where an unknown property means a client using the spec, and
+  RFC 6352 section 6.3.2.2 requires keeping it. A card that will not
+  parse is still served, it just does not get indexed.
+- `escape` and `fold` in `vcard.rb` have no caller yet. They are the
+  writer's half of the module, kept deliberately for PUT and the web
+  editor, and tested directly rather than through anything that serves.
 - `docs/plans/` entries are dated records of what was decided then. Write
   a new one rather than editing an old one to match current behavior.
 - Types live in the code, as RBS comments: `#:` above a method for its

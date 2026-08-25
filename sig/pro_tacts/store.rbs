@@ -1,0 +1,16 @@
+# Change is a Data class, whose members the inline parser cannot read
+# (see sig/pro_tacts/contact.rbs). Store itself is an ordinary class and
+# its types are inline in store.rb.
+module ProTacts
+  class Store
+    class Change
+      attr_reader sequence: Integer
+      attr_reader card_id: String
+      attr_reader action: String
+      attr_reader etag: String?
+      attr_reader created_at: String
+
+      def self.new: (sequence: Integer, card_id: String, action: String, etag: String?, created_at: String) -> instance
+    end
+  end
+end

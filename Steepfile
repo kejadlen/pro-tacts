@@ -10,5 +10,5 @@ target :lib do
   check "lib", inline: true
   signature "sig"
 
-  library "digest", "fileutils", "logger", "pathname"
+  library "digest", "fileutils", "logger", "pathname", "strscan"
 end

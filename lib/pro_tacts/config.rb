@@ -31,19 +31,23 @@ module ProTacts
       !value.nil? && value.match?(TRUTHY)
     end
 
-    # Root data directory: holds the contacts directory and, later, the
-    # database. Overridable with PRO_TACTS_DATA_DIR.
+    # Root data directory: holds the contacts database, and the exported
+    # card mirror once there is one. Overridable with
+    # PRO_TACTS_DATA_DIR.
     #: () -> Pathname
     def data_dir
       Pathname.new(@env.fetch("PRO_TACTS_DATA_DIR", "data"))
     end
 
-    # Contacts live at data/contacts, one KDL file per contact; the
-    # filename is the contact ID. See
-    # docs/plans/2026-01-12-carddav-architecture.md.
+    # The contacts database: every card, the change log, and the index
+    # derived from the cards (see ProTacts::Store). PRO_TACTS_DATABASE
+    # overrides the whole path rather than a name under the data
+    # directory, so a deployment can put the database on a different
+    # volume from the exports.
     #: () -> Pathname
-    def contacts_dir
-      data_dir / "contacts"
+    def database_path
+      path = @env.fetch("PRO_TACTS_DATABASE", nil)
+      path.nil? ? data_dir / "contacts.db" : Pathname.new(path)
     end
 
     # Where requests the app could not answer are kept, one directory per

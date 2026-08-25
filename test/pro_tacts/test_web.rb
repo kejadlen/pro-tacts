@@ -7,6 +7,7 @@ require "rack/test"
 require "tmpdir"
 
 require "pro_tacts/config"
+require "pro_tacts/store"
 require "pro_tacts/web"
 
 class WebTest < Minitest::Test
@@ -146,22 +147,28 @@ class WebTest < Minitest::Test
     assert_equal "Not Found", last_response.body
   end
 
-  # Swaps in a throwaway data directory so the multi-contact routes can
-  # be exercised without touching the exchange fixture data.
-  def with_contacts(files)
+  # A card as Contacts would send one, so the routes are exercised
+  # against stored bytes rather than anything this test renders.
+  def card(id, name)
+    "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:#{name}\r\nUID:#{id}\r\nEND:VCARD\r\n"
+  end
+
+  # Hands the app a throwaway store so the multi-contact routes can be
+  # exercised without touching the exchange fixture data, and yields it
+  # so a test can change a card mid-request-sequence. Only the store is
+  # swapped: nothing in a request reads configuration.
+  def with_contacts(names)
     Dir.mktmpdir do |dir|
-      contacts_dir = Pathname.new(dir) / "contacts"
-      Dir.mkdir(contacts_dir)
-      files.each { |name, content| File.write(contacts_dir / name, content) }
-      original = ProTacts.config
-      ProTacts.config = ProTacts::Config.new({
-        "RACK_ENV" => "test",
-        "PRO_TACTS_DATA_DIR" => dir,
-      })
-      begin
-        yield contacts_dir
+      original = ProTacts::Web.store
+
+      ProTacts::Store.connect(Pathname.new(dir) / "contacts.db") do |store|
+        ProTacts::Web.store = store
+        names.each do |id, name|
+          store.put(id, card(id, name))
+        end
+        yield store
       ensure
-        ProTacts.config = original
+        ProTacts::Web.store = original
       end
     end
   end
@@ -203,11 +210,8 @@ class WebTest < Minitest::Test
     XML
   end
 
-  def test_listing_and_multiget_serve_every_contact_on_disk
-    with_contacts({
-      "aiden.kdl" => "name \"Aiden\"",
-      "znorth.kdl" => "name \"Zed\"",
-    }) do
+  def test_listing_and_multiget_serve_every_stored_contact
+    with_contacts({"aiden" => "Aiden", "znorth" => "Zed"}) do
       request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
 
       assert_equal 207, last_response.status
@@ -225,7 +229,7 @@ class WebTest < Minitest::Test
   end
 
   def test_multiget_reports_unknown_hrefs_as_404
-    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do
+    with_contacts({"aiden" => "Aiden"}) do
       request "/dav/addressbook/", method: "REPORT", input: multiget("aiden", "nope")
 
       assert_equal 207, last_response.status
@@ -236,7 +240,7 @@ class WebTest < Minitest::Test
   end
 
   def test_multiget_escapes_vcard_content_for_xml
-    with_contacts({"aiden.kdl" => "name \"A & B <Team>\""}) do
+    with_contacts({"aiden" => "A & B <Team>"}) do
       request "/dav/addressbook/", method: "REPORT", input: multiget("aiden")
 
       assert_equal 207, last_response.status
@@ -245,7 +249,7 @@ class WebTest < Minitest::Test
   end
 
   def test_sync_collection_returns_etags_only
-    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do
+    with_contacts({"aiden" => "Aiden"}) do
       request "/dav/addressbook/", method: "REPORT", input: <<~XML
         <?xml version="1.0" encoding="UTF-8"?>
         <A:sync-collection xmlns:A="DAV:">
@@ -272,7 +276,7 @@ class WebTest < Minitest::Test
     directory = ProTacts.config.unhandled_dir
     FileUtils.rm_rf(directory)
 
-    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do
+    with_contacts({"aiden" => "Aiden"}) do
       request "/dav/addressbook/", method: "REPORT", input: addressbook_query
 
       assert_equal 403, last_response.status
@@ -290,7 +294,7 @@ class WebTest < Minitest::Test
   end
 
   def test_etags_agree_across_listing_multiget_and_get
-    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do
+    with_contacts({"aiden" => "Aiden"}) do
       request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
       etag = last_response.body[%r{<d:getetag>(.+)</d:getetag>}, 1]
 
@@ -303,7 +307,7 @@ class WebTest < Minitest::Test
   end
 
   def test_a_changed_card_changes_its_etag_and_the_collection_tags
-    with_contacts({"aiden.kdl" => "name \"Aiden\""}) do |contacts_dir|
+    with_contacts({"aiden" => "Aiden"}) do |store|
       read_tags = lambda {
         request "/dav/addressbook/", method: "PROPFIND"
         [last_response.body[%r{<d:getetag>(.+)</d:getetag>}, 1],
@@ -314,7 +318,7 @@ class WebTest < Minitest::Test
       before = read_tags.call
       assert_equal before, read_tags.call # stable across requests
 
-      File.write(contacts_dir / "aiden.kdl", "name \"Aiden Smith\"")
+      store.put("aiden", card("aiden", "Aiden Smith"))
       after = read_tags.call
 
       before.zip(after).each { refute_equal it.first, it.last }

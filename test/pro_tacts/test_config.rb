@@ -21,9 +21,16 @@ class ConfigTest < Minitest::Test
     assert_equal Pathname.new("/tmp/state"), ProTacts::Config.new("PRO_TACTS_DATA_DIR" => "/tmp/state").data_dir
   end
 
-  def test_contacts_dir_lives_under_the_data_dir
-    assert_equal Pathname.new("data/contacts"), ProTacts::Config.new({}).contacts_dir
-    assert_equal Pathname.new("/tmp/state/contacts"), ProTacts::Config.new("PRO_TACTS_DATA_DIR" => "/tmp/state").contacts_dir
+  def test_the_database_lives_under_the_data_dir
+    assert_equal Pathname.new("data/contacts.db"), ProTacts::Config.new({}).database_path
+    assert_equal Pathname.new("/tmp/state/contacts.db"), ProTacts::Config.new("PRO_TACTS_DATA_DIR" => "/tmp/state").database_path
+  end
+
+  def test_the_database_path_is_overridable_on_its_own
+    config = ProTacts::Config.new("PRO_TACTS_DATA_DIR" => "/tmp/state", "PRO_TACTS_DATABASE" => "/srv/cards.db")
+
+    assert_equal Pathname.new("/srv/cards.db"), config.database_path
+    assert_equal Pathname.new("/tmp/state"), config.data_dir
   end
 
   def test_debug_defaults_off
