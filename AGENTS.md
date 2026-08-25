@@ -77,6 +77,11 @@ before regenerating.
   under a C locale otherwise. Watch for em dashes in comments.
 - `RUBYOPT=--enable-frozen-string-literal` is set in `.ramekin/config.kdl`.
   String literals are frozen; mutating one raises.
+- `supported_http_methods` in `config/puma.rb` *replaces* Puma's default
+  method list rather than extending it. Any method the app answers must be
+  named there or Puma returns 501 from the HTTP parser, before Rack runs —
+  so the request never reaches the app and `UnhandledRequests` cannot
+  capture it. Adding a route is two files, not one.
 - Application code reads configuration through `ProTacts.config` only; add
   a method to `config.rb` rather than reaching for `ENV`. The Rakefile is
   outside that rule and reads `PRO_TACTS_HOSTNAME` directly.

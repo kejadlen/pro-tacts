@@ -130,6 +130,77 @@ arriving. A cold account does not hit this: first sync uses the etag
 listing plus `multiget`, which needs no advertisement. Verified by
 minimization rounds 3b/3c on 2026-08-18.
 
+## Writes are gated on the advertised privilege set
+
+The client asks for `DAV:current-user-privilege-set` on the collection in
+every `Depth: 1` poll, and attempts no write at all while the server omits
+it. Adding it — `read`, `write`, `bind`, `unbind` (RFC 3744 sections 3.1,
+3.2, 3.9, 3.10) — produced a `PUT` within a second of the first response
+that carried it, from an edit made four hours earlier.
+
+The `Allow` header is not what decides this. Contacts sends `OPTIONS` to
+the principal, never to the address book collection, so it never learns
+which methods the collection accepts. Verified 2026-08-24.
+
+## Pending writes queue indefinitely and retry on their own
+
+An edit made while the server refuses writes is not lost. `REV` is stamped
+at edit time and the client replays that same body for hours, retrying
+every few minutes, byte-identical apart from a refreshed `REV`. An
+experiment round that fails for server-side reasons does not need the edit
+redone — fix the server and the queued write arrives by itself.
+
+## What a write looks like on the wire
+
+Creates carry `If-None-Match: *` (RFC 6352 section 6.3.2) and a
+client-minted UUID in both the request URI and the card's `UID`. The
+16-character id scheme in `plans/2026-01-12-carddav-architecture.md`
+therefore governs only cards this server creates.
+
+Updates carry `If-Match` with the server's strong etag, so conditional
+requests work and an etag derived from the rendered card is a usable basis
+for them. Both use `Content-Type: text/vcard; charset=utf-8`.
+
+## The client rewrites every card it touches
+
+A card served by pro-tacts and edited in Contacts does not come back in the
+form it was sent. Values survive exactly; serialization does not:
+
+```
+TEL;TYPE=mobile      ->  TEL;type=CELL;type=VOICE;type=pref
+EMAIL                ->  EMAIL;type=INTERNET;type=pref
+ADR;TYPE=home        ->  ADR;type=HOME;type=pref
+(TEL before EMAIL)   ->  (EMAIL before TEL)
+                     ->  PRODID and REV added
+```
+
+Parameter names are lowercased, values uppercased, defaults filled in, and
+properties reordered. The phone number, address, and all seven `ADR`
+components return byte-identical, including the two leading empty ones.
+
+`TYPE=mobile` is not a valid value — RFC 2426 section 3.3.1 lists home,
+msg, work, pref, voice, fax, and cell — so the rewrite to `CELL` is the
+client correcting the server. The repeated `type=` spelling is sanctioned
+by that same section, which allows either a parameter list or a value list.
+
+The practical consequence is that any comparison between a card the server
+sent and the card that comes back has to be semantic. Comparing bytes
+reports every untouched property as modified. Verified 2026-08-24.
+
+## Birthdays without a year
+
+A birthday entered as a month and day carries Apple's own parameter, using
+1604 as a sentinel in both halves:
+
+```
+BDAY;X-APPLE-OMIT-YEAR=1604:1604-01-01
+```
+
+A birthday with a real year is a plain `BDAY:1900-01-01`. Parsing either
+into a date type loses the distinction and re-renders the no-year case as a
+birthday in 1604, so the parameter has to survive storage rather than be
+interpreted.
+
 ## One address book per account
 
 Through at least macOS 10.10, Contacts binds one address book per account
