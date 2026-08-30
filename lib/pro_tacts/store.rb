@@ -129,7 +129,7 @@ module ProTacts
     # nil.
     #: (String id) -> Contact?
     def contact(id)
-      contact_from(cards.where(id: text(id)).sole)
+      contact_from(cards.where(id:).sole)
     rescue Sequel::NoMatchingRow
       nil
     end
@@ -143,7 +143,7 @@ module ProTacts
     # cards sharing a UID is a corruption to raise on, not a choice.
     #: (String uid) -> String?
     def card_id_with_uid(uid)
-      card_properties.where(name: "UID", value: text(uid)).sole.fetch(:card_id).to_s
+      card_properties.where(name: "UID", value: uid).sole.fetch(:card_id).to_s
     rescue Sequel::NoMatchingRow
       nil
     end
@@ -152,9 +152,16 @@ module ProTacts
     # change-log entry a client's sync token counts on, carrying the etag
     # this card hashed to now, and the index rows read off the card. One
     # transaction, because the log entry cannot be rebuilt from anything.
+    #
+    # The strings are UTF-8 by contract, and the adapter holds the store
+    # to it: the sqlite3 gem encodes every bound value to UTF-8, so a
+    # binary-flagged byte above 7 bits raises at the bind, and bytes
+    # that are not UTF-8 at all stop at the insert, which SQLite refuses
+    # to store as text. Rack's binary is relabelled before this —
+    # Web#utf8, where the wire meets the route.
     #: (String id, String vcard) -> Contact
     def put(id, vcard)
-      contact = Contact.for(id: text(id), vcard: text(vcard))
+      contact = Contact.for(id:, vcard:)
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
@@ -169,7 +176,6 @@ module ProTacts
     # it is gone. Returns whether there was anything to remove.
     #: (String id) -> bool
     def delete(id)
-      id = text(id)
       @database.transaction do
         deleted = cards.where(id:).delete.positive?
         record(id, "delete", nil) if deleted
@@ -221,22 +227,6 @@ module ProTacts
     #: () -> Sequel::Dataset
     def card_parameters
       @database[:card_parameters]
-    end
-
-    # Anything that came off the wire is ASCII-8BIT, and Sequel writes a
-    # value into UTF-8 SQL, so a card with a byte above 7 bits raises
-    # Encoding::UndefinedConversionError on the way in. Ids are ASCII by
-    # Contact::ID_FORMAT and cards go out as `text/vcard; charset=utf-8`,
-    # so this relabels bytes rather than converting them.
-    #
-    # Relabelling is not validating, and deliberately so — the card is
-    # kept as it arrived. Bytes that are not UTF-8 at all do not slip
-    # through, though: SQLite refuses them on the insert, which is where
-    # a card that cannot honestly be served as UTF-8 should stop. There
-    # is a test pinning that.
-    #: (String value) -> String
-    def text(value)
-      value.encoding == Encoding::BINARY ? value.dup.force_encoding(Encoding::UTF_8) : value
     end
 
     #: (String card_id, String action, String? etag) -> void

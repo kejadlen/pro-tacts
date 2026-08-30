@@ -365,6 +365,24 @@ class WebTest < Minitest::Test
     end
   end
 
+  # A body arrives flagged ASCII-8BIT — Rack's rule for request input —
+  # and becomes UTF-8 where the route meets the wire, so a card with
+  # non-ASCII in it stores and serves as the UTF-8 it is.
+  def test_put_of_a_binary_flagged_body_stores_as_utf_8
+    card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden Åberg\r\nUID:new\r\nEND:VCARD\r\n"
+
+    with_contacts({}) do
+      put_request "new", card.dup.force_encoding(Encoding::BINARY),
+        "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
+
+      assert_equal 201, last_response.status
+
+      get "/dav/addressbook/new.vcf"
+      assert_equal Encoding::UTF_8, last_response.body.encoding
+      assert_equal card, last_response.body
+    end
+  end
+
   # A last segment that is not the <id>.vcf shape can address no
   # resource here, created or read — the 404 the GET handler gives it.
   def test_put_to_a_uri_that_cannot_address_a_card

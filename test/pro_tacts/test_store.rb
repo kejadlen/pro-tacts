@@ -121,19 +121,22 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # An id and a card off the wire are ASCII-8BIT, and Sequel writes
-  # values into UTF-8 SQL: a card with an accent in it raises on the way
-  # in unless the bytes are relabelled first.
-  def test_binary_bytes_off_the_wire_are_stored_as_text
+  # The store's contract is UTF-8, and the adapter enforces it: the
+  # sqlite3 gem encodes every bound value to UTF-8, so a binary-flagged
+  # string with a byte above 7 bits raises at the bind — loudly, at the
+  # contract violation, rather than being quietly relabelled here. The
+  # route is where Rack's binary becomes text (Web#utf8).
+  def test_binary_bytes_above_ascii_raise_at_the_bind
     accented = AIDEN.sub("Aiden", "Aiden Åberg")
 
-    with_store do |store|
-      store.put("aiden".b, accented.b)
+    with_store({"aiden" => AIDEN}) do |store|
+      assert_raises(Encoding::UndefinedConversionError) do
+        store.put("aiden".b, accented.b)
+      end
 
-      assert_equal accented, store.contact("aiden".b).vcard
-      assert_equal accented, store.contact("aiden").vcard
-      assert_equal Encoding::UTF_8, store.contact("aiden").vcard.encoding
-      assert_equal ProTacts::Contact.etag_for(accented), store.contact("aiden").etag
+      # Pure ASCII carries no such byte, so a binary-flagged id still
+      # finds its row.
+      assert_equal AIDEN, store.contact("aiden".b).vcard
     end
   end
 
@@ -211,11 +214,14 @@ class StoreTest < Minitest::Test
   # Relabelling bytes is not converting them, so a card whose bytes are
   # not UTF-8 at all is refused rather than stored: better than serving
   # it back as `text/vcard; charset=utf-8` while it is no such thing.
-  # Pinned here so that a later "fix" to Store#text has to be deliberate.
+  # Relabelled first, as the route would — a request this bad never
+  # reaches the store, and this pins the last line that catches it.
   def test_a_card_that_is_not_utf_8_is_refused
     with_store do |store|
+      invalid = "BEGIN:VCARD\r\nFN:\xFF\xFE\r\nEND:VCARD\r\n".dup.force_encoding(Encoding::UTF_8)
+
       assert_raises(Sequel::DatabaseError) do
-        store.put("bad", "BEGIN:VCARD\r\nFN:\xFF\xFE\r\nEND:VCARD\r\n".b)
+        store.put("bad", invalid)
       end
 
       assert_empty store.contacts
