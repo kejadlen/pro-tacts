@@ -20,8 +20,8 @@ does work is under Status below.
 
 ## Status
 
-Read-only and serving real data. Contacts live in a SQLite database at
-`data/contacts.db` (override the root with `PRO_TACTS_DATA_DIR`, or the
+Serving real data, reads and writes both. Contacts live in a SQLite
+database at `data/contacts.db` (override the root with `PRO_TACTS_DATA_DIR`, or the
 database path alone with `PRO_TACTS_DATABASE`), one row per contact,
 holding the vCard itself:
 
@@ -48,7 +48,9 @@ later work has a known-good baseline to change. See
 `docs/plans/2026-08-12-one-card-on-macos.md` for what that milestone
 established. A contact's etag hashes the card it serves and the
 collection tags hash the membership, so a change to a card reaches synced
-clients on their next poll.
+clients on their next poll. Writes arrive the same way: PUT stores the
+submitted card verbatim (RFC 6352 section 6.3.2), and the change log the
+sync tokens count on is written with it, in one transaction.
 
 Requests are authenticated by the `Tailscale-User-Login` header that
 `tailscale serve` injects, which it strips from incoming requests so a
@@ -90,6 +92,12 @@ carry:
 - `REPORT sync-collection`: `getetag` only — the client refetches changed
   cards through multiget or `GET` on its own.
 - `GET` a card: the vCard body plus an `ETag` header.
+- `PUT` a card: 201 for a create at an unmapped href, 204 for a replace,
+  both carrying the strong `ETag` — permitted because what is stored is
+  what was submitted (RFC 6352 section 6.3.2.3). A refused write is a
+  412 naming the precondition in a `DAV:error` body. This row follows
+  the RFC rather than client evidence: no live write had been answered
+  when it was written, so the first synced device to edit is its test.
 
 Three properties are load-bearing in non-obvious ways, documented in
 `docs/macos-contacts.md`: the collection's `resourcetype` (without

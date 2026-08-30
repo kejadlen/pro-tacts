@@ -130,7 +130,7 @@ module ProTacts
         # support (RFC 6352 section 6.1); the header is RFC 4918 section 10.1.
         r.options do
           response["DAV"] = "addressbook"
-          response["Allow"] = "OPTIONS, PROPFIND, REPORT"
+          response["Allow"] = "OPTIONS, PROPFIND, REPORT, PUT"
           ""
         end
 
@@ -191,14 +191,16 @@ module ProTacts
               # is not standardized — an Apple CalendarServer extension in the
               # calendarserver.org namespace, kept because macOS polls it.
               #
-              # The privileges are advertised before the methods granting them
-              # exist. macOS Contacts asks for this property on every poll and
-              # attempts no write without it, so claiming the privileges is
-              # what makes the client send a PUT this server can capture in
-              # log/unhandled — the point of the experiment, not an oversight.
-              # DAV:write covers PUT and PROPPATCH (RFC 3744 section 3.2),
-              # DAV:bind adding a member to the collection (section 3.9), and
-              # DAV:unbind removing one (section 3.10).
+              # The privileges are advertised ahead of the methods
+              # granting some of them. macOS Contacts asks for this
+              # property on every poll and attempts no write without it,
+              # so claiming them is what makes the client send writes at
+              # all — the PUT they prompted was what log/unhandled
+              # captured them for. DAV:write covers PUT and PROPPATCH
+              # (RFC 3744 section 3.2), and PUT is the one of the pair
+              # answered; DAV:bind is adding a member to the collection
+              # (section 3.9) and DAV:unbind removing one (section 3.10),
+              # neither of which has a route yet.
               collection_response = <<~XML
                 <d:response>
                   <d:href>/dav/addressbook/</d:href>
@@ -327,6 +329,20 @@ module ProTacts
               contact.vcard
             end
           end
+
+          # PUT to an unmapped URI creates the card there and PUT to a
+          # mapped one replaces it (RFC 6352 section 6.3.2). macOS
+          # creates with If-None-Match: * and a UUID it mints into both
+          # the URI and the card's UID, and updates with If-Match
+          # carrying the strong etag it was last served — see
+          # docs/macos-contacts.md, "What a write looks like on the wire".
+          r.put String do |filename|
+            id = filename.delete_suffix(".vcf")
+            # A last segment that is not this server's <id>.vcf shape
+            # cannot address a resource here, created or read — the
+            # same fall-through-to-404 the GET handler gives it.
+            write_card(id) if id.match?(Contact::ID_FORMAT)
+          end
         end
       end
     end
@@ -357,6 +373,131 @@ module ProTacts
     #: () -> Store
     def store
       self.class.store
+    end
+
+    # The whole of the PUT route: a private method because a Roda route
+    # block cannot return early, so each refusal is a value the block
+    # ends with rather than a branch it exits. The checks run in the
+    # order RFC 7232 section 5 sets for a request with preconditions —
+    # the request's own validity first, the conditionals on stored
+    # state after — so a card that cannot be stored hears
+    # CARDDAV:valid-address-data even when its If-Match is stale too.
+    #: (String id) -> String
+    def write_card(id)
+      vcard = request.body.read
+      # Rack reads a body in as ASCII-8BIT; relabel rather than convert,
+      # the way Store#text does, so the charset check and the insert see
+      # the same bytes.
+      vcard = vcard.dup.force_encoding(Encoding::UTF_8) if vcard.encoding == Encoding::BINARY
+
+      # CARDDAV:supported-address-data (RFC 6352 section 6.3.2.1): what
+      # arrived must be a vCard, and text/vcard is the one media type
+      # this server stores.
+      return precondition("supported-address-data") unless request.media_type == "text/vcard"
+
+      # CARDDAV:valid-address-data: bytes that are the UTF-8 the media
+      # type declares, parsing into a card with the envelope RFC 2426
+      # section 4 requires. Invalid UTF-8 would otherwise surface as a
+      # 500 out of SQLite on the insert, past the point where the
+      # client could be told what was wrong with the body.
+      return precondition("valid-address-data") unless vcard.valid_encoding?
+
+      properties = parse_card(vcard)
+      return precondition("valid-address-data") unless properties && VCard.card?(properties)
+
+      # CARDDAV:no-uid-conflict: the submitted UID must not belong to a
+      # different resource, and a mapped URI must not be overwritten by
+      # a card carrying a different UID. Here the id is the card's UID
+      # (see Contact), so both clauses come down to: the card carries a
+      # UID naming the resource being written, and no other card claims
+      # it. The href in the body is the SHOULD that section attaches to
+      # the first clause — report where the UID already lives.
+      uid = VCard.uid(properties)
+      owner = uid && store.card_id_with_uid(uid)
+      return precondition("no-uid-conflict", owner) if uid != id || owner && owner != id
+
+      existing = store.contact(id)
+
+      # The lost-update conditionals, RFC 7232 sections 3.1 and 3.2.
+      # macOS sends If-Match on updates and If-None-Match: * on creates;
+      # a PUT carrying neither is unconditional and allowed to proceed.
+      if_match = request.env["HTTP_IF_MATCH"]
+      return plain_412 if if_match && !if_match_satisfied?(if_match, existing)
+
+      if_none_match = request.env["HTTP_IF_NONE_MATCH"]
+      return plain_412 if if_none_match && if_none_match_failed?(if_none_match, existing)
+
+      stored = store.put(id, vcard)
+      response.status = existing ? 204 : 201
+      # A strong ETag belongs on the answer because what was stored is
+      # the submitted bytes, octet for octet — the one case RFC 6352
+      # section 6.3.2.3 says a client may rely on the tag it gets back.
+      # Nothing subtracts from a card before storage yet; when a group
+      # contributes properties at write time, that PUT must stop
+      # sending one.
+      response["ETag"] = stored.etag
+      ""
+    end
+
+    # A parse that answers nil rather than raising when the bytes are
+    # not a card — the same tolerance Store#properties_of gives the
+    # index, at the point where a caller must decide.
+    #: (String vcard) -> Array[VCard::Property]?
+    def parse_card(vcard)
+      VCard::Parser.parse(vcard)
+    rescue VCard::ParseError
+      nil
+    end
+
+    # A 412 whose body names the CardDAV precondition that failed, in
+    # the DAV:error form RFC 4918 section 16 defines; the element names
+    # are RFC 6352 section 6.3.2.1's, qualified by the card: namespace
+    # the body declares. no-uid-conflict carries the conflicting card's
+    # href when there is one.
+    #: (String element, ?String? conflict_id) -> String
+    def precondition(element, conflict_id = nil)
+      named = if conflict_id
+        "<card:#{element}><d:href>#{contact_href(conflict_id)}</d:href></card:#{element}>"
+      else
+        "<card:#{element}/>"
+      end
+      response.status = 412
+
+      <<~XML
+        <?xml version="1.0" encoding="UTF-8"?>
+        <d:error xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
+          #{named}
+        </d:error>
+      XML
+    end
+
+    # A bare 412: these failures are HTTP's own conditionals (RFC 7232),
+    # not a WebDAV precondition with an element to name in a body.
+    #: () -> String
+    def plain_412
+      response.status = 412
+      ""
+    end
+
+    # RFC 7232 section 3.1: If-Match passes when the current etag is one
+    # of those listed, or, for `*`, when there is a current
+    # representation at all.
+    #: (String header, Contact? existing) -> bool
+    def if_match_satisfied?(header, existing)
+      return !existing.nil? if header.strip == "*"
+
+      !existing.nil? && header.split(",").map(&:strip).include?(existing.etag)
+    end
+
+    # RFC 7232 section 3.2: If-None-Match fails a non-GET request when
+    # the current etag is one of those listed, or, for `*`, whenever the
+    # resource exists. The create — If-None-Match: * against an unmapped
+    # URI — is the case CardDAV clients send (RFC 6352 section 6.3.2).
+    #: (String header, Contact? existing) -> bool
+    def if_none_match_failed?(header, existing)
+      return !existing.nil? if header.strip == "*"
+
+      !existing.nil? && header.split(",").map(&:strip).include?(existing.etag)
     end
 
     #: (Array[String] responses) -> String

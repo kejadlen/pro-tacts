@@ -48,6 +48,32 @@ class StoreTest < Minitest::Test
     with_store { assert_nil it.contact("nobody") }
   end
 
+  ## UIDs
+
+  # The read behind the no-uid-conflict precondition (RFC 6352 section
+  # 6.3.2.1): which card, if any, owns this UID.
+  def test_the_card_holding_a_uid_is_found_by_it
+    with_store({"aiden" => AIDEN}) do |store|
+      assert_equal "aiden", store.card_id_with_uid("aiden")
+    end
+  end
+
+  def test_a_uid_no_card_holds_finds_no_owner
+    with_store({"aiden" => AIDEN}) do |store|
+      assert_nil store.card_id_with_uid("znorth")
+    end
+  end
+
+  # The lookup runs through the index, whose name column ignores case,
+  # so a card that spelled the property lowercase is still found.
+  def test_a_lowercase_uid_property_is_found
+    lowercase = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nuid:aiden\r\nEND:VCARD\r\n"
+
+    with_store({"aiden" => lowercase}) do |store|
+      assert_equal "aiden", store.card_id_with_uid("aiden")
+    end
+  end
+
   def test_putting_the_same_id_replaces_the_card
     with_store({"aiden" => AIDEN}) do |store|
       updated = AIDEN.sub("Aiden", "Aiden Smith")

@@ -28,6 +28,12 @@ class Roda
     def on: (*untyped matchers) { (*untyped) -> untyped } -> void
     def get: (*untyped matchers) ?{ (*untyped) -> untyped } -> void
     def options: (*untyped matchers) ?{ (*untyped) -> untyped } -> void
+    def put: (*untyped matchers) ?{ (*untyped) -> untyped } -> void
+
+    # The media type of the request body, without parameters — inherited
+    # from Rack::Request in the gem, restated here because the local
+    # RodaRequest does not.
+    def media_type: () -> String?
 
     # Halts the request, so nothing after it in a route block runs.
     def redirect: (String path, ?Integer status) -> bot

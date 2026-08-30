@@ -1,6 +1,6 @@
 # Project conventions
 
-A read-only CardDAV server for a family address book, in Ruby on Roda.
+A CardDAV server for a family address book, in Ruby on Roda.
 Contacts are vCard 3.0 documents in SQLite, served as the bytes that
 were stored.
 

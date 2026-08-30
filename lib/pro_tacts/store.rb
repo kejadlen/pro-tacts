@@ -134,6 +134,20 @@ module ProTacts
       nil
     end
 
+    # The id of the card whose UID property holds this value, if one
+    # does — the read behind the no-uid-conflict precondition (RFC 6352
+    # section 6.3.2.1). It reads the index, so a card that failed to
+    # parse is invisible here; no card that arrived by PUT can be in
+    # that state, because PUT rejects what will not parse before
+    # storing it. `sole` for the same reason `contact` uses it: two
+    # cards sharing a UID is a corruption to raise on, not a choice.
+    #: (String uid) -> String?
+    def card_id_with_uid(uid)
+      card_properties.where(name: "UID", value: text(uid)).sole.fetch(:card_id).to_s
+    rescue Sequel::NoMatchingRow
+      nil
+    end
+
     # Stores a card and everything that has to move with it: the
     # change-log entry a client's sync token counts on, carrying the etag
     # this card hashed to now, and the index rows read off the card. One

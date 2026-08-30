@@ -147,6 +147,235 @@ class WebTest < Minitest::Test
     assert_equal "Not Found", last_response.body
   end
 
+  ## PUT
+
+  # One PUT, so each test reads as a client's request rather than as
+  # Rack env assembly.
+  def put_request(id, body, headers = {})
+    request "/dav/addressbook/#{id}.vcf", { method: "PUT", input: body }.merge(headers)
+  end
+
+  VCARD = "text/vcard"
+
+  # RFC 6352 section 6.3.2: a PUT to an unmapped URI creates, and the
+  # strong ETag comes back because the stored bytes are the submitted
+  # bytes — the one case section 6.3.2.3 lets a client rely on it.
+  def test_put_creates_a_contact
+    card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:New\r\nUID:new\r\nEND:VCARD\r\n"
+
+    with_contacts({}) do |store|
+      put_request "new", card, "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
+
+      assert_equal 201, last_response.status
+      assert_equal %("#{Digest::SHA256.hexdigest(card)}"), last_response["ETag"]
+      assert_empty last_response.body
+
+      get "/dav/addressbook/new.vcf"
+      assert_equal card, last_response.body
+
+      # The change-log entry a sync token counts on landed with the card.
+      change = store.changes.last
+      assert_equal "new", change.card_id
+      assert_equal "put", change.action
+    end
+  end
+
+  def test_put_with_if_none_match_star_refuses_an_existing_card
+    with_contacts({"aiden" => "Aiden"}) do
+      get "/dav/addressbook/aiden.vcf"
+      served = last_response.body
+
+      put_request "aiden", card("aiden", "Aiden Smith"),
+        "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
+
+      assert_equal 412, last_response.status
+
+      get "/dav/addressbook/aiden.vcf"
+      assert_equal served, last_response.body
+    end
+  end
+
+  # If-None-Match is the client's SHOULD, not the server's requirement:
+  # a bare PUT to an unmapped URI creates all the same (RFC 6352
+  # section 6.3.2).
+  def test_put_without_a_conditional_creates
+    with_contacts({}) do
+      put_request "new", card("new", "New"), "CONTENT_TYPE" => VCARD
+
+      assert_equal 201, last_response.status
+    end
+  end
+
+  def test_put_with_the_current_etag_updates
+    with_contacts({"aiden" => "Aiden"}) do
+      get "/dav/addressbook/aiden.vcf"
+      stale = last_response["ETag"]
+
+      updated = card("aiden", "Aiden Smith")
+      put_request "aiden", updated, "CONTENT_TYPE" => VCARD, "HTTP_IF_MATCH" => stale
+
+      assert_equal 204, last_response.status
+      etag = %("#{Digest::SHA256.hexdigest(updated)}")
+      assert_equal etag, last_response["ETag"]
+
+      # The tag the PUT returned is the one every read now reports, which
+      # is what lets a client keep syncing against its own write.
+      get "/dav/addressbook/aiden.vcf"
+      assert_equal updated, last_response.body
+      assert_equal etag, last_response["ETag"]
+
+      request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
+      assert_includes last_response.body, "<d:getetag>#{etag}</d:getetag>"
+    end
+  end
+
+  def test_put_with_a_stale_etag_is_refused_and_changes_nothing
+    with_contacts({"aiden" => "Aiden"}) do
+      get "/dav/addressbook/aiden.vcf"
+      before = last_response.body
+
+      put_request "aiden", card("aiden", "Aiden Smith"),
+        "CONTENT_TYPE" => VCARD, "HTTP_IF_MATCH" => %("#{"0" * 64}")
+
+      assert_equal 412, last_response.status
+
+      get "/dav/addressbook/aiden.vcf"
+      assert_equal before, last_response.body
+    end
+  end
+
+  # If-Match on a resource that does not exist fails rather than creating
+  # — the client named a representation it never saw (RFC 7232 section
+  # 3.1).
+  def test_put_with_if_match_against_nothing_is_refused
+    with_contacts({}) do
+      put_request "new", card("new", "New"),
+        "CONTENT_TYPE" => VCARD, "HTTP_IF_MATCH" => %("#{"0" * 64}")
+
+      assert_equal 412, last_response.status
+    end
+  end
+
+  # RFC 7232 section 3.1 allows If-Match a list of tags, and `*` for any
+  # current representation.
+  def test_if_match_accepts_a_list_and_a_star
+    with_contacts({"aiden" => "Aiden"}) do
+      get "/dav/addressbook/aiden.vcf"
+      etag = last_response["ETag"]
+      updated = card("aiden", "Aiden Smith")
+
+      put_request "aiden", updated, "CONTENT_TYPE" => VCARD,
+        "HTTP_IF_MATCH" => %("#{"0" * 64}", #{etag})
+      assert_equal 204, last_response.status
+
+      put_request "aiden", card("aiden", "Aiden"), "CONTENT_TYPE" => VCARD, "HTTP_IF_MATCH" => "*"
+      assert_equal 204, last_response.status
+    end
+  end
+
+  def test_put_without_a_conditional_overwrites
+    with_contacts({"aiden" => "Aiden"}) do
+      put_request "aiden", card("aiden", "Aiden Smith"), "CONTENT_TYPE" => VCARD
+
+      assert_equal 204, last_response.status
+
+      get "/dav/addressbook/aiden.vcf"
+      assert_includes last_response.body, "Aiden Smith"
+    end
+  end
+
+  # The preconditions of RFC 6352 section 6.3.2.1, marshalled as 412s
+  # in the DAV:error form RFC 4918 section 16 defines.
+  def test_put_of_a_non_vcard_media_type_names_its_precondition
+    with_contacts({}) do
+      put_request "new", card("new", "New"), "CONTENT_TYPE" => "text/plain"
+
+      assert_equal 412, last_response.status
+      assert_includes last_response.body, "<card:supported-address-data/>"
+    end
+  end
+
+  def test_put_of_bytes_that_are_not_utf_8_names_its_precondition
+    with_contacts({}) do
+      put_request "new", "\xFF\xFE".b, "CONTENT_TYPE" => VCARD
+
+      assert_equal 412, last_response.status
+      assert_includes last_response.body, "<card:valid-address-data/>"
+    end
+  end
+
+  def test_put_of_something_that_is_not_a_card_names_its_precondition
+    with_contacts({}) do
+      put_request "new", "not a vCard at all", "CONTENT_TYPE" => VCARD
+      assert_equal 412, last_response.status
+
+      # Lines that parse are still not a card without the envelope.
+      put_request "new", "FN:Nope\r\n", "CONTENT_TYPE" => VCARD
+      assert_equal 412, last_response.status
+
+      assert_includes last_response.body, "<card:valid-address-data/>"
+    end
+  end
+
+  def test_put_of_a_card_whose_uid_belongs_to_another_card
+    with_contacts({"aiden" => "Aiden"}) do
+      put_request "znorth", card("aiden", "Aiden"), "CONTENT_TYPE" => VCARD
+
+      assert_equal 412, last_response.status
+      assert_includes last_response.body, "<card:no-uid-conflict>"
+      # Where the UID already lives, which RFC 6352 section 6.3.2.1 asks
+      # the error to say.
+      assert_includes last_response.body, "<d:href>/dav/addressbook/aiden.vcf</d:href>"
+    end
+  end
+
+  # The id is the card's UID here, so a card whose UID names nothing at
+  # all is still a conflict: the href it was PUT to would not be the
+  # href it answers at.
+  def test_put_of_a_card_whose_uid_is_not_its_href
+    with_contacts({}) do
+      put_request "new", card("other", "New"), "CONTENT_TYPE" => VCARD
+
+      assert_equal 412, last_response.status
+      assert_includes last_response.body, "<card:no-uid-conflict/>"
+      refute_includes last_response.body, "d:href"
+    end
+  end
+
+  def test_put_of_a_card_with_no_uid
+    with_contacts({}) do
+      card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:New\r\nEND:VCARD\r\n"
+      put_request "new", card, "CONTENT_TYPE" => VCARD
+
+      assert_equal 412, last_response.status
+      assert_includes last_response.body, "<card:no-uid-conflict/>"
+    end
+  end
+
+  # RFC 6352 section 6.3.2.2: what the server does not model survives
+  # the trip, because the submitted bytes are the stored bytes.
+  def test_put_stores_what_it_was_sent_verbatim
+    card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:New\r\nX-APPLE-FOO:kept\r\nUID:new\r\nEND:VCARD\r\n"
+
+    with_contacts({}) do
+      put_request "new", card, "CONTENT_TYPE" => VCARD
+
+      get "/dav/addressbook/new.vcf"
+      assert_equal card, last_response.body
+    end
+  end
+
+  # A last segment that is not the <id>.vcf shape can address no
+  # resource here, created or read — the 404 the GET handler gives it.
+  def test_put_to_a_uri_that_cannot_address_a_card
+    with_contacts({}) do
+      request "/dav/addressbook/bad.id.vcf",
+        method: "PUT", input: card("bad.id", "Bad"), "CONTENT_TYPE" => VCARD
+
+      assert_equal 404, last_response.status
+    end
+  end
+
   # A card as Contacts would send one, so the routes are exercised
   # against stored bytes rather than anything this test renders.
   def card(id, name)

@@ -5,12 +5,11 @@ class Roda
   module RodaPlugins
     # Adds routing methods for WebDAV/CardDAV HTTP verbs.
     #
-    # Only PROPFIND and REPORT are implemented since this is a read-only
-    # CardDAV server. PROPFIND handles discovery and property retrieval,
-    # REPORT handles addressbook-query and addressbook-multiget requests.
-    #
-    # Other WebDAV verbs (PROPPATCH, MKCOL, COPY, MOVE, LOCK, UNLOCK)
-    # would be needed for write support.
+    # Only PROPFIND and REPORT are implemented here because they are the
+    # two with no routing method in Roda itself; PUT arrives through
+    # plugin :all_verbs. Other WebDAV verbs (PROPPATCH, MKCOL, COPY,
+    # MOVE, LOCK, UNLOCK) would each need a line here when one is
+    # answered.
     module DavVerbs
       module RequestMethods
         %w[propfind report].each do |verb|

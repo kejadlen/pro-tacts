@@ -49,6 +49,31 @@ module ProTacts
     # @rbs skip
     Property = Data.define(:group, :name, :parameters, :value)
 
+    # Whether parsed properties carry the envelope RFC 2426 section 4
+    # requires of a card: BEGIN:VCARD first, END:VCARD last, and a
+    # VERSION in between. Deciding that is deliberately not the
+    # parser's job — it reads lines without judging the card — so it
+    # lives here, where a caller that has to decide (a PUT) can ask.
+    # The VERSION's value is not judged: any version is stored verbatim,
+    # and this only decides whether there is a card at all.
+    #: (Array[Property] properties) -> bool
+    def self.card?(properties)
+      return false if properties.empty?
+
+      first, last = properties.first, properties.last
+      first.name.casecmp?("BEGIN") && first.value.casecmp?("VCARD") &&
+        last.name.casecmp?("END") && last.value.casecmp?("VCARD") &&
+        properties.any? { it.name.casecmp?("VERSION") }
+    end
+
+    # The value of the card's UID property, if it carries one. Names
+    # compare without case, as the index's NOCASE collation already
+    # assumes for them.
+    #: (Array[Property] properties) -> String?
+    def self.uid(properties)
+      properties.find { it.name.casecmp?("UID") }&.value
+    end
+
     # Text values escape backslash, the component separator, and the
     # sub-component separator (RFC 2426 section 2.4.2); CRLF and CR are
     # normalized to the `\n` escape because a raw line break would end

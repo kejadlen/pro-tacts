@@ -1,5 +1,5 @@
 200
 Content-Type: text/html
 DAV: addressbook
-Allow: OPTIONS, PROPFIND, REPORT
+Allow: OPTIONS, PROPFIND, REPORT, PUT
 
