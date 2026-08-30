@@ -1,0 +1,10 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Lovelace;Ada;;;
+FN:Ada Lovelace
+EMAIL:ada@example.com
+TEL;TYPE=mobile:+1-555-0100
+ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom
+NOTE:Test
+UID:oqmvpzooywwmtwwx
+END:VCARD

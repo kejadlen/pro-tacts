@@ -16,8 +16,8 @@ Content-Type: text/xml
           <d:report><d:sync-collection/></d:report>
         </d:supported-report>
       </d:supported-report-set>
-      <cs:getctag>cfe366324ca3c5bb85010587e5fa778044ee67b5480e45441b562c662b7d1dc5</cs:getctag>
-      <d:sync-token>http://pro-tacts/sync/cfe366324ca3c5bb85010587e5fa778044ee67b5480e45441b562c662b7d1dc5</d:sync-token>
+      <cs:getctag>570e809cb07cb01027a3fd7a6404f564797e494fae2fadc4431eaeda89d95a5b</cs:getctag>
+      <d:sync-token>http://pro-tacts/sync/570e809cb07cb01027a3fd7a6404f564797e494fae2fadc4431eaeda89d95a5b</d:sync-token>
       <d:current-user-privilege-set>
         <d:privilege><d:read/></d:privilege>
         <d:privilege><d:write/></d:privilege>
@@ -34,6 +34,15 @@ Content-Type: text/xml
   <d:propstat>
     <d:prop>
       <d:getetag>"ce8bef6ad9abb83e81da4d5aceb7999b43781726f148e2607ed853532f9b8db6"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/oqmvpzooywwmtwwx.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"0d07279dcc669c2424d9dc5d393d3d3b9bcad064d1639cdfb8170ccde76b233d"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>

@@ -13,5 +13,14 @@ Content-Type: text/xml
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
 </d:response>
+<d:response>
+  <d:href>/dav/addressbook/oqmvpzooywwmtwwx.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"0d07279dcc669c2424d9dc5d393d3d3b9bcad064d1639cdfb8170ccde76b233d"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
 
 </d:multistatus>
