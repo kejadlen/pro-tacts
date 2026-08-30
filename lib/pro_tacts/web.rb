@@ -317,7 +317,7 @@ module ProTacts
           # Read on its own rather than through the collection: serving
           # one href has no reason to load every other contact first.
           r.get String do |filename|
-            contact = store.contact(utf8(filename.delete_suffix(".vcf")))
+            contact = store.contact(filename.delete_suffix(".vcf"))
 
             # No match falls through to the empty-body 404 that the
             # not_found handler fills in.
@@ -384,7 +384,13 @@ module ProTacts
     # CARDDAV:valid-address-data even when its If-Match is stale too.
     #: (String id) -> String
     def write_card(id)
-      vcard = utf8(request.body.read)
+      # The body is the one binary input: Rack requires input in
+      # ASCII-8BIT and Rack::RewindableInput enforces it again. Relabel
+      # rather than convert — the bytes are untouched, and the charset
+      # check below is what judges them. Paths need no counterpart:
+      # Puma hands PATH_INFO over still percent-encoded, so an id off
+      # the wire is ASCII.
+      vcard = request.body.read.force_encoding(Encoding::UTF_8)
 
       # CARDDAV:supported-address-data (RFC 6352 section 6.3.2.1): what
       # arrived must be a vCard, and text/vcard is the one media type
@@ -443,18 +449,6 @@ module ProTacts
       VCard::Parser.parse(vcard)
     rescue VCard::ParseError
       nil
-    end
-
-    # Where the wire's bytes become the app's text. Rack hands the
-    # request body in as ASCII-8BIT, and path segments carrying non-ASCII
-    # likewise (its spec's rule for CGI values), while everything past
-    # the route — the store, the parser, the responses — speaks UTF-8.
-    # Relabelling is not converting: the bytes are untouched, and a body
-    # that is not UTF-8 at all is caught by the charset check in
-    # write_card rather than here.
-    #: (String wire) -> String
-    def utf8(wire)
-      wire.encoding == Encoding::BINARY ? wire.dup.force_encoding(Encoding::UTF_8) : wire
     end
 
     # A 412 whose body names the CardDAV precondition that failed, in

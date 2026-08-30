@@ -113,12 +113,15 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   Never edit a migration that has run anywhere; add the next one.
 - Those tables are `STRICT`, so every string column needs `text: true`:
   Sequel's plain `String` is a varchar, which STRICT refuses. Strings
-  reach the store as UTF-8 by contract — `Web#utf8` relabels Rack's
-  binary (the request body, path segments carrying non-ASCII) where the
-  wire meets the route — and the adapter enforces it: the sqlite3 gem
-  encodes every bound value to UTF-8, so binary-flagged bytes above 7
-  bits raise at the bind, while bytes that are not UTF-8 at all are
-  refused by SQLite on the insert.
+  reach the store as UTF-8 by contract, and the adapter enforces it: the
+  sqlite3 gem encodes every bound value to UTF-8, so binary-flagged
+  bytes above 7 bits raise at the bind, while bytes that are not UTF-8
+  at all are refused by SQLite on the insert. The one binary input is
+  the request body — Rack requires input in ASCII-8BIT and
+  Rack::RewindableInput enforces it — relabelled to UTF-8 where it is
+  read, in `write_card`. Path-derived ids need no relabel: Puma hands
+  PATH_INFO over still percent-encoded (set verbatim from
+  REQUEST_PATH), so an id off the wire is ASCII.
 - The app is handed its store rather than reaching for one:
   `config.ru` builds it and sets `ProTacts::Web.store`, and a test does
   the same with a throwaway. There is no global `ProTacts.store`, so

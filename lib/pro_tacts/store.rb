@@ -157,8 +157,8 @@ module ProTacts
     # to it: the sqlite3 gem encodes every bound value to UTF-8, so a
     # binary-flagged byte above 7 bits raises at the bind, and bytes
     # that are not UTF-8 at all stop at the insert, which SQLite refuses
-    # to store as text. Rack's binary is relabelled before this —
-    # Web#utf8, where the wire meets the route.
+    # to store as text. The body — the one binary input — is relabelled
+    # where it is read, in write_card.
     #: (String id, String vcard) -> Contact
     def put(id, vcard)
       contact = Contact.for(id:, vcard:)
