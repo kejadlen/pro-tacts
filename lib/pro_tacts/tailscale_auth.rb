@@ -45,7 +45,11 @@ module ProTacts
     #: () -> Rack::response
     def forbidden
       body = "Forbidden: no Tailscale identity on this request.\n"
-      [403, { "Content-Type" => "text/plain", "Content-Length" => body.bytesize.to_s }, [body]]
+      # Lowercase names: a bare Rack 3 response hash is not normalized
+      # on the way out the way Roda's response[ ]= is, and rackup's
+      # development Lint rejects an uppercase name with a 500 that hides
+      # the 403.
+      [403, { "content-type" => "text/plain", "content-length" => body.bytesize.to_s }, [body]]
     end
   end
 end
