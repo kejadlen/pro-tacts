@@ -54,7 +54,7 @@ module ProTacts
       def render_row(row)
         li do
           a(href: "/contacts/#{row.contact.id}") do
-            span(class: "avatar") { Format.initials(row.fields.name || row.contact.id) }
+            span(class: "avatar") { row.fields.initials || Format.initials(row.contact.id) }
             div(style: "flex: 1; min-width: 0;") do
               div(style: "font-weight: 550;") { row.fields.name || row.contact.id }
             end

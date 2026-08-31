@@ -8,7 +8,7 @@ class ContactFieldsTest < Minitest::Test
     ProTacts::Admin::ContactFields.from(ProTacts::Contact.for(id: "aiden", vcard:))
   end
 
-  CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada Lovelace\r\n" \
+  CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada Lovelace\r\nN:Lovelace;Ada;;;\r\n" \
     "TEL;TYPE=mobile:+1-555-0100\r\nTEL;TYPE=work:+1-555-0199\r\n" \
     "EMAIL;TYPE=home:ada@example.com\r\n" \
     "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
@@ -16,6 +16,29 @@ class ContactFieldsTest < Minitest::Test
 
   def test_reads_the_name
     assert_equal "Ada Lovelace", fields(CARD).name
+  end
+
+  # Initials come from the structured N property (given + family),
+  # not a guess at word boundaries in the free-text FN.
+  def test_initials_come_from_the_structured_name
+    assert_equal "AL", fields(CARD).initials
+  end
+
+  # A card with no N at all — an organization's own entry, say — falls
+  # back to Format.initials' word-splitting guess on FN.
+  def test_initials_fall_back_to_the_display_name_with_no_n_property
+    no_n = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Riverside Elementary\r\nUID:office\r\nEND:VCARD\r\n"
+
+    assert_equal "RE", fields(no_n).initials
+  end
+
+  # N with only one of given/family present (a mononym, or a card that
+  # only bothered with a family name) still gives one initial rather
+  # than raising on the missing half.
+  def test_initials_from_a_partial_n_property
+    family_only = CARD.sub("N:Lovelace;Ada;;;", "N:Lovelace;;;;")
+
+    assert_equal "L", fields(family_only).initials
   end
 
   def test_reads_every_phone_with_its_type

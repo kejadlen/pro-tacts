@@ -29,7 +29,7 @@ module ProTacts
           div(class: "card") do
             div(class: "card-body") do
               div(class: "detail-header") do
-                span(class: "avatar", data_size: "lg") { Format.initials(@fields.name || @contact.id) }
+                span(class: "avatar", data_size: "lg") { @fields.initials || Format.initials(@contact.id) }
                 h1(class: "type-h2", style: "margin: 0;") { @fields.name || @contact.id }
               end
               # Only rendered when there's something to show: an empty

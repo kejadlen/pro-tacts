@@ -1,5 +1,6 @@
 require "date"
 
+require "pro_tacts/admin/format"
 require "pro_tacts/birthday"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
@@ -16,7 +17,7 @@ module ProTacts
       Email = Data.define(:value, :type)
       Address = Data.define(:lines, :type)
 
-      attr_reader :name, :phones, :emails, :addresses, :birthday, :notes
+      attr_reader :name, :initials, :phones, :emails, :addresses, :birthday, :notes
 
       # Lets VCard::ParseError raise rather than showing an empty card:
       # a stored card that fails to parse here is not the ordinary case
@@ -36,6 +37,7 @@ module ProTacts
       def initialize(properties)
         by_name = properties.group_by { it.name.upcase }
         @name = by_name.fetch("FN", []).first&.value
+        @initials = initials_from(by_name.fetch("N", []).first) || (@name && Format.initials(@name))
         @phones = by_name.fetch("TEL", []).map { |p| Phone.new(value: VCard.unescape(p.value), type: type_of(p)) }
         @emails = by_name.fetch("EMAIL", []).map { |p| Email.new(value: VCard.unescape(p.value), type: type_of(p)) }
         @addresses = by_name.fetch("ADR", []).map { |p| address_from(p) }
@@ -45,6 +47,22 @@ module ProTacts
       end
 
       private
+
+      # RFC 2426 section 3.1.2: N is Family;Given;Additional;Prefixes;
+      # Suffixes. A given and family name are structured data — reading
+      # them is the real answer to "what are this contact's initials,"
+      # not guessing at word boundaries in the free-text FN the way
+      # Format.initials does. That guess is kept only as the fallback
+      # for a card with no N at all (an organization's own address-book
+      # entry, say, which has a name but no person to split in two).
+      #: (VCard::Property? property) -> String?
+      def initials_from(property)
+        return nil if property.nil?
+
+        family, given = VCard.split_components(property.value)
+        letters = [given, family].filter_map { |part| part[0] unless part.to_s.empty? }
+        letters.empty? ? nil : letters.join.upcase
+      end
 
       # RFC 2426 section 3.3.1: TYPE can repeat (TYPE=work;TYPE=voice) or
       # comma-list (TYPE=work,voice) — either arrives here as one
