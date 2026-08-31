@@ -14,6 +14,15 @@ Content-Type: text/xml
   </d:propstat>
 </d:response>
 <d:response>
+  <d:href>/dav/addressbook/D0504597-CF12-4AF6-9894-43724366D39D.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"6ce139775700c82011936b1958b6e081d62f27c711931804ecac2a1e5bb6e8f9"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
   <d:href>/dav/addressbook/oqmvpzooywwmtwwx.vcf</d:href>
   <d:propstat>
     <d:prop>
