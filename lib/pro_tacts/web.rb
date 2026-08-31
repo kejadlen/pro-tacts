@@ -382,7 +382,7 @@ module ProTacts
     # the request's own validity first, the conditionals on stored
     # state after — so a card that cannot be stored hears
     # CARDDAV:valid-address-data even when its If-Match is stale too.
-    #: (String id) -> String
+    #: (String id) -> String?
     def write_card(id)
       # The body is the one binary input: Rack requires input in
       # ASCII-8BIT and Rack::RewindableInput enforces it again. Relabel
@@ -438,7 +438,11 @@ module ProTacts
       # contributes properties at write time, that PUT must stop
       # sending one.
       response["ETag"] = stored.etag
-      ""
+
+      # A returned "" would land in the body and pin text/html and
+      # content-length onto the 204, which a bodyless status must not
+      # carry (Rack 3's lint rejects both); nil leaves it bodyless.
+      nil
     end
 
     # A parse that answers nil rather than raising when the bytes are

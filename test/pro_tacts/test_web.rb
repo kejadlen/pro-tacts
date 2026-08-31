@@ -218,6 +218,11 @@ class WebTest < Minitest::Test
       etag = %("#{Digest::SHA256.hexdigest(updated)}")
       assert_equal etag, last_response["ETag"]
 
+      # A bodyless status must carry neither header: Rack 3's lint rejects
+      # both on a 204, and `rake dev` runs under it.
+      assert_nil last_response["Content-Type"]
+      assert_nil last_response["Content-Length"]
+
       # The tag the PUT returned is the one every read now reports, which
       # is what lets a client keep syncing against its own write.
       get "/dav/addressbook/aiden.vcf"
