@@ -55,17 +55,21 @@
 /* The detail card's load-bearing rule: type in one column, value in
    the other, every row aligned to the same grid regardless of what
    kind of attribute it is. See docs/DESIGN.md, "Alignment is the
-   layout." */
+   layout." `align-items: baseline` rather than the grid default
+   (stretch, which top-aligns each cell's content): dt and dd carry
+   different type styles — .type-label at --gl-step--2/1, .type-body-sm
+   at --gl-step--1/1.5 — so lining up their boxes still leaves their
+   text sitting at different heights. Baseline lines up the text itself. */
 .detail-grid {
   display: grid;
   grid-template-columns: 6rem 1fr;
   row-gap: var(--gl-space-2xs);
   column-gap: var(--gl-space-s);
+  align-items: baseline;
   margin: 0;
 }
 .detail-grid dt {
   grid-column: 1;
-  padding-top: 0.2em;
 }
 .detail-grid dd {
   grid-column: 2;
