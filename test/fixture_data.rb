@@ -12,7 +12,8 @@ require "pro_tacts/store"
 # The cards are files rather than a checked-in database because they are
 # evidence, the same standing the request files in macos-exchange have:
 # a reviewer can read a .vcf and a diff means something. The database is
-# derived from them, and lives under tmp/ with everything else that is.
+# derived from them, and lives in a throwaway tmpdir with everything
+# else that does.
 module FixtureData
   CARDS = Pathname.new(__dir__) / "fixtures" / "cards"
 

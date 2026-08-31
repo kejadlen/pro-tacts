@@ -1,5 +1,6 @@
 
 require "pathname"
+require "tmpdir"
 
 $LOAD_PATH.unshift(Pathname.new(__dir__) / "lib")
 require "minitest/test_task"
@@ -16,25 +17,32 @@ task :dev do
   # test/fixtures/cards on every start, so a client always sees known
   # state and the real data/ directory stays out of the dev loop. Only
   # rackup reloads under entr, so a client's edits survive a restart and
-  # a fresh `rake dev` is what resets to the fixtures.
-  data_dir = Pathname.new(__dir__) / "tmp" / "dev-data"
-  ENV["PRO_TACTS_DATA_DIR"] = data_dir.to_s
-  require_relative "test/fixture_data"
-  FixtureData.install(data_dir).close
-  sh "fd -e rb . lib | entr -r rackup -o localhost"
+  # a fresh `rake dev` is what resets to the fixtures. The data lives in
+  # a session-scoped tmpdir: two servers running at once each get their
+  # own database, and the directory goes when the task does.
+  Dir.mktmpdir("pro-tacts-dev") do |dir|
+    data_dir = Pathname.new(dir)
+    ENV["PRO_TACTS_DATA_DIR"] = data_dir.to_s
+    require_relative "test/fixture_data"
+    FixtureData.install(data_dir).close
+    sh "fd -e rb . lib | entr -r rackup -o localhost"
+  end
 end
 
 desc "Regenerate macOS exchange response fixtures from current responses"
 task :fixtures do
   # Mirrors test/test_helper.rb, which cannot be required here without
-  # minitest/autorun running its at_exit hook inside rake.
-  data_dir = Pathname.new(__dir__) / "tmp" / "test-data"
-  ENV["PRO_TACTS_DATA_DIR"] = data_dir.to_s
-  require "pro_tacts/web"
-  require_relative "test/fixture_data"
-  require_relative "test/pro_tacts/exchange_fixtures"
-  ProTacts::Web.store = FixtureData.install(data_dir)
-  ExchangeFixtures.record_responses(ProTacts::Web)
+  # minitest/autorun running its at_exit hook inside rake. Its own
+  # tmpdir, so a fixture re-record cannot race a concurrent test run.
+  Dir.mktmpdir("pro-tacts-test") do |dir|
+    data_dir = Pathname.new(dir)
+    ENV["PRO_TACTS_DATA_DIR"] = data_dir.to_s
+    require "pro_tacts/web"
+    require_relative "test/fixture_data"
+    require_relative "test/pro_tacts/exchange_fixtures"
+    ProTacts::Web.store = FixtureData.install(data_dir)
+    ExchangeFixtures.record_responses(ProTacts::Web)
+  end
 end
 
 desc "Type check lib against the RBS comments in it"

@@ -15,8 +15,8 @@ rake                  # Tests (the default task)
 rake steep            # Type check lib against the RBS comments in it
 rake fixtures         # Re-record response fixtures from current behavior
 rake index:rebuild    # Derive the parsed index again from the stored cards
-rake dev              # Dev server, seeded from test/fixtures/cards into
-                      # tmp/dev-data on every start, reloading on change
+rake dev              # Dev server, seeded from test/fixtures/cards into a
+                      # throwaway tmpdir on every start, reloading on change
                       # (needs fd and entr)
 rake profile:install  # Render and stage carddav.mobileconfig for approval
 ```
@@ -66,7 +66,7 @@ A fixture diff you didn't intend is the test suite doing its job. Read it
 before regenerating.
 
 `test/fixtures/cards/` holds the vCards the test database is seeded from.
-The database itself is built under `tmp/test-data` on every run and is
+The database itself is built in a throwaway tmpdir on every run and is
 not a fixture; edit a `.vcf` to change what the replay serves.
 
 ## Gotchas
