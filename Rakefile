@@ -12,6 +12,15 @@ end
 
 desc "Start development server, reloading on changes"
 task :dev do
+  # The dev server serves the fixture book, rebuilt from
+  # test/fixtures/cards on every start, so a client always sees known
+  # state and the real data/ directory stays out of the dev loop. Only
+  # rackup reloads under entr, so a client's edits survive a restart and
+  # a fresh `rake dev` is what resets to the fixtures.
+  data_dir = Pathname.new(__dir__) / "tmp" / "dev-data"
+  ENV["PRO_TACTS_DATA_DIR"] = data_dir.to_s
+  require_relative "test/fixture_data"
+  FixtureData.install(data_dir).close
   sh "fd -e rb . lib | entr -r rackup -o localhost"
 end
 
