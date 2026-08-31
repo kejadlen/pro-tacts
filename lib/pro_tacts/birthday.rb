@@ -64,24 +64,27 @@ module ProTacts
     Split = Data.define(:card, :birthday, :bday_kept)
 
     # The only constructor, so no birthday exists in a shape the grammar
-    # rejects. Components are not calendar-validated beyond their ranges:
-    # a partial date has no whole date to be wrong about, and a nonsense
-    # but well-shaped one round-trips rather than 500s a write.
+    # rejects: one `in` clause per shape RFC 6350 section 4.3.1 admits,
+    # each component's range standing where the component stands, so the
+    # pattern is the grammar rather than a prose description of it. A
+    # range admits any Comparable in its bounds, so the check is
+    # Integer-grade only in practice: the two producers — SQLite's
+    # integer columns and #to_i — cannot yield anything else, and a
+    # String or nil-shaped miss falls to the else. Components are not
+    # calendar-validated beyond their ranges: a partial date has no
+    # whole date to be wrong about, and a nonsense but well-shaped one
+    # round-trips rather than 500s a write.
     def self.new(year: nil, month: nil, day: nil)
-      if year.nil? && month.nil? && day.nil?
-        raise ArgumentError, "a birthday needs at least one of year, month, and day"
-      end
-      if year && month.nil? && day
-        raise ArgumentError, "year with day but no month is not a shape RFC 6350 section 4.3.1 admits"
-      end
-      if month && !month.between?(1, 12)
-        raise ArgumentError, "month out of range: #{month}"
-      end
-      if day && !day.between?(1, 31)
-        raise ArgumentError, "day out of range: #{day}"
-      end
-      if year && !year.between?(0, 9999)
-        raise ArgumentError, "year out of range: #{year}"
+      case [year, month, day]
+      in [0..9999, 1..12, 1..31]
+      in [0..9999, 1..12, nil]
+      in [0..9999, nil, nil]
+      in [nil, 1..12, 1..31]
+      in [nil, 1..12, nil]
+      in [nil, nil, 1..31]
+      else
+        raise ArgumentError,
+          "not a shape RFC 6350 section 4.3.1 admits: year=#{year.inspect}, month=#{month.inspect}, day=#{day.inspect}"
       end
 
       super
