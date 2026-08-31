@@ -431,13 +431,15 @@ module ProTacts
 
       stored = store.put(id, vcard)
       response.status = existing ? 204 : 201
-      # A strong ETag belongs on the answer because what was stored is
+      # A strong ETag belongs on the answer only when what was stored is
       # the submitted bytes, octet for octet — the one case RFC 6352
-      # section 6.3.2.3 says a client may rely on the tag it gets back.
-      # Nothing subtracts from a card before storage yet; when a group
-      # contributes properties at write time, that PUT must stop
-      # sending one.
-      response["ETag"] = stored.etag
+      # section 6.3.2.3 lets a client rely on the tag it gets back, and
+      # anywhere else it forbids one outright. A birthday is subtracted
+      # from the card before storage and composed back in on read, so a
+      # PUT that carried one stores a different card than it was handed
+      # and the client refetches; a card with nothing to subtract still
+      # stores octet for octet and still gets the tag.
+      response["ETag"] = stored.etag if stored.vcard == vcard
 
       # A returned "" would land in the body and pin text/html and
       # content-length onto the 204, which a bodyless status must not

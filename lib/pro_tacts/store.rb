@@ -3,6 +3,7 @@ require "digest"
 require "pathname"
 require "sequel"
 
+require "pro_tacts/birthday"
 require "pro_tacts/contact"
 require "pro_tacts/vcard/parser"
 
@@ -12,16 +13,25 @@ module ProTacts
   # The transactional store: one SQLite database holding each contact's
   # card exactly as it was submitted.
   #
-  # Three kinds of state live here and they are not equally precious.
+  # Four kinds of state live here and they are not equally precious.
   # The cards are the truth about contact data, and the reason they are
   # stored as the card rather than a parse of it is
   # docs/plans/2026-08-24-vcard-storage-and-groups.md. The change log is
   # the truth about history, and is why this is one database rather than
   # a directory of files: "what changed since token X" cannot be
   # recovered from current state, so a card, its etag, and its
-  # change-log entry have to land or fail together. Everything else is
+  # change-log entry have to land or fail together. The birthdays are
+  # the third thing that cannot be rebuilt — a partial date has no
+  # vCard 3.0 spelling, so it lives beside its card rather than in it
+  # (docs/plans/2026-08-31-partial-birthdays.md). Everything else is
   # an index derived from the cards, and #rebuild_index will make it
   # again from nothing.
+  #
+  # Every Contact this store hands out is composed, never the stored
+  # card alone: a birthday is subtracted out of a card on the way in
+  # and composed back in on the way out, so the vcard and the etag a
+  # caller sees — and the etag the change log records — describe the
+  # card a client downloads, not the bytes on disk.
   #
   # Sequel's transactions join one already open rather than failing on
   # SQLite's lack of nesting, which is what lets the group fan-out this
@@ -100,7 +110,8 @@ module ProTacts
     # what SQLite feels like returning.
     #: () -> Array[Contact]
     def contacts
-      cards.order(:id).map { contact_from(it) }
+      birthdays = birthdays_by_id
+      cards.order(:id).map { contact_from(it, birthdays[it.fetch(:id).to_s]) }
     end
 
     # The collection's content tag: one value that changes when any card
@@ -129,7 +140,7 @@ module ProTacts
     # nil.
     #: (String id) -> Contact?
     def contact(id)
-      contact_from(cards.where(id:).sole)
+      contact_from(cards.where(id:).sole, birthday_of(id))
     rescue Sequel::NoMatchingRow
       nil
     end
@@ -153,6 +164,19 @@ module ProTacts
     # this card hashed to now, and the index rows read off the card. One
     # transaction, because the log entry cannot be rebuilt from anything.
     #
+    # What is stored is the card minus its birthday, which moves into
+    # the birthdays table — vCard 3.0 cannot carry a partial date, so
+    # the card never carries BDAY and every read composes it back in
+    # (docs/plans/2026-08-31-partial-birthdays.md). The Contact this
+    # returns is the composed one, and the logged etag is its hash, so
+    # a client's token describes the card it downloads. A submitted
+    # BDAY in a spelling the model does not recompose stays in the
+    # card byte for byte and empties the model, keeping RFC 6352
+    # section 6.3.2.2's promise; a submitted card with no BDAY at all
+    # deletes the birthday only when the model held a shape a client
+    # could have seen, because one it never served is not something
+    # the client could have removed.
+    #
     # The strings are UTF-8 by contract, and the adapter holds the store
     # to it: the sqlite3 gem encodes every bound value to UTF-8, so a
     # binary-flagged byte above 7 bits raises at the bind, and bytes
@@ -161,13 +185,36 @@ module ProTacts
     # where it is read, in write_card.
     #: (String id, String vcard) -> Contact
     def put(id, vcard)
-      contact = Contact.for(id:, vcard:)
+      split = Birthday.subtract(vcard)
+      existing = birthday_of(id)
+      birthday =
+        if split.bday_kept
+          nil
+        elsif split.birthday
+          split.birthday
+        elsif existing && !existing.served?
+          existing
+        else
+          nil
+        end
+
+      contact = Contact.for(id:, vcard: Birthday.compose(split.card, birthday))
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
-          .insert(id: contact.id, vcard: contact.vcard)
+          .insert(id: contact.id, vcard: split.card)
+        if birthday
+          birthdays
+            .insert_conflict(
+              target: :card_id,
+              update: {year: Sequel[:excluded][:year], month: Sequel[:excluded][:month], day: Sequel[:excluded][:day]},
+            )
+            .insert(card_id: contact.id, year: birthday.year, month: birthday.month, day: birthday.day)
+        else
+          birthdays.where(card_id: contact.id).delete
+        end
         record(contact.id, "put", contact.etag)
-        reindex(contact)
+        reindex(contact.id, split.card)
       end
       contact
     end
@@ -196,13 +243,16 @@ module ProTacts
     # Always safe to run: nothing is authoritative here, so if the
     # projection ever disagrees with the cards, this is the repair.
     # Returns the ids of cards that did not parse, which are served in
-    # full but contribute nothing to the index.
+    # full but contribute nothing to the index. Raw rows rather than
+    # #contacts, which compose birthdays in: the index reflects what is
+    # stored, and no stored card carries a BDAY.
     #: () -> Array[String]
     def rebuild_index
       @database.transaction do
         card_properties.delete
-        contacts.each.with_object([]) do |contact, unindexed|
-          unindexed << contact.id unless reindex(contact)
+        cards.order(:id).all.each.with_object([]) do |row, unindexed|
+          id = row.fetch(:id).to_s
+          unindexed << id unless reindex(id, row.fetch(:vcard).to_s)
         end
       end
     end
@@ -229,6 +279,11 @@ module ProTacts
       @database[:card_parameters]
     end
 
+    #: () -> Sequel::Dataset
+    def birthdays
+      @database[:birthdays]
+    end
+
     #: (String card_id, String action, String? etag) -> void
     def record(card_id, action, etag)
       change_log.insert(card_id:, action:, etag:)
@@ -238,24 +293,26 @@ module ProTacts
     # diffed because it is derived data and replacing it is the cheaper
     # correct thing. Returns whether the card parsed: one that does not
     # is still served, so refusing to index it must not fail the write.
-    #: (Contact contact) -> bool
-    def reindex(contact)
+    # Takes the stored card — with the birthday already subtracted — so
+    # the index never sees a BDAY no stored card carries.
+    #: (String id, String vcard) -> bool
+    def reindex(id, vcard)
       # Before the parse, so that a card which has stopped parsing does
       # not keep the rows from when it did.
-      card_properties.where(card_id: contact.id).delete
-      properties = properties_of(contact.vcard)
+      card_properties.where(card_id: id).delete
+      properties = properties_of(vcard)
       return false if properties.nil?
 
       properties.each.with_index do |property, position|
         card_properties.insert(
-          card_id: contact.id,
+          card_id: id,
           position:,
           property_group: property.group,
           name: property.name,
           value: property.value,
         )
         property.parameters.each do |name, value|
-          card_parameters.insert(card_id: contact.id, position:, name:, value:)
+          card_parameters.insert(card_id: id, position:, name:, value:)
         end
       end
       true
@@ -280,9 +337,40 @@ module ProTacts
 
     # The etag comes back out of the card rather than out of a column, so
     # a row can never carry one that disagrees with the bytes beside it.
-    #: (Hash[Symbol, untyped] row) -> Contact
-    def contact_from(row)
-      Contact.for(id: row.fetch(:id).to_s, vcard: row.fetch(:vcard).to_s)
+    # The card is composed with its birthday first, so both halves
+    # describe what a client downloads.
+    #: (Hash[Symbol, untyped] row, Birthday? birthday) -> Contact
+    def contact_from(row, birthday)
+      Contact.for(
+        id: row.fetch(:id).to_s,
+        vcard: Birthday.compose(row.fetch(:vcard).to_s, birthday),
+      )
+    end
+
+    # Every birthday, keyed by card, for the listing reads that compose
+    # a whole collection in one pass.
+    #: () -> Hash[String, Birthday]
+    def birthdays_by_id
+      birthdays.all.to_h {
+        [it.fetch(:card_id).to_s, birthday_from(it)] #: [String, Birthday]
+      }
+    end
+
+    # One card's birthday, or nil for none. A plain `first` read rather
+    # than `sole`: card_id is the primary key, so there is no ambiguity
+    # for `sole` to catch and no row is the ordinary answer.
+    #: (String id) -> Birthday?
+    def birthday_of(id)
+      row = birthdays.where(card_id: id).first
+      row && birthday_from(row)
+    end
+
+    # A birthday row read as the model. The shape was validated on the
+    # way in, so a row that no longer parses is corruption to raise on
+    # rather than quietly drop.
+    #: (Hash[Symbol, untyped] row) -> Birthday
+    def birthday_from(row)
+      Birthday.new(year: row[:year], month: row[:month], day: row[:day])
     end
 
     #: (Hash[Symbol, untyped] row) -> Change

@@ -16,8 +16,8 @@ Content-Type: text/xml
           <d:report><d:sync-collection/></d:report>
         </d:supported-report>
       </d:supported-report-set>
-      <cs:getctag>ef8eddac0927936788c8997a6faedb70b86480fc67475851dcb15013ddc230c9</cs:getctag>
-      <d:sync-token>http://pro-tacts/sync/ef8eddac0927936788c8997a6faedb70b86480fc67475851dcb15013ddc230c9</d:sync-token>
+      <cs:getctag>8d49f12d5a21ce322b92458f141a911457556c0113fa89bbb6d647264744a0d9</cs:getctag>
+      <d:sync-token>http://pro-tacts/sync/8d49f12d5a21ce322b92458f141a911457556c0113fa89bbb6d647264744a0d9</d:sync-token>
       <d:current-user-privilege-set>
         <d:privilege><d:read/></d:privilege>
         <d:privilege><d:write/></d:privilege>
@@ -60,7 +60,7 @@ Content-Type: text/xml
   <d:href>/dav/addressbook/bday-complete.vcf</d:href>
   <d:propstat>
     <d:prop>
-      <d:getetag>"a4e6b4c955cfcebf3431ab4ab547c64a6bf1983ceba7953a77074ec64c1d6fbd"</d:getetag>
+      <d:getetag>"45d8178d8bb621243701ec282a386af13a226c9a6aa3f98bcd4d53a1deffefdc"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
@@ -69,7 +69,7 @@ Content-Type: text/xml
   <d:href>/dav/addressbook/bday-datetime.vcf</d:href>
   <d:propstat>
     <d:prop>
-      <d:getetag>"348c560bf1811fc48380fac606cf7198333ae0746c4f5ba8cec7269474b13162"</d:getetag>
+      <d:getetag>"16aae3a4d1cb495a0fa706932b411f87862c0d2111bab8b07efd3b5354b44847"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
@@ -96,7 +96,7 @@ Content-Type: text/xml
   <d:href>/dav/addressbook/bday-omit-year.vcf</d:href>
   <d:propstat>
     <d:prop>
-      <d:getetag>"55f079c8ad3ab5fce768ce51eecc2447ab3be4d24dbf84967a2360b780b58f9d"</d:getetag>
+      <d:getetag>"a448d198e3c96acaf128f490b5ebdc1a961823ffb15f1dca480fde63f9e63902"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>

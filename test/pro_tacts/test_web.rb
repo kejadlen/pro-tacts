@@ -289,6 +289,45 @@ class WebTest < Minitest::Test
     end
   end
 
+  # RFC 6352 section 6.3.2.3: a strong ETag belongs on a PUT answer only
+  # when what was stored is the submission octet for octet. A birthday is
+  # subtracted before storage and composed back in on read, so a PUT that
+  # carried one elsewhere in the card than where compose puts it must not
+  # claim the tag — the client refetches instead. macOS writes BDAY
+  # mid-card, which is the shape here.
+  def test_a_put_whose_birthday_moves_goes_without_the_strong_etag
+    born = card("new", "New").sub("FN:New\r\n", "FN:New\r\nBDAY:1985-04-12\r\n")
+
+    with_contacts({}) do
+      put_request "new", born, "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
+
+      assert_equal 201, last_response.status
+      assert_nil last_response["ETag"]
+
+      # What the client refetches carries the birthday, composed before
+      # the END, and that refetched tag is the one the next write matches.
+      get "/dav/addressbook/new.vcf"
+      assert_includes last_response.body, "BDAY:1985-04-12\r\nEND:VCARD"
+      etag = last_response["ETag"]
+
+      put_request "new", card("new", "New"), "CONTENT_TYPE" => VCARD, "HTTP_IF_MATCH" => etag
+      assert_equal 204, last_response.status
+    end
+  end
+
+  # The boundary of the same rule: a birthday already sitting where
+  # compose puts it stores octet for octet, and the tag is honest.
+  def test_a_put_whose_birthday_composes_in_place_keeps_the_strong_etag
+    born = card("new", "New").sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n")
+
+    with_contacts({}) do
+      put_request "new", born, "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
+
+      assert_equal 201, last_response.status
+      assert_equal %("#{Digest::SHA256.hexdigest(born)}"), last_response["ETag"]
+    end
+  end
+
   # The preconditions of RFC 6352 section 6.3.2.1, marshalled as 412s
   # in the DAV:error form RFC 4918 section 16 defines.
   def test_put_of_a_non_vcard_media_type_names_its_precondition

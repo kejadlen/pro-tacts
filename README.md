@@ -38,10 +38,11 @@ END:VCARD
 Storing the card rather than a parse of it is what lets the server keep
 properties it does not model, which RFC 6352 section 6.3.2.2 requires of
 anything accepting writes; `docs/plans/2026-08-24-vcard-storage-and-groups.md`
-makes the case at length. The same database holds the change log, which
-is the one thing in it that cannot be rebuilt, and an index of parsed
-properties, which can — `rake index:rebuild` derives that again from the
-cards alone.
+makes the case at length. The same database holds the change log and
+the birthdays — the two things in it that cannot be rebuilt, the
+birthdays because a partial date has no vCard 3.0 spelling — and an
+index of parsed properties, which can: `rake index:rebuild` derives
+that again from the stored cards alone.
 
 macOS Contacts displays them over Tailscale serve as of 2026-08-14, so
 later work has a known-good baseline to change. See
@@ -93,11 +94,14 @@ carry:
   cards through multiget or `GET` on its own.
 - `GET` a card: the vCard body plus an `ETag` header.
 - `PUT` a card: 201 for a create at an unmapped href, 204 for a replace,
-  both carrying the strong `ETag` — permitted because what is stored is
-  what was submitted (RFC 6352 section 6.3.2.3). A refused write is a
-  412 naming the precondition in a `DAV:error` body. This row follows
-  the RFC rather than client evidence: no live write had been answered
-  when it was written, so the first synced device to edit is its test.
+  each carrying the strong `ETag` only when what is stored is what was
+  submitted, octet for octet (RFC 6352 section 6.3.2.3) — a card whose
+  birthday is subtracted out before storage and composed back in on
+  read goes without the tag and the client refetches. A refused write
+  is a 412 naming the precondition in a `DAV:error` body. The statuses
+  follow the RFC rather than client evidence: no live write had been
+  answered when they were written, so the first synced device to edit
+  is its test.
 
 Three properties are load-bearing in non-obvious ways, documented in
 `docs/macos-contacts.md`: the collection's `resourcetype` (without

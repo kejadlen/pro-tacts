@@ -416,6 +416,147 @@ class StoreTest < Minitest::Test
     end
   end
 
+  ## Birthdays
+
+  AIDEN_BORN = AIDEN.sub("FN:Aiden\r\n", "FN:Aiden\r\nBDAY:1985-04-12\r\n")
+
+  # The stored card carries no BDAY — a partial date has no vCard 3.0
+  # spelling — and every read composes the birthday back in, so the
+  # served card is the submitted one with the line back where compose
+  # puts it.
+  def test_a_birthday_is_stored_beside_the_card_and_served_within_it
+    with_store({"aiden" => AIDEN_BORN}) do |store|
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_equal AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n"), store.contact("aiden").vcard
+    end
+  end
+
+  # The composed card is what an etag describes, on a read and in the
+  # change log alike, so a client's If-Match and its sync token both
+  # talk about the card it downloads.
+  def test_the_etag_and_the_log_describe_the_composed_card
+    with_store({"aiden" => AIDEN_BORN}) do |store|
+      composed = AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n")
+
+      assert_equal ProTacts::Contact.etag_for(composed), store.contact("aiden").etag
+      assert_equal ProTacts::Contact.etag_for(composed), store.changes.last.etag
+    end
+  end
+
+  # The ctag follows the composed card too: a birthday moved is a
+  # change a client must see, even when the stored bytes did not move.
+  def test_the_ctag_moves_with_a_birthday_alone
+    with_store({"aiden" => AIDEN}) do |store|
+      before = store.ctag
+      store.put("aiden", AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n"))
+
+      refute_equal before, store.ctag
+    end
+  end
+
+  def test_an_apple_no_year_birthday_round_trips
+    with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY;X-APPLE-OMIT-YEAR=1604:1604-04-12\r\nEND:VCARD\r\n")}) do |store|
+      assert_equal ProTacts::Birthday.new(month: 4, day: 12), birthday_row(store, "aiden")
+    end
+  end
+
+  # A submitted card with no BDAY deletes the birthday — the client
+  # was served one and sent its card back without it, which on a
+  # read-modify-write client is the user removing it.
+  def test_a_card_put_back_without_its_served_birthday_loses_it
+    with_store({"aiden" => AIDEN_BORN}) do |store|
+      store.put("aiden", AIDEN)
+
+      assert_nil birthday_row(store, "aiden")
+      assert_equal AIDEN, store.contact("aiden").vcard
+    end
+  end
+
+  # A birthday no client can see — year alone, month alone, day alone,
+  # year and month — survives a round trip the client never saw a
+  # birthday in. Planted directly, because no writer produces one yet.
+  def test_a_birthday_no_client_can_see_survives_a_card_without_one
+    with_store({"aiden" => AIDEN}) do |store|
+      database(store)[:birthdays].insert(card_id: "aiden", year: 1985)
+
+      store.put("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
+
+      assert_equal ProTacts::Birthday.new(year: 1985), birthday_row(store, "aiden")
+      assert_equal AIDEN.sub("FN:Aiden", "FN:Aiden Smith"), store.contact("aiden").vcard
+    end
+  end
+
+  # A BDAY the model cannot recompose stays in the card verbatim and
+  # empties the model: the card's own line speaks for itself, and
+  # compose must never add a second one beside it.
+  def test_an_unmodeled_bday_stays_in_the_card_and_empties_the_model
+    unmodeled = AIDEN.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n")
+
+    with_store({"aiden" => AIDEN_BORN}) do |store|
+      store.put("aiden", unmodeled)
+
+      assert_equal unmodeled, store.contact("aiden").vcard
+      assert_nil birthday_row(store, "aiden")
+    end
+  end
+
+  def test_a_stored_card_is_never_indexed_with_a_bday
+    with_store({"aiden" => AIDEN_BORN}) do |store|
+      assert_equal %w[BEGIN VERSION FN UID END], indexed_names(store, "aiden")
+    end
+  end
+
+  def test_deleting_a_card_takes_its_birthday_with_it
+    with_store({"aiden" => AIDEN_BORN}) do |store|
+      store.delete("aiden")
+
+      assert_empty database(store)[:birthdays].all
+    end
+  end
+
+  # The transaction the whole design turns on, now with a third piece:
+  # a birthday must not survive a write whose log entry failed.
+  def test_a_failed_birthday_write_leaves_no_birthday
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+
+      FailingLog.connect(path) do |store|
+        assert_raises(RuntimeError) { store.put("aiden", AIDEN_BORN) }
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        assert_empty store.contacts
+        assert_empty database(store)[:birthdays].all
+      end
+    end
+  end
+
+  ## The migration
+
+  # A database at the old shape — BDAY in the card, no birthdays table
+  # — is carried over by the same subtraction a write makes: modeled
+  # forms move, unmodeled forms stay put.
+  def test_the_migration_moves_a_modeled_bday_out_of_the_cards
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 1)
+        db[:cards].insert(id: "aiden", vcard: AIDEN_BORN)
+        db[:cards].insert(id: "znorth", vcard: ZED.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n"))
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+        assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), birthday_row(store, "aiden")
+        assert_equal AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n"), store.contact("aiden").vcard
+
+        # Unmodeled: byte-identical, no birthday row beside it.
+        assert_equal ZED.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n"), store.contact("znorth").vcard
+        assert_nil birthday_row(store, "znorth")
+      end
+    end
+  end
+
   private
 
   # A store whose change-log write fails, after Store#put has already put
@@ -459,6 +600,13 @@ class StoreTest < Minitest::Test
       database(store)[:card_properties].order(:card_id, :position).all,
       database(store)[:card_parameters].order(:card_id, :position, :name, :value).all,
     ]
+  end
+
+  # The birthday row read through the store's own model, so a test sees
+  # the shape it holds and not the columns it came from.
+  def birthday_row(store, id)
+    birthday = database(store)[:birthdays].where(card_id: id).first
+    birthday && ProTacts::Birthday.new(year: birthday[:year], month: birthday[:month], day: birthday[:day])
   end
 
   def wreck_the_index(store)

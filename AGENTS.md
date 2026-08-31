@@ -135,12 +135,14 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   configuration as it loads, since the unhandled-request middleware is
   given its directory at class-definition time. Set it afterwards and
   the 404 captures land in `log/` instead of `tmp/`.
-- Only two things in the database cannot be rebuilt: the cards and the
-  change log. Everything else is a projection of the cards that
-  `rake index:rebuild` will make again, so no repair is ever needed for
-  it. A write that touches a card must land its change-log entry in the
-  same transaction, because a client's sync token silently skips
-  whatever the log missed.
+- Only three things in the database cannot be rebuilt: the cards, the
+  change log, and the birthdays — a partial date has no vCard 3.0
+  spelling, so it lives beside its card rather than in it (see
+  docs/plans/2026-08-31-partial-birthdays.md). Everything else is a
+  projection of the cards that `rake index:rebuild` will make again,
+  so no repair is ever needed for it. A write that touches a card must
+  land its change-log entry in the same transaction, because a client's
+  sync token silently skips whatever the log missed.
 - A read whose filter is meant to identify one row uses `sole`, not
   `first` — `first` answers with one of several rather than saying the
   filter was too loose. `sole` raises either way it is wrong:

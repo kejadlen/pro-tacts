@@ -1,0 +1,47 @@
+# Birthday and Birthday::Split are Data classes, whose members the
+# inline parser cannot read (see sig/pro_tacts/contact.rbs). Both are
+# marked `@rbs skip` in birthday.rb and signed here instead.
+module ProTacts
+  class Birthday
+    FULL_DATE: Regexp
+    OMIT_YEAR_DATE: Regexp
+    OMIT_YEAR: String
+    BDAY_LINE: Regexp
+    END_LINE: Regexp
+    CONTINUATION: Regexp
+
+    attr_reader year: Integer?
+    attr_reader month: Integer?
+    attr_reader day: Integer?
+
+    def self.new: (?year: Integer?, ?month: Integer?, ?day: Integer?) -> instance
+
+    def to_line: () -> String?
+
+    def served?: () -> bool
+
+    def self.from_property: (VCard::Property property) -> Birthday?
+
+    def self.apple_no_year?: (VCard::Property property) -> bool
+
+    def self.subtract: (String card) -> Split
+
+    def self.compose: (String card, Birthday? birthday) -> String
+
+    def self.parse_line: (String text) -> VCard::Property?
+
+    def self.physical_lines: (String card) -> Array[String]
+
+    def self.line_groups: (String card) -> Array[Array[String]]
+
+    def self.terminator_of: (String line) -> String
+
+    class Split
+      attr_reader card: String
+      attr_reader birthday: Birthday?
+      attr_reader bday_kept: bool
+
+      def self.new: (card: String, birthday: Birthday?, bday_kept: bool) -> instance
+    end
+  end
+end
