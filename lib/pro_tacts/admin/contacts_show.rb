@@ -6,7 +6,7 @@ require "pro_tacts/admin/layout"
 
 module ProTacts
   module Admin
-    # GET /admin/contacts/:id — a contact's card, read-only. Follows
+    # GET /contacts/:id — a contact's card, read-only. Follows
     # docs/DESIGN.md's alignment rule even before there is anything to
     # edit: every row's type sits in one column and its value in the
     # other, and an attribute with no data gets no row at all.
@@ -25,7 +25,7 @@ module ProTacts
 
       def view_template
         render Layout.new(title: @fields.name || @contact.id) do
-          a(href: "/admin/contacts", class: "type-label") { "‹ contacts" }
+          a(href: "/", class: "type-label") { "‹ contacts" }
           div(class: "card") do
             div(class: "card-body") do
               div(style: "display: flex; align-items: center; gap: var(--gl-space-s);") do

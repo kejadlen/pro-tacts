@@ -42,7 +42,7 @@ class AdminContactsPagesTest < Minitest::Test
 
   def test_index_lists_recently_updated_contacts
     with_contacts({"ada" => ADA}) do
-      get "/admin/contacts"
+      get "/"
 
       assert_equal 200, last_response.status
       assert_equal "text/html; charset=utf-8", last_response["Content-Type"]
@@ -52,7 +52,7 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   def test_index_with_no_contacts_says_so
-    with_contacts({}) { get "/admin/contacts" }
+    with_contacts({}) { get "/" }
 
     assert_includes last_response.body, "No contacts yet."
   end
@@ -63,7 +63,7 @@ class AdminContactsPagesTest < Minitest::Test
       .sub("UID:ada", "UID:grace")
 
     with_contacts({"ada" => ADA, "grace" => grace}) do
-      get "/admin/contacts", q: "hopper"
+      get "/", q: "hopper"
 
       assert_includes last_response.body, "Grace Hopper"
       refute_includes last_response.body, "Ada Lovelace"
@@ -75,17 +75,17 @@ class AdminContactsPagesTest < Minitest::Test
   # any of its values, or the groups it belongs to.
   def test_search_matches_a_phone_or_email_value
     with_contacts({"ada" => ADA}) do
-      get "/admin/contacts", q: "555-0100"
+      get "/", q: "555-0100"
       assert_includes last_response.body, "Ada Lovelace"
 
-      get "/admin/contacts", q: "ada@example.com"
+      get "/", q: "ada@example.com"
       assert_includes last_response.body, "Ada Lovelace"
     end
   end
 
   def test_search_with_no_matches_says_so
     with_contacts({"ada" => ADA}) do
-      get "/admin/contacts", q: "nobody"
+      get "/", q: "nobody"
 
       assert_includes last_response.body, "No contacts match."
     end
@@ -93,7 +93,7 @@ class AdminContactsPagesTest < Minitest::Test
 
   def test_show_renders_the_contacts_fields
     with_contacts({"ada" => ADA}) do
-      get "/admin/contacts/ada"
+      get "/contacts/ada"
 
       assert_equal 200, last_response.status
       assert_includes last_response.body, "Ada Lovelace"
@@ -112,7 +112,7 @@ class AdminContactsPagesTest < Minitest::Test
     bare = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Bare Contact\r\nUID:bare\r\nEND:VCARD\r\n"
 
     with_contacts({"bare" => bare}) do
-      get "/admin/contacts/bare"
+      get "/contacts/bare"
 
       assert_equal 200, last_response.status
       refute_includes last_response.body, "notes"
@@ -121,7 +121,7 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   def test_show_of_an_unknown_contact_is_404
-    with_contacts({}) { get "/admin/contacts/nope" }
+    with_contacts({}) { get "/contacts/nope" }
 
     assert_equal 404, last_response.status
   end

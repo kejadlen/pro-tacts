@@ -6,9 +6,9 @@ require "pro_tacts/admin/layout"
 
 module ProTacts
   module Admin
-    # GET /admin/contacts — search first, no browsing (docs/DESIGN.md):
-    # a query narrows to matches across every contact, an empty query
-    # shows the ten most recently updated. Read-only: no add, no edit,
+    # GET / — search first, no browsing (docs/DESIGN.md): a query
+    # narrows to matches across every contact, an empty query shows
+    # the ten most recently updated. Read-only: no add, no edit,
     # nothing to commit, so there is no state here beyond the query.
     class ContactsIndex < Phlex::HTML
       RECENT_LIMIT = 10
@@ -26,7 +26,7 @@ module ProTacts
       def view_template
         render Layout.new(title: "Contacts") do
           h1(class: "type-h1") { "Contacts" }
-          form(action: "/admin/contacts", method: "get") do
+          form(action: "/", method: "get") do
             input(type: "search", name: "q", value: @query, placeholder: "Search contacts", autofocus: @query.empty?)
           end
           span(class: "type-label") { @query.empty? ? "recently updated" : "results" }
@@ -53,7 +53,7 @@ module ProTacts
       #: (Row row) -> void
       def render_row(row)
         li do
-          a(href: "/admin/contacts/#{row.contact.id}") do
+          a(href: "/contacts/#{row.contact.id}") do
             span(class: "avatar") { Format.initials(row.fields.name || row.contact.id) }
             div(style: "flex: 1; min-width: 0;") do
               div(style: "font-weight: 550;") { row.fields.name || row.contact.id }

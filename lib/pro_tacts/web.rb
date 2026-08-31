@@ -82,33 +82,35 @@ module ProTacts
     route do |r|
       r.public
 
-      # The read-only admin UI (docs/DESIGN.md). Under the same auth
-      # gate as the CardDAV routes above it — "a few family members, all
+      # The card browser, one segment down from the page at the root:
+      # /contacts/:id names what the id is without spending the whole
+      # single-segment namespace on contact ids. Under the same auth
+      # gate as the CardDAV routes — "a few family members, all
       # trusted" is the whole access model this app has, see README's
       # simplifying assumptions.
-      r.on "admin" do
-        r.on "contacts" do
-          r.is do
-            r.get do
-              response["Content-Type"] = "text/html; charset=utf-8"
-              Admin::ContactsIndex.call(recent: store.contacts_by_recency, query: r.params["q"])
-            end
-          end
+      r.on "contacts" do
+        r.get String do |id|
+          contact = store.contact(id)
 
-          r.get String do |id|
-            contact = store.contact(id)
-
-            # No match falls through to the empty-body 404 the
-            # not_found handler fills in, same as the CardDAV GET.
-            if contact
-              response["Content-Type"] = "text/html; charset=utf-8"
-              Admin::ContactsShow.call(contact:)
-            end
+          # No match falls through to the empty-body 404 the
+          # not_found handler fills in, same as the CardDAV GET.
+          if contact
+            response["Content-Type"] = "text/html; charset=utf-8"
+            Admin::ContactsShow.call(contact:)
           end
         end
       end
 
       r.is "" do
+        # The contacts page itself: the root is the one human-facing
+        # screen's home (docs/DESIGN.md), a GET alongside the PROPFIND
+        # below it — same path, disjoint verbs, and a browser's plain
+        # GET is no DAV client's bootstrap.
+        r.get do
+          response["Content-Type"] = "text/html; charset=utf-8"
+          Admin::ContactsIndex.call(recent: store.contacts_by_recency, query: r.params["q"])
+        end
+
         # DAV:current-user-principal (RFC 5397 section 3) — what a client
         # asks the root for to find the principal it is acting as.
         r.propfind do
