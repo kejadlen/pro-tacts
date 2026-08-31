@@ -205,6 +205,24 @@ class StoreTest < Minitest::Test
     end
   end
 
+  def test_contacts_by_recency_orders_newest_first
+    with_store({"aiden" => AIDEN}) do |store|
+      sleep 0.002
+      store.put("znorth", ZED)
+
+      assert_equal %w[znorth aiden], store.contacts_by_recency.map { it.contact.id }
+    end
+  end
+
+  def test_contacts_by_recency_carries_the_stamp
+    with_store({"aiden" => AIDEN}) do |store|
+      recent = store.contacts_by_recency.fetch(0)
+
+      assert_match TIMESTAMP, recent.updated_at
+      assert_equal card_row(store, "aiden").fetch(:updated_at), recent.updated_at
+    end
+  end
+
   def test_a_change_is_stamped_when_it_is_logged
     with_store({"aiden" => AIDEN}) do |store|
       assert_match TIMESTAMP, store.changes.last.created_at

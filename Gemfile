@@ -2,6 +2,7 @@ source "https://rubygems.org"
 
 gem "logger"
 gem "nokogiri"
+gem "phlex"
 gem "puma"
 gem "rackup"
 gem "rake"

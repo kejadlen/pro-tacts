@@ -1,0 +1,45 @@
+/* Pro-tacts' own layer on top of Gloss (see docs/DESIGN.md) — page
+   chrome and the detail grid, neither of which Gloss defines a
+   component for. Every value below is a var(--gl-*) or a structural
+   rem width in the spirit of card.css's own max-width: 18rem; nothing
+   here is a hex, a px, or a duration. */
+
+.admin-header {
+  padding: var(--gl-space-s) var(--gl-space-m);
+  border-bottom: 1px solid var(--gl-color-border-hairline);
+}
+.admin-header a {
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--1);
+  color: var(--gl-color-text-primary);
+  text-decoration: none;
+}
+
+.admin-main {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: var(--gl-space-l) var(--gl-space-m);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-m);
+}
+
+/* The detail card's load-bearing rule: type in one column, value in
+   the other, every row aligned to the same grid regardless of what
+   kind of attribute it is. See docs/DESIGN.md, "Alignment is the
+   layout." */
+.detail-grid {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  row-gap: var(--gl-space-2xs);
+  column-gap: var(--gl-space-s);
+  margin: 0;
+}
+.detail-grid dt {
+  grid-column: 1;
+  padding-top: 0.2em;
+}
+.detail-grid dd {
+  grid-column: 2;
+  margin: 0;
+}

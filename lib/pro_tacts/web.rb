@@ -1,4 +1,6 @@
 
+require "pathname"
+
 require "pro_tacts"
 require "sentry-ruby"
 
@@ -6,6 +8,8 @@ require "rack/rewindable_input"
 require "nokogiri"
 require "roda"
 
+require "pro_tacts/admin/contacts_index"
+require "pro_tacts/admin/contacts_show"
 require "pro_tacts/debug_logger"
 require "pro_tacts/contact"
 require "pro_tacts/store"
@@ -17,6 +21,15 @@ module ProTacts
   class Web < Roda
     # @rbs @contacts: Array[Contact]?
     # @rbs @ctag: String?
+
+    # The vendored Gloss CSS and the admin app's own stylesheet (see
+    # docs/DESIGN.md); relative to this file rather than $0 for the same
+    # reason Store::MIGRATIONS is, and served by Roda's own `public`
+    # plugin rather than a reverse proxy — there is no reverse proxy
+    # here, `tailscale serve` hands requests straight to this app.
+    PUBLIC_ROOT = Pathname.new(
+      __dir__ #: String
+    ).parent.parent / "public" #: Pathname
 
     # The store this app serves from. config.ru builds it and hands it in;
     # nothing here reaches for a global to find one, which is what lets a
@@ -55,6 +68,7 @@ module ProTacts
 
     plugin :all_verbs
     plugin :dav_verbs
+    plugin :public, root: PUBLIC_ROOT.to_s
 
     plugin :not_found do
       Sentry.capture_message("404 Not Found", level: :warning)
@@ -66,6 +80,34 @@ module ProTacts
     # and service discovery (RFC 6764). Each handler cites its section, and
     # the texts are vendored under docs/rfcs to check them against.
     route do |r|
+      r.public
+
+      # The read-only admin UI (docs/DESIGN.md). Under the same auth
+      # gate as the CardDAV routes above it — "a few family members, all
+      # trusted" is the whole access model this app has, see README's
+      # simplifying assumptions.
+      r.on "admin" do
+        r.on "contacts" do
+          r.is do
+            r.get do
+              response["Content-Type"] = "text/html; charset=utf-8"
+              Admin::ContactsIndex.call(recent: store.contacts_by_recency, query: r.params["q"])
+            end
+          end
+
+          r.get String do |id|
+            contact = store.contact(id)
+
+            # No match falls through to the empty-body 404 the
+            # not_found handler fills in, same as the CardDAV GET.
+            if contact
+              response["Content-Type"] = "text/html; charset=utf-8"
+              Admin::ContactsShow.call(contact:)
+            end
+          end
+        end
+      end
+
       r.is "" do
         # DAV:current-user-principal (RFC 5397 section 3) — what a client
         # asks the root for to find the principal it is acting as.

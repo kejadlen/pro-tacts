@@ -12,5 +12,12 @@ module ProTacts
 
       def self.new: (sequence: Integer, card_id: String, action: String, etag: String?, created_at: String) -> instance
     end
+
+    class RecentContact
+      attr_reader contact: Contact
+      attr_reader updated_at: String
+
+      def self.new: (contact: Contact, updated_at: String) -> instance
+    end
   end
 end

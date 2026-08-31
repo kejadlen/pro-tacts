@@ -1,0 +1,769 @@
+/* Vendored from kejadlen/gloss @ d1d0aa0abdc4a70d461ff1878b412424be583091, 2026-08-31.
+   Gloss ships this as plain CSS meant to be copied into a consuming
+   project (see install.md) — there is no build step to run here.
+   Refresh with `rake gloss:vendor GLOSS=/path/to/gloss/checkout`. */
+
+/* Button
+   A flat, quiet button that recedes rather than performs — no gradients, no
+   shine. Variants: default, primary, dark, ghost, danger. Sizes: sm, md
+   (default), lg — padding and font step only, weight and radius stay put.
+
+   The contract is the element itself: a bare <button> is styled directly, no
+   class required. An <a> that acts like a button (navigates rather than
+   changes something — see the Button page's "Links that act like buttons")
+   opts in with a single `.btn` class, since a bare `a` selector would catch
+   every ordinary prose link on the site. `:not(.icon-button)` keeps this
+   block from leaking onto IconButton, which shares the <button> tag but is
+   an entirely different shape. */
+
+button:not(.icon-button),
+a.btn {
+  --_bg: var(--gl-color-surface-card);
+  --_fg: var(--gl-color-text-primary);
+  --_border: var(--gl-color-border-default);
+  --_pad: var(--gl-space-xs) var(--gl-space-s);
+  --_font: var(--gl-step--1);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gl-space-2xs);
+  padding: var(--_pad);
+  border: 1px solid var(--_border);
+  border-radius: var(--gl-radius-md);
+  background: var(--_bg);
+  color: var(--_fg);
+  font-family: var(--gl-font-sans);
+  font-size: var(--_font);
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: filter var(--gl-dur-fast) var(--gl-ease),
+              border-color var(--gl-dur-fast) var(--gl-ease);
+}
+
+:is(button:not(.icon-button), a.btn):hover:not(:disabled):not([aria-disabled="true"]) { filter: brightness(0.96); }
+:is(button:not(.icon-button), a.btn):active:not(:disabled):not([aria-disabled="true"]) { filter: brightness(0.92); }
+
+button:not(.icon-button):disabled,
+:is(button:not(.icon-button), a.btn)[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+:is(button:not(.icon-button), a.btn)[data-variant="primary"] {
+  --_bg: var(--gl-color-accent);
+  --_fg: var(--gl-color-accent-fg);
+  --_border: var(--gl-color-accent);
+}
+
+/* Reserved for the single most-committing action in a view — a final Save,
+   never a whole row of them. */
+:is(button:not(.icon-button), a.btn)[data-variant="dark"] {
+  --_bg: var(--gl-color-text-primary);
+  --_fg: var(--gl-color-surface-page);
+  --_border: var(--gl-color-text-primary);
+}
+
+:is(button:not(.icon-button), a.btn)[data-variant="ghost"] {
+  --_bg: transparent;
+  --_fg: var(--gl-color-text-primary);
+  --_border: transparent;
+}
+
+/* The source hardcodes this label white rather than deriving it — danger
+   is not "on a filled accent surface", so --gl-color-accent-fg is reused
+   here only because its resolved value is the same literal white, not
+   because the two roles are the same thing. */
+:is(button:not(.icon-button), a.btn)[data-variant="danger"] {
+  --_bg: var(--gl-color-danger);
+  --_fg: var(--gl-color-accent-fg);
+  --_border: var(--gl-color-danger);
+}
+
+:is(button:not(.icon-button), a.btn)[data-size="sm"] { --_pad: 0.375rem 0.75rem; --_font: 0.8125rem; }
+:is(button:not(.icon-button), a.btn)[data-size="lg"] { --_pad: 0.75rem 1.375rem; --_font: var(--gl-step-0); }
+
+:is(button:not(.icon-button), a.btn)[data-block] { width: 100%; }
+
+/* Button group — [role="group"] is already the correct ARIA role for a
+   toolbar of related buttons, so it doubles as the styling hook for free. */
+[role="group"] {
+  display: inline-flex;
+  isolation: isolate;
+}
+[role="group"] > button { border-radius: 0; }
+[role="group"] > button:first-child { border-start-start-radius: var(--gl-radius-md); border-end-start-radius: var(--gl-radius-md); }
+[role="group"] > button:last-child { border-start-end-radius: var(--gl-radius-md); border-end-end-radius: var(--gl-radius-md); }
+[role="group"] > button + button { margin-inline-start: -1px; }
+[role="group"] > button:hover,
+[role="group"] > button:focus-visible { z-index: 1; }
+
+/* IconButton — a square icon-only button. Always needs an aria-label; it
+   becomes both the accessible name and the native tooltip. There is no
+   attribute that distinguishes "a button that is only an icon" from a plain
+   Button, so this is the one sanctioned class in this file. */
+.icon-button {
+  --_size: 2.125rem;
+  --_bg: transparent;
+  --_border: transparent;
+  --_fg: var(--gl-color-text-secondary);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--_size);
+  height: var(--_size);
+  padding: 0;
+  flex: none;
+  border: 1px solid var(--_border);
+  border-radius: var(--gl-radius-md);
+  background: var(--_bg);
+  color: var(--_fg);
+  cursor: pointer;
+  transition: background-color var(--gl-dur-fast) var(--gl-ease),
+              color var(--gl-dur-fast) var(--gl-ease);
+}
+.icon-button:hover:not(:disabled) { background: var(--gl-color-surface-fill-2); }
+.icon-button:disabled { opacity: 0.5; cursor: default; }
+
+.icon-button[data-size="sm"] { --_size: 1.75rem; }
+.icon-button[data-size="lg"] { --_size: 2.5rem; }
+
+.icon-button[data-variant="outline"] { --_bg: var(--gl-color-surface-card); --_border: var(--gl-color-border-default); --_fg: var(--gl-color-text-primary); }
+.icon-button[data-variant="accent"]  { --_bg: var(--gl-color-accent-soft); --_fg: var(--gl-color-accent-ink); }
+/* Field
+   The labeled field wrapper — a <label> that wraps its own caption text
+   together with the control, so the association is native and needs no
+   `for`/`id` pair. The caption is mono, uppercase, tracked — the same
+   catalog-label convention as Badge and type-label.
+
+   A <label> is reused for three different shapes across this system (this
+   wrapper, Checkbox/Radio's row, Switch's row), so it cannot be styled bare
+   without one shape leaking into another. Field is the one of the three with
+   no distinguishing attribute of its own, so it gets the sanctioned class;
+   Checkbox/Radio tell themselves apart structurally instead (see below). */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-2xs);
+  min-width: 0;
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--2);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gl-color-text-secondary);
+}
+
+/* Hint and error read the native fine-print element. `role="alert"` is a
+   real live-region role for validation text, so it doubles as the selector
+   that turns a hint red. */
+.field > small {
+  font-family: var(--gl-font-sans);
+  font-size: var(--gl-step--2);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+  color: var(--gl-color-text-tertiary);
+}
+.field > small[role="alert"] { color: var(--gl-color-danger); }
+
+/* Input / Select — bordered, matched to each other exactly. Both tags ARE
+   the component, so they are styled bare; nothing else on this site uses a
+   text input or a select. */
+input:not([type="checkbox"]):not([type="radio"]),
+select {
+  width: 100%;
+  padding: var(--gl-space-xs) var(--gl-space-s);
+  background: var(--gl-color-surface-card);
+  border: 1px solid var(--gl-color-border-default);
+  border-radius: var(--gl-radius-sm);
+  color: var(--gl-color-text-primary);
+  font-family: var(--gl-font-sans);
+  font-size: var(--gl-step--1);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+  outline: none;
+  transition: border-color var(--gl-dur-fast) var(--gl-ease),
+              box-shadow var(--gl-dur-fast) var(--gl-ease);
+}
+input::placeholder { color: var(--gl-color-text-tertiary); }
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus {
+  border-color: var(--gl-color-accent);
+  box-shadow: 0 0 0 2px var(--gl-color-accent-soft);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):disabled,
+select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The chevron is the one flagged color exception in this component set:
+   CSS cannot point a data-URI background-image at a custom property, so its
+   stroke is a literal hex rather than a var(--gl-*) reference. It is picked
+   to match --gl-color-text-secondary and commented here so it is not
+   mistaken for a stray color. */
+select {
+  appearance: none;
+  padding-inline-end: var(--gl-space-l);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%235f5d59' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--gl-space-xs) center;
+}
+
+input[aria-invalid="true"],
+select[aria-invalid="true"] {
+  border-color: var(--gl-color-danger);
+  background-color: var(--gl-color-danger-bg);
+}
+
+/* Checkbox / Radio — the real native controls, tinted with accent-color
+   instead of a hand-drawn box. This is not just a rename: it deletes the
+   custom SVG-checkmark markup entirely and lets the browser draw its own
+   (platform-appropriate) check and dot. `role="switch"` is excluded here so
+   Switch — a checkbox playing a different role — can style itself below
+   without this rule fighting it. A <label> wrapping a checkbox/radio is told
+   apart from Field's <label> structurally: it :has() one as a direct child,
+   no class required. */
+input[type="checkbox"]:not([role="switch"]),
+input[type="radio"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  accent-color: var(--gl-color-accent);
+  cursor: pointer;
+}
+input[type="checkbox"]:not([role="switch"]):focus-visible,
+input[type="radio"]:focus-visible {
+  outline: 2px solid var(--gl-color-accent);
+  outline-offset: 2px;
+}
+
+label:has(> input[type="checkbox"]:not([role="switch"])),
+label:has(> input[type="radio"]) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gl-space-2xs);
+  cursor: pointer;
+  font-family: var(--gl-font-sans);
+  font-size: var(--gl-step--1);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--gl-color-text-primary);
+}
+label:has(> input:disabled) { cursor: default; opacity: 0.5; }
+
+/* Switch — for on/off settings only, never a substitute for Checkbox.
+   `input[type="checkbox"][role="switch"]` is real ARIA (the correct role for
+   a toggle), not an invented hook, but the visual track+thumb needs a second
+   element for the thumb's independent position and transition — more than
+   `appearance: none` plus pseudo-elements on the input itself can cleanly
+   carry — so `.switch` is a deliberate, documented fallback class rather
+   than a first choice. */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gl-space-2xs);
+  cursor: pointer;
+  font-family: var(--gl-font-sans);
+  font-size: var(--gl-step--1);
+  color: var(--gl-color-text-primary);
+}
+.switch input[role="switch"] { position: absolute; opacity: 0; width: 2.25rem; height: 1.25rem; margin: 0; }
+
+.switch span {
+  position: relative;
+  flex: none;
+  width: 2.25rem;
+  height: 1.25rem;
+  border-radius: var(--gl-radius-full);
+  background: var(--gl-color-border-default);
+  transition: background-color var(--gl-dur-base) var(--gl-ease);
+}
+.switch span::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  width: 1rem;
+  height: 1rem;
+  border-radius: var(--gl-radius-full);
+  background: var(--gl-color-accent-fg);
+  box-shadow: var(--gl-shadow-sm);
+  transition: translate var(--gl-dur-base) var(--gl-ease);
+}
+.switch input[role="switch"]:checked + span { background: var(--gl-color-accent); }
+.switch input[role="switch"]:checked + span::after { translate: 1rem 0; }
+.switch input[role="switch"]:focus-visible + span { outline: 2px solid var(--gl-color-accent); outline-offset: 2px; }
+.switch:has(input:disabled) { cursor: default; opacity: 0.5; }
+
+/* Rows of fields — used by the settings-form pattern. `<form>`/`<fieldset>`
+   are the elements that already mean this, so they are styled bare. A row
+   grouping two fields side by side has no element of its own, so it keeps
+   one plain class. */
+form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-s);
+  max-width: 28rem;
+}
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--gl-space-xs);
+}
+/* Vertically stacked fields — the other half of form layout alongside
+   .form-row's side-by-side pair. */
+.field-stack { display: flex; flex-direction: column; gap: var(--gl-space-s); }
+fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-2xs);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+fieldset > legend {
+  padding: 0 0 var(--gl-space-2xs);
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--2);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gl-color-text-secondary);
+}
+/* Badge
+   Mono, uppercase, tracked — the catalog-label convention for status and
+   meta values (SAVED, OVERDUE, RECOMMENDED). A label, never a button.
+
+   A <span> is too generic to style globally — it is used all over running
+   prose for unrelated reasons — so Badge gets the one sanctioned class this
+   shape needs. Tone is an attribute, not a modifier class. */
+
+.badge {
+  --_bg: var(--gl-color-surface-fill);
+  --_fg: var(--gl-color-text-secondary);
+  --_border: var(--gl-color-border-hairline);
+
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem 0.5rem;
+  border: 1px solid var(--_border);
+  border-radius: var(--gl-radius-sm);
+  background: var(--_bg);
+  color: var(--_fg);
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.badge[data-tone="accent"]  { --_bg: var(--gl-color-accent-soft);  --_fg: var(--gl-color-accent-ink);  --_border: transparent; }
+.badge[data-tone="success"] { --_bg: var(--gl-color-success-bg);   --_fg: var(--gl-color-success);      --_border: transparent; }
+.badge[data-tone="danger"]  { --_bg: var(--gl-color-danger-bg);    --_fg: var(--gl-color-danger);       --_border: transparent; }
+
+.badge-set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gl-space-2xs);
+}
+
+/* Tag
+   A removable mono chip for freeform tags — locations, categories.
+   `[data-dashed]` renders an "add tag" affordance instead of a value. Same
+   reasoning as Badge: <span> is too generic to select bare, so Tag gets one
+   class. The remove control is a real <button>, styled through the
+   descendant selector rather than a class of its own. */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--gl-radius-sm);
+  background: var(--gl-color-surface-fill);
+  border: 1px solid var(--gl-color-border-default);
+  color: var(--gl-color-text-secondary);
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--2);
+  line-height: 1;
+}
+
+.tag[data-dashed] {
+  background: transparent;
+  border-style: dashed;
+  color: var(--gl-color-text-tertiary);
+  cursor: pointer;
+}
+
+.tag button {
+  all: unset;
+  cursor: pointer;
+  color: var(--gl-color-text-tertiary);
+  line-height: 1;
+  font-size: 0.75rem;
+}
+.tag button:hover { color: var(--gl-color-text-primary); }
+
+.tag-set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+/* Card
+   Flat surface, hairline border, radius-lg. `[data-elevated]` is opt-in and
+   reserved for the one focused/primary card in a view — a dialog, the
+   primary capture card — flat is the default everywhere else.
+
+   A <div>/<article> is too generic to select bare, so Card keeps one
+   sanctioned class. When Card's job is holding a list of rows — the common
+   case, entry lists, task lists, settings rows — it is a real <ul class="
+   card">, and CardRow is a bare <li> underneath it: no second class needed,
+   the row look comes from the `.card > li` descendant selector alone. The
+   first row's top border is removed automatically so callers never have to
+   override it by hand. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--gl-color-surface-card);
+  border: 1px solid var(--gl-color-border-hairline);
+  border-radius: var(--gl-radius-lg);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.card[data-elevated] { box-shadow: var(--gl-shadow-float); }
+
+.card > li {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-xs);
+  padding: var(--gl-space-xs) var(--gl-space-s);
+  border-top: 1px solid var(--gl-color-border-hairline);
+  color: var(--gl-color-text-primary);
+  font-family: var(--gl-font-sans);
+  font-size: var(--gl-step--1);
+}
+.card > li:first-child { border-top: none; }
+
+/* A row whose ENTIRE content is wrapped in a real <button> or <a> — the
+   accessible way to make a row clickable — fills the row edge-to-edge and
+   picks up a hover fill and pointer cursor. `:only-child` is what tells this
+   apart from a row that merely contains a small button among other content
+   (a leading checkbox next to a title and a trailing value, say): only a
+   button/anchor that IS the row's one and only child means "the whole row
+   is the control." */
+.card > li:has(> button:only-child),
+.card > li:has(> a:only-child) {
+  padding: 0;
+}
+.card > li > button:only-child,
+.card > li > a:only-child {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-xs);
+  width: 100%;
+  padding: var(--gl-space-xs) var(--gl-space-s);
+  box-sizing: border-box;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color var(--gl-dur-fast) var(--gl-ease);
+}
+.card > li > button:only-child:hover,
+.card > li > a:only-child:hover { background: var(--gl-color-surface-fill); }
+
+/* Documentation-only extras: a body/footer pair and a responsive grid, used
+   by the prose pages (rationale.md, index.md) to show a Card as a plain
+   content tile rather than a data row. Neither is part of Card's props —
+   they exist because a content tile's inner layout has no element of its
+   own to hang a selector on. */
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-2xs);
+  padding: var(--gl-space-m);
+}
+.card-body h3 { margin: 0; font: 600 var(--gl-step-0)/1.3 var(--gl-font-sans); }
+.card-body p { margin: 0; color: var(--gl-color-text-secondary); font-size: var(--gl-step--1); }
+.card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gl-space-xs);
+  margin-top: auto;
+  padding: var(--gl-space-xs) var(--gl-space-m);
+  border-top: 1px solid var(--gl-color-border-hairline);
+  background: var(--gl-color-surface-fill);
+}
+
+.card[data-link] { transition: border-color var(--gl-dur-fast) var(--gl-ease), box-shadow var(--gl-dur-fast) var(--gl-ease); }
+.card[data-link]:hover { border-color: var(--gl-color-border-default); box-shadow: var(--gl-shadow-sm); }
+.card[data-link]:focus-within { outline: 2px solid var(--gl-color-accent); outline-offset: 2px; }
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: var(--gl-space-s);
+}
+
+/* Avatar — lives here because it almost never appears outside a card or a
+   row (the Loop dashboard's initials chip, Archive's file-type chip). A
+   <span> is too generic for a bare selector, so it keeps one class. */
+.avatar {
+  --_size: 1.875rem;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--_size);
+  height: var(--_size);
+  flex: none;
+  border-radius: var(--gl-radius-full);
+  background: var(--gl-color-accent-soft);
+  color: var(--gl-color-accent-ink);
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--2);
+  font-weight: 600;
+  overflow: hidden;
+}
+.avatar[data-square] { border-radius: var(--gl-radius-md); background: var(--gl-color-surface-fill); color: var(--gl-color-text-secondary); border: 1px solid var(--gl-color-border-hairline); }
+.avatar[data-size="sm"] { --_size: 1.5rem; }
+.avatar[data-size="lg"] { --_size: 2.25rem; }
+/* Tooltip — a dark mono label on hover, positioned above the child. Pure CSS:
+   the trigger and bubble are siblings inside one relatively-positioned span,
+   shown on :hover/:focus-within so it works from the keyboard too.
+
+   `[role="tooltip"]` is the correct ARIA role for the bubble itself, so it
+   doubles as the styling hook — zero classes there. The wrapping span has no
+   attribute of its own, but it does not need one: `:has()` picks out "a span
+   that contains a [role=tooltip] bubble" precisely, without reaching for a
+   class on an otherwise-generic element. */
+span:has(> [role="tooltip"]) {
+  position: relative;
+  display: inline-flex;
+}
+
+[role="tooltip"] {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--gl-radius-sm);
+  background: var(--gl-color-text-primary);
+  color: var(--gl-color-surface-page);
+  font-family: var(--gl-font-mono);
+  /* 11px is the source's own literal choice — smaller than --gl-step--2, the
+     smallest step on the scale, because a tooltip is meant to read as a
+     glance-only aside rather than body text. */
+  font-size: 11px;
+  white-space: nowrap;
+  line-height: 1.4;
+  z-index: 20;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--gl-dur-fast) var(--gl-ease);
+}
+span:has(> [role="tooltip"]):hover > [role="tooltip"],
+span:has(> [role="tooltip"]):focus-within > [role="tooltip"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Toast — the real pattern used for delete confirmations: a flat bar with an
+   optional destructive action and a dismiss. `[data-fixed]` pins it
+   bottom-right for real use; without it the toast stays in document flow for
+   documentation. `role="status"` is the correct live-region role for a
+   transient status message, so it is both the accessibility hook and the
+   style selector — no base class needed. The action and dismiss buttons are
+   plain <button>s told apart by `aria-label="Dismiss"`, an attribute they
+   need anyway for the icon-only close control. */
+[role="status"] {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-xs);
+  min-width: 20rem;
+  padding: var(--gl-space-xs) var(--gl-space-s);
+  background: var(--gl-color-surface-card);
+  border: 1px solid var(--gl-color-border-default);
+  border-radius: var(--gl-radius-md);
+  box-shadow: var(--gl-shadow-float);
+  color: var(--gl-color-text-primary);
+  font-family: var(--gl-font-sans);
+  font-size: var(--gl-step--2);
+}
+[role="status"][data-fixed] {
+  position: fixed;
+  inset-block-end: var(--gl-space-s);
+  inset-inline-end: var(--gl-space-s);
+  z-index: 60;
+}
+[role="status"] > span { flex: 1; }
+[role="status"] button {
+  all: unset;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--gl-color-danger);
+}
+[role="status"] button[aria-label="Dismiss"] {
+  color: var(--gl-color-text-tertiary);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1;
+}
+[role="status"] button[aria-label="Dismiss"]:hover { color: var(--gl-color-text-primary); }
+
+/* Dialog — the native <dialog> element: a centered modal, flat surface, no
+   colored header, hairline dividers between title/body/footer. A <header>
+   holds the title and a <footer> holds the actions, matching the elements
+   the tag already wants; everything else in between is the body, styled by
+   excluding those two rather than by a class of its own.
+
+   `.dialog-demo` scopes a static, always-open example to its own preview
+   container instead of the viewport, so it can sit safely inside a
+   documentation page — this is a doc-only affordance, not part of Dialog's
+   contract. It relies on the browser's own dialog centering: the UA
+   stylesheet already gives an open <dialog> `position: absolute; inset: 0;
+   margin: auto`, which centers it inside the nearest positioned ancestor —
+   here, `.dialog-demo` itself. A real `.showModal()` call gets the genuine
+   viewport-fixed overlay and `::backdrop` for free; a plain `open` attribute
+   (used here so the demo renders without JavaScript) does not paint a
+   backdrop at all, since `::backdrop` only exists for a dialog shown
+   modally — wire the real open/close state and call `.showModal()` in the
+   consuming app. */
+.dialog-demo {
+  position: relative;
+  min-height: 20rem;
+  background: var(--gl-color-surface-fill);
+  border-radius: var(--gl-radius-lg);
+}
+
+dialog {
+  width: 26rem;
+  max-width: calc(100% - (2 * var(--gl-space-s)));
+  height: fit-content;
+  padding: 0;
+  background: var(--gl-color-surface-card);
+  border: 1px solid var(--gl-color-border-hairline);
+  border-radius: var(--gl-radius-lg);
+  box-shadow: var(--gl-shadow-float);
+  color: var(--gl-color-text-primary);
+  overflow: hidden;
+}
+dialog::backdrop {
+  background: rgba(20, 18, 14, 0.35);
+}
+dialog > header {
+  padding: var(--gl-space-s) var(--gl-space-m);
+  border-bottom: 1px solid var(--gl-color-border-hairline);
+  font-family: var(--gl-font-sans);
+  font-weight: 600;
+  font-size: var(--gl-step-0);
+  color: var(--gl-color-text-primary);
+}
+dialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gl-space-2xs);
+  padding: var(--gl-space-s) var(--gl-space-m);
+  border-top: 1px solid var(--gl-color-border-hairline);
+}
+dialog > *:not(header):not(footer) {
+  padding: var(--gl-space-m);
+  margin: 0;
+  color: var(--gl-color-text-primary);
+  font-size: var(--gl-step--1);
+}
+/* Tabs
+   Follows the real WAI-ARIA tabs pattern: a `[role="tablist"]` of
+   `[role="tab"]` buttons controlling `[role="tabpanel"]`s. Those roles are
+   required for the pattern to be accessible in the first place, so they
+   double as the entire styling contract — no classes at all for the base
+   shape. The keyboard wiring lives in assets/js/system.js and is
+   variant-agnostic — it only cares about `[data-tabs]` / `[role=tab]`.
+
+   Two real variants: `underline` (mono, accent underline — primary section
+   nav, the default) and `segmented` (pill track, active segment lifts to the
+   surface — filters like All · Overdue · Upcoming, never primary
+   navigation), chosen with `data-variant="segmented"` on the tablist since
+   neither has a natural attribute of its own. */
+
+/* Every rule below the list container pairs [role="tablist"] with
+   [role="tab"] rather than styling [role="tab"] alone — Tab buttons are
+   still literal <button> elements, so the compound selector's extra
+   specificity is what keeps Button's base styling (button.css) from
+   winning the cascade on shared properties like padding and background. */
+
+[role="tablist"] {
+  display: flex;
+  gap: var(--gl-space-m);
+  border-bottom: 1px solid var(--gl-color-border-hairline);
+}
+[role="tablist"] [role="tab"] {
+  padding: 0.5rem 0;
+  margin-bottom: -1px;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--gl-color-text-secondary);
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--1);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color var(--gl-dur-fast) var(--gl-ease), border-color var(--gl-dur-fast) var(--gl-ease);
+}
+[role="tablist"] [role="tab"]:hover { color: var(--gl-color-text-primary); }
+[role="tablist"] [role="tab"][aria-selected="true"] {
+  color: var(--gl-color-text-primary);
+  border-bottom-color: var(--gl-color-accent);
+}
+
+[role="tablist"][data-variant="segmented"] {
+  display: inline-flex;
+  gap: 0.125rem;
+  padding: 0.1875rem;
+  border-bottom: 0;
+  background: var(--gl-color-surface-fill);
+  border-radius: var(--gl-radius-md);
+}
+[role="tablist"][data-variant="segmented"] [role="tab"] {
+  all: unset;
+  cursor: pointer;
+  padding: 0.375rem 0.875rem;
+  border-radius: var(--gl-radius-sm);
+  font-family: var(--gl-font-sans);
+  font-size: var(--gl-step--1);
+  font-weight: 550;
+  color: var(--gl-color-text-secondary);
+  transition: background-color var(--gl-dur-fast) var(--gl-ease), color var(--gl-dur-fast) var(--gl-ease);
+}
+[role="tablist"][data-variant="segmented"] [role="tab"][aria-selected="true"] {
+  color: var(--gl-color-text-primary);
+  background: var(--gl-color-surface-card);
+  box-shadow: var(--gl-shadow-sm);
+}
+
+[role="tabpanel"] { padding-top: var(--gl-space-s); }
+[role="tabpanel"][hidden] { display: none; }
+[role="tabpanel"]:focus-visible { outline-offset: 4px; }

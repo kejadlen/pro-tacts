@@ -49,6 +49,13 @@ module ProTacts
     # @rbs skip
     Change = Data.define(:sequence, :card_id, :action, :etag, :created_at)
 
+    # A contact paired with when its card last changed. Contact itself
+    # carries no timestamp — it is derived from the card alone, see its
+    # own comment — so a surface that sorts or displays recency (the
+    # admin UI's "recently updated" list) gets it from here instead.
+    # @rbs skip
+    RecentContact = Data.define(:contact, :updated_at)
+
     # SQLite has no ON UPDATE, so the column default stamps a row on
     # insert and this stamps it again on the way past. Same expression as
     # the migration's, deliberately: the database keeps the clock, so two
@@ -112,6 +119,17 @@ module ProTacts
     def contacts
       birthdays = birthdays_by_id
       cards.order(:id).map { contact_from(it, birthdays[it.fetch(:id).to_s]) }
+    end
+
+    # Every contact paired with its card's updated_at, newest first — the
+    # read behind any "recently updated" surface. Same shape and cost as
+    # #contacts, ordered by the column SQLite already stamps rather than
+    # by id.
+    #: () -> Array[RecentContact]
+    def contacts_by_recency
+      cards.order(Sequel.desc(:updated_at)).map {
+        RecentContact.new(contact: contact_from(it), updated_at: it.fetch(:updated_at).to_s)
+      }
     end
 
     # The collection's content tag: one value that changes when any card

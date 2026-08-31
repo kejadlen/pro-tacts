@@ -1,0 +1,139 @@
+/* Vendored from kejadlen/gloss @ d1d0aa0abdc4a70d461ff1878b412424be583091, 2026-08-31.
+   Gloss ships this as plain CSS meant to be copied into a consuming
+   project (see install.md) — there is no build step to run here.
+   Refresh with `rake gloss:vendor GLOSS=/path/to/gloss/checkout`. */
+
+/* Gloss — design tokens. Hand-maintained; edit values directly. */
+
+:root {
+  /* Palette ramps — reference only. Components use the aliases below. */
+  --gl-neutral-0: #faf9f7;
+  --gl-neutral-50: #fdfdfb;
+  --gl-neutral-100: #f1f0ed;
+  --gl-neutral-150: #e8e6e2;
+  --gl-neutral-200: #dcdad7;
+  --gl-neutral-300: #c0bdb9;
+  --gl-neutral-500: #888681;
+  --gl-neutral-600: #5f5d59;
+  --gl-neutral-800: #2a2926;
+  --gl-neutral-900: #100f0d;
+  --gl-neutral-dark-0: #0e0d0b;
+  --gl-neutral-dark-50: #151412;
+  --gl-neutral-dark-100: #1e1d1a;
+  --gl-neutral-dark-150: #252421;
+  --gl-neutral-dark-200: #2c2b29;
+  --gl-neutral-dark-300: #44423f;
+  --gl-neutral-dark-500: #7c7a76;
+  --gl-neutral-dark-600: #a09e9a;
+  --gl-neutral-dark-800: #d9d7d4;
+  --gl-neutral-dark-900: #e9e8e6;
+  --gl-accent-teal: #3a6a63;
+  --gl-accent-clay: #9a5a3c;
+  --gl-accent-ink-blue: #2b4a78;
+  --gl-accent-ochre: #93701f;
+  --gl-accent-plum: #6a3a5c;
+
+  /* Surfaces */
+  --gl-color-surface-page: #faf9f7;
+  --gl-color-surface-card: #fdfdfb;
+  --gl-color-surface-fill: #f1f0ed;
+  --gl-color-surface-fill-2: #e8e6e2;
+
+  /* Borders */
+  --gl-color-border-hairline: #dcdad7;
+  --gl-color-border-default: #c0bdb9;
+
+  /* Text */
+  --gl-color-text-primary: #100f0d;
+  --gl-color-text-secondary: #5f5d59;
+  --gl-color-text-tertiary: #888681;
+
+  /* Accent */
+  --gl-color-accent: #3a6a63;
+  --gl-color-accent-fg: #ffffff;
+  --gl-color-accent-ink: color-mix(in oklch, var(--gl-color-accent) 78%, black);
+  --gl-color-accent-soft: color-mix(in oklch, var(--gl-color-accent) 12%, white);
+
+  /* Status (fixed — never swapped like the accent) */
+  --gl-color-success: #3f7a4a;
+  --gl-color-success-bg: color-mix(in oklch, var(--gl-color-success) 12%, white);
+  --gl-color-danger: #ad3a2c;
+  --gl-color-danger-bg: color-mix(in oklch, var(--gl-color-danger) 10%, white);
+
+  /* Type families */
+  --gl-font-sans: -apple-system, "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --gl-font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  --gl-font-serif: Georgia, "Times New Roman", "Iowan Old Style", serif;
+
+  /* Type steps — fluid (Utopia scale), the design system's own body-text size */
+  --gl-step--2: clamp(0.7813rem, 0.7736rem + 0.0341vw, 0.8rem);
+  --gl-step--1: clamp(0.9375rem, 0.9119rem + 0.1136vw, 1rem);
+  --gl-step-0: clamp(1.125rem, 1.0739rem + 0.2273vw, 1.25rem);
+  --gl-step-1: clamp(1.35rem, 1.2631rem + 0.3864vw, 1.5625rem);
+  --gl-step-2: clamp(1.62rem, 1.4837rem + 0.6057vw, 1.9531rem);
+  --gl-step-3: clamp(1.944rem, 1.7405rem + 0.9044vw, 2.4414rem);
+  --gl-step-4: clamp(2.3328rem, 2.0387rem + 1.3072vw, 3.0518rem);
+  --gl-step-5: clamp(2.7994rem, 2.384rem + 1.8461vw, 3.8147rem);
+
+  /* Space */
+  --gl-space-3xs: clamp(0.3125rem, 0.3125rem + 0vw, 0.3125rem);
+  --gl-space-2xs: clamp(0.5625rem, 0.5369rem + 0.1136vw, 0.625rem);
+  --gl-space-xs: clamp(0.875rem, 0.8494rem + 0.1136vw, 0.9375rem);
+  --gl-space-s: clamp(1.125rem, 1.0739rem + 0.2273vw, 1.25rem);
+  --gl-space-m: clamp(1.6875rem, 1.6108rem + 0.3409vw, 1.875rem);
+  --gl-space-l: clamp(2.25rem, 2.1477rem + 0.4545vw, 2.5rem);
+  --gl-space-xl: clamp(3.375rem, 3.2216rem + 0.6818vw, 3.75rem);
+  --gl-space-2xl: clamp(4.5rem, 4.2955rem + 0.9091vw, 5rem);
+  --gl-space-3xl: clamp(6.75rem, 6.4432rem + 1.3636vw, 7.5rem);
+
+  /* Radius */
+  --gl-radius-sm: 4px;
+  --gl-radius-md: 6px;
+  --gl-radius-lg: 10px;
+  --gl-radius-full: 999px;
+  --gl-border-w: 1px;
+
+  /* Elevation */
+  --gl-shadow-sm: 0 1px 2px rgba(20, 18, 14, 0.05);
+  --gl-shadow-float: 0 2px 6px rgba(20, 18, 14, 0.06), 0 10px 24px -12px rgba(20, 18, 14, 0.18);
+
+  /* Motion */
+  --gl-dur-fast: 0.12s;
+  --gl-dur-base: 0.16s;
+  --gl-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --gl-color-surface-page: #0e0d0b;
+    --gl-color-surface-card: #151412;
+    --gl-color-surface-fill: #1e1d1a;
+    --gl-color-surface-fill-2: #252421;
+    --gl-color-border-hairline: #2c2b29;
+    --gl-color-border-default: #44423f;
+    --gl-color-text-primary: #e9e8e6;
+    --gl-color-text-secondary: #a09e9a;
+    --gl-color-text-tertiary: #7c7a76;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --gl-color-surface-page: #0e0d0b;
+  --gl-color-surface-card: #151412;
+  --gl-color-surface-fill: #1e1d1a;
+  --gl-color-surface-fill-2: #252421;
+  --gl-color-border-hairline: #2c2b29;
+  --gl-color-border-default: #44423f;
+  --gl-color-text-primary: #e9e8e6;
+  --gl-color-text-secondary: #a09e9a;
+  --gl-color-text-tertiary: #7c7a76;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --gl-dur-fast: 0ms;
+    --gl-dur-base: 0ms;
+  }
+}

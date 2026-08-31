@@ -83,6 +83,25 @@ module ProTacts
       text.gsub(/\r\n|\r/, "\n").gsub(/[\\;,\n]/) { TEXT_ESCAPES.fetch(it) }
     end
 
+    # escape's inverse: unescapes backslash, the component separators, and
+    # the `\n` line-break escape (RFC 2426 section 2.4.2). Nothing that
+    # serves a card needs this — a served card is the stored bytes going
+    # out unparsed — but a view that displays a structured value (an
+    # admin screen, not this server's CardDAV responses) has to undo the
+    # escaping or show the reader literal backslashes.
+    #: (String text) -> String
+    def self.unescape(text)
+      text.gsub(/\\[\\;,n]/) { it == "\\n" ? "\n" : it[1..].to_s }
+    end
+
+    # Splits a structured value's ";"-delimited components (RFC 2426
+    # section 3.2.1, e.g. ADR and N) without breaking on an escaped
+    # "\;", and unescapes each component in the same pass.
+    #: (String value) -> Array[String]
+    def self.split_components(value)
+      value.split(/(?<!\\);/, -1).map { unescape(it) }
+    end
+
     # Folds a logical line into physical lines of at most LINE_LIMIT
     # octets, each continuation starting with a single space (RFC 2426
     # section 2.6). The walk is character-wise so a multibyte character

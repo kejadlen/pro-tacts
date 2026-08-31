@@ -41,6 +41,36 @@ class VCardTest < Minitest::Test
     end
   end
 
+  ## Unescaping
+
+  def test_unescape_reverses_escape
+    assert_equal "Smith, John; Jr.", ProTacts::VCard.unescape("Smith\\, John\\; Jr.")
+    assert_equal "a\\b", ProTacts::VCard.unescape("a\\\\b")
+  end
+
+  def test_unescape_reverses_the_line_break_escape
+    assert_equal "a\nb\nc", ProTacts::VCard.unescape("a\\nb\\nc")
+  end
+
+  def test_escape_and_unescape_round_trip
+    Hegel.test do |tc|
+      value = tc.draw(text(max_size: 300))
+      normalized = value.gsub(/\r\n|\r/, "\n")
+      raise "unescape did not reverse escape" unless ProTacts::VCard.unescape(ProTacts::VCard.escape(value)) == normalized
+    end
+  end
+
+  ## Structured values
+
+  def test_split_components_respects_the_component_separator
+    assert_equal ["", "", "12 Analytical Way", "London", "England", "NW1 1AA", "United Kingdom"],
+      ProTacts::VCard.split_components(";;12 Analytical Way;London;England;NW1 1AA;United Kingdom")
+  end
+
+  def test_split_components_does_not_split_on_an_escaped_separator
+    assert_equal ["Smith; Jr.", "John"], ProTacts::VCard.split_components("Smith\\; Jr.;John")
+  end
+
   ## Property tests
 
   def test_unfolding_reverses_folding

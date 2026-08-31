@@ -8,6 +8,12 @@
 # (see sig/pro_tacts/). Both are documented where they are defined.
 target :lib do
   check "lib", inline: true
+  # Phlex ships no RBS of its own, and lib/pro_tacts/admin is built on
+  # it — unlike Sequel, Roda, Nokogiri, and friends, which have hand
+  # written stand-ins under sig/gems. Ignored rather than stubbed for
+  # now; add sig/gems/phlex.rbs and drop this once the admin surface is
+  # worth typing.
+  ignore "lib/pro_tacts/admin"
   signature "sig"
 
   library "digest", "fileutils", "logger", "pathname", "strscan"
