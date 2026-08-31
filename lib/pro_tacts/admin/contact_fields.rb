@@ -18,12 +18,18 @@ module ProTacts
 
       attr_reader :name, :phones, :emails, :addresses, :birthday, :notes
 
+      # Lets VCard::ParseError raise rather than showing an empty card:
+      # a stored card that fails to parse here is not the ordinary case
+      # #format_birthday's rescue handles (a well-shaped but nonsense
+      # value that round-trips on purpose) — every PUT already checks
+      # VCard.card? before the store accepts a card, so one reaching
+      # this unparseable is a bug or a corrupt row, and Sentry (already
+      # wired into every request, see ProTacts::Web) is where that
+      # should surface, not a silently blank screen.
       #: (Contact contact) -> ContactFields
       def self.from(contact)
         properties = VCard::Parser.parse(contact.vcard)
         new(properties)
-      rescue VCard::ParseError
-        new([])
       end
 
       #: (Array[VCard::Property] properties) -> void

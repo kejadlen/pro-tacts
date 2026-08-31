@@ -85,6 +85,16 @@ not a fixture; edit a `.vcf` to change what the replay serves.
 - Anything added to a request body must be assumed to reach Sentry. Card
   content is redacted by `ProTacts::SentryScrubber`; a new kind of sensitive
   field would need its own rule there.
+- Don't hide errors. A `rescue` that swallows an exception and returns a
+  fallback value reads as defensive but is actually the opposite: it turns
+  a bug or corrupt data into a silently wrong screen instead of a loud one.
+  Every request already runs under `Sentry::Rack::CaptureExceptions`, so an
+  unexpected failure that's allowed to raise is reported and visible —
+  rescuing it locally "to be safe" makes it neither. Rescue only what's an
+  ordinary, anticipated case with a real fallback to show (e.g. a birthday
+  whose stored value is well-shaped but calendar-nonsense — see
+  `ContactFields#format_birthday`), never "this might fail, better catch
+  it."
 - `config.ru` must stay ASCII-only; a test enforces it, because boot crashes
   under a C locale otherwise. Watch for em dashes in comments.
 - `RUBYOPT=--enable-frozen-string-literal` is set in `.ramekin/config.kdl`.

@@ -57,13 +57,13 @@ class ContactFieldsTest < Minitest::Test
     assert_nil fields.notes
   end
 
-  # Fail open, the same contract Store#rebuild_index has: a card the
-  # parser cannot read still shows something rather than raising.
-  def test_a_card_that_will_not_parse_shows_no_fields
-    fields = fields("not a vCard at all")
-
-    assert_nil fields.name
-    assert_empty fields.phones
+  # Unlike Store#rebuild_index, which fails a card open because a
+  # write already guarantees every stored card parses (VCard.card? is
+  # checked before a PUT is accepted) — a card that reaches here and
+  # still won't parse is a bug or a corrupt row, not the ordinary case,
+  # and it should raise into Sentry rather than render a blank card.
+  def test_a_card_that_will_not_parse_raises
+    assert_raises(ProTacts::VCard::ParseError) { fields("not a vCard at all") }
   end
 
   # RFC 2426 section 3.1.5 lets BDAY carry a date-time, and a client is
