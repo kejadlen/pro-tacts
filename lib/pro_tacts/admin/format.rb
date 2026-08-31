@@ -4,9 +4,13 @@ module ProTacts
   module Admin
     # Small display helpers shared by the admin views.
     module Format
+      # The first letter of a name with nothing more structured to go
+      # on — an id, or a display name with no N property behind it
+      # (see ContactFields#initials_from). One letter rather than a
+      # guess at where a first/last split would fall in free text.
       #: (String name) -> String
       def self.initials(name)
-        name.to_s.split(/\s+/).reject(&:empty?).first(2).map { it[0].upcase }.join
+        name.to_s.strip[0].to_s.upcase
       end
 
       # A card's updated_at, UTC ISO 8601 to the millisecond (see

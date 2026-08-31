@@ -3,10 +3,10 @@ require_relative "../../test_helper"
 require "pro_tacts/admin/format"
 
 class FormatTest < Minitest::Test
-  def test_initials_takes_the_first_letter_of_up_to_two_words
-    assert_equal "AL", ProTacts::Admin::Format.initials("Ada Lovelace")
+  def test_initials_is_the_first_letter_of_the_name
+    assert_equal "A", ProTacts::Admin::Format.initials("Ada Lovelace")
     assert_equal "A", ProTacts::Admin::Format.initials("Ada")
-    assert_equal "RE", ProTacts::Admin::Format.initials("Riverside Elementary Front Office")
+    assert_equal "R", ProTacts::Admin::Format.initials("Riverside Elementary Front Office")
   end
 
   def test_initials_of_a_blank_name_is_blank

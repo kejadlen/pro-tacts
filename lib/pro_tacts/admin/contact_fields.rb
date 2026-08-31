@@ -51,10 +51,10 @@ module ProTacts
       # RFC 2426 section 3.1.2: N is Family;Given;Additional;Prefixes;
       # Suffixes. A given and family name are structured data — reading
       # them is the real answer to "what are this contact's initials,"
-      # not guessing at word boundaries in the free-text FN the way
-      # Format.initials does. That guess is kept only as the fallback
-      # for a card with no N at all (an organization's own address-book
-      # entry, say, which has a name but no person to split in two).
+      # rather than guessing at where a first/last split falls in the
+      # free-text FN. A card with no N at all (an organization's own
+      # address-book entry, say, with a name but no person to split in
+      # two) falls back to Format.initials' single first letter.
       #: (VCard::Property? property) -> String?
       def initials_from(property)
         return nil if property.nil?

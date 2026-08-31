@@ -25,11 +25,11 @@ class ContactFieldsTest < Minitest::Test
   end
 
   # A card with no N at all — an organization's own entry, say — falls
-  # back to Format.initials' word-splitting guess on FN.
+  # back to Format.initials' single first letter of FN.
   def test_initials_fall_back_to_the_display_name_with_no_n_property
     no_n = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Riverside Elementary\r\nUID:office\r\nEND:VCARD\r\n"
 
-    assert_equal "RE", fields(no_n).initials
+    assert_equal "R", fields(no_n).initials
   end
 
   # N with only one of given/family present (a mononym, or a card that
