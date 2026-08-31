@@ -120,6 +120,19 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # No properties at all means no grid, not an empty one — an empty
+  # <dl> would still eat the gap card-body puts before it, leaving the
+  # name pinned near the top of the card instead of centered in it.
+  def test_show_of_a_bare_contact_renders_no_grid
+    bare = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Bare Contact\r\nUID:bare\r\nEND:VCARD\r\n"
+
+    with_contacts({"bare" => bare}) do
+      get "/contacts/bare"
+
+      refute_includes last_response.body, "detail-grid"
+    end
+  end
+
   def test_show_of_an_unknown_contact_is_404
     with_contacts({}) { get "/contacts/nope" }
 

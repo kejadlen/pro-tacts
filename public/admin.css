@@ -24,6 +24,34 @@
   gap: var(--gl-space-m);
 }
 
+/* field.css's `form { max-width: 28rem; }` is sized for the
+   settings-form pattern; the search box is a single input that should
+   span the same width as the list below it. */
+.search-form {
+  max-width: none;
+}
+
+/* base/typography.css's `li + li { margin-top: var(--gl-space-3xs); }`
+   is a prose-list rule (Markdown bullet lists) that also matches
+   Card's row list, adding a stray gap below every row but the last. */
+.card > li {
+  margin: 0;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-s);
+}
+/* Breathing room before the property grid — but only when there's a
+   grid to make room for. A contact with no properties renders no
+   .detail-grid at all (see ContactsShow#has_data?), and this rule
+   staying silent then is what keeps its name centered in the card
+   rather than pinned to the top with dead space below it. */
+.detail-header:has(+ .detail-grid) {
+  margin-bottom: var(--gl-space-m);
+}
+
 /* The detail card's load-bearing rule: type in one column, value in
    the other, every row aligned to the same grid regardless of what
    kind of attribute it is. See docs/DESIGN.md, "Alignment is the

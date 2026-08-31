@@ -26,7 +26,7 @@ module ProTacts
       def view_template
         render Layout.new(title: "Contacts") do
           h1(class: "type-h1") { "Contacts" }
-          form(action: "/", method: "get") do
+          form(action: "/", method: "get", class: "search-form") do
             input(type: "search", name: "q", value: @query, placeholder: "Search contacts", autofocus: @query.empty?)
           end
           span(class: "type-label") { @query.empty? ? "recently updated" : "results" }

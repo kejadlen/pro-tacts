@@ -28,17 +28,27 @@ module ProTacts
           a(href: "/", class: "type-label") { "‹ contacts" }
           div(class: "card") do
             div(class: "card-body") do
-              div(style: "display: flex; align-items: center; gap: var(--gl-space-s);") do
+              div(class: "detail-header") do
                 span(class: "avatar", data_size: "lg") { Format.initials(@fields.name || @contact.id) }
                 h1(class: "type-h2", style: "margin: 0;") { @fields.name || @contact.id }
               end
-              dl(class: "detail-grid") { rows }
+              # Only rendered when there's something to show: an empty
+              # <dl> would still take up the gap card-body puts between
+              # its children, leaving the header off-center in a card
+              # with nothing else in it.
+              dl(class: "detail-grid") { rows } if has_data?
             end
           end
         end
       end
 
       private
+
+      #: () -> bool
+      def has_data?
+        @fields.phones.any? || @fields.emails.any? || @fields.addresses.any? ||
+          !@fields.birthday.nil? || !@fields.notes.nil?
+      end
 
       def rows
         @fields.phones.each { |phone| row(phone.type, phone.value) }
