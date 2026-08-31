@@ -74,10 +74,10 @@ class ContactFieldsTest < Minitest::Test
     assert_equal "December 10, 1985", fields(with_time).birthday
   end
 
-  # ISO 8601's reduced-precision form for "no year on file", not RFC
-  # 2426 itself — see the comment on ContactFields::NO_YEAR_DATE.
+  # Apple's 1604-sentinel spelling for "no year on file" (see
+  # ProTacts::Birthday), the shape a served card actually carries.
   def test_a_birthday_with_no_year_omits_one
-    no_year = CARD.sub("BDAY:1985-12-10", "BDAY:--12-10")
+    no_year = CARD.sub("BDAY:1985-12-10", "BDAY;X-APPLE-OMIT-YEAR=1604:1604-12-10")
 
     assert_equal "December 10", fields(no_year).birthday
   end

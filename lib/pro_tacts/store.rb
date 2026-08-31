@@ -127,8 +127,12 @@ module ProTacts
     # by id.
     #: () -> Array[RecentContact]
     def contacts_by_recency
+      birthdays = birthdays_by_id
       cards.order(Sequel.desc(:updated_at)).map {
-        RecentContact.new(contact: contact_from(it), updated_at: it.fetch(:updated_at).to_s)
+        RecentContact.new(
+          contact: contact_from(it, birthdays[it.fetch(:id).to_s]),
+          updated_at: it.fetch(:updated_at).to_s,
+        )
       }
     end
 

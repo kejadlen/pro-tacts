@@ -1,5 +1,6 @@
 require "date"
 
+require "pro_tacts/birthday"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
@@ -14,16 +15,6 @@ module ProTacts
       Phone = Data.define(:value, :type)
       Email = Data.define(:value, :type)
       Address = Data.define(:lines, :type)
-
-      # RFC 2426 section 3.1.5 defines BDAY as a date or a date-time; the
-      # reduced-precision "--MM-DD" form (ISO 8601, not RFC 2426 itself)
-      # is how a year gets omitted. Matched explicitly rather than
-      # handed to Date.iso8601, which parses "--12-10" by silently
-      # filling in the current year — exactly the wrong answer for a
-      # birthday that deliberately has none. See the open question on
-      # year omission in docs/plans/2026-08-24-vcard-storage-and-groups.md.
-      FULL_DATE = /\A(\d{4})-(\d{2})-(\d{2})/
-      NO_YEAR_DATE = /\A--(\d{2})-(\d{2})/
 
       attr_reader :name, :phones, :emails, :addresses, :birthday, :notes
 
@@ -42,7 +33,7 @@ module ProTacts
         @phones = by_name.fetch("TEL", []).map { |p| Phone.new(value: VCard.unescape(p.value), type: type_of(p)) }
         @emails = by_name.fetch("EMAIL", []).map { |p| Email.new(value: VCard.unescape(p.value), type: type_of(p)) }
         @addresses = by_name.fetch("ADR", []).map { |p| address_from(p) }
-        @birthday = format_birthday(by_name.fetch("BDAY", []).first&.value)
+        @birthday = format_birthday(by_name.fetch("BDAY", []).first)
         note = by_name.fetch("NOTE", []).first&.value
         @notes = note && VCard.unescape(note)
       end
@@ -72,21 +63,25 @@ module ProTacts
         Address.new(lines:, type: type_of(property))
       end
 
-      # A value this cannot recognize is shown as stored rather than
-      # dropped or guessed at.
-      #: (String? value) -> String?
-      def format_birthday(value)
-        return nil if value.nil? || value.empty?
+      # Reuses ProTacts::Birthday, which knows the two BDAY spellings a
+      # served card actually carries (see lib/pro_tacts/birthday.rb): a
+      # plain full date, and Apple's 1604-sentinel no-year form. A BDAY
+      # in any other shape is one the app's model doesn't recompose —
+      # kept in the card verbatim on write — so it's shown as stored.
+      #: (VCard::Property? property) -> String?
+      def format_birthday(property)
+        return nil if property.nil?
 
-        if (m = value.match(FULL_DATE))
-          Date.new(m[1].to_i, m[2].to_i, m[3].to_i).strftime("%B %-d, %Y")
-        elsif (m = value.match(NO_YEAR_DATE))
-          Date.new(2000, m[1].to_i, m[2].to_i).strftime("%B %-d")
+        birthday = Birthday.from_property(property)
+        return property.value if birthday.nil?
+
+        if birthday.year
+          Date.new(birthday.year, birthday.month, birthday.day).strftime("%B %-d, %Y")
         else
-          value
+          Date.new(2000, birthday.month, birthday.day).strftime("%B %-d")
         end
       rescue ArgumentError
-        value
+        property.value
       end
     end
   end
