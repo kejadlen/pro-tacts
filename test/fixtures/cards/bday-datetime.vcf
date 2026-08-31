@@ -1,0 +1,7 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Birthday;Date-Time;;;
+FN:Date-Time Birthday
+BDAY:1985-04-12T23:10:00Z
+UID:bday-datetime
+END:VCARD

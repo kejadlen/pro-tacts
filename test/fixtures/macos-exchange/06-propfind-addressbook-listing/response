@@ -23,6 +23,78 @@ Content-Type: text/xml
   </d:propstat>
 </d:response>
 <d:response>
+  <d:href>/dav/addressbook/bday-basic-noyear.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"98dbb3374e96a83578e334e9d8c5455721576795724e90f621d11a6b4662bc27"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-complete.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"a4e6b4c955cfcebf3431ab4ab547c64a6bf1983ceba7953a77074ec64c1d6fbd"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-datetime.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"348c560bf1811fc48380fac606cf7198333ae0746c4f5ba8cec7269474b13162"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-day-only.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"f5c9defba63b13fe74e2ad78270bf609957db631ff701aa9920fcd8aa5d8f28c"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-extended-noyear.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"433c9c285186c3a1cee60452295512a7f8e326e7b70c4670c399b235f9300a62"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-omit-year.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"55f079c8ad3ab5fce768ce51eecc2447ab3be4d24dbf84967a2360b780b58f9d"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-year-month.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"48a1e4a752c132571a33aec08edafe49d2b3b64a4b9658a7a41cac30e8bd7866"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-year-only.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"cc4ef0c4a6d004412a4b7f11dd05d66414204d822c9de0453eaafe164378b53e"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
   <d:href>/dav/addressbook/oqmvpzooywwmtwwx.vcf</d:href>
   <d:propstat>
     <d:prop>

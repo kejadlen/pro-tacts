@@ -1,0 +1,7 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Birthday;Year Only;;;
+FN:Year Only Birthday
+BDAY:1985
+UID:bday-year-only
+END:VCARD
