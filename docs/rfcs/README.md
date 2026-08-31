@@ -18,6 +18,7 @@ handler that implements each one, and `lib/pro_tacts/vcard.rb` cites RFC
 | [3253](rfc3253.txt) | Versioning Extensions to WebDAV (DeltaV) | `supported-report-set` only; no versioning is implemented |
 | [3744](rfc3744.txt) | WebDAV Access Control Protocol | `current-user-privilege-set` and the privilege names in it; no ACL is implemented |
 | [2426](rfc2426.txt) | vCard 3.0 | The card format itself; the version Apple clients speak |
+| [2425](rfc2425.txt) | A MIME Content-Type for Directory Information | The value types RFC 2426 defers to rather than define, `date` among them |
 | [6350](rfc6350.txt) | vCard 4.0 | Nothing here implements it; kept for comparison |
 
 One property the server sends has no RFC. `getctag` is an Apple
