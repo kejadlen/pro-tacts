@@ -28,6 +28,10 @@ module Sequel
   # DSL has no spelling for.
   def self.lit: (String sql) -> untyped
 
+  # A column in descending order, for Dataset#order — the ordering the
+  # "recently updated" reads sort by.
+  def self.desc: (Symbol name) -> untyped
+
   class Database
     def []: (Symbol table) -> Dataset
 

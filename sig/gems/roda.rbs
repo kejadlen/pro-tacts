@@ -30,10 +30,20 @@ class Roda
     def options: (*untyped matchers) ?{ (*untyped) -> untyped } -> void
     def put: (*untyped matchers) ?{ (*untyped) -> untyped } -> void
 
+    # The :public plugin's file server: answers a GET that names a file
+    # under PUBLIC_ROOT from there, and falls through to the routes
+    # below when it does not.
+    def public: () -> void
+
     # The media type of the request body, without parameters — inherited
     # from Rack::Request in the gem, restated here because the local
     # RodaRequest does not.
     def media_type: () -> String?
+
+    # The request's query and form parameters, inherited from
+    # Rack::Request in the gem and restated here for the same reason as
+    # #media_type. Values stay untyped: repeated keys arrive as arrays.
+    def params: () -> Hash[String, untyped]
 
     # Halts the request, so nothing after it in a route block runs.
     def redirect: (String path, ?Integer status) -> bot

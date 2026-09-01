@@ -13,7 +13,12 @@ target :lib do
   # written stand-ins under sig/gems. Ignored rather than stubbed for
   # now; add sig/gems/phlex.rbs and drop this once the admin surface is
   # worth typing.
-  ignore "lib/pro_tacts/admin"
+  #
+  # inline: true is load-bearing: `ignore` keeps separate lists for
+  # plain and inline sources, and these files were enrolled by
+  # `check ... inline: true`. A bare `ignore` feeds the other list and
+  # the files stay checked.
+  ignore "lib/pro_tacts/admin", inline: true
   signature "sig"
 
   library "digest", "fileutils", "logger", "pathname", "strscan"
