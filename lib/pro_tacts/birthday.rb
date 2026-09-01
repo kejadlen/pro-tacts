@@ -18,9 +18,10 @@ module ProTacts
   # with all three components required, and RFC 2426 section 3.1.5 builds
   # BDAY on it. So a birthday is database state that no stored card
   # carries, composed into the served card on read and subtracted out of
-  # a submitted one on write — Store owns that surgery, over the line
-  # rules VCard provides and the property-level reading below; the full
-  # reasoning is docs/plans/2026-08-31-partial-birthdays.md.
+  # a submitted one on write — Store owns that surgery, over the card
+  # VCard reads and the property-level reading below; the full reasoning
+  # is docs/plans/2026-08-31-partial-birthdays.md and
+  # docs/plans/2026-09-01-birthdays-across-a-rewrite.md.
   #
   # The signature lives in sig/pro_tacts/birthday.rbs: a Data class has
   # no constant super class for the inline syntax to read.
@@ -41,6 +42,30 @@ module ProTacts
     # the Gregorian calendar; the parameter names the year to omit.
     OMIT_YEAR_DATE = /\A1604-(\d{2})-(\d{2})\z/ #: Regexp
     OMIT_YEAR = "1604" #: String
+
+    # The BDAY values no client renders, spelled whole: the four
+    # partial shapes #to_line has no form for, dashed as RFC 6350
+    # section 4.3.1's examples spell them, components in range, each
+    # pattern anchored alone so no edit to one can loosen another's.
+    # A value off the list is not carried across a rewrite, by the
+    # same probe: the served shapes in any spelling were visible, so
+    # their absence is a deletion, and an unrecognized or out-of-range
+    # value is cleaner dying with the rewrite than living forever
+    # (docs/macos-contacts.md, "A birthday the client cannot render is
+    # dropped from the card").
+    UNRENDERED_VALUES = [
+      /\A\d{4}-(?:0[1-9]|1[0-2])\z/,       # year and month
+      /\A\d{4}\z/,                         # year alone
+      /\A--(?:0[1-9]|1[0-2])\z/,           # month alone
+      /\A---(?:0[1-9]|[12]\d|3[01])\z/,    # day alone
+    ] #: Array[Regexp]
+
+    # The reduced no-year values macOS reads on a card it did not write
+    # and converts to the sentinel on its own
+    # (docs/macos-contacts.md, "Birthdays without a year"). Together
+    # with #from_property's two spellings this is the rendered set: a
+    # BDAY a client could see, and so could have deleted.
+    REDUCED_DATE = /\A--(?:0[1-9]|1[0-2])-?(?:0[1-9]|[12]\d|3[01])\z/ #: Regexp
 
     # The only constructor, so no birthday exists in a shape the grammar
     # rejects: one `in` clause per shape RFC 6350 section 4.3.1 admits,
@@ -73,6 +98,8 @@ module ProTacts
     # full date, and Apple's 1604 sentinel for a month and day. The other
     # four shapes have no verified spelling and reach no client — this
     # returns nil for them and no card grows a BDAY on their behalf.
+    # UNRENDERED_VALUES is exactly those four shapes' spellings, so
+    # widening this means narrowing that.
     def to_line
       if year && month && day
         format("BDAY:%04d-%02d-%02d", year, month, day)
@@ -118,6 +145,27 @@ module ProTacts
 
       name, value = property.parameters.fetch(0)
       name.casecmp?("X-APPLE-OMIT-YEAR") && value == OMIT_YEAR
+    end
+
+    # Whether a BDAY value is one no client renders — the spellings a
+    # rewrite carries across, so the birthday survives a client that
+    # drops what it cannot display. A predicate rather than a reader:
+    # nothing downstream wants the shape as a model, and a whitelist
+    # cannot raise on what it does not recognize.
+    def self.unrendered_value?(value)
+      UNRENDERED_VALUES.any? { value.match?(it) }
+    end
+
+    # Whether a client renders this BDAY property as a birthday: one of
+    # the two spellings #to_line emits (#from_property reads exactly
+    # those), or a reduced no-year value macOS additionally reads. A
+    # client that renders a BDAY can have deleted it, so its absence
+    # from a rewrite is a removal; a property that is neither rendered
+    # nor carried is neither, and the rewrite that drops it reports
+    # the loss — Store#put, to Sentry.
+    def self.rendered?(property)
+      !from_property(property).nil? ||
+        (property.group.nil? && property.parameters.empty? && property.value.match?(REDUCED_DATE))
     end
   end
 end

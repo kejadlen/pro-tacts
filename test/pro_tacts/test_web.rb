@@ -328,6 +328,27 @@ class WebTest < Minitest::Test
     end
   end
 
+  # The same omission for the rewrite that carries a birthday across:
+  # the stored card is the submission plus the BDAY line macOS dropped,
+  # so the answer cannot claim the tag — the client refetches, and the
+  # refetch is what shows the birthday survived its edit.
+  def test_a_put_that_carries_a_birthday_back_goes_without_the_strong_etag
+    unrendered = card("new", "New").sub("END:VCARD\r\n", "BDAY:1985-04\r\nEND:VCARD\r\n")
+
+    with_contacts({}) do
+      put_request "new", unrendered, "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
+
+      edited = card("new", "New Smith")
+      put_request "new", edited, "CONTENT_TYPE" => VCARD
+
+      assert_equal 204, last_response.status
+      assert_nil last_response["ETag"]
+
+      get "/dav/addressbook/new.vcf"
+      assert_includes last_response.body, "BDAY:1985-04\r\nEND:VCARD"
+    end
+  end
+
   # The preconditions of RFC 6352 section 6.3.2.1, marshalled as 412s
   # in the DAV:error form RFC 4918 section 16 defines.
   def test_put_of_a_non_vcard_media_type_names_its_precondition

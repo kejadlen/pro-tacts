@@ -15,6 +15,23 @@ class StoreTest < Minitest::Test
 
   # A store on disk rather than in memory: WAL, the busy timeout, and
   # reopening a database are all part of what is under test.
+  # minitest 6 ships no mock, so the Sentry capture is stubbed by hand:
+  # the bound original is swapped back in an ensure, so one assertion
+  # cannot leak into the next. Sentry is never initialized under test,
+  # so the original is inert anyway — this only makes it observable.
+  # Returns what was captured.
+  def capturing_sentry
+    messages = []
+    original = Sentry.method(:capture_message)
+    Sentry.define_singleton_method(:capture_message) { |message, **| messages << message }
+    begin
+      yield messages
+    ensure
+      Sentry.define_singleton_method(:capture_message, original)
+    end
+    messages
+  end
+
   def with_store(cards = {})
     Dir.mktmpdir do |dir|
       ProTacts::Store.connect(Pathname.new(dir) / "contacts.db") do |store|
@@ -522,6 +539,110 @@ class StoreTest < Minitest::Test
 
         assert_equal unmodeled, store.contact("aiden").vcard, bday
         assert_nil birthday_row(store, "aiden"), bday
+      end
+    end
+  end
+
+  # The card's half of the same rule. A BDAY in a shape no client
+  # renders lives in the card — the model has no spelling for it — and
+  # macOS Contacts drops those lines from every card it writes, so a
+  # rewrite that omits the BDAY carries them across or loses them
+  # (docs/macos-contacts.md, "A birthday the client cannot render is
+  # dropped from the card").
+  def test_a_birthday_no_client_renders_survives_a_rewrite_that_drops_it
+    ["BDAY:1985-04", "BDAY:1985", "BDAY:--04", "BDAY:---12"].each do |line|
+      with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")}) do |store|
+        edited = AIDEN.sub("FN:Aiden", "FN:Aiden Smith")
+
+        store.put("aiden", edited)
+
+        assert_equal edited.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"), store.contact("aiden").vcard, line
+        assert_nil birthday_row(store, "aiden"), line
+      end
+    end
+  end
+
+  # The divider is the shape, not the spelling: macOS renders --0412,
+  # so a rewrite without it has removed a birthday the client could
+  # see, and the deletion is honored. Honoring it is what keeps these
+  # deletable at all.
+  def test_a_birthday_a_client_renders_is_deleted_by_a_rewrite_without_it
+    with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n")}) do |store|
+      store.put("aiden", AIDEN)
+
+      assert_equal AIDEN, store.contact("aiden").vcard
+      assert_nil birthday_row(store, "aiden")
+    end
+  end
+
+  # A submission carrying any BDAY replaces what was there, carried
+  # line included: PUT is a whole-card replace, not a merge.
+  def test_a_submitted_birthday_replaces_the_carried_line
+    with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04\r\nEND:VCARD\r\n")}) do |store|
+      born = AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n")
+
+      store.put("aiden", born)
+
+      assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), birthday_row(store, "aiden")
+      assert_equal born, store.contact("aiden").vcard
+    end
+  end
+
+  # The loss report, the rewrite's half of the arrival one: a stored
+  # BDAY no client renders and no whitelist recognizes is about to be
+  # dropped, and nobody would know.
+  def test_a_rewrite_dropping_an_unrecognized_bday_is_reported
+    with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY:1985-13\r\nEND:VCARD\r\n")}) do |store|
+      messages = capturing_sentry {
+        store.put("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
+      }
+
+      assert_equal 1, messages.length
+      assert_match /BDAY/, messages.fetch(0)
+    end
+  end
+
+  # A rewrite's quiet cases: a carried line survives (asserted above),
+  # a rendered one was deleted by a user who could see it, and a card
+  # with no BDAY at all has nothing to say.
+  def test_a_rewrite_over_known_bdays_stays_quiet
+    ["BDAY:--0412", "BDAY:1985-04"].each do |line|
+      with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")}) do |store|
+        messages = capturing_sentry {
+          store.put("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
+        }
+
+        assert_empty messages, line
+      end
+    end
+  end
+
+  # The arrival report: a submitted BDAY this server can neither model,
+  # recognize as rendered, nor recognize as carried is unexpected input,
+  # and storing it verbatim would be the last anyone heard of it.
+  # Known forms — the modeled spellings, the reduced values macOS
+  # reads, the carried shapes — stay quiet.
+  def test_an_unrecognized_bday_arriving_is_reported
+    ["BDAY:1985-13", "BDAY:--0432", "BDAY:19850412", "BDAY:1985-4"].each do |line|
+      with_store({}) do |store|
+        messages = capturing_sentry {
+          store.put("aiden", AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"))
+        }
+
+        assert_equal 1, messages.length, line
+      end
+    end
+  end
+
+  def test_a_bday_the_server_knows_arrives_quietly
+    ["BDAY:1985-04-12", "BDAY:1985-04-12T23:10:00Z", "BDAY;X-APPLE-OMIT-YEAR=1604:1604-04-12",
+      "BDAY:--0412", "BDAY:--04-12", "BDAY:1985-04", "BDAY:1985"].each do |line|
+      with_store({}) do |store|
+        messages = capturing_sentry {
+          store.put("aiden", AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"))
+        }
+
+        assert_empty messages, line
       end
     end
   end

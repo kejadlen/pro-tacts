@@ -21,7 +21,7 @@ class BirthdayTest < Minitest::Test
     error = assert_raises(ArgumentError) { ProTacts::Birthday.new(year: 1985, day: 12) }
     assert_match "not a shape", error.message
 
-    assert_raises(ArgumentError) { ProTacts::Birthday.new() }
+    assert_raises(ArgumentError) { ProTacts::Birthday.new }
   end
 
   def test_components_out_of_range_are_refused
@@ -98,7 +98,8 @@ class BirthdayTest < Minitest::Test
   end
 
   # A component out of range is unmodeled, not exceptional: from_property
-  # reads nil and the line stays wherever it was.
+  # reads nil and the line stays wherever it was. Store reports the value
+  # as unrecognized, so the swallow is not silent.
   def test_an_out_of_range_date_reads_as_nil
     assert_nil ProTacts::Birthday.from_property(property("1985-13-40"))
   end
@@ -113,6 +114,49 @@ class BirthdayTest < Minitest::Test
       property("1604-04-12", parameters: [["X-APPLE-OMIT-YEAR", "1604"], ["X-OTHER", "1"]]),
       property("1985-04-12", group: "item1")].each do |unmodeled|
       assert_nil ProTacts::Birthday.from_property(unmodeled), unmodeled.value
+    end
+  end
+
+  ## the values no client renders
+
+  def test_unrendered_value_accepts_the_four_shapes_spellings
+    ["1985-04", "1985", "--04", "---12"].each do |value|
+      assert ProTacts::Birthday.unrendered_value?(value), value
+    end
+  end
+
+  # The rendered set matches none of the four, and a value the grammar
+  # will not read matches nothing. The padded pair pins the anchors —
+  # each pattern is anchored alone, so no spelling matches inside a
+  # longer or padded value.
+  def test_unrendered_value_refuses_everything_else
+    ["1985-04-12", "--0412", "--04-12", "19850412", "1985-4", "1985-13", "--00", "", "x1985", "1985-04\n"].each do |value|
+      refute ProTacts::Birthday.unrendered_value?(value), value
+    end
+  end
+
+  ## the values a client renders
+
+  # from_property's two spellings, the reduced no-year values macOS
+  # additionally reads, and their case: a client that renders a BDAY
+  # can have deleted it, so its absence from a rewrite is a removal.
+  def test_rendered_reads_the_spellings_clients_show
+    [property("1985-04-12"), property("1985-04-12T23:10:00Z"),
+      property("1604-04-12", parameters: [["X-APPLE-OMIT-YEAR", "1604"]]),
+      property("--0412"), property("--04-12")].each do |rendered|
+      assert ProTacts::Birthday.rendered?(rendered), rendered.value
+    end
+  end
+
+  # What no client renders — the carried shapes, the out-of-range, the
+  # unrecognizable — is not rendered, and a rewrite dropping it is
+  # something Store reports rather than a deletion it honors.
+  def test_rendered_refuses_what_no_client_shows
+    [property("1985-04"), property("1985"), property("--04"), property("---12"),
+      property("1985-13"), property("--0432"), property("19850412"),
+      property("banana"),
+      property("--0412", group: "item1")].each do |unrendered|
+      refute ProTacts::Birthday.rendered?(unrendered), unrendered.value
     end
   end
 end

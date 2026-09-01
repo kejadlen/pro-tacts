@@ -6,6 +6,8 @@ module ProTacts
     FULL_DATE: Regexp
     OMIT_YEAR_DATE: Regexp
     OMIT_YEAR: String
+    UNRENDERED_VALUES: Array[Regexp]
+    REDUCED_DATE: Regexp
 
     attr_reader year: Integer?
     attr_reader month: Integer?
@@ -20,5 +22,9 @@ module ProTacts
     def self.from_property: (VCard::Property property) -> Birthday?
 
     def self.apple_no_year?: (VCard::Property property) -> bool
+
+    def self.unrendered_value?: (String value) -> bool
+
+    def self.rendered?: (VCard::Property property) -> bool
   end
 end

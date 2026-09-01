@@ -1,10 +1,11 @@
-
 require "digest"
 require "pathname"
 require "sequel"
+require "sentry-ruby"
 
 require "pro_tacts/birthday"
 require "pro_tacts/contact"
+require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
 Sequel.extension :migration
@@ -188,23 +189,18 @@ module ProTacts
     #
     # What is stored is the card minus its birthday, which moves into
     # the birthdays table — vCard 3.0 cannot carry a partial date, so
-    # the card never carries BDAY and every read composes it back in
-    # (docs/plans/2026-08-31-partial-birthdays.md). The Contact this
-    # returns is the composed one, and the logged etag is its hash, so
-    # a client's token describes the card it downloads. A submitted
-    # BDAY in a spelling the model does not recompose stays in the
-    # card byte for byte and empties the model, keeping RFC 6352
-    # section 6.3.2.2's promise; a submitted card with no BDAY at all
-    # deletes the birthday only when the model held a shape a client
-    # could have seen, because one it never served is not something
-    # the client could have removed.
+    # no stored card carries the model's BDAY and every read composes
+    # it back in (docs/plans/2026-08-31-partial-birthdays.md). The
+    # Contact this returns is the composed one, and the logged etag is
+    # its hash, so a client's token describes the card it downloads.
     #
     # The strings are UTF-8 by contract, and the adapter holds the store
     # to it: the sqlite3 gem encodes every bound value to UTF-8, so a
     # binary-flagged byte above 7 bits raises at the bind, and bytes
     # that are not UTF-8 at all stop at the insert, which SQLite refuses
     # to store as text. The body — the one binary input — is relabelled
-    # where it is read, in write_card.
+    # where it is read, in write_card, and refused at the card itself
+    # before that: VCard raises on bytes that are not text.
     #: (String id, String vcard) -> Contact
     def put(id, vcard)
       # The birthday half of the split a write makes, one arm per shape
@@ -214,21 +210,34 @@ module ProTacts
       # line that will not parse, more than one — is data the model
       # cannot recompose and stays in the card byte for byte, with the
       # model emptied so nothing composes a second BDAY beside it
-      # (RFC 6352 section 6.3.2.2). No BDAY at all is nothing to split:
-      # the birthday to carry is whatever an unseen model row already
-      # holds, and a served one was the user's deletion. Bytes that are
-      # not UTF-8 raise at the card before any of this runs — a PUT
-      # has already answered them with a 412 by then.
+      # (RFC 6352 section 6.3.2.2). No BDAY at all is a client's
+      # rewrite, and macOS Contacts drops the BDAY lines it cannot
+      # render from every card it writes (docs/macos-contacts.md):
+      # what the stored card held in a spelling no client renders
+      # rides across the rewrite, what it held that a client could
+      # see was the user's deletion, an unseen model row survives as
+      # nothing a client ever saw, and what nobody recognizes is
+      # reported rather than lost in silence.
       existing = birthday_of(id)
       birthday, stored =
         case VCard.new(vcard).partition { it.names?("BDAY") }
         in [[line], others]
+          report_unrecognized_bday_lines([line])
           property = line.property
           birthday = property && Birthday.from_property(property)
           [birthday, birthday ? others.map(&:verbatim).join : vcard]
         in [[], _]
-          [existing && !existing.served? ? existing : nil, vcard]
-        in [_, _]
+          # The rewrite arm: carry the unrendered lines out of the
+          # stored card, report the unrecognized ones' loss, and keep
+          # whatever an unseen model row holds.
+          carried, lost = carried_and_lost_bday_lines(stored_vcard(id))
+          kept = existing && !existing.served? ? existing : nil
+          report_lost_bday_lines(lost)
+          [kept, VCard.new(vcard).insert(carried)]
+        in [lines, _]
+          # More than one BDAY: cardinality-broken data, kept verbatim
+          # and reported like any other unrecognized line.
+          report_unrecognized_bday_lines(lines)
           [nil, vcard]
         end
 
@@ -359,6 +368,64 @@ module ProTacts
     #: () -> void
     def migrate
       Sequel::Migrator.run(@database, MIGRATIONS.to_s)
+    end
+
+    # The card currently stored for an id, or nil for a card being
+    # created. A plain `first` read: the primary key leaves `sole`
+    # nothing to catch, and no row is the ordinary answer.
+    #: (String id) -> String?
+    def stored_vcard(id)
+      row = cards.where(id:).first
+      row && row.fetch(:vcard).to_s
+    end
+
+    # A stored card's BDAY lines in two piles: the verbatim lines a
+    # rewrite carries across — values no client renders — and the ones
+    # it drops unwitnessed, which no client renders and no whitelist
+    # recognizes. Lines a client rendered are in neither pile: their
+    # absence is a deletion the rewrite already honors.
+    #: (String? vcard) -> [Array[String], Array[VCard::Line]]
+    def carried_and_lost_bday_lines(vcard)
+      return [[], []] if vcard.nil?
+
+      bdays, = VCard.new(vcard).partition { it.names?("BDAY") }
+      carried, rest = bdays.partition { |line|
+        line.property && Birthday.unrendered_value?(line.property.value)
+      }
+      lost = rest.reject { |line| line.property && Birthday.rendered?(line.property) }
+      [carried.map(&:verbatim), lost]
+    end
+
+    # The arrival report: a BDAY line this server can neither model,
+    # recognize as rendered, nor recognize as carried is unexpected
+    # input, and storing it verbatim would be the last anyone heard of
+    # it. The message carries no card content
+    # (ProTacts::SentryScrubber's line); the values stay on the
+    # machine, where the admin view shows them raw.
+    #: (Array[VCard::Line] lines) -> void
+    def report_unrecognized_bday_lines(lines)
+      unrecognized = lines.count { |line|
+        line.property.nil? || (!Birthday.rendered?(line.property) && !Birthday.unrendered_value?(line.property.value))
+      }
+      return if unrecognized.zero?
+
+      Sentry.capture_message(
+        "a submitted card carried #{unrecognized} BDAY line(s) no client renders and no whitelist recognizes",
+        level: :warning,
+      )
+    end
+
+    # The loss report, the rewrite's half of the arrival one: a stored
+    # BDAY no client renders and no whitelist recognizes is about to be
+    # dropped, and nobody would know.
+    #: (Array[VCard::Line] lines) -> void
+    def report_lost_bday_lines(lines)
+      return if lines.empty?
+
+      Sentry.capture_message(
+        "a rewrite dropped #{lines.length} BDAY line(s) no client renders and no whitelist carries",
+        level: :warning,
+      )
     end
 
     # The etag comes back out of the card rather than out of a column, so
