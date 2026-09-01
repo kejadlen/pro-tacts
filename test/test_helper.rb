@@ -36,6 +36,12 @@ unhandled_dir = Pathname.new(Dir.mktmpdir("pro-tacts-unhandled"))
 ENV["PRO_TACTS_UNHANDLED_DIR"] = unhandled_dir.to_s
 Minitest.after_run { FileUtils.rm_rf(unhandled_dir) }
 
+# Debug exchanges, when PRO_TACTS_DEBUG is exported for a test run, get
+# their own log, truncated per run: stderr would bury the test progress
+# under full bodies, and log/debug.log is for real client sessions only.
+ENV["PRO_TACTS_DEBUG_LOG"] ||= "log/test.log"
+File.truncate("log/test.log", 0) if File.exist?("log/test.log")
+
 require_relative "fixture_data"
 require "pro_tacts/web"
 require "minitest/autorun"
