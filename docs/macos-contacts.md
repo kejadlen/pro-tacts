@@ -201,6 +201,36 @@ into a date type loses the distinction and re-renders the no-year case as a
 birthday in 1604, so the parameter has to survive storage rather than be
 interpreted.
 
+A card the server supplies can spell the same month and day the way RFC 6350
+section 4.3.1 does, and Contacts reads both `BDAY:--0412` and
+`BDAY:--04-12` as April 12. Neither spelling survives an edit: the client
+writes the sentinel back in place of whatever it received. Serving a reduced
+form therefore changes what the client displays, never what it stores.
+Contacts also renders the sentinel on a card it did not write, which its own
+round trip could not establish. Verified 2026-09-01.
+
+## A birthday the client cannot render is dropped from the card
+
+Contacts displays two of the six birthday shapes RFC 6350 section 4.3.1
+admits: a full date, and a month with a day. It shows nothing for the rest,
+and the next card it writes no longer carries the property at all:
+
+```
+BDAY:1985-04-12      ->  BDAY:1985-04-12
+BDAY:--0412          ->  BDAY;X-APPLE-OMIT-YEAR=1604:1604-04-12
+BDAY:--04-12         ->  BDAY;X-APPLE-OMIT-YEAR=1604:1604-04-12
+BDAY:1985-04         ->  (dropped)
+BDAY:1985            ->  (dropped)
+BDAY:---12           ->  (dropped)
+```
+
+Editing an unrelated field triggers this; the three losses above came from
+adding a note. The client does not preserve what it cannot display, so a
+server that stores the submitted card as authoritative loses the birthday
+permanently. Only the year and month, year alone, and day alone shapes were
+tested; month alone (`BDAY:--04`) has a seed card but no observation yet.
+Verified 2026-09-01, macOS 26.5.1 (AddressBookCore/2732.600.11).
+
 ## One address book per account
 
 Through at least macOS 10.10, Contacts binds one address book per account
