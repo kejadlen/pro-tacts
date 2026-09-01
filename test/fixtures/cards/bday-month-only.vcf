@@ -1,0 +1,7 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Birthday;Month Only;;;
+FN:Month Only Birthday
+BDAY:--04
+UID:bday-month-only
+END:VCARD

@@ -16,8 +16,8 @@ Content-Type: text/xml
           <d:report><d:sync-collection/></d:report>
         </d:supported-report>
       </d:supported-report-set>
-      <cs:getctag>8d49f12d5a21ce322b92458f141a911457556c0113fa89bbb6d647264744a0d9</cs:getctag>
-      <d:sync-token>http://pro-tacts/sync/8d49f12d5a21ce322b92458f141a911457556c0113fa89bbb6d647264744a0d9</d:sync-token>
+      <cs:getctag>dd8f4d6dc8fa74f0ea9abdc089a0b2a9c1c5a548ee3f2812c3ee7e6abbfbf1cb</cs:getctag>
+      <d:sync-token>http://pro-tacts/sync/dd8f4d6dc8fa74f0ea9abdc089a0b2a9c1c5a548ee3f2812c3ee7e6abbfbf1cb</d:sync-token>
       <d:current-user-privilege-set>
         <d:privilege><d:read/></d:privilege>
         <d:privilege><d:write/></d:privilege>
@@ -88,6 +88,15 @@ Content-Type: text/xml
   <d:propstat>
     <d:prop>
       <d:getetag>"433c9c285186c3a1cee60452295512a7f8e326e7b70c4670c399b235f9300a62"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-month-only.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"9e74786a9f63faee3401fbb02a58da8ee8238d358d9378bc9487c4c3ad3c33a7"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
