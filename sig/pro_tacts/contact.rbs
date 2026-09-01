@@ -1,19 +1,44 @@
-# `class Contact < Data.define(...)` has no constant for a super class,
-# which is what inline RBS needs to read one (RBS docs/data_and_struct.md
-# covers the pattern). The class is marked `@rbs skip` in contact.rb and
-# its signature written out here instead.
+# Contact::Phone, ::Email, and ::Address are Data classes, whose
+# members the inline parser cannot read (see sig/pro_tacts/birthday.rbs
+# for the same limit). Each is marked `@rbs skip` in contact.rb and
+# signed here; Contact itself is a plain class and carries its
+# signature inline.
 module ProTacts
   class Contact
-    ID_FORMAT: Regexp
+    class Phone
+      attr_reader value: String
+      attr_reader type: String?
 
-    attr_reader id: String
-    attr_reader vcard: String
-    attr_reader etag: String
+      def self.new: (value: String, type: String?) -> instance
+    end
 
-    def self.new: (id: String, vcard: String, etag: String) -> instance
+    class Email
+      attr_reader value: String
+      attr_reader type: String?
 
-    def self.for: (id: String, vcard: String) -> Contact
+      def self.new: (value: String, type: String?) -> instance
+    end
 
-    def self.etag_for: (String vcard) -> String
+    class Address
+      attr_reader po_box: String?
+      attr_reader extended: String?
+      attr_reader street: String?
+      attr_reader locality: String?
+      attr_reader region: String?
+      attr_reader postal_code: String?
+      attr_reader country: String?
+      attr_reader type: String?
+
+      def self.new: (
+        po_box: String?,
+        extended: String?,
+        street: String?,
+        locality: String?,
+        region: String?,
+        postal_code: String?,
+        country: String?,
+        type: String?
+      ) -> instance
+    end
   end
 end

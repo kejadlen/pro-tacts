@@ -1,6 +1,5 @@
 require "phlex"
 
-require "pro_tacts/admin/contact_fields"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/layout"
 
@@ -20,17 +19,17 @@ module ProTacts
       #: (Contact contact) -> void
       def initialize(contact:)
         @contact = contact
-        @fields = ContactFields.from(contact)
+        @birthday = Format.birthday(contact)
       end
 
       def view_template
-        render Layout.new(title: @fields.name || @contact.id) do
+        render Layout.new(title: @contact.name || @contact.id) do
           a(href: "/", class: "type-label") { "‹ contacts" }
           div(class: "card") do
             div(class: "card-body") do
               div(class: "detail-header") do
-                span(class: "avatar", data_size: "lg") { @fields.initials || Format.initials(@contact.id) }
-                h1(class: "type-h2", style: "margin: 0;") { @fields.name || @contact.id }
+                span(class: "avatar", data_size: "lg") { Format.initials(@contact) }
+                h1(class: "type-h2", style: "margin: 0;") { @contact.name || @contact.id }
               end
               # Only rendered when there's something to show: an empty
               # <dl> would still take up the gap card-body puts between
@@ -46,22 +45,34 @@ module ProTacts
 
       #: () -> bool
       def has_data?
-        @fields.phones.any? || @fields.emails.any? || @fields.addresses.any? ||
-          !@fields.birthday.nil? || !@fields.notes.nil?
+        @contact.phones.any? || @contact.emails.any? || @contact.addresses.any? ||
+          !@birthday.nil? || !@contact.notes.nil?
       end
 
       def rows
-        @fields.phones.each { |phone| row(phone.type, phone.value) }
-        @fields.emails.each { |email| row(email.type, email.value) }
-        @fields.addresses.each { |address| row(address.type || "address", address.lines) }
-        row("birthday", @fields.birthday) if @fields.birthday
-        row("notes", @fields.notes) if @fields.notes
+        @contact.phones.each { |phone| row(phone.type, phone.value) }
+        @contact.emails.each { |email| row(email.type, email.value) }
+        @contact.addresses.each { |address| row(address.type || "address", address_lines(address)) }
+        row("birthday", @birthday) if @birthday
+        row("notes", @contact.notes) if @contact.notes
       end
 
       #: (String? type, String | Array[String] value) -> void
       def row(type, value)
         dt(class: "type-label") { type }
         dd(class: "type-body-sm") { render_value(value) }
+      end
+
+      # ADR's components as two display lines — street, then everything
+      # after it — the same shape the design's own address rows settled
+      # on. Presentation: the components themselves are Contact's.
+      #: (Contact::Address address) -> Array[String]
+      def address_lines(address)
+        [
+          [address.extended, address.street].reject { |s| s.nil? || s.empty? }.join(" "),
+          [address.locality, address.region, address.postal_code].reject { |s| s.nil? || s.empty? }.join(", "),
+          address.country,
+        ].reject { |s| s.nil? || s.empty? }
       end
 
       #: (String | Array[String] value) -> void

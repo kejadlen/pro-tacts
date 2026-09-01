@@ -7,6 +7,16 @@ require "pro_tacts/contact"
 class ContactTest < Minitest::Test
   CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nEND:VCARD\r\n"
 
+  STRUCTURED = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada Lovelace\r\nN:Lovelace;Ada;;;\r\n" \
+    "TEL;TYPE=mobile:+1-555-0100\r\nTEL;TYPE=work:+1-555-0199\r\n" \
+    "EMAIL;TYPE=home:ada@example.com\r\n" \
+    "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+    "BDAY:1985-12-10\r\nNOTE:Countess\\, mathematician.\r\nUID:ada\r\nEND:VCARD\r\n"
+
+  def contact(vcard)
+    ProTacts::Contact.for(id: "aiden", vcard:)
+  end
+
   def test_the_etag_hashes_the_card
     contact = ProTacts::Contact.for(id: "aiden", vcard: CARD)
 
@@ -41,5 +51,110 @@ class ContactTest < Minitest::Test
     %w[AB12C345-6789-0DEF-1234-567890ABCDEF aiden znorth_2].each do |id|
       assert_equal id, ProTacts::Contact.for(id:, vcard: CARD).id
     end
+  end
+
+  # The parse is lazy so the serving paths never pay it: ctag and the
+  # listings build a contact per row without reading structure, and a
+  # card that will not parse is still served byte for byte.
+  def test_making_a_contact_never_parses_the_card
+    assert_equal "aiden", contact("not a vCard at all").id
+  end
+
+  def test_reads_the_name
+    assert_equal "Ada Lovelace", contact(STRUCTURED).name
+  end
+
+  def test_reads_the_name_components
+    assert_equal ["Lovelace", "Ada", "", "", ""], contact(STRUCTURED).name_components
+  end
+
+  def test_values_come_back_unescaped
+    escaped = STRUCTURED.sub("FN:Ada Lovelace", "FN:Ada\\, Countess of Lovelace")
+
+    assert_equal "Ada, Countess of Lovelace", contact(escaped).name
+  end
+
+  def test_reads_every_phone_with_its_type
+    assert_equal [["+1-555-0100", "mobile"], ["+1-555-0199", "work"]],
+      contact(STRUCTURED).phones.map { [it.value, it.type] }
+  end
+
+  def test_reads_email
+    emails = contact(STRUCTURED).emails
+    assert_equal 1, emails.length
+    assert_equal "ada@example.com", emails.fetch(0).value
+    assert_equal "home", emails.fetch(0).type
+  end
+
+  def test_reads_an_address_as_its_seven_components
+    address = contact(STRUCTURED).addresses.fetch(0)
+    assert_equal "", address.po_box
+    assert_equal "", address.extended
+    assert_equal "12 Analytical Way", address.street
+    assert_equal "London", address.locality
+    assert_equal "England", address.region
+    assert_equal "NW1 1AA", address.postal_code
+    assert_equal "United Kingdom", address.country
+    assert_equal "home", address.type
+  end
+
+  # Components the card's value stopped short of are nil, not empty —
+  # only a delimiter the value actually carried makes an empty one.
+  def test_address_components_beyond_the_value_are_nil
+    short = STRUCTURED.sub(
+      "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
+      "ADR:;;12 Analytical Way",
+    )
+    address = contact(short).addresses.fetch(0)
+
+    assert_nil address.locality
+    assert_nil address.region
+    assert_nil address.postal_code
+    assert_nil address.country
+  end
+
+  def test_the_birthday_is_the_model_the_store_composed
+    assert_equal ProTacts::Birthday.new(year: 1985, month: 12, day: 10), contact(STRUCTURED).birthday
+  end
+
+  # A BDAY in a spelling the model does not recompose stays in the card
+  # verbatim; the accessor reads nil, and showing it as stored is the
+  # substrate's job (Format.birthday).
+  def test_an_unmodeled_birthday_spelling_reads_nil
+    unmodeled = STRUCTURED.sub("BDAY:1985-12-10", "BDAY:not-a-date")
+
+    assert_nil contact(unmodeled).birthday
+  end
+
+  def test_unescapes_notes
+    assert_equal "Countess, mathematician.", contact(STRUCTURED).notes
+  end
+
+  def test_properties_are_the_parsed_card
+    properties = contact(STRUCTURED).properties
+
+    assert_equal "BEGIN", properties.fetch(0).name
+    assert properties.any? { it.name.casecmp?("TEL") }
+  end
+
+  def test_attributes_with_no_data_are_nil_or_empty
+    bare = contact("BEGIN:VCARD\r\nVERSION:3.0\r\nUID:bare\r\nEND:VCARD\r\n")
+
+    assert_nil bare.name
+    assert_nil bare.name_components
+    assert_empty bare.phones
+    assert_empty bare.emails
+    assert_empty bare.addresses
+    assert_nil bare.birthday
+    assert_nil bare.notes
+  end
+
+  # Unlike Store#rebuild_index, which fails a card open because a
+  # write already guarantees every stored card parses (VCard.card? is
+  # checked before a PUT is accepted) — a card that reaches here and
+  # still won't parse is a bug or a corrupt row, not the ordinary case,
+  # and it should raise into Sentry rather than render a blank card.
+  def test_a_card_that_will_not_parse_raises_from_the_accessors
+    assert_raises(ProTacts::VCard::ParseError) { contact("not a vCard at all").phones }
   end
 end

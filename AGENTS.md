@@ -35,7 +35,8 @@ is already `pro-tacts` — don't pass `--backlog` or verify it.
 lib/pro_tacts/
 ├── web.rb          # The Roda app: every route and response body
 ├── store.rb        # Sequel over SQLite: cards, change log, derived index
-├── contact.rb      # id and vCard, with the etag derived from the card
+├── contact.rb      # the one model of a contact: id, vCard, etag,
+│                   # and the structured accessors over the card
 ├── vcard.rb        # vCard 3.0 escaping and folding, and what a card is
 ├── vcard/parser.rb # One card's bytes into properties
 ├── config.rb       # Every environment read in the app
@@ -93,7 +94,7 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   rescuing it locally "to be safe" makes it neither. Rescue only what's an
   ordinary, anticipated case with a real fallback to show (e.g. a birthday
   whose stored value is well-shaped but calendar-nonsense — see
-  `ContactFields#format_birthday`), never "this might fail, better catch
+  `Admin::Format.birthday`), never "this might fail, better catch
   it."
 - `config.ru` must stay ASCII-only; a test enforces it, because boot crashes
   under a C locale otherwise. Watch for em dashes in comments.

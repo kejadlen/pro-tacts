@@ -1,6 +1,5 @@
 require "phlex"
 
-require "pro_tacts/admin/contact_fields"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/layout"
 
@@ -13,13 +12,13 @@ module ProTacts
     class ContactsIndex < Phlex::HTML
       RECENT_LIMIT = 10
 
-      Row = Data.define(:contact, :fields, :updated_at)
+      Row = Data.define(:contact, :updated_at)
       private_constant :Row
 
       #: (recent: Array[Store::RecentContact], query: String?) -> void
       def initialize(recent:, query:)
         @query = query.to_s.strip
-        rows = recent.map { Row.new(contact: it.contact, fields: ContactFields.from(it.contact), updated_at: it.updated_at) }
+        rows = recent.map { Row.new(contact: it.contact, updated_at: it.updated_at) }
         @rows = @query.empty? ? rows.first(RECENT_LIMIT) : rows.select { matches?(it, @query) }
       end
 
@@ -43,9 +42,9 @@ module ProTacts
       #: (Row row, String query) -> bool
       def matches?(row, query)
         q = query.downcase
-        return true if row.fields.name&.downcase&.include?(q)
-        return true if row.fields.phones.any? { it.value.downcase.include?(q) }
-        return true if row.fields.emails.any? { it.value.downcase.include?(q) }
+        return true if row.contact.name&.downcase&.include?(q)
+        return true if row.contact.phones.any? { it.value.downcase.include?(q) }
+        return true if row.contact.emails.any? { it.value.downcase.include?(q) }
 
         false
       end
@@ -54,9 +53,9 @@ module ProTacts
       def render_row(row)
         li do
           a(href: "/contacts/#{row.contact.id}") do
-            span(class: "avatar") { row.fields.initials || Format.initials(row.contact.id) }
+            span(class: "avatar") { Format.initials(row.contact) }
             div(style: "flex: 1; min-width: 0;") do
-              div(style: "font-weight: 550;") { row.fields.name || row.contact.id }
+              div(style: "font-weight: 550;") { row.contact.name || row.contact.id }
             end
             span(class: "type-label") { Format.time_ago(row.updated_at) }
           end
