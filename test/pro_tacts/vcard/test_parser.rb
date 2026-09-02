@@ -153,29 +153,46 @@ class VCardParserTest < Minitest::Test
     card = "BEGIN:VCARD\r\nBDAY:1985-04-\r\n 12\r\nEND:VCARD\r\n"
     lines = ProTacts::VCard::Parser.lines(card)
 
-    assert_equal %w[BEGIN BDAY END], lines.map { it.properties.first&.name }
-    assert_equal "1985-04-12", lines.fetch(1).properties.first&.value
+    assert_equal %w[BEGIN BDAY END], lines.map { it.property&.name }
+    assert_equal "1985-04-12", lines.fetch(1).property&.value
     assert_equal "BDAY:1985-04-\r\n 12\r\n", lines.fetch(1).verbatim
     assert_equal card, lines.map(&:verbatim).join
   end
 
-  # A lone CR ends a content line inside a physical line, so one
-  # logical line can read as two properties — the walk keeps both
-  # beside the bytes that carried them, where the old lenient read
-  # kept only the first.
-  def test_a_logical_line_can_read_as_several_content_lines
+  # A bare CR ends a content line without ending a physical line, so
+  # it packs two properties into one line's bytes. No recorded macOS
+  # session sends one, and this server is built on that: the line is
+  # refused, its bytes kept, so nothing downstream can move a property
+  # and take another property's bytes along.
+  def test_a_bare_cr_packing_two_content_lines_is_refused
     line = ProTacts::VCard::Parser.lines("FN:A\rNOTE:n\r\n").fetch(0)
 
-    assert_equal %w[FN NOTE], line.properties.map { it.name }
-    assert_nil line.error
-    assert_equal %w[FN NOTE], parse("FN:A\rNOTE:n\r\n").map { it.name }
+    assert_kind_of ProTacts::VCard::Parser::BrokenAssumption, line.error
+    assert_nil line.property
+    assert_equal "FN:A\rNOTE:n\r\n", line.verbatim
+
+    assert_raises(ProTacts::VCard::Parser::BrokenAssumption) { parse("FN:A\rNOTE:n\r\n") }
+  end
+
+  # A bare CR that ends the only content line on its line takes no
+  # second property with it, so there is nothing to refuse.
+  def test_a_bare_cr_ending_a_line_alone_still_reads
+    assert_equal %w[FN], parse("FN:A\r").map { it.name }
+  end
+
+  # BrokenAssumption is a ParseError, so a caller that declines a card
+  # it cannot read declines this one too without knowing the
+  # difference — the class is for reporting, not for control flow.
+  def test_a_broken_assumption_is_a_parse_error
+    assert_operator ProTacts::VCard::Parser::BrokenAssumption, :<, ProTacts::VCard::ParseError
+    assert_nil ProTacts::VCard.new("BEGIN:VCARD\rEND:VCARD\r\n").properties
   end
 
   def test_a_line_that_will_not_read_carries_its_error_and_keeps_its_bytes
     line = ProTacts::VCard::Parser.lines("BDAY;=;:\r\n").fetch(0)
 
     assert_kind_of ProTacts::VCard::ParseError, line.error
-    assert_empty line.properties
+    assert_nil line.property
     assert_equal "BDAY;=;:\r\n", line.verbatim
   end
 
@@ -198,7 +215,7 @@ class VCardParserTest < Minitest::Test
     lines = ProTacts::VCard::Parser.lines("FN:A\r\n\r\nUID:b\r\n")
 
     assert_equal ["FN:A\r\n", "\r\n", "UID:b\r\n"], lines.map(&:verbatim)
-    assert_empty lines.fetch(1).properties
+    assert_nil lines.fetch(1).property
     assert_nil lines.fetch(1).error
     assert_equal %w[FN UID], parse("FN:A\r\n\r\nUID:b\r\n").map { it.name }
   end

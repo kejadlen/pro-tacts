@@ -27,6 +27,19 @@ module ProTacts
     class Parser
       # @rbs @scanner: StringScanner
 
+      # Something this parser was built to assume it would never read.
+      # Not a judgment on the card: the assumptions are about macOS
+      # Contacts, the only client this address book serves
+      # (test/fixtures/macos-exchange is the evidence for each), and a
+      # card can break one while being a perfectly good vCard. Raising
+      # is how the assumption gets checked instead of merely held.
+      #
+      # A ParseError so it rides the same rails as any card that will
+      # not read — the bytes are still served, an index entry is what
+      # is lost — and its own class so Store can report it, a wrong
+      # assumption being news rather than ordinary bad input.
+      class BrokenAssumption < ParseError; end
+
       # The content line, RFC 2426 section 4:
       #
       #   contentline = [group "."] name *(";" param) ":" value CRLF
@@ -70,7 +83,7 @@ module ProTacts
         error = lines.filter_map { it.error }.first
         raise error if error
 
-        lines.flat_map { it.properties }
+        lines.filter_map { it.property }
       end
 
       # The card's logical lines, each parsed beside the exact bytes it
@@ -85,24 +98,30 @@ module ProTacts
 
       # VCard.fold's inverse, and the first thing a read does: RFC 2426
       # section 2.6 has a content line unfolded before it is read. It
-      # runs over the whole line rather than token by token because a
-      # fold can land anywhere in it — Contacts folds at 75 octets
-      # without regard for what it splits — so there is no boundary to
-      # do it at.
+      # runs over the whole line rather than token by token because the
+      # RFC puts no constraint on where a fold lands — mid-token and
+      # mid-escape included — so there is no boundary to do it at.
+      #
+      # The recorded macOS session folds nothing: it sent a 443-octet
+      # X-ADDRESSING-GRAMMAR line and an 81-octet ADR unbroken, both
+      # past the 75-octet limit, with no continuation in the card
+      # (test/fixtures/macos-exchange/10-put-contact-edit). That is one
+      # capture of one card, and the PHOTO bodies that would settle it
+      # went unpromoted, so this stays general rather than becoming
+      # another macOS assumption.
       #: (String line) -> String
       def self.unfold(line)
         line.gsub(FOLD, "")
       end
 
-      # One logical line into a Line: every content line it read, or
-      # the error the first failure raised — the prefix that did read
-      # is dropped to match parse, which declines a line wholesale by
-      # raising. A blank line is neither: no properties, no error.
+      # One logical line into a Line: the content line it read, or the
+      # error the failure raised. A blank line is neither: no property,
+      # no error.
       #: (String logical_line) -> Line
       def self.line_of(logical_line)
-        Line.new(properties: new(logical_line).parse, verbatim: logical_line, error: nil)
+        Line.new(property: new(logical_line).parse, verbatim: logical_line, error: nil)
       rescue ParseError => error
-        Line.new(properties: [], verbatim: logical_line, error:)
+        Line.new(property: nil, verbatim: logical_line, error:)
       end
 
       # The card's logical lines: a physical line and the continuations
@@ -134,18 +153,23 @@ module ProTacts
         @scanner = StringScanner.new(self.class.unfold(logical_line))
       end
 
-      # Every content line in this logical line, in order — usually one,
-      # though a lone CR can end a content line mid-physical-line, and a
-      # blank line has none.
-      #: () -> Array[Property]
+      # The one content line this logical line carries, or nil when it
+      # carries none — a blank line reads as nothing.
+      #
+      # A second content line means a bare CR ended the first (see
+      # LINE_BREAK), and that is refused rather than read: it is a line
+      # ending no recorded macOS session sends, and reading it would
+      # leave a property whose bytes cannot move without taking another
+      # property's along.
+      #: () -> Property?
       def parse
-        properties = [] #: Array[Property]
-        until @scanner.eos?
-          next if @scanner.skip(LINE_BREAK)
+        nil while @scanner.skip(LINE_BREAK)
+        return nil if @scanner.eos?
 
-          properties << content_line
-        end
-        properties
+        property = content_line
+        return property if @scanner.eos?
+
+        raise BrokenAssumption, "a bare CR packed a second content line into one line #{here}"
       end
 
       private

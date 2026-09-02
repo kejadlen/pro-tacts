@@ -549,11 +549,12 @@ class StoreTest < Minitest::Test
   # rewrite that omits the BDAY carries them across or loses them
   # (docs/macos-contacts.md, "A birthday the client cannot render is
   # dropped from the card").
-  # A BDAY sharing its line's bytes with another content line — a lone
-  # CR packs two into one physical line — is not a birthday any single
-  # decision can be made of: taking the first property alone would drop
-  # the bytes beside it unwitnessed, so the line stays verbatim, the
-  # model empties, and the arrival is reported.
+  # A BDAY sharing its line's bytes with another content line — a bare
+  # CR packs two into one physical line — is a shape the parser is
+  # built to assume macOS never sends, so it is refused rather than
+  # read: the line stays verbatim, the model empties, and the broken
+  # assumption is reported as itself rather than as an odd BDAY, which
+  # is what would send anyone reading it looking in the wrong place.
   def test_a_bday_sharing_its_line_arrives_whole_and_reported
     shared = AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\rNOTE:b\r\nEND:VCARD\r\n")
 
@@ -563,6 +564,7 @@ class StoreTest < Minitest::Test
       assert_equal shared, store.contact("aiden").vcard
       assert_nil birthday_row(store, "aiden")
       assert_equal 1, messages.length
+      assert_match "broke 1 parser assumption", messages.fetch(0)
     end
   end
 

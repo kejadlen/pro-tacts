@@ -3,7 +3,7 @@ module ProTacts
   # they came from, so a caller asks questions of either without
   # re-parsing, and moves a property without a byte around it moving
   # too. #lines walks the card once into Line values — a logical line's
-  # properties beside the exact bytes that carried them — and is the
+  # property beside the exact bytes that carried it — and is the
   # enumeration the questions that move bytes are asked over;
   # #properties folds the same walk down to structure, and #insert
   # puts lines back in. vCard 3.0 (RFC 2426): escape and fold, the
@@ -51,16 +51,21 @@ module ProTacts
     Property = Data.define(:group, :name, :parameters, :value)
 
     # One logical line of a card, parsed beside the exact bytes that
-    # carried it: `properties` is every content line the logical line
-    # read (usually one — a lone CR can end one mid-physical-line, and
-    # a blank line reads as none), `error` the ParseError the first
-    # failure raised, nil when it read, and `verbatim` the line itself,
-    # folds and terminator included, so what moves between cards moves
-    # unchanged.
+    # carried it: `property` is the content line it read, nil when it
+    # read none (a blank line, or one that would not read), `error` the
+    # ParseError the failure raised, nil when it read, and `verbatim`
+    # the line itself, folds and terminator included, so what moves
+    # between cards moves unchanged.
+    #
+    # One property, not a list of them: a logical line can only hold a
+    # second content line when a bare CR ends the first, and Parser
+    # refuses that outright (Parser::BrokenAssumption). That is what
+    # lets a caller move a line's bytes knowing it moves exactly one
+    # property.
     #
     # The signature lives in sig/pro_tacts/vcard.rbs with Property's.
     # @rbs skip
-    Line = Data.define(:properties, :verbatim, :error)
+    Line = Data.define(:property, :verbatim, :error)
 
     # Reopened rather than defined in the block above: steep reads a
     # define block's self as this class's, not the constant's, so the
@@ -145,7 +150,7 @@ module ProTacts
     def properties
       return @properties if defined?(@properties)
 
-      @properties = lines.any? { it.error } ? nil : lines.flat_map { it.properties }
+      @properties = lines.any? { it.error } ? nil : lines.filter_map { it.property }
     end
 
     # Whether the parsed properties carry the envelope RFC 2426 section

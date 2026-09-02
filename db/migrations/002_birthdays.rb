@@ -44,12 +44,11 @@ Sequel.migration do
       # card's BDAY lines take — only the modeled single line moves.
       case ProTacts::VCard.new(row.fetch(:vcard)).lines.partition { it.names?("BDAY") }
       in [[line], others]
-        # Only a line holding exactly one BDAY property can move it
-        # out: the line's bytes move as one, and a lone CR can pack a
-        # second content line into them.
-        next unless line.properties.one?
-        property = line.properties.fetch(0)
-        next unless property.name.casecmp?("BDAY")
+        # Only a line that reads as a BDAY can move it out: the line's
+        # bytes move as one, and a line holding anything else — or
+        # nothing this parser will read — stays where it is.
+        property = line.property
+        next unless property&.name&.casecmp?("BDAY")
 
         birthday = ProTacts::Birthday.from_property(property)
         next if birthday.nil?

@@ -219,9 +219,11 @@ module ProTacts
       # see was the user's deletion, an unseen model row survives as
       # nothing a client ever saw, and what nobody recognizes is
       # reported rather than lost in silence.
+      card = VCard.new(vcard)
+      report_broken_assumptions(card)
       existing = birthday_of(id)
       birthday, stored =
-        case VCard.new(vcard).lines.partition { it.names?("BDAY") }
+        case card.lines.partition { it.names?("BDAY") }
         in [[line], others]
           report_unrecognized_bday_lines([line])
           property = bday_of(line)
@@ -234,7 +236,7 @@ module ProTacts
           carried, lost = carried_and_lost_bday_lines(stored_vcard(id))
           kept = existing && !existing.served? ? existing : nil
           report_lost_bday_lines(lost)
-          [kept, VCard.new(vcard).insert(carried)]
+          [kept, card.insert(carried)]
         in [lines, _]
           # More than one BDAY: cardinality-broken data, kept verbatim
           # and reported like any other unrecognized line.
@@ -380,19 +382,17 @@ module ProTacts
       row && row.fetch(:vcard).to_s
     end
 
-    # The BDAY a decision may be made of: the line's one property,
-    # when the line holds exactly one and it names BDAY. Found by name,
-    # not position, and only when alone, because the line is the unit a
-    # rewrite or a move to the model carries — a BDAY sharing its bytes
-    # with another content line (a lone CR packs two into one physical
-    # line) cannot leave without taking the rest with it. Nil for any
-    # other shape, the empty line a failed read leaves included.
+    # The BDAY a decision may be made of: the line's property, when it
+    # has one and it names BDAY. Found by name rather than position,
+    # and safe to act on because the line is the unit a rewrite or a
+    # move to the model carries and a line holds at most one property
+    # (VCard::Line) — so moving its bytes moves this and nothing else.
+    # Nil for any other shape, the empty line a failed read leaves
+    # included.
     #: (VCard::Line line) -> VCard::Property?
     def bday_of(line)
-      return nil unless line.properties.one?
-
-      property = line.properties.fetch(0)
-      property.name.casecmp?("BDAY") ? property : nil
+      property = line.property
+      property if property&.name&.casecmp?("BDAY")
     end
 
     # A stored card's BDAY lines in two piles: the verbatim lines a
@@ -425,6 +425,11 @@ module ProTacts
     #: (Array[VCard::Line] lines) -> void
     def report_unrecognized_bday_lines(lines)
       unrecognized = lines.count { |line|
+        # A line that broke a parser assumption is not an unrecognized
+        # BDAY, it is a line this server declined to read at all —
+        # report_broken_assumptions says so, and more precisely.
+        next false if line.error.is_a?(VCard::Parser::BrokenAssumption)
+
         property = bday_of(line)
         property.nil? || (!Birthday.rendered?(property) && !Birthday.unrendered_value?(property.value))
       }
@@ -446,6 +451,25 @@ module ProTacts
       Sentry.capture_message(
         "a rewrite dropped #{lines.length} BDAY line(s) no client renders and no whitelist carries",
         level: :warning,
+      )
+    end
+
+    # The assumption report, louder than the two above it: a submitted
+    # card that breaks one of the parser's assumptions
+    # (VCard::Parser::BrokenAssumption) is not bad input, it is news
+    # that the assumption is wrong and every simplification resting on
+    # it is now suspect. Nothing else would say so — the card is stored
+    # and served either way, and only its index entry is lost. The
+    # message carries no card content (ProTacts::SentryScrubber's
+    # line); the admin view shows the card raw.
+    #: (VCard card) -> void
+    def report_broken_assumptions(card)
+      broken = card.lines.count { it.error.is_a?(VCard::Parser::BrokenAssumption) }
+      return if broken.zero?
+
+      Sentry.capture_message(
+        "a submitted card broke #{broken} parser assumption(s) about what macOS Contacts sends",
+        level: :error,
       )
     end
 
