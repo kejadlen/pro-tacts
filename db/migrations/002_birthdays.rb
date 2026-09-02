@@ -42,8 +42,8 @@ Sequel.migration do
     self[:cards].order(:id).each do |row|
       # The same move a write makes, one arm per shape the stored
       # card's BDAY lines take — only the modeled single line moves.
-      case ProTacts::VCard.new(row.fetch(:vcard)).lines.partition { it.names?("BDAY") }
-      in [[line], others]
+      case ProTacts::VCard.new(row.fetch(:vcard)).extract("BDAY")
+      in [[line], rest]
         # Only a line that reads as a BDAY can move it out: the line's
         # bytes move as one, and a line holding anything else — or
         # nothing this parser will read — stays where it is.
@@ -53,7 +53,7 @@ Sequel.migration do
         birthday = ProTacts::Birthday.from_property(property)
         next if birthday.nil?
 
-        self[:cards].where(id: row.fetch(:id)).update(vcard: others.map(&:verbatim).join)
+        self[:cards].where(id: row.fetch(:id)).update(vcard: rest.to_s)
         self[:birthdays].insert(
           card_id: row.fetch(:id),
           year: birthday.year,

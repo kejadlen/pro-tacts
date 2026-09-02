@@ -58,14 +58,25 @@ class VCardLinesTest < Minitest::Test
     assert_equal CARD, lines.map(&:verbatim).join
   end
 
-  def test_partition_splits_a_card_without_losing_a_byte
+  # The split every caller that moves a property makes: the named
+  # lines come back parsed beside their bytes, and what is left comes
+  # back a card, byte for byte, ready to be split again.
+  def test_extract_splits_a_card_without_losing_a_byte
     born = CARD.sub("UID:ada\r\n", "UID:ada\r\nBDAY:1985-04-12\r\n")
-    bdays, others = VCARD.new(born).lines.partition { it.names?("BDAY") }
+    bdays, rest = VCARD.new(born).extract("BDAY")
 
     assert_equal 1, bdays.length
     assert_equal "1985-04-12", bdays.fetch(0).property&.value
     assert_equal "BDAY:1985-04-12\r\n", bdays.fetch(0).verbatim
-    assert_equal CARD, others.map(&:verbatim).join
+    assert_equal CARD, rest.to_s
+    assert_equal "ada", rest.uid
+  end
+
+  def test_extract_of_a_property_the_card_lacks_leaves_it_whole
+    bdays, rest = VCARD.new(CARD).extract("BDAY")
+
+    assert_empty bdays
+    assert_equal CARD, rest.to_s
   end
 
   # A fold travels with its line, byte for byte, and parses as the one
@@ -103,22 +114,18 @@ class VCardLinesTest < Minitest::Test
   # in whoever reports it: news about this server and ordinary bad
   # input want different handling, and neither caller should have to
   # know the parser's error taxonomy to pick.
-  def test_a_card_separates_broken_assumptions_from_bad_input
+  def test_a_line_says_whether_it_broke_an_assumption_or_merely_failed
     packed = VCARD.new("BEGIN:VCARD\r\nFN:A\rNOTE:n\r\nEND:VCARD\r\n")
 
-    assert_equal 1, packed.broken_assumptions.length
-    assert_match "bare CR", packed.broken_assumptions.fetch(0).message
     assert_equal [false, true, false], packed.lines.map { it.broke_assumption? }
+    assert_match "bare CR", packed.lines.fetch(1).error&.message
 
     unreadable = VCARD.new("BEGIN:VCARD\r\nBDAY;=;:\r\nEND:VCARD\r\n")
 
     assert_kind_of VCARD::ParseError, unreadable.lines.fetch(1).error
-    assert_empty unreadable.broken_assumptions
     refute unreadable.lines.fetch(1).broke_assumption?
-  end
 
-  def test_a_card_that_reads_broke_no_assumption
-    assert_empty VCARD.new(CARD).broken_assumptions
+    refute VCARD.new(CARD).lines.any? { it.broke_assumption? }
   end
 
   ## insert

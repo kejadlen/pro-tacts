@@ -188,20 +188,20 @@ module ProTacts
       parsed && parsed.find { it.name.casecmp?("UID") }&.value
     end
 
-    # The parser assumptions this card broke — the errors themselves,
-    # so a caller reporting them can say what was assumed and where.
-    # Empty for a card that reads, and for one that merely will not:
-    # a broken assumption is news about this server, ordinary bad
-    # input is not (Parser::BrokenAssumption). Deciding what to do
-    # about it is the caller's — reporting on every parse would fire
-    # on every read of the card, not once on its arrival.
-    #: () -> Array[Parser::BrokenAssumption]
-    def broken_assumptions
-      lines.filter_map { |line|
-        error = line.error
-        error if error.is_a?(Parser::BrokenAssumption)
-      }
+    # The lines naming `name`, and the card without them: the split
+    # every caller that moves a property makes, so none of them has to
+    # rejoin the rest by hand and none can lose a byte doing it. The
+    # taken lines come back parsed beside their bytes; what is left
+    # comes back a card, ready to store or to take another split.
+    #: (String name) -> [Array[Line], VCard]
+    def extract(name)
+      taken, rest = lines.partition { it.names?(name) }
+      [taken, VCard.new(rest.map(&:verbatim).join)]
     end
+
+    # The card's bytes, exactly as it was given them.
+    #: () -> String
+    def to_s = @bytes
 
     # The card's logical lines, each parsed beside its verbatim bytes —
     # the enumeration the questions that move bytes are asked over. A

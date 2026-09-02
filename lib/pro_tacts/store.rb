@@ -223,12 +223,12 @@ module ProTacts
       report_broken_assumptions(card)
       existing = birthday_of(id)
       birthday, stored =
-        case card.lines.partition { it.names?("BDAY") }
-        in [[line], others]
+        case card.extract("BDAY")
+        in [[line], rest]
           report_unrecognized_bday_lines([line])
           property = bday_of(line)
           birthday = property && Birthday.from_property(property)
-          [birthday, birthday ? others.map(&:verbatim).join : vcard]
+          [birthday, birthday ? rest.to_s : vcard]
         in [[], _]
           # The rewrite arm: carry the unrendered lines out of the
           # stored card, report the unrecognized ones' loss, and keep
@@ -404,7 +404,7 @@ module ProTacts
     def carried_and_lost_bday_lines(vcard)
       return [[], []] if vcard.nil?
 
-      bdays, = VCard.new(vcard).lines.partition { it.names?("BDAY") }
+      bdays, = VCard.new(vcard).extract("BDAY")
       carried, rest = bdays.partition { |line|
         property = bday_of(line)
         property && Birthday.unrendered_value?(property.value)
@@ -470,7 +470,7 @@ module ProTacts
     # raw.
     #: (VCard card) -> void
     def report_broken_assumptions(card)
-      broken = card.broken_assumptions.length
+      broken = card.lines.count { it.broke_assumption? }
       return if broken.zero?
 
       Sentry.capture_message(
