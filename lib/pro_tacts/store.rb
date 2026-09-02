@@ -220,7 +220,7 @@ module ProTacts
       # reported rather than lost in silence.
       existing = birthday_of(id)
       birthday, stored =
-        case VCard.new(vcard).partition { it.names?("BDAY") }
+        case VCard.new(vcard).lines.partition { it.names?("BDAY") }
         in [[line], others]
           report_unrecognized_bday_lines([line])
           property = line.property
@@ -388,7 +388,7 @@ module ProTacts
     def carried_and_lost_bday_lines(vcard)
       return [[], []] if vcard.nil?
 
-      bdays, = VCard.new(vcard).partition { it.names?("BDAY") }
+      bdays, = VCard.new(vcard).lines.partition { it.names?("BDAY") }
       carried, rest = bdays.partition { |line|
         line.property && Birthday.unrendered_value?(line.property.value)
       }

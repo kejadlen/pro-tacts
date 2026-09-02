@@ -42,7 +42,7 @@ Sequel.migration do
     self[:cards].order(:id).each do |row|
       # The same move a write makes, one arm per shape the stored
       # card's BDAY lines take — only the modeled single line moves.
-      case ProTacts::VCard.new(row.fetch(:vcard)).partition { it.names?("BDAY") }
+      case ProTacts::VCard.new(row.fetch(:vcard)).lines.partition { it.names?("BDAY") }
       in [[line], others]
         property = line.property
         birthday = property && ProTacts::Birthday.from_property(property)

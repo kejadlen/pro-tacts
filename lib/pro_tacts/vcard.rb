@@ -2,20 +2,15 @@ module ProTacts
   # A card, read once: the parsed properties beside the exact bytes
   # they came from, so a caller asks questions of either without
   # re-parsing, and moves a property without a byte around it moving
-  # too. A card is Enumerable over its logical lines — each one parsed
-  # beside its verbatim bytes (#each and Line) — so the structured
-  # questions are select and reject and count, and #insert puts lines
-  # back in. vCard 3.0 (RFC 2426): escape and fold, the writer's half,
-  # are here; Parser owns the reading half, down to the line split.
-  # The line walk is lazy for the same reason Contact's parse is: the
-  # byte-moving paths never read structure.
-  # The signature lives in sig/pro_tacts/vcard.rbs: the generic
-  # Enumerable include is beyond the inline parser.
-  # @rbs skip
+  # too. Iteration is explicit over either half — #properties for the
+  # parsed card, #lines for the logical lines parsed beside their
+  # verbatim bytes (Line), where the questions that move bytes are
+  # asked — and #insert puts lines back in. vCard 3.0 (RFC 2426):
+  # escape and fold, the writer's half, are here; Parser owns the
+  # reading half, down to the line split. Both walks are lazy for the
+  # same reason Contact's parse is: the byte-moving paths never read
+  # structure.
   class VCard
-    include Enumerable
-
-
     # Folded lines must not exceed 75 octets, excluding the line break
     # (RFC 2426 section 2.6). The octet count, not character count, is
     # what matters: a continuation must never split a multibyte
@@ -52,6 +47,7 @@ module ProTacts
     #
     # The signature lives in sig/pro_tacts/vcard.rbs: a Data class has no
     # constant super class for the inline syntax to read.
+    # @rbs skip
     Property = Data.define(:group, :name, :parameters, :value)
 
     # One logical line of a card, parsed beside the exact bytes that
@@ -61,6 +57,7 @@ module ProTacts
     # included, so what moves between cards moves unchanged.
     #
     # The signature lives in sig/pro_tacts/vcard.rbs with Property's.
+    # @rbs skip
     Line = Data.define(:property, :verbatim)
 
     # Reopened rather than defined in the block above: steep reads a
@@ -71,6 +68,7 @@ module ProTacts
       # (`item1.BDAY`) counting as naming it. Asked of the line rather
       # than the property because a line that will not parse still has
       # a name in it.
+      #: (String name) -> bool
       def names?(name)
         verbatim.match?(/\A(?:[A-Za-z0-9-]+\.)?#{Regexp.escape(name)}[;:]/i)
       end
@@ -80,6 +78,7 @@ module ProTacts
     # sub-component separator (RFC 2426 section 2.4.2); CRLF and CR are
     # normalized to the `\n` escape because a raw line break would end
     # the property line.
+    #: (String text) -> String
     def self.escape(text)
       text.gsub(/\r\n|\r/, "\n").gsub(/[\\;,\n]/) { TEXT_ESCAPES.fetch(it) }
     end
@@ -90,6 +89,7 @@ module ProTacts
     # out unparsed — but a view that displays a structured value (an
     # admin screen, not this server's CardDAV responses) has to undo the
     # escaping or show the reader literal backslashes.
+    #: (String text) -> String
     def self.unescape(text)
       text.gsub(/\\[\\;,n]/) { it == "\\n" ? "\n" : it[1..].to_s }
     end
@@ -97,6 +97,7 @@ module ProTacts
     # Splits a structured value's ";"-delimited components (RFC 2426
     # section 3.2.1, e.g. ADR and N) without breaking on an escaped
     # "\;", and unescapes each component in the same pass.
+    #: (String value) -> Array[String]
     def self.split_components(value)
       value.split(/(?<!\\);/, -1).map { unescape(it) }
     end
@@ -105,6 +106,7 @@ module ProTacts
     # octets, each continuation starting with a single space (RFC 2426
     # section 2.6). The walk is character-wise so a multibyte character
     # is never split mid-sequence.
+    #: (String line) -> String
     def self.fold(line)
       return line if line.bytesize <= LINE_LIMIT
 
@@ -126,12 +128,14 @@ module ProTacts
     # rather than leaking an ArgumentError out of whatever regex first
     # trips over them. A PUT gates this with its own 412 first, and the
     # store's bind holds the same line again below the card.
+    #: (String bytes) -> void
     def initialize(bytes)
       raise ArgumentError, "not valid UTF-8: a card is text" unless bytes.valid_encoding?
 
       @bytes = bytes
     end
 
+    #: () -> String
     def bytes
       @bytes
     end
@@ -140,6 +144,7 @@ module ProTacts
     # Nil when the bytes are not a vCard — a caller is expected to carry
     # on serving the bytes (ParseError's rule, held one level up), and
     # #parseable? is the question to ask about it.
+    #: () -> Array[Property]?
     def properties
       return @properties if defined?(@properties)
 
@@ -148,6 +153,7 @@ module ProTacts
       @properties = nil
     end
 
+    #: () -> bool
     def parseable?
       !properties.nil?
     end
@@ -159,6 +165,7 @@ module ProTacts
     # lives here, where a caller that has to decide (a PUT) can ask.
     # The VERSION's value is not judged: any version is stored verbatim,
     # and this only decides whether there is a card at all.
+    #: () -> bool
     def card?
       parsed = properties
       return false if parsed.nil? || parsed.empty?
@@ -172,18 +179,22 @@ module ProTacts
     # The value of the card's UID property, if it carries one. Names
     # compare without case, as the index's NOCASE collation already
     # assumes for them.
+    #: () -> String?
     def uid
       parsed = properties
       parsed && parsed.find { it.name.casecmp?("UID") }&.value
     end
 
-    # Each logical line of the card, parsed beside its verbatim bytes —
-    # the one enumeration every structured question about a card is
-    # asked over. A continuation travels with its line, terminators
-    # attached, so no line's bytes are lost or normalized on the way
-    # through (RFC 2426 section 2.6 folding).
-    def each(&block)
-      lines.each(&block)
+    # The card's logical lines, each parsed beside its verbatim bytes —
+    # the enumeration the questions that move bytes are asked over. A
+    # continuation travels with its line, terminators attached, so no
+    # line's bytes are lost or normalized on the way through (RFC 2426
+    # section 2.6 folding).
+    #: () -> Array[Line]
+    def lines
+      return @lines if defined?(@lines)
+
+      @lines = Parser.lines(@bytes)
     end
 
     # Lines into the card immediately before END:VCARD. A line with no
@@ -191,6 +202,7 @@ module ProTacts
     # single-convention; a terminated line keeps its own, folds and
     # all. With no END to anchor to there is no envelope worth
     # respecting, and the lines are appended with CRLF.
+    #: (Array[String] lines) -> String
     def insert(lines)
       return @bytes if lines.empty?
 
@@ -207,23 +219,16 @@ module ProTacts
 
     private
 
-    # The card's logical lines, walked once on the first question
-    # asked over them. Parser's split — the bytes each property came
-    # from are #each's rule, held there.
-    def lines
-      return @lines if defined?(@lines)
-
-      @lines = Parser.lines(@bytes)
-    end
-
     # Physical lines with their terminators attached, so surgery on them
     # cannot lose or normalize a line break.
+    #: () -> Array[String]
     def physical_lines
       @bytes.split(/(?<=\n)/, -1)
     end
 
     # The line break a line ends with, for the line inserted beside it
     # to match. CRLF when it has none, being the grammar's own.
+    #: (String line) -> String
     def terminator_of(line)
       line[/\r?\n\z/] || "\r\n"
     end
