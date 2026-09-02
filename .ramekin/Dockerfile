@@ -41,11 +41,11 @@ RUN wget -q "https://cache.ruby-lang.org/pub/ruby/${RUBY_VERSION%.*}/ruby-${RUBY
 RUN gem install bundler -v 4.0.3
 
 # Install project gems at build time so bundle/rake/puma are ready each session.
-# Build context is expected to be the project root. The lockfile is darwin-only,
-# so add the linux platforms before resolving or the native gems won't install.
+# Build context is expected to be the project root. The lockfile carries all
+# three platforms (arm64-darwin plus both linux ones), so the platform gems
+# with bundled natives — sqlite3, ffi, and hegeltest's libhegel engine —
+# install without compiling anything.
 COPY Gemfile Gemfile.lock /tmp/bundle/
 RUN cd /tmp/bundle \
- && bundle lock --add-platform aarch64-linux \
- && bundle lock --add-platform x86_64-linux \
  && bundle install --jobs 4 \
  && rm -rf /tmp/bundle

@@ -12,7 +12,7 @@ gem "sequel"
 gem "sqlite3"
 
 group :development do
-  gem "hegeltest", git: "https://github.com/meganemura/hegel-ruby"
+  gem "hegeltest"
   gem "irb"
   gem "minitest"
   gem "rack-test"
