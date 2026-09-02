@@ -233,15 +233,17 @@ class StoreTest < Minitest::Test
   # not UTF-8 at all is refused rather than stored: better than serving
   # it back as `text/vcard; charset=utf-8` while it is no such thing.
   # Relabelled first, as the route would — a request this bad never
-  # reaches the store, and this pins the last line that catches it.
+  # reaches the store, and this pins the last line that catches it: the
+  # card itself, before any walk or bind could meet the bytes.
   def test_a_card_that_is_not_utf_8_is_refused
     with_store do |store|
       invalid = "BEGIN:VCARD\r\nFN:\xFF\xFE\r\nEND:VCARD\r\n".dup.force_encoding(Encoding::UTF_8)
 
-      assert_raises(Sequel::DatabaseError) do
+      error = assert_raises(ArgumentError) do
         store.put("bad", invalid)
       end
 
+      assert_match "not valid UTF-8", error.message
       assert_empty store.contacts
     end
   end
@@ -507,14 +509,34 @@ class StoreTest < Minitest::Test
   # A BDAY the model cannot recompose stays in the card verbatim and
   # empties the model: the card's own line speaks for itself, and
   # compose must never add a second one beside it.
+  # A BDAY the model cannot recompose stays in the card verbatim and
+  # empties the model: the card's own line speaks for itself, and
+  # nothing composes a second one beside it. A fold travels with its
+  # line, byte for byte.
   def test_an_unmodeled_bday_stays_in_the_card_and_empties_the_model
-    unmodeled = AIDEN.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n")
+    ["BDAY:--0412", "BDAY:1985-\r\n 04\r\n", "BDAY:1985-04-12\r\nBDAY:1986-04-12\r\n"].each do |bday|
+      unmodeled = AIDEN.sub("END:VCARD\r\n", "#{bday}END:VCARD\r\n")
 
-    with_store({"aiden" => AIDEN_BORN}) do |store|
-      store.put("aiden", unmodeled)
+      with_store({"aiden" => AIDEN_BORN}) do |store|
+        store.put("aiden", unmodeled)
 
-      assert_equal unmodeled, store.contact("aiden").vcard
-      assert_nil birthday_row(store, "aiden")
+        assert_equal unmodeled, store.contact("aiden").vcard, bday
+        assert_nil birthday_row(store, "aiden"), bday
+      end
+    end
+  end
+
+  # The card is made of text and says so itself: bytes that are not
+  # UTF-8 raise at the card, before any walk — the web's PUT has
+  # already answered them with a 412 by the time one reaches a caller
+  # this direct.
+  def test_put_of_bytes_that_are_not_text_raises_at_the_card
+    invalid = "BEGIN:VCARD\r\nFN:\xFF\r\nEND:VCARD\r\n".dup.force_encoding(Encoding::UTF_8)
+
+    with_store({}) do |store|
+      error = assert_raises(ArgumentError) { store.put("aiden", invalid) }
+
+      assert_match "not valid UTF-8", error.message
     end
   end
 

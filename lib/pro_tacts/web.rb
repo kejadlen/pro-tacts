@@ -448,8 +448,8 @@ module ProTacts
       # client could be told what was wrong with the body.
       return precondition("valid-address-data") unless vcard.valid_encoding?
 
-      properties = parse_card(vcard)
-      return precondition("valid-address-data") unless properties && VCard.card?(properties)
+      card = VCard.new(vcard)
+      return precondition("valid-address-data") unless card.card?
 
       # CARDDAV:no-uid-conflict: the submitted UID must not belong to a
       # different resource, and a mapped URI must not be overwritten by
@@ -458,7 +458,7 @@ module ProTacts
       # UID naming the resource being written, and no other card claims
       # it. The href in the body is the SHOULD that section attaches to
       # the first clause — report where the UID already lives.
-      uid = VCard.uid(properties)
+      uid = card.uid
       owner = uid && store.card_id_with_uid(uid)
       return precondition("no-uid-conflict", owner) if uid != id || owner && owner != id
 
@@ -488,16 +488,6 @@ module ProTacts
       # A returned "" would land in the body and pin text/html and
       # content-length onto the 204, which a bodyless status must not
       # carry (Rack 3's lint rejects both); nil leaves it bodyless.
-      nil
-    end
-
-    # A parse that answers nil rather than raising when the bytes are
-    # not a card — the same tolerance Store#properties_of gives the
-    # index, at the point where a caller must decide.
-    #: (String vcard) -> Array[VCard::Property]?
-    def parse_card(vcard)
-      VCard::Parser.parse(vcard)
-    rescue VCard::ParseError
       nil
     end
 

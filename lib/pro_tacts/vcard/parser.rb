@@ -4,7 +4,7 @@ require "strscan"
 require "pro_tacts/vcard"
 
 module ProTacts
-  module VCard
+  class VCard
     # Reads a stored card into VCard::Property values.
     #
     # Deliberately shallow: a property is a name, its parameters, and the

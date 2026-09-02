@@ -95,10 +95,12 @@ module ProTacts
     # The card's properties, parsed once and memoized — the substrate
     # the typed accessors sit on, and the read for what none of them
     # models. Lets VCard::ParseError raise rather than returning an
-    # empty card: PUT checks VCard.card? before the store accepts a
-    # card, so one reaching this unparseable is a bug or a corrupt row,
-    # and Sentry (already wired into every request, see ProTacts::Web)
-    # is where that should surface, not a silently blank screen.
+    # empty card: PUT checks the card's envelope before the store
+    # accepts it, so one reaching this unparseable is a bug or a
+    # corrupt row, and Sentry (already wired into every request, see
+    # ProTacts::Web) is where that should surface, not a silently
+    # blank screen. VCard.new tolerates the same bytes for the paths
+    # that serve them; this model of a served contact does not.
     #: () -> Array[VCard::Property]
     def properties
       return @properties if defined?(@properties)

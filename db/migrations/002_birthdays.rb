@@ -7,6 +7,7 @@
 # which refuse Sequel's plain String. No timestamp: a birthday changes
 # with its card's write and the card's stamp is the write's stamp.
 require "pro_tacts/birthday"
+require "pro_tacts/vcard"
 
 Sequel.migration do
   change do
@@ -35,17 +36,29 @@ Sequel.migration do
     # birthday-carrying card once, by design rather than by accident.
     # The change log is not written: as far as any client can tell, no
     # contact changed, and the stamps are left alone to say the same.
+    # Spelled out against VCard and Birthday directly rather than
+    # through a Store helper, so what this migration does cannot drift
+    # with the app's internals; its test pins the behavior.
     self[:cards].order(:id).each do |row|
-      split = ProTacts::Birthday.subtract(row.fetch(:vcard))
-      next if split.birthday.nil?
+      # The same move a write makes, one arm per shape the stored
+      # card's BDAY lines take — only the modeled single line moves.
+      case ProTacts::VCard.new(row.fetch(:vcard)).partition { it.names?("BDAY") }
+      in [[line], others]
+        property = line.property
+        birthday = property && ProTacts::Birthday.from_property(property)
+        next if birthday.nil?
 
-      self[:cards].where(id: row.fetch(:id)).update(vcard: split.card)
-      self[:birthdays].insert(
-        card_id: row.fetch(:id),
-        year: split.birthday.year,
-        month: split.birthday.month,
-        day: split.birthday.day,
-      )
+        self[:cards].where(id: row.fetch(:id)).update(vcard: others.map(&:verbatim).join)
+        self[:birthdays].insert(
+          card_id: row.fetch(:id),
+          year: birthday.year,
+          month: birthday.month,
+          day: birthday.day,
+        )
+      in [[], _] | [_, _]
+        # Nothing to move, or lines the model cannot recompose: the
+        # card stands as stored.
+      end
     end
   end
 end

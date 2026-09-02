@@ -207,36 +207,42 @@ module ProTacts
     # where it is read, in write_card.
     #: (String id, String vcard) -> Contact
     def put(id, vcard)
-      split = Birthday.subtract(vcard)
+      # The birthday half of the split a write makes, one arm per shape
+      # a submitted card's BDAY lines can take. One line that reads as
+      # a modeled birthday moves out of the card and into the model;
+      # any other BDAY — the vCard 4.0 forms, a foreign sentinel, a
+      # line that will not parse, more than one — is data the model
+      # cannot recompose and stays in the card byte for byte, with the
+      # model emptied so nothing composes a second BDAY beside it
+      # (RFC 6352 section 6.3.2.2). No BDAY at all is nothing to split:
+      # the birthday to carry is whatever an unseen model row already
+      # holds, and a served one was the user's deletion. Bytes that are
+      # not UTF-8 raise at the card before any of this runs — a PUT
+      # has already answered them with a 412 by then.
       existing = birthday_of(id)
-      birthday =
-        if split.bday_kept
-          nil
-        elsif split.birthday
-          split.birthday
-        elsif existing && !existing.served?
-          existing
-        else
-          nil
+      birthday, stored =
+        case VCard.new(vcard).partition { it.names?("BDAY") }
+        in [[line], others]
+          property = line.property
+          birthday = property && Birthday.from_property(property)
+          [birthday, birthday ? others.map(&:verbatim).join : vcard]
+        in [[], _]
+          [existing && !existing.served? ? existing : nil, vcard]
+        in [_, _]
+          [nil, vcard]
         end
 
-      contact = Contact.for(id:, vcard: Birthday.compose(split.card, birthday))
+      # The Contact this returns is the composed one, and the logged
+      # etag is its hash, so a client's token describes the card it
+      # downloads.
+      contact = Contact.for(id:, vcard: with_birthday(stored, birthday))
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
-          .insert(id: contact.id, vcard: split.card)
-        if birthday
-          birthdays
-            .insert_conflict(
-              target: :card_id,
-              update: {year: Sequel[:excluded][:year], month: Sequel[:excluded][:month], day: Sequel[:excluded][:day]},
-            )
-            .insert(card_id: contact.id, year: birthday.year, month: birthday.month, day: birthday.day)
-        else
-          birthdays.where(card_id: contact.id).delete
-        end
+          .insert(id: contact.id, vcard: stored)
+        write_birthday(contact.id, birthday)
         record(contact.id, "put", contact.etag)
-        reindex(contact.id, split.card)
+        reindex(contact.id, stored)
       end
       contact
     end
@@ -343,9 +349,7 @@ module ProTacts
     # A card's properties, or nil when the bytes are not a vCard.
     #: (String vcard) -> Array[VCard::Property]?
     def properties_of(vcard)
-      VCard::Parser.parse(vcard)
-    rescue VCard::ParseError
-      nil
+      VCard.new(vcard).properties
     end
 
     # Applies whatever migrations the database has not seen. On one it is
@@ -365,8 +369,37 @@ module ProTacts
     def contact_from(row, birthday)
       Contact.for(
         id: row.fetch(:id).to_s,
-        vcard: Birthday.compose(row.fetch(:vcard).to_s, birthday),
+        vcard: with_birthday(row.fetch(:vcard).to_s, birthday),
       )
+    end
+
+    # The card to serve: the stored card with its birthday composed
+    # back in, immediately before END:VCARD. A birthday with no wire
+    # form, or none at all, leaves the card exactly as it is.
+    #: (String card, Birthday? birthday) -> String
+    def with_birthday(card, birthday)
+      line = birthday && birthday.to_line
+      return card if line.nil?
+
+      VCard.new(card).insert([line])
+    end
+
+    # The model's half of a write: hold the birthday the card gave up,
+    # or empty the model — a BDAY that stayed in the card must not grow
+    # a composed twin beside it, and a deletion must take the row with
+    # it.
+    #: (String id, Birthday? birthday) -> void
+    def write_birthday(id, birthday)
+      if birthday
+        birthdays
+          .insert_conflict(
+            target: :card_id,
+            update: {year: Sequel[:excluded][:year], month: Sequel[:excluded][:month], day: Sequel[:excluded][:day]},
+          )
+          .insert(card_id: id, year: birthday.year, month: birthday.month, day: birthday.day)
+      else
+        birthdays.where(card_id: id).delete
+      end
     end
 
     # Every birthday, keyed by card, for the listing reads that compose
