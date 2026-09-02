@@ -8,9 +8,6 @@ module ProTacts
 
     LINE_LIMIT: Integer
     TEXT_ESCAPES: Hash[String, String]
-    LINE_BREAK: Regexp
-    FOLD: Regexp
-    CONTINUATION: Regexp
     END_LINE: Regexp
 
     class ParseError < StandardError
@@ -40,17 +37,11 @@ module ProTacts
 
     def self.fold: (String line) -> String
 
-    def self.unfold: (String card) -> String
-
     private
-
-    def parse: (Array[String] group) -> Property?
 
     def lines: () -> Array[Line]
 
     def physical_lines: () -> Array[String]
-
-    def line_groups: () -> Array[Array[String]]
 
     def terminator_of: (String line) -> String
 

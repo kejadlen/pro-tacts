@@ -5,10 +5,10 @@ module ProTacts
   # too. A card is Enumerable over its logical lines — each one parsed
   # beside its verbatim bytes (#each and Line) — so the structured
   # questions are select and reject and count, and #insert puts lines
-  # back in. vCard 3.0 (RFC 2426): the line-level rules a card obeys
-  # are here whichever half is being asked — Parser reads, escape and
-  # fold write. The line walk is lazy for the same reason Contact's
-  # parse is: the byte-moving paths never read structure.
+  # back in. vCard 3.0 (RFC 2426): escape and fold, the writer's half,
+  # are here; Parser owns the reading half, down to the line split.
+  # The line walk is lazy for the same reason Contact's parse is: the
+  # byte-moving paths never read structure.
   # The signature lives in sig/pro_tacts/vcard.rbs: the generic
   # Enumerable include is beyond the inline parser.
   # @rbs skip
@@ -28,20 +28,6 @@ module ProTacts
       "," => "\\,",
       "\n" => "\\n",
     }.freeze #: Hash[String, String]
-
-    # A bare CR is not a line break in the grammar, but it ends a value
-    # and has to end a line here too: without it the parser's scanner
-    # would sit on one forever, because no token can consume it.
-    LINE_BREAK = /\r\n|[\r\n]/ #: Regexp
-
-    # Reads like an alternation-precedence bug and is not: Ruby wraps an
-    # interpolated Regexp in a non-capturing group, so this is
-    # `(?:\r\n|[\r\n])[ \t]` rather than `\r\n` or `[\r\n][ \t]`.
-    FOLD = /#{LINE_BREAK}[ \t]/ #: Regexp
-
-    # A physical line that continues the one above it (RFC 2426 section
-    # 2.6 folding).
-    CONTINUATION = /\A[ \t]/ #: Regexp
 
     # The line inserted lines go immediately before, so a property
     # lands inside the envelope however bare the card is.
@@ -135,15 +121,6 @@ module ProTacts
       folded
     end
 
-    # Fold's inverse, and the first thing a parse does: RFC 2426 section
-    # 2.6 has a content line unfolded before it is read. It runs over
-    # the whole card rather than token by token because a fold can land
-    # anywhere in a line — Contacts folds at 75 octets without regard for
-    # what it splits — so there is no boundary to do it at.
-    def self.unfold(card)
-      card.gsub(FOLD, "")
-    end
-
     # A card is made of UTF-8 text, and refuses to be made of anything
     # else: bytes that are not valid UTF-8 raise here, at the boundary,
     # rather than leaking an ArgumentError out of whatever regex first
@@ -230,38 +207,19 @@ module ProTacts
 
     private
 
-    # One line group read as a property, or nil when it does not read
-    # as one. The parser unfolds what it is handed, so a folded group
-    # arrives as the single logical line it is.
-    def parse(group)
-      Parser.parse(group.join).fetch(0, nil)
-    rescue ParseError
-      nil
-    end
-
     # The card's logical lines, walked once on the first question
-    # asked over them. The terminatorless trailing group the byte-level
-    # split leaves behind is not a line — dropping it loses nothing,
-    # an empty group joining to nothing.
+    # asked over them. Parser's split — the bytes each property came
+    # from are #each's rule, held there.
     def lines
       return @lines if defined?(@lines)
 
-      groups = line_groups.reject { |group| group == [""] }
-      @lines = groups.map { |group| Line.new(property: parse(group), verbatim: group.join) }
+      @lines = Parser.lines(@bytes)
     end
 
     # Physical lines with their terminators attached, so surgery on them
     # cannot lose or normalize a line break.
     def physical_lines
       @bytes.split(/(?<=\n)/, -1)
-    end
-
-    # Logical lines: a physical line and the continuations folded under
-    # it, kept together because a property and its fold are one unit.
-    # Slicing before each non-continuation, rather than chunking, is
-    # what attaches a continuation to the line above it.
-    def line_groups
-      physical_lines.slice_when { |_line, next_line| !next_line.match?(CONTINUATION) }.to_a
     end
 
     # The line break a line ends with, for the line inserted beside it

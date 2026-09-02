@@ -5,7 +5,7 @@ require "pro_tacts/vcard"
 
 module ProTacts
   class VCard
-    # Reads a stored card into VCard::Property values.
+    # Reads a stored card into VCard::Property and VCard::Line values.
     #
     # Deliberately shallow: a property is a name, its parameters, and the
     # text of its value, and nothing here knows what any of them mean.
@@ -15,9 +15,15 @@ module ProTacts
     # 6.3.2.2 requires of a CardDAV server. See
     # docs/plans/2026-08-24-vcard-storage-and-groups.md.
     #
-    # One instance reads one card. The scanner is the whole of its state,
-    # which is why it is a class and not a handful of functions passing
-    # a position between them.
+    # The whole reading half of VCard lives here: unfolding, the split
+    # into logical lines, and the reads over them. One instance reads one
+    # logical line — the scanner is the whole of its state, which is why
+    # it is a class and not a handful of functions passing a position
+    # between them — and the two class-level reads differ only in
+    # strictness. parse raises on a line that will not read, which is
+    # what keeps an unparseable card served but unindexed; lines carries
+    # the same line with a nil property, which is what lets a rewrite
+    # move bytes no line could ever parse out of.
     class Parser
       # @rbs @scanner: StringScanner
 
@@ -39,20 +45,91 @@ module ProTacts
       QUOTED_STRING = /"([^\x00-\x08\x0A-\x1F\x7F"]*)"/ #: Regexp
       VALUE = /[^\r\n]*/ #: Regexp
 
-      #: (String card) -> Array[Property]
-      def self.parse(card)
-        new(card).parse
-      end
+      # A bare CR is not a line break in the grammar, but it ends a value
+      # and has to end a line here too: without it the scanner would sit
+      # on one forever, because no token can consume it.
+      LINE_BREAK = /\r\n|[\r\n]/ #: Regexp
 
-      #: (String card) -> void
-      def initialize(card)
-        @scanner = StringScanner.new(VCard.unfold(card))
-      end
+      # Reads like an alternation-precedence bug and is not: Ruby wraps
+      # an interpolated Regexp in a non-capturing group, so this is
+      # `(?:\r\n|[\r\n])[ \t]` rather than `\r\n` or `[\r\n][ \t]`.
+      FOLD = /#{LINE_BREAK}[ \t]/ #: Regexp
+
+      # A physical line that continues the one above it (RFC 2426 section
+      # 2.6 folding).
+      CONTINUATION = /\A[ \t]/ #: Regexp
 
       # Every content line in the card, in order. Blank lines are
       # skipped, and BEGIN, VERSION, and END come back like any other
       # property: deciding that a card is well-formed is not this class's
-      # job.
+      # job. Raises on the first line that will not read, so a caller
+      # rescuing ParseError declines the whole card at once.
+      #: (String card) -> Array[Property]
+      def self.parse(card)
+        logical_lines(card).flat_map { new(it).parse }
+      end
+
+      # The card's logical lines, each parsed beside the exact bytes it
+      # came from, folds and terminator included. A line that will not
+      # read is a fact about the line, not an error: the property is nil
+      # and the bytes stay enumerable.
+      #: (String card) -> Array[Line]
+      def self.lines(card)
+        logical_lines(card).map { |line| Line.new(property: property_of(line), verbatim: line) }
+      end
+
+      # VCard.fold's inverse, and the first thing a read does: RFC 2426
+      # section 2.6 has a content line unfolded before it is read. It
+      # runs over the whole line rather than token by token because a
+      # fold can land anywhere in it — Contacts folds at 75 octets
+      # without regard for what it splits — so there is no boundary to
+      # do it at.
+      #: (String line) -> String
+      def self.unfold(line)
+        line.gsub(FOLD, "")
+      end
+
+      # One logical line read as its first property, or nil when it does
+      # not read as one — blank, or rejected by the grammar.
+      #: (String line) -> Property?
+      def self.property_of(line)
+        new(line).parse.fetch(0, nil)
+      rescue ParseError
+        nil
+      end
+
+      # The card's logical lines: a physical line and the continuations
+      # folded under it, kept together because a property and its fold
+      # are one unit (RFC 2426 section 2.6). Slicing before each
+      # non-continuation, rather than chunking, is what attaches a
+      # continuation to the line above it. The empty string the
+      # byte-level split leaves behind is not a line — dropping it loses
+      # nothing, an empty group joining to nothing.
+      #: (String card) -> Array[String]
+      def self.logical_lines(card)
+        physical_lines(card)
+          .slice_when { |_line, next_line| !next_line.match?(CONTINUATION) }
+          .map(&:join)
+          .reject { it == "" }
+      end
+
+      # Physical lines with their terminators attached, so the split
+      # cannot lose or normalize a line break.
+      #: (String card) -> Array[String]
+      def self.physical_lines(card)
+        card.split(/(?<=\n)/, -1)
+      end
+
+      private_class_method :property_of, :logical_lines, :physical_lines
+
+      #: (String logical_line) -> void
+      def initialize(logical_line)
+        @scanner = StringScanner.new(self.class.unfold(logical_line))
+      end
+
+      # Every content line in this logical line, in order — usually one,
+      # though a lone CR can end a content line mid-physical-line, and a
+      # blank line has none.
       #: () -> Array[Property]
       def parse
         properties = [] #: Array[Property]

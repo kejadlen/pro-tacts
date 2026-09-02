@@ -145,6 +145,47 @@ class VCardParserTest < Minitest::Test
     assert_equal "abcd", parse(card("NOTE:ab", "\tcd")).first.value
   end
 
+  ## Lines
+
+  # lines pairs each property with the exact bytes it came from — the
+  # fold travels with its line, and the verbatims join back to the card.
+  def test_lines_pair_properties_with_verbatim_bytes
+    card = "BEGIN:VCARD\r\nBDAY:1985-04-\r\n 12\r\nEND:VCARD\r\n"
+    lines = ProTacts::VCard::Parser.lines(card)
+
+    assert_equal %w[BEGIN BDAY END], lines.map { it.property&.name }
+    assert_equal "1985-04-12", lines.fetch(1).property&.value
+    assert_equal "BDAY:1985-04-\r\n 12\r\n", lines.fetch(1).verbatim
+    assert_equal card, lines.map(&:verbatim).join
+  end
+
+  def test_a_line_that_will_not_read_has_no_property_but_keeps_its_bytes
+    line = ProTacts::VCard::Parser.lines("BDAY;=;:\r\n").fetch(0)
+
+    assert_nil line.property
+    assert_equal "BDAY;=;:\r\n", line.verbatim
+  end
+
+  # The two reads' strictness split, pinned: parse declines the whole
+  # card, lines carries the same line with a nil property.
+  def test_parse_raises_where_lines_carries
+    card = "FN:A\r\nBDAY;=;:\r\n"
+
+    assert_raises(ProTacts::VCard::ParseError) { parse(card) }
+    assert_nil ProTacts::VCard::Parser.lines(card).fetch(1).property
+  end
+
+  # A blank line is a line — its bytes stay enumerable, so a rewrite
+  # carrying lines does not drop them — while parse skips it, as the
+  # grammar lets a card carry blank lines between properties.
+  def test_a_blank_line_stays_a_line_but_parses_as_none
+    lines = ProTacts::VCard::Parser.lines("FN:A\r\n\r\nUID:b\r\n")
+
+    assert_equal ["FN:A\r\n", "\r\n", "UID:b\r\n"], lines.map(&:verbatim)
+    assert_nil lines.fetch(1).property
+    assert_equal %w[FN UID], parse("FN:A\r\n\r\nUID:b\r\n").map { it.name }
+  end
+
   ## Refusals
 
   def test_a_line_without_a_colon_raises
