@@ -79,6 +79,14 @@ module ProTacts
       def names?(name)
         verbatim.match?(/\A(?:[A-Za-z0-9-]+\.)?#{Regexp.escape(name)}[;:]/i)
       end
+
+      # Whether this line broke one of the parser's assumptions rather
+      # than merely failing to read. Asked here so no caller has to
+      # know the error taxonomy to tell the two apart.
+      #: () -> bool
+      def broke_assumption?
+        error.is_a?(Parser::BrokenAssumption)
+      end
     end
 
     # Text values escape backslash, the component separator, and the
@@ -178,6 +186,21 @@ module ProTacts
     def uid
       parsed = properties
       parsed && parsed.find { it.name.casecmp?("UID") }&.value
+    end
+
+    # The parser assumptions this card broke — the errors themselves,
+    # so a caller reporting them can say what was assumed and where.
+    # Empty for a card that reads, and for one that merely will not:
+    # a broken assumption is news about this server, ordinary bad
+    # input is not (Parser::BrokenAssumption). Deciding what to do
+    # about it is the caller's — reporting on every parse would fire
+    # on every read of the card, not once on its arrival.
+    #: () -> Array[Parser::BrokenAssumption]
+    def broken_assumptions
+      lines.filter_map { |line|
+        error = line.error
+        error if error.is_a?(Parser::BrokenAssumption)
+      }
     end
 
     # The card's logical lines, each parsed beside its verbatim bytes —

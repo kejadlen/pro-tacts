@@ -428,7 +428,7 @@ module ProTacts
         # A line that broke a parser assumption is not an unrecognized
         # BDAY, it is a line this server declined to read at all —
         # report_broken_assumptions says so, and more precisely.
-        next false if line.error.is_a?(VCard::Parser::BrokenAssumption)
+        next false if line.broke_assumption?
 
         property = bday_of(line)
         property.nil? || (!Birthday.rendered?(property) && !Birthday.unrendered_value?(property.value))
@@ -455,16 +455,22 @@ module ProTacts
     end
 
     # The assumption report, louder than the two above it: a submitted
-    # card that breaks one of the parser's assumptions
-    # (VCard::Parser::BrokenAssumption) is not bad input, it is news
-    # that the assumption is wrong and every simplification resting on
-    # it is now suspect. Nothing else would say so — the card is stored
-    # and served either way, and only its index entry is lost. The
-    # message carries no card content (ProTacts::SentryScrubber's
-    # line); the admin view shows the card raw.
+    # card that breaks one of the parser's assumptions is not bad
+    # input, it is news that the assumption is wrong and every
+    # simplification resting on it is now suspect. Nothing else would
+    # say so — the card is stored and served either way, and only its
+    # index entry is lost.
+    #
+    # Here rather than in the parser, which is where the break is
+    # found: a parse happens on every read of a card — the admin index
+    # parses every contact on every page load — and one bad card must
+    # not alert once per page view. An arrival is the event worth a
+    # message. The message carries no card content
+    # (ProTacts::SentryScrubber's line); the admin view shows the card
+    # raw.
     #: (VCard card) -> void
     def report_broken_assumptions(card)
-      broken = card.lines.count { it.error.is_a?(VCard::Parser::BrokenAssumption) }
+      broken = card.broken_assumptions.length
       return if broken.zero?
 
       Sentry.capture_message(

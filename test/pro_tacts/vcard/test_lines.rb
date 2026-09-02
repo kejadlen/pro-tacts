@@ -98,6 +98,29 @@ class VCardLinesTest < Minitest::Test
     assert_equal "BDAY;=;:\r\n", unparsed.verbatim
   end
 
+  # A broken assumption and an ordinary unreadable line are both
+  # errors on a line, and telling them apart belongs here rather than
+  # in whoever reports it: news about this server and ordinary bad
+  # input want different handling, and neither caller should have to
+  # know the parser's error taxonomy to pick.
+  def test_a_card_separates_broken_assumptions_from_bad_input
+    packed = VCARD.new("BEGIN:VCARD\r\nFN:A\rNOTE:n\r\nEND:VCARD\r\n")
+
+    assert_equal 1, packed.broken_assumptions.length
+    assert_match "bare CR", packed.broken_assumptions.fetch(0).message
+    assert_equal [false, true, false], packed.lines.map { it.broke_assumption? }
+
+    unreadable = VCARD.new("BEGIN:VCARD\r\nBDAY;=;:\r\nEND:VCARD\r\n")
+
+    assert_kind_of VCARD::ParseError, unreadable.lines.fetch(1).error
+    assert_empty unreadable.broken_assumptions
+    refute unreadable.lines.fetch(1).broke_assumption?
+  end
+
+  def test_a_card_that_reads_broke_no_assumption
+    assert_empty VCARD.new(CARD).broken_assumptions
+  end
+
   ## insert
 
   def test_insert_takes_the_end_lines_terminator_for_a_bare_line
