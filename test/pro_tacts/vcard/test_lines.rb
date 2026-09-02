@@ -9,11 +9,9 @@ class VCardLinesTest < Minitest::Test
 
   ## the card, read once
 
-  def test_a_card_reads_its_properties_beside_its_bytes
+  def test_a_card_reads_its_properties
     card = VCARD.new(CARD)
 
-    assert_equal CARD, card.bytes
-    assert card.parseable?
     assert_equal %w[BEGIN VERSION FN UID END], card.properties.map(&:name)
   end
 
@@ -21,8 +19,6 @@ class VCardLinesTest < Minitest::Test
   def test_the_parse_happens_only_when_read
     card = VCARD.new("this is not a vCard\r\n")
 
-    assert_equal "this is not a vCard\r\n", card.bytes
-    refute card.parseable?
     assert_nil card.properties
     refute card.card?
     assert_nil card.uid

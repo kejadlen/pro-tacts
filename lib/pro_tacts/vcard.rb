@@ -135,15 +135,9 @@ module ProTacts
       @bytes = bytes
     end
 
-    #: () -> String
-    def bytes
-      @bytes
-    end
-
     # The card's properties, parsed once on the first structured read.
     # Nil when the bytes are not a vCard — a caller is expected to carry
-    # on serving the bytes (ParseError's rule, held one level up), and
-    # #parseable? is the question to ask about it.
+    # on serving the bytes (ParseError's rule, held one level up).
     #: () -> Array[Property]?
     def properties
       return @properties if defined?(@properties)
@@ -151,11 +145,6 @@ module ProTacts
       @properties = Parser.parse(@bytes)
     rescue ParseError
       @properties = nil
-    end
-
-    #: () -> bool
-    def parseable?
-      !properties.nil?
     end
 
     # Whether the parsed properties carry the envelope RFC 2426 section
