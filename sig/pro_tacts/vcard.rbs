@@ -13,10 +13,11 @@ module ProTacts
     end
 
     class Line
-      attr_reader property: Property?
+      attr_reader properties: Array[Property]
       attr_reader verbatim: String
+      attr_reader error: ParseError?
 
-      def self.new: (property: Property?, verbatim: String) -> instance
+      def self.new: (properties: Array[Property], verbatim: String, error: ParseError?) -> instance
     end
   end
 end

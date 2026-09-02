@@ -54,7 +54,7 @@ class VCardLinesTest < Minitest::Test
   def test_lines_yield_the_cards_lines_parsed_beside_verbatim
     lines = VCARD.new(CARD).lines
 
-    assert_equal %w[BEGIN VERSION FN UID END], lines.map { it.property&.name }
+    assert_equal %w[BEGIN VERSION FN UID END], lines.map { it.properties.first&.name }
     assert_equal CARD, lines.map(&:verbatim).join
   end
 
@@ -63,7 +63,7 @@ class VCardLinesTest < Minitest::Test
     bdays, others = VCARD.new(born).lines.partition { it.names?("BDAY") }
 
     assert_equal 1, bdays.length
-    assert_equal "1985-04-12", bdays.fetch(0).property&.value
+    assert_equal "1985-04-12", bdays.fetch(0).properties.first&.value
     assert_equal "BDAY:1985-04-12\r\n", bdays.fetch(0).verbatim
     assert_equal CARD, others.map(&:verbatim).join
   end
@@ -74,13 +74,13 @@ class VCardLinesTest < Minitest::Test
     folded = CARD.sub("UID:ada\r\n", "UID:ada\r\nBDAY:1985-04-\r\n 12\r\n")
     bday = VCARD.new(folded).lines.find { it.names?("BDAY") }
 
-    assert_equal "1985-04-12", bday&.property&.value
+    assert_equal "1985-04-12", bday&.properties&.first&.value
     assert_equal "BDAY:1985-04-\r\n 12\r\n", bday&.verbatim
   end
 
   # A group prefix counts as naming the property; anything else does
-  # not, and a line that will not parse is a fact about the line
-  # (property nil), not an error.
+  # not, and a line that will not parse is a fact about the line,
+  # carried as data rather than raised.
   def test_names_judges_lines_not_properties
     grouped = CARD.sub("UID:ada\r\n", "UID:ada\r\nitem1.BDAY:1985-04-12\r\n")
 
@@ -92,7 +92,8 @@ class VCardLinesTest < Minitest::Test
 
     unparsed = VCARD.new("BDAY;=;:\r\n").lines.first
 
-    assert_nil unparsed.property
+    assert_kind_of VCARD::ParseError, unparsed.error
+    assert_empty unparsed.properties
     assert unparsed.names?("BDAY")
     assert_equal "BDAY;=;:\r\n", unparsed.verbatim
   end

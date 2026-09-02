@@ -223,7 +223,7 @@ module ProTacts
         case VCard.new(vcard).lines.partition { it.names?("BDAY") }
         in [[line], others]
           report_unrecognized_bday_lines([line])
-          property = line.property
+          property = line.properties.first
           birthday = property && Birthday.from_property(property)
           [birthday, birthday ? others.map(&:verbatim).join : vcard]
         in [[], _]
@@ -390,9 +390,13 @@ module ProTacts
 
       bdays, = VCard.new(vcard).lines.partition { it.names?("BDAY") }
       carried, rest = bdays.partition { |line|
-        line.property && Birthday.unrendered_value?(line.property.value)
+        property = line.properties.first
+        property && Birthday.unrendered_value?(property.value)
       }
-      lost = rest.reject { |line| line.property && Birthday.rendered?(line.property) }
+      lost = rest.reject { |line|
+        property = line.properties.first
+        property && Birthday.rendered?(property)
+      }
       [carried.map(&:verbatim), lost]
     end
 
@@ -405,7 +409,8 @@ module ProTacts
     #: (Array[VCard::Line] lines) -> void
     def report_unrecognized_bday_lines(lines)
       unrecognized = lines.count { |line|
-        line.property.nil? || (!Birthday.rendered?(line.property) && !Birthday.unrendered_value?(line.property.value))
+        property = line.properties.first
+        property.nil? || (!Birthday.rendered?(property) && !Birthday.unrendered_value?(property.value))
       }
       return if unrecognized.zero?
 

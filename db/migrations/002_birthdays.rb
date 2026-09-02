@@ -44,7 +44,7 @@ Sequel.migration do
       # card's BDAY lines take — only the modeled single line moves.
       case ProTacts::VCard.new(row.fetch(:vcard)).lines.partition { it.names?("BDAY") }
       in [[line], others]
-        property = line.property
+        property = line.properties.first
         birthday = property && ProTacts::Birthday.from_property(property)
         next if birthday.nil?
 

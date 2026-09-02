@@ -2,14 +2,14 @@ module ProTacts
   # A card, read once: the parsed properties beside the exact bytes
   # they came from, so a caller asks questions of either without
   # re-parsing, and moves a property without a byte around it moving
-  # too. Iteration is explicit over either half — #properties for the
-  # parsed card, #lines for the logical lines parsed beside their
-  # verbatim bytes (Line), where the questions that move bytes are
-  # asked — and #insert puts lines back in. vCard 3.0 (RFC 2426):
-  # escape and fold, the writer's half, are here; Parser owns the
-  # reading half, down to the line split. Both walks are lazy for the
-  # same reason Contact's parse is: the byte-moving paths never read
-  # structure.
+  # too. #lines walks the card once into Line values — a logical line's
+  # properties beside the exact bytes that carried them — and is the
+  # enumeration the questions that move bytes are asked over;
+  # #properties folds the same walk down to structure, and #insert
+  # puts lines back in. vCard 3.0 (RFC 2426): escape and fold, the
+  # writer's half, are here; Parser owns the reading half, down to
+  # the line split. The walk is lazy for the same reason Contact's
+  # parse is: the byte-moving paths never read structure.
   class VCard
     # Folded lines must not exceed 75 octets, excluding the line break
     # (RFC 2426 section 2.6). The octet count, not character count, is
@@ -51,14 +51,16 @@ module ProTacts
     Property = Data.define(:group, :name, :parameters, :value)
 
     # One logical line of a card, parsed beside the exact bytes that
-    # carried it: `property` is the parsed form — nil when the line
-    # will not read as one, which is a fact about the line, not an
-    # error — and `verbatim` is the line itself, folds and terminator
-    # included, so what moves between cards moves unchanged.
+    # carried it: `properties` is every content line the logical line
+    # read (usually one — a lone CR can end one mid-physical-line, and
+    # a blank line reads as none), `error` the ParseError the first
+    # failure raised, nil when it read, and `verbatim` the line itself,
+    # folds and terminator included, so what moves between cards moves
+    # unchanged.
     #
     # The signature lives in sig/pro_tacts/vcard.rbs with Property's.
     # @rbs skip
-    Line = Data.define(:property, :verbatim)
+    Line = Data.define(:properties, :verbatim, :error)
 
     # Reopened rather than defined in the block above: steep reads a
     # define block's self as this class's, not the constant's, so the
@@ -135,16 +137,15 @@ module ProTacts
       @bytes = bytes
     end
 
-    # The card's properties, parsed once on the first structured read.
-    # Nil when the bytes are not a vCard — a caller is expected to carry
-    # on serving the bytes (ParseError's rule, held one level up).
+    # The card's properties, folded off the same single walk #lines is
+    # and parsed once on the first structured read. Nil when any line
+    # would not read — a caller is expected to carry on serving the
+    # bytes (ParseError's rule, held one level up).
     #: () -> Array[Property]?
     def properties
       return @properties if defined?(@properties)
 
-      @properties = Parser.parse(@bytes)
-    rescue ParseError
-      @properties = nil
+      @properties = lines.any? { it.error } ? nil : lines.flat_map { it.properties }
     end
 
     # Whether the parsed properties carry the envelope RFC 2426 section

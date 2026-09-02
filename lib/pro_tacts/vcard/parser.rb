@@ -62,20 +62,25 @@ module ProTacts
       # Every content line in the card, in order. Blank lines are
       # skipped, and BEGIN, VERSION, and END come back like any other
       # property: deciding that a card is well-formed is not this class's
-      # job. Raises on the first line that will not read, so a caller
-      # rescuing ParseError declines the whole card at once.
+      # job. Raises the error of the first line that will not read, so a
+      # caller rescuing ParseError declines the whole card at once.
       #: (String card) -> Array[Property]
       def self.parse(card)
-        logical_lines(card).flat_map { new(it).parse }
+        lines = lines(card)
+        error = lines.filter_map { it.error }.first
+        raise error if error
+
+        lines.flat_map { it.properties }
       end
 
       # The card's logical lines, each parsed beside the exact bytes it
-      # came from, folds and terminator included. A line that will not
-      # read is a fact about the line, not an error: the property is nil
-      # and the bytes stay enumerable.
+      # came from, folds and terminator included — the one walk every
+      # read of a card derives from. A line that will not read is a
+      # fact about the line, not an error: the error it raised rides on
+      # it, and the bytes stay enumerable.
       #: (String card) -> Array[Line]
       def self.lines(card)
-        logical_lines(card).map { |line| Line.new(property: property_of(line), verbatim: line) }
+        logical_lines(card).map { |logical_line| line_of(logical_line) }
       end
 
       # VCard.fold's inverse, and the first thing a read does: RFC 2426
@@ -89,13 +94,15 @@ module ProTacts
         line.gsub(FOLD, "")
       end
 
-      # One logical line read as its first property, or nil when it does
-      # not read as one — blank, or rejected by the grammar.
-      #: (String line) -> Property?
-      def self.property_of(line)
-        new(line).parse.fetch(0, nil)
-      rescue ParseError
-        nil
+      # One logical line into a Line: every content line it read, or
+      # the error the first failure raised — the prefix that did read
+      # is dropped to match parse, which declines a line wholesale by
+      # raising. A blank line is neither: no properties, no error.
+      #: (String logical_line) -> Line
+      def self.line_of(logical_line)
+        Line.new(properties: new(logical_line).parse, verbatim: logical_line, error: nil)
+      rescue ParseError => error
+        Line.new(properties: [], verbatim: logical_line, error:)
       end
 
       # The card's logical lines: a physical line and the continuations
@@ -120,7 +127,7 @@ module ProTacts
         card.split(/(?<=\n)/, -1)
       end
 
-      private_class_method :property_of, :logical_lines, :physical_lines
+      private_class_method :line_of, :logical_lines, :physical_lines
 
       #: (String logical_line) -> void
       def initialize(logical_line)
