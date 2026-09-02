@@ -207,7 +207,8 @@ module ProTacts
       # a submitted card's BDAY lines can take. One line that reads as
       # a modeled birthday moves out of the card and into the model;
       # any other BDAY — the vCard 4.0 forms, a foreign sentinel, a
-      # line that will not parse, more than one — is data the model
+      # line that will not parse, a BDAY sharing its line's bytes with
+      # another, more than one — is data the model
       # cannot recompose and stays in the card byte for byte, with the
       # model emptied so nothing composes a second BDAY beside it
       # (RFC 6352 section 6.3.2.2). No BDAY at all is a client's
@@ -223,7 +224,7 @@ module ProTacts
         case VCard.new(vcard).lines.partition { it.names?("BDAY") }
         in [[line], others]
           report_unrecognized_bday_lines([line])
-          property = line.properties.first
+          property = bday_of(line)
           birthday = property && Birthday.from_property(property)
           [birthday, birthday ? others.map(&:verbatim).join : vcard]
         in [[], _]
@@ -379,6 +380,21 @@ module ProTacts
       row && row.fetch(:vcard).to_s
     end
 
+    # The BDAY a decision may be made of: the line's one property,
+    # when the line holds exactly one and it names BDAY. Found by name,
+    # not position, and only when alone, because the line is the unit a
+    # rewrite or a move to the model carries — a BDAY sharing its bytes
+    # with another content line (a lone CR packs two into one physical
+    # line) cannot leave without taking the rest with it. Nil for any
+    # other shape, the empty line a failed read leaves included.
+    #: (VCard::Line line) -> VCard::Property?
+    def bday_of(line)
+      return nil unless line.properties.one?
+
+      property = line.properties.fetch(0)
+      property.name.casecmp?("BDAY") ? property : nil
+    end
+
     # A stored card's BDAY lines in two piles: the verbatim lines a
     # rewrite carries across — values no client renders — and the ones
     # it drops unwitnessed, which no client renders and no whitelist
@@ -390,11 +406,11 @@ module ProTacts
 
       bdays, = VCard.new(vcard).lines.partition { it.names?("BDAY") }
       carried, rest = bdays.partition { |line|
-        property = line.properties.first
+        property = bday_of(line)
         property && Birthday.unrendered_value?(property.value)
       }
       lost = rest.reject { |line|
-        property = line.properties.first
+        property = bday_of(line)
         property && Birthday.rendered?(property)
       }
       [carried.map(&:verbatim), lost]
@@ -409,7 +425,7 @@ module ProTacts
     #: (Array[VCard::Line] lines) -> void
     def report_unrecognized_bday_lines(lines)
       unrecognized = lines.count { |line|
-        property = line.properties.first
+        property = bday_of(line)
         property.nil? || (!Birthday.rendered?(property) && !Birthday.unrendered_value?(property.value))
       }
       return if unrecognized.zero?

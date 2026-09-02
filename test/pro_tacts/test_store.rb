@@ -549,6 +549,23 @@ class StoreTest < Minitest::Test
   # rewrite that omits the BDAY carries them across or loses them
   # (docs/macos-contacts.md, "A birthday the client cannot render is
   # dropped from the card").
+  # A BDAY sharing its line's bytes with another content line — a lone
+  # CR packs two into one physical line — is not a birthday any single
+  # decision can be made of: taking the first property alone would drop
+  # the bytes beside it unwitnessed, so the line stays verbatim, the
+  # model empties, and the arrival is reported.
+  def test_a_bday_sharing_its_line_arrives_whole_and_reported
+    shared = AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\rNOTE:b\r\nEND:VCARD\r\n")
+
+    with_store({"aiden" => AIDEN_BORN}) do |store|
+      messages = capturing_sentry { store.put("aiden", shared) }
+
+      assert_equal shared, store.contact("aiden").vcard
+      assert_nil birthday_row(store, "aiden")
+      assert_equal 1, messages.length
+    end
+  end
+
   def test_a_birthday_no_client_renders_survives_a_rewrite_that_drops_it
     ["BDAY:1985-04", "BDAY:1985", "BDAY:--04", "BDAY:---12"].each do |line|
       with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")}) do |store|
@@ -572,6 +589,21 @@ class StoreTest < Minitest::Test
 
       assert_equal AIDEN, store.contact("aiden").vcard
       assert_nil birthday_row(store, "aiden")
+    end
+  end
+
+  # The rewrite's half of the same rule: a shared line is not carried
+  # (carrying it would carry its fellow bytes too), so dropping it is
+  # reported rather than silent.
+  def test_a_rewrite_dropping_a_shared_bday_line_is_reported
+    shared = AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04\rNOTE:b\r\nEND:VCARD\r\n")
+    edited = AIDEN.sub("FN:Aiden", "FN:Aiden Smith")
+
+    with_store({"aiden" => shared}) do |store|
+      messages = capturing_sentry { store.put("aiden", edited) }
+
+      assert_equal edited, store.contact("aiden").vcard
+      assert_equal 1, messages.length
     end
   end
 
@@ -698,12 +730,14 @@ class StoreTest < Minitest::Test
   # — is carried over by the same subtraction a write makes: modeled
   # forms move, unmodeled forms stay put.
   def test_the_migration_moves_a_modeled_bday_out_of_the_cards
+    shared = ZED.sub("UID:znorth", "UID:xavi").sub("END:VCARD\r\n", "BDAY:1985-04-12\rNOTE:b\r\nEND:VCARD\r\n")
     Dir.mktmpdir do |dir|
       path = Pathname.new(dir) / "contacts.db"
       Sequel.connect("sqlite://#{path}") do |db|
         Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 1)
         db[:cards].insert(id: "aiden", vcard: AIDEN_BORN)
         db[:cards].insert(id: "znorth", vcard: ZED.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n"))
+        db[:cards].insert(id: "xavi", vcard: shared)
       end
 
       ProTacts::Store.connect(path) do |store|
@@ -714,6 +748,12 @@ class StoreTest < Minitest::Test
         # Unmodeled: byte-identical, no birthday row beside it.
         assert_equal ZED.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n"), store.contact("znorth").vcard
         assert_nil birthday_row(store, "znorth")
+
+        # A BDAY sharing its line's bytes stays put: the line moves as
+        # one or not at all, where the first property alone would have
+        # moved the birthday and dropped the NOTE unwitnessed.
+        assert_equal shared, store.contact("xavi").vcard
+        assert_nil birthday_row(store, "xavi")
       end
     end
   end
