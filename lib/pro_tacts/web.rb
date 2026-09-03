@@ -442,10 +442,16 @@ module ProTacts
       return precondition("supported-address-data") unless request.media_type == "text/vcard"
 
       # CARDDAV:valid-address-data: bytes that are the UTF-8 the media
-      # type declares, parsing into a card with the envelope RFC 2426
-      # section 4 requires. Invalid UTF-8 would otherwise surface as a
-      # 500 out of SQLite on the insert, past the point where the
-      # client could be told what was wrong with the body.
+      # type declares, carrying the envelope RFC 2426 section 4
+      # requires. Invalid UTF-8 would otherwise surface as a 500 out of
+      # SQLite on the insert, past the point where the client could be
+      # told what was wrong with the body.
+      #
+      # The envelope is the whole test. A line inside it this parser
+      # cannot read is not grounds for refusing the card: RFC 6352
+      # section 6.3.2.2 has the server keep what it does not
+      # understand, and it is kept — the stored bytes are what goes
+      # back out.
       return precondition("valid-address-data") unless vcard.valid_encoding?
 
       card = VCard.new(vcard)
@@ -473,6 +479,8 @@ module ProTacts
       if_none_match = request.env["HTTP_IF_NONE_MATCH"]
       return plain_412 if if_none_match && if_none_match_failed?(if_none_match, existing)
 
+      report_broken_assumptions(card)
+
       stored = store.put(id, vcard)
       response.status = existing ? 204 : 201
       # A strong ETag belongs on the answer only when what was stored is
@@ -489,6 +497,30 @@ module ProTacts
       # content-length onto the 204, which a bodyless status must not
       # carry (Rack 3's lint rejects both); nil leaves it bodyless.
       nil
+    end
+
+    # A card that breaks one of the parser's assumptions is not bad
+    # input, it is news that the assumption is wrong and every
+    # simplification resting on it is now suspect. Nothing else would
+    # say so: the card is accepted, stored, and served either way, and
+    # a line that will not read costs it only its index rows.
+    #
+    # Here rather than in the parser, which is where the break is
+    # found: a read happens on every look at a card — the admin index
+    # reads every contact on every page load — and one bad card must
+    # not alert once per page view. An arrival is the event worth a
+    # message, and a PUT is the only arrival there is. The message
+    # carries no card content (ProTacts::SentryScrubber's line); the
+    # admin view shows the card raw.
+    #: (VCard card) -> void
+    def report_broken_assumptions(card)
+      broken = card.lines.count { it.broke_assumption? }
+      return if broken.zero?
+
+      Sentry.capture_message(
+        "a submitted card broke #{broken} parser assumption(s) about what macOS Contacts sends",
+        level: :error,
+      )
     end
 
     # A 412 whose body names the CardDAV precondition that failed, in

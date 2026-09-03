@@ -170,10 +170,10 @@ module ProTacts
 
     # The id of the card whose UID property holds this value, if one
     # does — the read behind the no-uid-conflict precondition (RFC 6352
-    # section 6.3.2.1). It reads the index, so a card that failed to
-    # parse is invisible here; no card that arrived by PUT can be in
-    # that state, because PUT rejects what will not parse before
-    # storing it. `sole` for the same reason `contact` uses it: two
+    # section 6.3.2.1). It reads the index, so a card whose UID line
+    # would not read is invisible here; no card that arrived by PUT can
+    # be in that state, because PUT reads the UID off the same lines
+    # before storing it. `sole` for the same reason `contact` uses it: two
     # cards sharing a UID is a corruption to raise on, not a choice.
     #: (String uid) -> String?
     def card_id_with_uid(uid)
@@ -220,7 +220,6 @@ module ProTacts
       # nothing a client ever saw, and what nobody recognizes is
       # reported rather than lost in silence.
       card = VCard.new(vcard)
-      report_broken_assumptions(card)
       existing = birthday_of(id)
       birthday, stored =
         case card.extract("BDAY")
@@ -281,19 +280,14 @@ module ProTacts
 
     # Drops the index and derives it again from the stored cards alone.
     # Always safe to run: nothing is authoritative here, so if the
-    # projection ever disagrees with the cards, this is the repair.
-    # Returns the ids of cards that did not parse, which are served in
-    # full but contribute nothing to the index. Raw rows rather than
-    # #contacts, which compose birthdays in: the index reflects what is
-    # stored, and no stored card carries a BDAY.
-    #: () -> Array[String]
+    # projection ever disagrees with the cards, this is the repair. Raw
+    # rows rather than #contacts, which compose birthdays in: the index
+    # reflects what is stored, and no stored card carries a BDAY.
+    #: () -> void
     def rebuild_index
       @database.transaction do
         card_properties.delete
-        cards.order(:id).all.each.with_object([]) do |row, unindexed|
-          id = row.fetch(:id).to_s
-          unindexed << id unless reindex(id, row.fetch(:vcard).to_s)
-        end
+        cards.order(:id).all.each { reindex(it.fetch(:id).to_s, it.fetch(:vcard).to_s) }
       end
     end
 
@@ -331,19 +325,19 @@ module ProTacts
 
     # Replaces a card's rows in the index. Rebuilt wholesale rather than
     # diffed because it is derived data and replacing it is the cheaper
-    # correct thing. Returns whether the card parsed: one that does not
-    # is still served, so refusing to index it must not fail the write.
-    # Takes the stored card — with the birthday already subtracted — so
-    # the index never sees a BDAY no stored card carries.
-    #: (String id, String vcard) -> bool
+    # correct thing. Indexes the lines that read and says nothing about
+    # the ones that did not: the card is served from its bytes either
+    # way, and there is no version of this write that fixes a line the
+    # parser cannot read. Takes the stored card — with the birthday
+    # already subtracted — so the index never sees a BDAY no stored
+    # card carries.
+    #: (String id, String vcard) -> void
     def reindex(id, vcard)
       # Before the parse, so that a card which has stopped parsing does
       # not keep the rows from when it did.
       card_properties.where(card_id: id).delete
-      properties = properties_of(vcard)
-      return false if properties.nil?
 
-      properties.each.with_index do |property, position|
+      properties_of(vcard).each.with_index do |property, position|
         card_properties.insert(
           card_id: id,
           position:,
@@ -355,11 +349,10 @@ module ProTacts
           card_parameters.insert(card_id: id, position:, name:, value:)
         end
       end
-      true
     end
 
-    # A card's properties, or nil when the bytes are not a vCard.
-    #: (String vcard) -> Array[VCard::Property]?
+    # A card's properties: every line of it that read.
+    #: (String vcard) -> Array[VCard::Parser::Property]
     def properties_of(vcard)
       VCard.new(vcard).properties
     end
@@ -386,10 +379,10 @@ module ProTacts
     # has one and it names BDAY. Found by name rather than position,
     # and safe to act on because the line is the unit a rewrite or a
     # move to the model carries and a line holds at most one property
-    # (VCard::Line) — so moving its bytes moves this and nothing else.
-    # Nil for any other shape, the empty line a failed read leaves
-    # included.
-    #: (VCard::Line line) -> VCard::Property?
+    # (VCard::Parser::Line) — so moving its bytes moves this and
+    # nothing else. Nil for any other shape, the empty line a failed
+    # read leaves included.
+    #: (VCard::Parser::Line line) -> VCard::Parser::Property?
     def bday_of(line)
       property = line.property
       property if property&.name&.casecmp?("BDAY")
@@ -400,7 +393,7 @@ module ProTacts
     # it drops unwitnessed, which no client renders and no whitelist
     # recognizes. Lines a client rendered are in neither pile: their
     # absence is a deletion the rewrite already honors.
-    #: (String? vcard) -> [Array[String], Array[VCard::Line]]
+    #: (String? vcard) -> [Array[String], Array[VCard::Parser::Line]]
     def carried_and_lost_bday_lines(vcard)
       return [[], []] if vcard.nil?
 
@@ -422,13 +415,13 @@ module ProTacts
     # it. The message carries no card content
     # (ProTacts::SentryScrubber's line); the values stay on the
     # machine, where the admin view shows them raw.
-    #: (Array[VCard::Line] lines) -> void
+    #: (Array[VCard::Parser::Line] lines) -> void
     def report_unrecognized_bday_lines(lines)
       unrecognized = lines.count { |line|
-        # A line that broke a parser assumption is not an unrecognized
-        # BDAY, it is a line this server declined to read at all —
-        # report_broken_assumptions says so, and more precisely.
-        next false if line.broke_assumption?
+        # A line with no property is one this server could not read at
+        # all, and a value it never read is not a value it failed to
+        # recognize. The line's bytes are stored either way.
+        next false if line.property.nil?
 
         property = bday_of(line)
         property.nil? || (!Birthday.rendered?(property) && !Birthday.unrendered_value?(property.value))
@@ -444,38 +437,13 @@ module ProTacts
     # The loss report, the rewrite's half of the arrival one: a stored
     # BDAY no client renders and no whitelist recognizes is about to be
     # dropped, and nobody would know.
-    #: (Array[VCard::Line] lines) -> void
+    #: (Array[VCard::Parser::Line] lines) -> void
     def report_lost_bday_lines(lines)
       return if lines.empty?
 
       Sentry.capture_message(
         "a rewrite dropped #{lines.length} BDAY line(s) no client renders and no whitelist carries",
         level: :warning,
-      )
-    end
-
-    # The assumption report, louder than the two above it: a submitted
-    # card that breaks one of the parser's assumptions is not bad
-    # input, it is news that the assumption is wrong and every
-    # simplification resting on it is now suspect. Nothing else would
-    # say so — the card is stored and served either way, and only its
-    # index entry is lost.
-    #
-    # Here rather than in the parser, which is where the break is
-    # found: a parse happens on every read of a card — the admin index
-    # parses every contact on every page load — and one bad card must
-    # not alert once per page view. An arrival is the event worth a
-    # message. The message carries no card content
-    # (ProTacts::SentryScrubber's line); the admin view shows the card
-    # raw.
-    #: (VCard card) -> void
-    def report_broken_assumptions(card)
-      broken = card.lines.count { it.broke_assumption? }
-      return if broken.zero?
-
-      Sentry.capture_message(
-        "a submitted card broke #{broken} parser assumption(s) about what macOS Contacts sends",
-        level: :error,
       )
     end
 

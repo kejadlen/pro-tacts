@@ -38,7 +38,7 @@ lib/pro_tacts/
 ├── contact.rb      # the one model of a contact: id, vCard, etag,
 │                   # and the structured accessors over the card
 ├── vcard.rb        # vCard 3.0 escaping and folding, and what a card is
-├── vcard/parser.rb # One card's bytes into properties
+├── vcard/parser.rb # One card's bytes into lines
 ├── config.rb       # Every environment read in the app
 ├── profile.rb      # carddav.mobileconfig generation
 └── debug_logger.rb # Full request/response dumps, off by default
@@ -166,12 +166,22 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   The etag in `changes` is the exception and is not the same fact — it
   is what the card hashed to at that write, which nothing can recompute
   once the card moves on.
+- Nothing above `vcard/parser.rb` handles a parse error, and nothing
+  should start. `Parser.lines` is the only read: a line that will not
+  read comes back as a Line with no property. The card is served from
+  its bytes regardless, `VCard` and `Contact` answer from the lines
+  that read, and the index holds what this server understood. There is
+  no repair to make, which is why no caller is asked to look for one.
+- The one exception is `Web#report_broken_assumptions`, and it is not
+  handling: a broken assumption is news that something this server was
+  built on is wrong. It lives at the PUT because that is the arrival —
+  a read happens on every page load, and one bad card must not alert
+  once per page view.
 - `vcard.rb` no longer raises on what it does not recognize, and must
   not start again. It used to render a hand-edited format, where an
   unknown key meant a typo silently losing data; it now reads stored
   cards, where an unknown property means a client using the spec, and
-  RFC 6352 section 6.3.2.2 requires keeping it. A card that will not
-  parse is still served, it just does not get indexed.
+  RFC 6352 section 6.3.2.2 requires keeping it.
 - `escape` and `fold` in `vcard.rb` have no caller yet. They are the
   writer's half of the module, kept deliberately for PUT and the web
   editor, and tested directly rather than through anything that serves.

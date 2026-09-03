@@ -11,9 +11,8 @@ namespace :index do
 
     database = ProTacts.config.database_path
     ProTacts::Store.connect(database) do |store|
-      unindexed = store.rebuild_index
+      store.rebuild_index
       puts "rebuilt the index in #{database}"
-      warn "not indexed, still served: #{unindexed.join(', ')}" unless unindexed.empty?
     end
   end
 end

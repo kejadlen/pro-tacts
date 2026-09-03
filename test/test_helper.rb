@@ -49,3 +49,25 @@ require "minitest/autorun"
 # Standing in for config.ru, which never runs here: build the store and
 # hand it to the app.
 ProTacts::Web.store = FixtureData.install(data_dir)
+
+# Sentry's capture_message, made observable for the length of a block and
+# restored after, so what one test captures cannot leak into the next.
+# Sentry is never initialized under test, so the original is inert
+# anyway — this only makes it observable. Returns what was captured.
+#
+# Here rather than in one test class because the reports are raised from
+# two layers: the web's PUT reports a broken parser assumption, the store
+# reports what its birthday model could not recompose.
+module CapturingSentry
+  def capturing_sentry
+    messages = []
+    original = Sentry.method(:capture_message)
+    Sentry.define_singleton_method(:capture_message) { |message, **| messages << message }
+    begin
+      yield messages
+    ensure
+      Sentry.define_singleton_method(:capture_message, original)
+    end
+    messages
+  end
+end

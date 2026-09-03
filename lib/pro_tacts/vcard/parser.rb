@@ -5,7 +5,7 @@ require "pro_tacts/vcard"
 
 module ProTacts
   class VCard
-    # Reads a stored card into VCard::Property and VCard::Line values.
+    # Reads a card's bytes into Lines.
     #
     # Deliberately shallow: a property is a name, its parameters, and the
     # text of its value, and nothing here knows what any of them mean.
@@ -15,17 +15,28 @@ module ProTacts
     # 6.3.2.2 requires of a CardDAV server. See
     # docs/plans/2026-08-24-vcard-storage-and-groups.md.
     #
-    # The whole reading half of VCard lives here: unfolding, the split
-    # into logical lines, and the reads over them. One instance reads one
-    # logical line — the scanner is the whole of its state, which is why
-    # it is a class and not a handful of functions passing a position
-    # between them — and the two class-level reads differ only in
-    # strictness. parse raises on a line that will not read, which is
-    # what keeps an unparseable card served but unindexed; lines carries
-    # the same line with a nil property, which is what lets a rewrite
-    # move bytes no line could ever parse out of.
+    # The whole reading half of VCard lives here — unfolding, the split
+    # into logical lines, the reads over them, and the values they come
+    # back as — and it has one entry point: lines. One instance reads
+    # one logical line; the scanner is the whole of its state, which is
+    # why it is a class and not a handful of functions passing a
+    # position between them.
+    #
+    # A line that will not read is a Line like any other, carrying the
+    # error rather than raising it, and no read here raises on a card's
+    # behalf. Nothing above handles one either: VCard and Contact answer
+    # from the lines that read, the index holds what this server
+    # understood, and a rewrite moves the bytes regardless. The error
+    # rides along for one reader, ProTacts::Web, which reports a broken
+    # assumption at the arrival that carried it.
     class Parser
       # @rbs @scanner: StringScanner
+
+      # A line whose bytes are not a content line at all. Never raised
+      # past #lines, which catches it and hands it back on the Line it
+      # happened to: what a line failing to read costs is that line's
+      # index rows, and the card is served from its bytes regardless.
+      class ParseError < StandardError; end
 
       # Something this parser was built to assume it would never read.
       # Not a judgment on the card: the assumptions are about macOS
@@ -34,11 +45,66 @@ module ProTacts
       # card can break one while being a perfectly good vCard. Raising
       # is how the assumption gets checked instead of merely held.
       #
-      # A ParseError so it rides the same rails as any card that will
-      # not read — the bytes are still served, an index entry is what
-      # is lost — and its own class so Store can report it, a wrong
-      # assumption being news rather than ordinary bad input.
+      # A ParseError so it rides the same rails as any line that will
+      # not read — the bytes are still served, index rows are what is
+      # lost — and its own class so ProTacts::Web can report it at the
+      # arrival, a wrong assumption being news rather than ordinary bad
+      # input.
       class BrokenAssumption < ParseError; end
+
+      # One parsed content line.
+      #
+      # `parameters` is a list of name-and-value pairs rather than a hash
+      # because a parameter can repeat, and RFC 2426 section 3.3.1 makes
+      # `TYPE=work;TYPE=voice` and `TYPE=work,voice` two spellings of the
+      # same thing — both arrive here as two pairs.
+      #
+      # `value` is the value's text, unfolded and otherwise exactly as it
+      # was stored, still escaped. Unescaping it and splitting it on the
+      # component separator are per-property semantics, and this layer has
+      # none.
+      #
+      # The signature lives in sig/pro_tacts/vcard/parser.rbs: a Data
+      # class has no constant super class for the inline syntax to read.
+      # @rbs skip
+      Property = Data.define(:group, :name, :parameters, :value)
+
+      # One logical line of a card, parsed beside the exact bytes that
+      # carried it: `property` is the content line it read, nil when it
+      # read none (a blank line, or one that would not read), `error` the
+      # ParseError the failure raised, nil when it read, and `verbatim`
+      # the line itself, folds and terminator included, so what moves
+      # between cards moves unchanged.
+      #
+      # One property, not a list of them: a logical line can only hold a
+      # second content line when a bare CR ends the first, and that is
+      # refused outright (BrokenAssumption). That is what lets a caller
+      # move a line's bytes knowing it moves exactly one property.
+      #
+      # The signature lives in sig/pro_tacts/vcard/parser.rbs with
+      # Property's.
+      # @rbs skip
+      Line = Data.define(:property, :verbatim, :error)
+
+      # Reopened rather than defined in the block above: steep reads a
+      # define block's self as this class's, not the constant's, so the
+      # methods could not live there.
+      class Line
+        # Whether this line names the property, a group prefix
+        # (`item1.BDAY`) counting as naming it. Asked of the line rather
+        # than the property because a line that will not parse still has
+        # a name in it.
+        #: (String name) -> bool
+        def names?(name)
+          verbatim.match?(/\A(?:[A-Za-z0-9-]+\.)?#{Regexp.escape(name)}[;:]/i)
+        end
+
+        # Whether this line broke one of the parser's assumptions rather
+        # than merely failing to read. Asked here so no caller has to
+        # know the error taxonomy to tell the two apart.
+        #: () -> bool
+        def broke_assumption? = error.is_a?(BrokenAssumption)
+      end
 
       # The content line, RFC 2426 section 4:
       #
@@ -72,25 +138,13 @@ module ProTacts
       # 2.6 folding).
       CONTINUATION = /\A[ \t]/ #: Regexp
 
-      # Every content line in the card, in order. Blank lines are
-      # skipped, and BEGIN, VERSION, and END come back like any other
-      # property: deciding that a card is well-formed is not this class's
-      # job. Raises the error of the first line that will not read, so a
-      # caller rescuing ParseError declines the whole card at once.
-      #: (String card) -> Array[Property]
-      def self.parse(card)
-        lines = lines(card)
-        error = lines.filter_map { it.error }.first
-        raise error if error
-
-        lines.filter_map { it.property }
-      end
-
       # The card's logical lines, each parsed beside the exact bytes it
       # came from, folds and terminator included — the one walk every
-      # read of a card derives from. A line that will not read is a
-      # fact about the line, not an error: the error it raised rides on
-      # it, and the bytes stay enumerable.
+      # read of a card derives from. Blank lines are lines, and BEGIN,
+      # VERSION, and END read like any other property: deciding that a
+      # card is well-formed is not this class's job. A line that will
+      # not read is a fact about the line, not an error: the error it
+      # raised rides on it, and the bytes stay enumerable.
       #: (String card) -> Array[Line]
       def self.lines(card)
         logical_lines(card).map { |logical_line| line_of(logical_line) }

@@ -35,7 +35,7 @@ module ProTacts
     # @rbs @id: String
     # @rbs @vcard: String
     # @rbs @etag: String
-    # @rbs @properties: Array[VCard::Property]
+    # @rbs @properties: Array[VCard::Parser::Property]
 
     # Ids end up in paths and arrive from client-supplied hrefs, so an id
     # outside this charset cannot be served.
@@ -94,18 +94,16 @@ module ProTacts
 
     # The card's properties, parsed once and memoized — the substrate
     # the typed accessors sit on, and the read for what none of them
-    # models. Lets VCard::ParseError raise rather than returning an
-    # empty card: PUT checks the card's envelope before the store
-    # accepts it, so one reaching this unparseable is a bug or a
-    # corrupt row, and Sentry (already wired into every request, see
-    # ProTacts::Web) is where that should surface, not a silently
-    # blank screen. VCard.new tolerates the same bytes for the paths
-    # that serve them; this model of a served contact does not.
-    #: () -> Array[VCard::Property]
+    # models. Every line that read, and no complaint about one that did
+    # not: a contact is served from its bytes, so a line this parser
+    # cannot read costs an accessor its answer and costs the contact
+    # nothing. There is no repair to make and nobody to make it, which
+    # is why nothing here looks for one.
+    #: () -> Array[VCard::Parser::Property]
     def properties
       return @properties if defined?(@properties)
 
-      @properties = VCard::Parser.parse(@vcard)
+      @properties = VCard.new(@vcard).properties
     end
 
     # FN's value (RFC 2426 section 3.1.1), in text form.
@@ -161,12 +159,12 @@ module ProTacts
 
     private
 
-    #: (String name) -> Array[VCard::Property]
+    #: (String name) -> Array[VCard::Parser::Property]
     def of_name(name)
       properties.select { it.name.casecmp?(name) }
     end
 
-    #: (VCard::Property property) -> Address
+    #: (VCard::Parser::Property property) -> Address
     def address_of(property)
       po_box, extended, street, locality, region, postal_code, country =
         VCard.split_components(property.value)
@@ -176,7 +174,7 @@ module ProTacts
     # RFC 2426 section 3.3.1: TYPE can repeat (TYPE=work;TYPE=voice) or
     # comma-list (TYPE=work,voice) — either arrives here as one
     # parameter per value, so the first is the one this carries.
-    #: (VCard::Property property) -> String?
+    #: (VCard::Parser::Property property) -> String?
     def type_of(property)
       property.parameters.find { |name, _| name.casecmp?("TYPE") }&.last&.downcase
     end

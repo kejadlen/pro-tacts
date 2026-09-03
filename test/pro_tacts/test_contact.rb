@@ -149,12 +149,13 @@ class ContactTest < Minitest::Test
     assert_nil bare.notes
   end
 
-  # Unlike Store#rebuild_index, which fails a card open because a
-  # write already guarantees every stored card parses (VCard.card? is
-  # checked before a PUT is accepted) — a card that reaches here and
-  # still won't parse is a bug or a corrupt row, not the ordinary case,
-  # and it should raise into Sentry rather than render a blank card.
-  def test_a_card_that_will_not_parse_raises_from_the_accessors
-    assert_raises(ProTacts::VCard::ParseError) { contact("not a vCard at all").phones }
+  # A card that will not read is still a contact: the bytes are what
+  # gets served, and no accessor has a repair to offer for a line the
+  # parser cannot read. The accessors answer from the lines that read
+  # and say nothing about the rest.
+  def test_a_card_that_will_not_parse_answers_from_what_read
+    assert_empty contact("not a vCard at all").phones
+    assert_empty contact("not a vCard at all").properties
+    assert_equal "Aiden", contact("FN:Aiden\r\nTEL;HOME:+1-555-1234\r\n").name
   end
 end

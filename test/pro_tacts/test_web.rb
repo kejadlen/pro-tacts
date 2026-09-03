@@ -11,6 +11,7 @@ require "pro_tacts/store"
 require "pro_tacts/web"
 
 class WebTest < Minitest::Test
+  include CapturingSentry
   include Rack::Test::Methods
 
   def app
@@ -379,6 +380,54 @@ class WebTest < Minitest::Test
       assert_equal 412, last_response.status
 
       assert_includes last_response.body, "<card:valid-address-data/>"
+    end
+  end
+
+  # A line that will not read is not grounds for refusing the card —
+  # RFC 6352 section 6.3.2.2 has the server keep what it does not
+  # understand — so the PUT succeeds and the bytes go back out whole.
+  def test_put_of_a_card_with_a_line_that_will_not_read_is_accepted_whole
+    unreadable = card("new", "New").sub("FN:New\r\n", "FN:New\r\nTEL;HOME:+1-555-1234\r\n")
+
+    with_contacts({}) do
+      put_request "new", unreadable, "CONTENT_TYPE" => VCARD
+
+      assert_equal 201, last_response.status
+
+      get "/dav/addressbook/new.vcf"
+
+      assert_equal unreadable, last_response.body
+    end
+  end
+
+  # The one report left in the app: a card that breaks an assumption
+  # about what macOS Contacts sends is news that the assumption is
+  # wrong, and an arrival is the event worth a message — a read happens
+  # on every page load. A bare CR packs two content lines into one
+  # line's bytes, which is the assumption this card breaks.
+  def test_put_of_a_card_breaking_a_parser_assumption_is_reported
+    packed = card("new", "New").sub("FN:New\r\n", "FN:New\rNOTE:b\r\n")
+
+    with_contacts({}) do
+      messages = capturing_sentry {
+        put_request "new", packed, "CONTENT_TYPE" => VCARD
+      }
+
+      assert_equal 201, last_response.status
+      assert_equal 1, messages.length
+      assert_match "broke 1 parser assumption", messages.fetch(0)
+    end
+  end
+
+  # Nothing else reports: an ordinary card arrives in silence.
+  def test_put_of_an_ordinary_card_is_quiet
+    with_contacts({}) do
+      messages = capturing_sentry {
+        put_request "new", card("new", "New"), "CONTENT_TYPE" => VCARD
+      }
+
+      assert_equal 201, last_response.status
+      assert_empty messages
     end
   end
 

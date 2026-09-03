@@ -65,7 +65,7 @@ class BirthdayTest < Minitest::Test
 
   # A parsed property, the shape a read out of a card takes.
   def property(value, parameters: [], group: nil)
-    ProTacts::VCard::Property.new(group:, name: "BDAY", parameters:, value:)
+    ProTacts::VCard::Parser::Property.new(group:, name: "BDAY", parameters:, value:)
   end
 
   def test_a_full_date_reads_into_the_model

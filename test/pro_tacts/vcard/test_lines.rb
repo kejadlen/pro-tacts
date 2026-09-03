@@ -15,13 +15,28 @@ class VCardLinesTest < Minitest::Test
     assert_equal %w[BEGIN VERSION FN UID END], card.properties.map(&:name)
   end
 
-  # The parse is lazy, so moving bytes never pays for reading structure.
-  def test_the_parse_happens_only_when_read
+  # A card whose bytes will not read is still a card here: it answers
+  # every question from the lines that did read, and never raises. A
+  # line the parser cannot read is nobody's problem to solve — the
+  # bytes are served either way — so nothing above the parser is asked
+  # to notice one.
+  def test_a_card_that_will_not_read_answers_from_what_did
     card = VCARD.new("this is not a vCard\r\n")
 
-    assert_nil card.properties
+    assert_empty card.properties
     refute card.card?
     assert_nil card.uid
+    assert_equal ["this is not a vCard\r\n"], card.lines.map(&:verbatim)
+  end
+
+  # Only the lines that would not read drop out; the card answers from
+  # the rest, envelope included.
+  def test_a_card_answers_around_a_line_that_will_not_read
+    card = VCARD.new(CARD.sub("FN:Ada\r\n", "FN:Ada\r\nTEL;HOME:+1-555-1234\r\n"))
+
+    assert_equal %w[BEGIN VERSION FN UID END], card.properties.map(&:name)
+    assert card.card?
+    assert_equal "ada", card.uid
   end
 
   # A card is made of UTF-8 text and refuses to be made of anything
@@ -103,7 +118,7 @@ class VCardLinesTest < Minitest::Test
 
     unparsed = VCARD.new("BDAY;=;:\r\n").lines.first
 
-    assert_kind_of VCARD::ParseError, unparsed.error
+    assert_kind_of VCARD::Parser::ParseError, unparsed.error
     assert_nil unparsed.property
     assert unparsed.names?("BDAY")
     assert_equal "BDAY;=;:\r\n", unparsed.verbatim
@@ -122,7 +137,7 @@ class VCardLinesTest < Minitest::Test
 
     unreadable = VCARD.new("BEGIN:VCARD\r\nBDAY;=;:\r\nEND:VCARD\r\n")
 
-    assert_kind_of VCARD::ParseError, unreadable.lines.fetch(1).error
+    assert_kind_of VCARD::Parser::ParseError, unreadable.lines.fetch(1).error
     refute unreadable.lines.fetch(1).broke_assumption?
 
     refute VCARD.new(CARD).lines.any? { it.broke_assumption? }

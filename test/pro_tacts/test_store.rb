@@ -8,6 +8,8 @@ require "sequel"
 require "pro_tacts/store"
 
 class StoreTest < Minitest::Test
+  include CapturingSentry
+
   AIDEN = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
   # UTC ISO 8601 to the millisecond, which is what SQLite is asked for.
   TIMESTAMP = /\A\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z\z/
@@ -15,23 +17,6 @@ class StoreTest < Minitest::Test
 
   # A store on disk rather than in memory: WAL, the busy timeout, and
   # reopening a database are all part of what is under test.
-  # minitest 6 ships no mock, so the Sentry capture is stubbed by hand:
-  # the bound original is swapped back in an ensure, so one assertion
-  # cannot leak into the next. Sentry is never initialized under test,
-  # so the original is inert anyway — this only makes it observable.
-  # Returns what was captured.
-  def capturing_sentry
-    messages = []
-    original = Sentry.method(:capture_message)
-    Sentry.define_singleton_method(:capture_message) { |message, **| messages << message }
-    begin
-      yield messages
-    ensure
-      Sentry.define_singleton_method(:capture_message, original)
-    end
-    messages
-  end
-
   def with_store(cards = {})
     Dir.mktmpdir do |dir|
       ProTacts::Store.connect(Pathname.new(dir) / "contacts.db") do |store|
@@ -413,7 +398,8 @@ class StoreTest < Minitest::Test
       wreck_the_index(store)
       refute_equal before, index_rows(store)
 
-      assert_empty store.rebuild_index
+      store.rebuild_index
+
       assert_equal before, index_rows(store)
     end
   end
@@ -437,8 +423,8 @@ class StoreTest < Minitest::Test
   ## Cards that will not parse
 
   # Fail open: the bytes are what gets served, so a card the parser
-  # cannot read is still a contact. It just contributes nothing to the
-  # index, and the rebuild names it.
+  # cannot read is still a contact. Its unreadable lines contribute
+  # nothing to the index and cost the index nothing else.
   def test_an_unparseable_card_is_still_stored_and_served
     with_store({"broken" => "this is not a vCard\r\n"}) do |store|
       assert_equal "this is not a vCard\r\n", store.contact("broken").vcard
@@ -446,10 +432,14 @@ class StoreTest < Minitest::Test
     end
   end
 
-  def test_rebuilding_names_the_cards_it_could_not_index
-    with_store({"aiden" => AIDEN, "broken" => "this is not a vCard\r\n"}) do |store|
-      assert_equal %w[broken], store.rebuild_index
+  # One line the parser cannot read does not cost the card the lines
+  # that read: the index is what this server understood, not an
+  # all-or-nothing verdict on the card.
+  def test_a_card_is_indexed_by_the_lines_that_read
+    unreadable = AIDEN.sub("FN:Aiden\r\n", "FN:Aiden\r\nTEL;HOME:+1-555-1234\r\n")
+    with_store({"aiden" => unreadable}) do |store|
       assert_equal %w[BEGIN VERSION FN UID END], indexed_names(store, "aiden")
+      assert_equal unreadable, store.contact("aiden").vcard
     end
   end
 
@@ -551,11 +541,13 @@ class StoreTest < Minitest::Test
   # dropped from the card").
   # A BDAY sharing its line's bytes with another content line — a bare
   # CR packs two into one physical line — is a shape the parser is
-  # built to assume macOS never sends, so it is refused rather than
-  # read: the line stays verbatim, the model empties, and the broken
-  # assumption is reported as itself rather than as an odd BDAY, which
-  # is what would send anyone reading it looking in the wrong place.
-  def test_a_bday_sharing_its_line_arrives_whole_and_reported
+  # built to assume macOS never sends, so it is never read: the line
+  # stays verbatim and the model empties. The store says nothing about
+  # it. A value it never read is not a value it failed to recognize,
+  # and reporting it as an odd BDAY would send anyone reading the
+  # message looking in the wrong place. WebTest holds the report that
+  # is worth making, at the arrival.
+  def test_a_bday_sharing_its_line_arrives_whole_and_unreported
     shared = AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\rNOTE:b\r\nEND:VCARD\r\n")
 
     with_store({"aiden" => AIDEN_BORN}) do |store|
@@ -563,8 +555,7 @@ class StoreTest < Minitest::Test
 
       assert_equal shared, store.contact("aiden").vcard
       assert_nil birthday_row(store, "aiden")
-      assert_equal 1, messages.length
-      assert_match "broke 1 parser assumption", messages.fetch(0)
+      assert_empty messages
     end
   end
 
