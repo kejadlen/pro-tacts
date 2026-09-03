@@ -95,7 +95,10 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   ordinary, anticipated case with a real fallback to show (e.g. a birthday
   whose stored value is well-shaped but calendar-nonsense — see
   `Admin::Format.birthday`), never "this might fail, better catch
-  it."
+  it." And never swallow one silently: whatever a rescue catches still
+  goes to Sentry — `Sentry.capture_exception` at the minimum — so the
+  fallback is what the screen shows, never a reason the error goes
+  unreported.
 - `config.ru` must stay ASCII-only; a test enforces it, because boot crashes
   under a C locale otherwise. Watch for em dashes in comments.
 - `RUBYOPT=--enable-frozen-string-literal` is set in `.ramekin/config.kdl`.
