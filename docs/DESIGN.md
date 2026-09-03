@@ -62,7 +62,7 @@ thousand, so no screen exists to scroll the whole set.
 
 Every collection screen is the same shape:
 
-1. A search input at the top, focused and ready.
+1. A search input in the page header, focused and ready.
 2. Results while there's a query.
 3. **Recently updated** when there isn't — the ten or so records touched last,
    sorted by update time.

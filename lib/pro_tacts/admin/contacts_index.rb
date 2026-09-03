@@ -6,12 +6,12 @@ require "pro_tacts/admin/upcoming_birthdays"
 
 module ProTacts
   module Admin
-    # GET / — the dashboard (docs/DESIGN.md): search and recency in
-    # the primary column, the birthdays the year is about to bring in
-    # the ambient one beside it. A query narrows the contacts column
-    # to matches across every contact; an empty query shows the ten
-    # most recently updated. Read-only: no add, no edit, nothing to
-    # commit, so there is no state here beyond the query.
+    # GET / — the dashboard (docs/DESIGN.md): the search in the page
+    # header, recency in the primary column, the birthdays the year is
+    # about to bring in the ambient one beside it. A query narrows the
+    # contacts column to matches across every contact; an empty query
+    # shows the ten most recently updated. Read-only: no add, no edit,
+    # nothing to commit, so there is no state here beyond the query.
     class ContactsIndex < Phlex::HTML
       RECENT_LIMIT = 10
       private_constant :RECENT_LIMIT
@@ -28,12 +28,9 @@ module ProTacts
       end
 
       def view_template
-        render Layout.new(title: "Contacts", wide: true) do
+        render Layout.new(title: "Contacts", wide: true, search: @query) do
           div(class: "dashboard") do
             section do
-              form(action: "/", method: "get", class: "search-form") do
-                input(type: "search", name: "q", value: @query, placeholder: "Search contacts", autofocus: @query.empty?)
-              end
               h2(class: "type-label") { @query.empty? ? "recently updated" : "results" }
               if @rows.empty?
                 p(class: "type-body-sm") { @query.empty? ? "No contacts yet." : "No contacts match." }

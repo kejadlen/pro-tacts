@@ -4,8 +4,16 @@
    rem width in the spirit of card.css's own max-width: 18rem; nothing
    here is a hex, a px, or a duration. */
 
+/* A chrome bar, not a content gutter: the block padding is the
+   scale's second-smallest step, so the header hugs its one line of
+   content instead of spacing it like page copy. Inline padding stays
+   at m to sit on the same vertical edges .admin-main's does. */
 .admin-header {
-  padding: var(--gl-space-s) var(--gl-space-m);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gl-space-s);
+  padding: var(--gl-space-2xs) var(--gl-space-m);
   border-bottom: 1px solid var(--gl-color-border-hairline);
 }
 .admin-header a {
@@ -43,10 +51,29 @@
 }
 
 /* field.css's `form { max-width: 28rem; }` is sized for the
-   settings-form pattern; the search box is a single input that should
-   span the same width as the list below it. */
+   settings-form pattern; the header's search is a single input, and
+   flex: 1 + a narrower cap puts a deliberate 18rem box at the
+   header's right and lets it shrink on a narrow viewport. */
 .search-form {
-  max-width: none;
+  flex: 1;
+  max-width: 18rem;
+}
+/* field.css sizes the input's padding for form bodies (xs block);
+   against the header's one-line chrome the box stands too tall, so it
+   sheds the vertical half of that padding down to the scale's
+   smallest step and keeps the horizontal. The selector
+   out-specifies field.css's double-:not input rule rather than
+   relying on stylesheet order. */
+.admin-header .search-form input[type="search"] {
+  padding-block: var(--gl-space-3xs);
+}
+
+/* Gloss zeroes every heading's margin (base/typography.css), which
+   leaves a section's type-label flush against the list it names. The
+   one vertical rhythm this layer adds, and shared by both dashboard
+   columns — every section is a type-label over a list. */
+section > h2 {
+  margin-bottom: var(--gl-space-s);
 }
 
 /* base/typography.css's `li + li { margin-top: var(--gl-space-3xs); }`
@@ -54,6 +81,18 @@
    Card's row list, adding a stray gap below every row but the last. */
 .card > li {
   margin: 0;
+}
+
+/* Both dashboard lists lead their rows with an avatar, and both are
+   growing rows taller than one line (the birthdays rows already are,
+   the contacts rows will be). A 1.875rem avatar centered against
+   multi-line text floats mid-row, so it leads from the top, level
+   with the name — no change today for single-line rows, where the
+   avatar is the tallest thing in the row either way. Scoped to
+   card-row links, so the contact detail header's centered avatar is
+   untouched. */
+.card > li > a:only-child .avatar {
+  align-self: flex-start;
 }
 
 .detail-header {

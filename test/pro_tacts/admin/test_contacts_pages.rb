@@ -117,6 +117,25 @@ class AdminContactsPagesTest < Minitest::Test
     assert_includes last_response.body, "No birthdays to show."
   end
 
+  # The search lives in the page header (docs/DESIGN.md), rendered by
+  # the layout when a screen asks for it. A screen that forgets to ask
+  # loses the input with no route failing — search still works through
+  # the URL — so this pins the wiring, not just the behavior.
+  def test_the_search_lives_in_the_header
+    with_contacts({"ada" => ADA}) do
+      get "/"
+      header = last_response.body.split("<main").first
+      assert_includes header, "search-form"
+      assert_includes header, "name=\"q\""
+      assert_includes header, "autofocus"
+
+      get "/", q: "ada"
+      header = last_response.body.split("<main").first
+      assert_includes header, "value=\"ada\""
+      refute_includes header, "autofocus"
+    end
+  end
+
   # Searching narrows the contacts column; the ambient column stays
   # where it is, still answering its own question.
   def test_search_leaves_the_birthdays_column_standing
