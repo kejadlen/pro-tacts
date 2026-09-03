@@ -113,10 +113,13 @@ module ProTacts
     # UNRENDERED_VALUES is exactly those four shapes' spellings, so
     # widening this means narrowing that.
     def to_line
-      if year && month && day
-        format("BDAY:%04d-%02d-%02d", year, month, day)
-      elsif month && day
-        format("BDAY;X-APPLE-OMIT-YEAR=1604:1604-%02d-%02d", month, day)
+      case [year, month, day]
+      in [Integer => y, Integer => m, Integer => d]
+        format("BDAY:%04d-%02d-%02d", y, m, d)
+      in [nil, Integer => m, Integer => d]
+        format("BDAY;X-APPLE-OMIT-YEAR=1604:1604-%02d-%02d", m, d)
+      else
+        nil
       end
     end
 
@@ -125,20 +128,22 @@ module ProTacts
     # birthday agrees. Carries no calendar: the components were
     # range-checked when built, and Date.new would only add a way to
     # fail, on a value like February 30 that is impossible but
-    # well-shaped and renders as the day it names.
+    # well-shaped and renders as the day it names. No else: the six are
+    # every shape a Birthday holds, so a seventh is better raising here
+    # than rendering as whichever clause it fell through to.
     def to_s
-      y, m, d = year, month, day
-      if y && m && d
+      case [year, month, day]
+      in [Integer => y, Integer => m, Integer => d]
         "#{Date::MONTHNAMES[m]} #{d}, #{y}"
-      elsif m && d
-        "#{Date::MONTHNAMES[m]} #{d}"
-      elsif y && m
+      in [Integer => y, Integer => m, nil]
         "#{Date::MONTHNAMES[m]} #{y}"
-      elsif y
+      in [Integer => y, nil, nil]
         y.to_s
-      elsif m
-        "#{Date::MONTHNAMES[m]}"
-      else
+      in [nil, Integer => m, Integer => d]
+        "#{Date::MONTHNAMES[m]} #{d}"
+      in [nil, Integer => m, nil]
+        Date::MONTHNAMES[m].to_s
+      in [nil, nil, Integer => d]
         d.to_s
       end
     end
