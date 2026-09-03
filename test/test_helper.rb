@@ -42,35 +42,6 @@ Minitest.after_run { FileUtils.rm_rf(unhandled_dir) }
 ENV["PRO_TACTS_DEBUG_LOG"] ||= "log/test.log"
 File.truncate("log/test.log", 0) if File.exist?("log/test.log")
 
-# The interpreter runs with -w (the test task's flag), and phlex's own
-# files compile under it into a stream of warnings — mismatched
-# indentations, a method-redefined pair for every void element — none
-# of it app code. Suppressed here, path-scoped to the gem's install
-# directory rather than globally, so this suite's own warnings (an
-# ambiguous `/` in test_store.rb, say) still surface. Defined after the
-# ENV block but before the first require that loads phlex: the spec
-# lookup finds the path without requiring the gem, and the override is
-# in place before phlex's files ever compile. Nothing later in this
-# file or the suite re-overrides Warning.warn, so the chain holds.
-module PhlexWarningFilter
-  PHLEX_PATH = Gem::Specification.find_by_name("phlex").full_gem_path
-
-  #: (String message) -> bool
-  def self.from_phlex?(message)
-    message.start_with?("#{PHLEX_PATH}/")
-  end
-end
-
-module Warning
-  class << self
-    alias_method :warn_without_phlex_filter, :warn
-  end
-
-  def self.warn(message, **kwargs)
-    warn_without_phlex_filter(message, **kwargs) unless PhlexWarningFilter.from_phlex?(message)
-  end
-end
-
 require_relative "fixture_data"
 require "pro_tacts/web"
 require "minitest/autorun"

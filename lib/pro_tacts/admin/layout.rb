@@ -1,4 +1,4 @@
-require "phlex"
+require "pro_tacts/admin/phlex"
 
 module ProTacts
   module Admin

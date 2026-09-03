@@ -1,4 +1,4 @@
-require "phlex"
+require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/layout"
