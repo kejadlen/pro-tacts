@@ -19,5 +19,12 @@ module ProTacts
 
       def self.new: (contact: Contact, updated_at: String) -> instance
     end
+
+    class UpcomingBirthday
+      attr_reader contact: Contact
+      attr_reader occurs_on: Date
+
+      def self.new: (contact: Contact, occurs_on: Date) -> instance
+    end
   end
 end

@@ -1,3 +1,4 @@
+require "date"
 require "digest"
 require "pathname"
 require "sequel"
@@ -56,6 +57,12 @@ module ProTacts
     # admin UI's "recently updated" list) gets it from here instead.
     # @rbs skip
     RecentContact = Data.define(:contact, :updated_at)
+
+    # A contact paired with the calendar day its birthday next lands
+    # on — the read behind the admin's upcoming-birthdays list, where
+    # the order is the coming year's, not the stored components'.
+    # @rbs skip
+    UpcomingBirthday = Data.define(:contact, :occurs_on)
 
     # SQLite has no ON UPDATE, so the column default stamps a row on
     # insert and this stamps it again on the way past. Same expression as
@@ -154,6 +161,26 @@ module ProTacts
     #: () -> String
     def ctag
       Digest::SHA256.hexdigest(contacts.map { "#{it.id} #{it.etag}" }.sort.join("\n"))
+    end
+
+    # Birthdays that land on a coming calendar day, in arrival order:
+    # today's first, and one already passed this year wrapped onto next
+    # year rather than dropped — the wrap that keeps "upcoming" a
+    # year-round answer instead of a January one. Only the shapes with
+    # both a month and a day land anywhere: a year alone, a year and
+    # month, and a month alone sit on no calendar day, and a day with
+    # no month arrives in no week in particular, so none of the four is
+    # this list's to place. A birthday is database state rather than a
+    # line in a card (docs/plans/2026-08-31-partial-birthdays.md), so
+    # this reads the table rather than scanning cards for BDAY.
+    #: (Integer limit, ?today: Date) -> Array[UpcomingBirthday]
+    def upcoming_birthdays(limit, today: Date.today)
+      birthdays
+        .join(:cards, id: :card_id)
+        .map { upcoming_from(it, today) }
+        .compact
+        .sort_by { [it.occurs_on, it.contact.id] }
+        .first(limit)
     end
 
     # `sole` rather than `first`: the id is the primary key, so a second
@@ -512,6 +539,33 @@ module ProTacts
     #: (Hash[Symbol, untyped] row) -> Birthday
     def birthday_from(row)
       Birthday.new(year: row[:year], month: row[:month], day: row[:day])
+    end
+
+    # One joined birthday-and-card row as an UpcomingBirthday, or nil
+    # for a shape that lands on no calendar day (see
+    # #upcoming_birthdays).
+    #: (Hash[Symbol, untyped] row, Date today) -> UpcomingBirthday?
+    def upcoming_from(row, today)
+      birthday = birthday_from(row)
+      month, day = birthday.month, birthday.day
+      return if month.nil? || day.nil?
+
+      candidate = date_in(today.year, month, day)
+      UpcomingBirthday.new(
+        contact: contact_from(row, birthday),
+        occurs_on: candidate < today ? date_in(today.year + 1, month, day) : candidate,
+      )
+    end
+
+    # A birthday's month and day as a date in `year`. A day the month
+    # does not have — February 30, April 31 — was stored well-shaped but
+    # calendar-nonsense (see Birthday), and lands on the month's last
+    # day for ordering; what the view shows is the stored value.
+    #: (Integer year, Integer month, Integer day) -> Date
+    def date_in(year, month, day)
+      Date.new(year, month, day)
+    rescue ArgumentError
+      Date.new(year, month, -1)
     end
 
     #: (Hash[Symbol, untyped] row) -> Change

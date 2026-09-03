@@ -700,6 +700,83 @@ class StoreTest < Minitest::Test
     end
   end
 
+  ## Upcoming birthdays
+
+  NO_YEAR = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:No Year\r\n" \
+    "BDAY;X-APPLE-OMIT-YEAR=1604:1604-06-15\r\nUID:noyear\r\nEND:VCARD\r\n"
+
+  # Arrival order is the coming year's, not the calendar's: a
+  # birthday already passed this year wraps onto next year and sorts
+  # after one still ahead, and one already here today is first.
+  def test_upcoming_birthdays_arrive_in_order_across_the_year_wrap
+    september = Date.new(2026, 9, 3)
+    ahead = AIDEN.sub("FN:Aiden\r\n", "FN:Aiden\r\nBDAY:1985-09-04\r\n")
+    passed = ZED.sub("FN:Zed\r\n", "FN:Zed\r\nBDAY:1990-03-15\r\n")
+    today = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Today\r\nBDAY:2000-09-03\r\nUID:today\r\nEND:VCARD\r\n"
+
+    with_store({"aiden" => ahead, "znorth" => passed, "today" => today}) do |store|
+      upcoming = store.upcoming_birthdays(10, today: september)
+
+      assert_equal %w[today aiden znorth], upcoming.map { it.contact.id }
+      assert_equal Date.new(2026, 9, 3), upcoming.fetch(0).occurs_on
+      assert_equal Date.new(2026, 9, 4), upcoming.fetch(1).occurs_on
+      assert_equal Date.new(2027, 3, 15), upcoming.fetch(2).occurs_on
+    end
+  end
+
+  # The limit keeps the list the length a screen wants, off the front.
+  def test_upcoming_birthdays_take_the_first_n
+    september = Date.new(2026, 9, 3)
+    cards = (1..3).to_h do |n|
+      ["c#{n}", "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Contact #{n}\r\nBDAY:1990-09-0#{n + 4}\r\nUID:c#{n}\r\nEND:VCARD\r\n"]
+    end
+
+    with_store(cards) do |store|
+      assert_equal %w[c1 c2], store.upcoming_birthdays(2, today: september).map { it.contact.id }
+    end
+  end
+
+  # A birthday without a year is on the day and in the list — the age
+  # is the view's question, not the query's.
+  def test_a_birthday_without_a_year_is_upcoming
+    september = Date.new(2026, 9, 3)
+
+    with_store({"noyear" => NO_YEAR}) do |store|
+      upcoming = store.upcoming_birthdays(10, today: september)
+
+      assert_equal 1, upcoming.length
+      assert_equal "noyear", upcoming.fetch(0).contact.id
+      assert_equal Date.new(2027, 6, 15), upcoming.fetch(0).occurs_on
+    end
+  end
+
+  # The shapes on no calendar day are nobody's to place. Planted
+  # directly, because no writer produces one yet.
+  def test_birthdays_on_no_calendar_day_are_left_out
+    september = Date.new(2026, 9, 3)
+
+    with_store({"aiden" => AIDEN_BORN, "noyear" => NO_YEAR, "znorth" => ZED}) do |store|
+      database(store)[:birthdays].where(card_id: "noyear").update(year: 1990, month: 6, day: nil)
+      database(store)[:birthdays].insert(card_id: "znorth", year: 1990)
+
+      assert_equal %w[aiden], store.upcoming_birthdays(10, today: september).map { it.contact.id }
+    end
+  end
+
+  # Well-shaped but calendar-nonsense — February 30 — lands on the
+  # month's last day for ordering, the same value Format.birthday
+  # rescues to a raw display of.
+  def test_a_day_the_month_does_not_have_orders_on_the_months_last_day
+    september = Date.new(2026, 9, 3)
+    nonsense = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Nonsense\r\nBDAY:1980-02-30\r\nUID:nonsense\r\nEND:VCARD\r\n"
+
+    with_store({"nonsense" => nonsense, "noyear" => NO_YEAR}) do |store|
+      upcoming = store.upcoming_birthdays(10, today: september)
+
+      assert_equal Date.new(2027, 2, 28), upcoming.fetch(0).occurs_on
+    end
+  end
+
   # The transaction the whole design turns on, now with a third piece:
   # a birthday must not survive a write whose log entry failed.
   def test_a_failed_birthday_write_leaves_no_birthday

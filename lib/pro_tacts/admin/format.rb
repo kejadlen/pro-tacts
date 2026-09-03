@@ -69,6 +69,21 @@ module ProTacts
 
         "#{(days / 30.0).round}mo ago"
       end
+
+      # time_ago's other half: how far ahead a known day is, rendered
+      # with the same coarseness. A birthday list spans weeks, so days
+      # give way to weeks after a fortnight and to months after a
+      # quarter.
+      #: (Date date) -> String
+      def self.time_until(date)
+        days = (date - Date.today).to_i
+        return "today" if days.zero?
+        return "tomorrow" if days == 1
+        return "in #{days}d" if days < 14
+        return "in #{(days / 7.0).round}w" if days < 90
+
+        "in #{(days / 30.0).round}mo"
+      end
     end
   end
 end

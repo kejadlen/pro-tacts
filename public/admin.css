@@ -15,6 +15,18 @@
   text-decoration: none;
 }
 
+/* The header's nav sits at the far edge from the wordmark. Its links
+   carry the catalog-label look of .type-label; this rule exists only
+   because .admin-header a is more specific than .type-label and would
+   otherwise force the wordmark's size and ink back onto them. */
+.admin-header nav {
+  margin-inline-start: auto;
+}
+.admin-header nav a {
+  font-size: var(--gl-step--2);
+  color: var(--gl-color-text-secondary);
+}
+
 .admin-main {
   max-width: 34rem;
   margin: 0 auto;

@@ -79,7 +79,11 @@ module Sequel
     def where: (*untyped conditions) -> Dataset
     def order: (*untyped columns) -> Dataset
     def limit: (Integer count) -> Dataset
+    # Hash conditions pair the joined table's column with the source's
+    # (`id: :card_id` is cards.id = birthdays.card_id); the array form
+    # joins same-named columns.
     def join: (Symbol table, Array[Symbol] using) -> Dataset
+           | (Symbol table, Sequel::row conditions) -> Dataset
 
     # The table a dataset selects from; raises when it has no source.
     def first_source: () -> Symbol

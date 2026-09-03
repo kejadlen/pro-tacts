@@ -128,8 +128,8 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/bare"
 
       assert_equal 200, last_response.status
-      refute_includes last_response.body, "notes"
-      refute_includes last_response.body, "birthday"
+      refute_includes last_response.body, '<dt class="type-label">notes</dt>'
+      refute_includes last_response.body, '<dt class="type-label">birthday</dt>'
     end
   end
 

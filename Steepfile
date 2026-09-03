@@ -21,5 +21,5 @@ target :lib do
   ignore "lib/pro_tacts/admin", inline: true
   signature "sig"
 
-  library "digest", "fileutils", "logger", "pathname", "strscan"
+  library "date", "digest", "fileutils", "logger", "pathname", "strscan"
 end

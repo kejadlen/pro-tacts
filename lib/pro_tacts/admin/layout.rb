@@ -6,7 +6,9 @@ module ProTacts
     # vendored Gloss stylesheets (see public/vendor/gloss and
     # docs/DESIGN.md), and a one-line header naming the app in type —
     # "no brand mark" is one of the rules that document inherits from
-    # Gloss. No JavaScript: nothing served here yet needs any.
+    # Gloss — with the screen-to-screen nav pushed to the far edge of
+    # it, quieter than the mark. No JavaScript: nothing served here yet
+    # needs any.
     class Layout < Phlex::HTML
       #: (title: String) -> void
       def initialize(title:)
@@ -28,7 +30,10 @@ module ProTacts
             link(rel: "stylesheet", href: "/admin.css")
           end
           body do
-            header(class: "admin-header") { a(href: "/") { "pro-tacts" } }
+            header(class: "admin-header") do
+              a(href: "/") { "pro-tacts" }
+              nav { a(href: "/birthdays", class: "type-label") { "birthdays" } }
+            end
             main(class: "admin-main") { yield }
           end
         end

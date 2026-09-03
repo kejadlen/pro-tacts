@@ -8,6 +8,7 @@ require "rack/rewindable_input"
 require "nokogiri"
 require "roda"
 
+require "pro_tacts/admin/birthdays"
 require "pro_tacts/admin/contacts_index"
 require "pro_tacts/admin/contacts_show"
 require "pro_tacts/debug_logger"
@@ -98,6 +99,16 @@ module ProTacts
             response["Content-Type"] = "text/html; charset=utf-8"
             Admin::ContactsShow.call(contact:)
           end
+        end
+      end
+
+      # The upcoming-birthdays screen: the coming-year question the
+      # birthdays table answers without a card in sight, one segment
+      # down like the browser and under the same auth gate.
+      r.on "birthdays" do
+        r.get do
+          response["Content-Type"] = "text/html; charset=utf-8"
+          Admin::Birthdays.call(upcoming: store.upcoming_birthdays(Admin::Birthdays::LIMIT))
         end
       end
 

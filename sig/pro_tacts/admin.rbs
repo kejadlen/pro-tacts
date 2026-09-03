@@ -1,5 +1,5 @@
 # lib/pro_tacts/admin is ignored by the Steepfile — built on Phlex,
-# which ships no signatures — but web.rb still calls its two views, and
+# which ships no signatures — but web.rb still calls its views, and
 # a checked file cannot reference a constant nothing declares. This
 # holds exactly that entry surface; the views' own files carry none.
 # When Phlex gets a stand-in under sig/gems and admin is checked for
@@ -12,6 +12,12 @@ module ProTacts
 
     class ContactsIndex
       def self.call: (recent: Array[Store::RecentContact], query: String?) -> String
+    end
+
+    class Birthdays
+      LIMIT: Integer
+
+      def self.call: (upcoming: Array[Store::UpcomingBirthday]) -> String
     end
   end
 end
