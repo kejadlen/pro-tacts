@@ -92,13 +92,12 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   Every request already runs under `Sentry::Rack::CaptureExceptions`, so an
   unexpected failure that's allowed to raise is reported and visible —
   rescuing it locally "to be safe" makes it neither. Rescue only what's an
-  ordinary, anticipated case with a real fallback to show (e.g. a birthday
-  whose stored value is well-shaped but calendar-nonsense — see
-  `Admin::Format.birthday`), never "this might fail, better catch
-  it." And never swallow one silently: whatever a rescue catches still
-  goes to Sentry — `Sentry.capture_exception` at the minimum — so the
-  fallback is what the screen shows, never a reason the error goes
-  unreported.
+  ordinary, anticipated case with a real fallback to show (e.g. no row for
+  a requested id — see `Store#contact`'s 404 path), never "this might
+  fail, better catch it." And never swallow one silently: a rescue that
+  catches an error still sends it to Sentry — `Sentry.capture_exception`
+  at the minimum — so the fallback is what the screen shows, never a
+  reason the error goes unreported.
 - `config.ru` must stay ASCII-only; a test enforces it, because boot crashes
   under a C locale otherwise. Watch for em dashes in comments.
 - `RUBYOPT=--enable-frozen-string-literal` is set in `.ramekin/config.kdl`.

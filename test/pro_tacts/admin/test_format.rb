@@ -85,12 +85,12 @@ class FormatTest < Minitest::Test
     assert_equal "December 10", ProTacts::Admin::Format.birthday(contact(basic))
   end
 
-  # Calendar-nonsense in the reduced spelling, shown as stored like
-  # the modeled one below.
-  def test_a_calendar_nonsense_reduced_no_year_birthday_is_shown_as_stored
+  # Calendar-nonsense in the reduced spelling, rendered as the day it
+  # names like the modeled one below.
+  def test_a_calendar_nonsense_reduced_no_year_birthday_renders_its_components
     nonsense = CARD.sub("BDAY:1985-12-10", "BDAY:--02-30")
 
-    assert_equal "--02-30", ProTacts::Admin::Format.birthday(contact(nonsense))
+    assert_equal "February 30", ProTacts::Admin::Format.birthday(contact(nonsense))
   end
 
   def test_a_birthday_that_will_not_parse_is_shown_as_stored
@@ -100,12 +100,26 @@ class FormatTest < Minitest::Test
   end
 
   # Well-shaped but calendar-nonsense: the model checks component
-  # ranges, not the calendar, so February 30 parses and only Date.new
-  # refuses it. The anticipated case, shown as stored rather than raised.
-  def test_a_calendar_nonsense_birthday_is_shown_as_stored
+  # ranges, not the calendar, and rendering is calendar-free — the
+  # prose names the day it says rather than refusing to display.
+  def test_a_calendar_nonsense_birthday_renders_its_components
     nonsense = CARD.sub("BDAY:1985-12-10", "BDAY:1985-02-30")
 
-    assert_equal "1985-02-30", ProTacts::Admin::Format.birthday(contact(nonsense))
+    assert_equal "February 30, 1985", ProTacts::Admin::Format.birthday(contact(nonsense))
+  end
+
+  # The partial shapes no client renders still display: every form
+  # the grammar admits has Birthday#to_s's one prose.
+  def test_the_partial_shapes_display_their_components
+    year_month = CARD.sub("BDAY:1985-12-10", "BDAY:1985-10")
+    year = CARD.sub("BDAY:1985-12-10", "BDAY:1985")
+    month = CARD.sub("BDAY:1985-12-10", "BDAY:--07")
+    day = CARD.sub("BDAY:1985-12-10", "BDAY:---04")
+
+    assert_equal "October 1985", ProTacts::Admin::Format.birthday(contact(year_month))
+    assert_equal "1985", ProTacts::Admin::Format.birthday(contact(year))
+    assert_equal "July", ProTacts::Admin::Format.birthday(contact(month))
+    assert_equal "4", ProTacts::Admin::Format.birthday(contact(day))
   end
 
   def test_a_card_with_no_birthday_formats_none

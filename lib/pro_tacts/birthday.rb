@@ -1,3 +1,5 @@
+require "date"
+
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
@@ -33,39 +35,49 @@ module ProTacts
     # stays in a card verbatim rather than drift to this model's
     # spelling. The optional time is RFC 2426 section 3.1.5's other
     # value shape, and it is accepted and dropped: a birthday is a
-    # date, the one deliberate loss the design records.
-    FULL_DATE = /\A(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:?\d{2}(:?\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?\z/ #: Regexp
+    # date, the one deliberate loss the design records. Components in
+    # range, so an out-of-range date does not match and stays in the
+    # card rather than reaching a constructor that would refuse it.
+    FULL_DATE = /\A(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(?:T\d{2}:?\d{2}(:?\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?\z/ #: Regexp
 
     # The no-year shape macOS writes, with 1604 standing in for the year
     # in both the parameter and the value (docs/macos-contacts.md,
     # "Birthdays without a year"). 1604 because it is the first year of
     # the Gregorian calendar; the parameter names the year to omit.
-    OMIT_YEAR_DATE = /\A1604-(\d{2})-(\d{2})\z/ #: Regexp
+    # Components in range, like FULL_DATE.
+    OMIT_YEAR_DATE = /\A1604-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\z/ #: Regexp
     OMIT_YEAR = "1604" #: String
 
-    # The BDAY values no client renders, spelled whole: the four
-    # partial shapes #to_line has no form for, dashed as RFC 6350
-    # section 4.3.1's examples spell them, components in range, each
-    # pattern anchored alone so no edit to one can loosen another's.
-    # A value off the list is not carried across a rewrite, by the
-    # same probe: the served shapes in any spelling were visible, so
-    # their absence is a deletion, and an unrecognized or out-of-range
-    # value is cleaner dying with the rewrite than living forever
-    # (docs/macos-contacts.md, "A birthday the client cannot render is
-    # dropped from the card").
+    # The BDAY values no client renders, one named pattern per shape —
+    # dashed as RFC 6350 section 4.3.1's examples spell them,
+    # components in range, each anchored alone so no edit to one can
+    # loosen another's. Capturing, because #from_value reads the
+    # components back; the predicate reads below only match, which
+    # captures do not disturb. A value off the list is not carried
+    # across a rewrite, by the same probe: the served shapes in any
+    # spelling were visible, so their absence is a deletion, and an
+    # unrecognized or out-of-range value is cleaner dying with the
+    # rewrite than living forever (docs/macos-contacts.md, "A birthday
+    # the client cannot render is dropped from the card").
+    YEAR_AND_MONTH = /\A(\d{4})-(0[1-9]|1[0-2])\z/ #: Regexp
+    YEAR_ALONE = /\A(\d{4})\z/ #: Regexp
+    MONTH_ALONE = /\A--(0[1-9]|1[0-2])\z/ #: Regexp
+    DAY_ALONE = /\A---(0[1-9]|[12]\d|3[01])\z/ #: Regexp
+
     UNRENDERED_VALUES = [
-      /\A\d{4}-(?:0[1-9]|1[0-2])\z/,       # year and month
-      /\A\d{4}\z/,                         # year alone
-      /\A--(?:0[1-9]|1[0-2])\z/,           # month alone
-      /\A---(?:0[1-9]|[12]\d|3[01])\z/,    # day alone
+      YEAR_AND_MONTH,
+      YEAR_ALONE,
+      MONTH_ALONE,
+      DAY_ALONE,
     ] #: Array[Regexp]
 
     # The reduced no-year values macOS reads on a card it did not write
     # and converts to the sentinel on its own
     # (docs/macos-contacts.md, "Birthdays without a year"). Together
     # with #from_property's two spellings this is the rendered set: a
-    # BDAY a client could see, and so could have deleted.
-    REDUCED_DATE = /\A--(?:0[1-9]|1[0-2])-?(?:0[1-9]|[12]\d|3[01])\z/ #: Regexp
+    # BDAY a client could see, and so could have deleted. Capturing
+    # for #from_value, like the unrendered patterns above.
+    REDUCED_DATE = /\A--(0[1-9]|1[0-2])-?(0[1-9]|[12]\d|3[01])\z/ #: Regexp
 
     # The only constructor, so no birthday exists in a shape the grammar
     # rejects: one `in` clause per shape RFC 6350 section 4.3.1 admits,
@@ -108,11 +120,60 @@ module ProTacts
       end
     end
 
+    # The birthday in prose, one clause per shape the constructor
+    # admits — the same six, in the same order — so every display of a
+    # birthday agrees. Carries no calendar: the components were
+    # range-checked when built, and Date.new would only add a way to
+    # fail, on a value like February 30 that is impossible but
+    # well-shaped and renders as the day it names.
+    def to_s
+      y, m, d = year, month, day
+      if y && m && d
+        "#{Date::MONTHNAMES[m]} #{d}, #{y}"
+      elsif m && d
+        "#{Date::MONTHNAMES[m]} #{d}"
+      elsif y && m
+        "#{Date::MONTHNAMES[m]} #{y}"
+      elsif y
+        y.to_s
+      elsif m
+        "#{Date::MONTHNAMES[m]}"
+      else
+        d.to_s
+      end
+    end
+
     # Whether any served card carries this birthday. The deletion rule
     # turns on it: a client that never saw the birthday cannot have
     # deleted it.
     def served?
       !to_line.nil?
+    end
+
+    # Any well-shaped BDAY value as a model, regardless of spelling:
+    # a full date (the optional time accepted and dropped, as
+    # #from_property drops it), the reduced no-year, and the four
+    # UNRENDERED_VALUES shapes — every form the grammar admits. A
+    # display reader, the raw-value counterpart of #from_property: the
+    # write path keeps reading properties, and accepts only what
+    # #to_line can serve back, so what a client PUTs still recomposes
+    # into exactly the served forms. A bare 1604 date is a full date
+    # here, as it is there — the sentinel is the parameter's to claim.
+    # Nil for anything else, and the caller keeps the value as stored.
+    def self.from_value(value)
+      if (m = value.match(FULL_DATE))
+        new(year: m[1].to_i, month: m[2].to_i, day: m[3].to_i)
+      elsif (m = value.match(REDUCED_DATE))
+        new(month: m[1].to_i, day: m[2].to_i)
+      elsif (m = value.match(YEAR_AND_MONTH))
+        new(year: m[1].to_i, month: m[2].to_i)
+      elsif (m = value.match(YEAR_ALONE))
+        new(year: m[1].to_i)
+      elsif (m = value.match(MONTH_ALONE))
+        new(month: m[1].to_i)
+      elsif (m = value.match(DAY_ALONE))
+        new(day: m[1].to_i)
+      end
     end
 
     # Reads one parsed BDAY property into the model, or nil for every
@@ -130,10 +191,6 @@ module ProTacts
       elsif apple_no_year?(property) && (m = property.value.match(OMIT_YEAR_DATE))
         new(month: m[1].to_i, day: m[2].to_i)
       end
-    rescue ArgumentError
-      # A component out of range is unmodeled, not exceptional: the line
-      # stays in the card as it came.
-      nil
     end
 
     # The parameter half of the Apple form, exactly: the one parameter,

@@ -61,6 +61,26 @@ class BirthdayTest < Minitest::Test
     end
   end
 
+  ## to_s
+
+  # One rendering per admitted shape, the same six the constructor
+  # accepts, so every display of a birthday agrees.
+  def test_to_s_renders_every_admitted_shape
+    assert_equal "April 12, 1985", ProTacts::Birthday.new(year: 1985, month: 4, day: 12).to_s
+    assert_equal "April 1985", ProTacts::Birthday.new(year: 1985, month: 4).to_s
+    assert_equal "1985", ProTacts::Birthday.new(year: 1985).to_s
+    assert_equal "April 12", ProTacts::Birthday.new(month: 4, day: 12).to_s
+    assert_equal "April", ProTacts::Birthday.new(month: 4).to_s
+    assert_equal "12", ProTacts::Birthday.new(day: 12).to_s
+  end
+
+  # Rendering carries no calendar: February 30 is impossible but
+  # well-shaped, and the prose names the day it says rather than
+  # refusing to render at all.
+  def test_to_s_renders_calendar_nonsense_as_the_day_it_names
+    assert_equal "February 30, 1985", ProTacts::Birthday.new(year: 1985, month: 2, day: 30).to_s
+  end
+
   ## from_property
 
   # A parsed property, the shape a read out of a card takes.
@@ -97,9 +117,10 @@ class BirthdayTest < Minitest::Test
     assert_equal ProTacts::Birthday.new(month: 4, day: 12), ProTacts::Birthday.from_property(sentinel)
   end
 
-  # A component out of range is unmodeled, not exceptional: from_property
-  # reads nil and the line stays wherever it was. Store reports the value
-  # as unrecognized, so the swallow is not silent.
+  # A component out of range is unmodeled, not exceptional: the
+  # patterns encode the ranges, so the value never matches and the
+  # line stays wherever it was — Store reports it as unrecognized
+  # when a rewrite drops it.
   def test_an_out_of_range_date_reads_as_nil
     assert_nil ProTacts::Birthday.from_property(property("1985-13-40"))
   end
@@ -114,6 +135,37 @@ class BirthdayTest < Minitest::Test
       property("1604-04-12", parameters: [["X-APPLE-OMIT-YEAR", "1604"], ["X-OTHER", "1"]]),
       property("1985-04-12", group: "item1")].each do |unmodeled|
       assert_nil ProTacts::Birthday.from_property(unmodeled), unmodeled.value
+    end
+  end
+
+  ## from_value
+
+  # The display reader: every well-shaped spelling models, regardless
+  # of what the write path serves — the two from_property reads (a
+  # date-time's time dropped on the way in, as there), the reduced
+  # no-year in both spellings, and the four no client renders.
+  def test_from_value_reads_every_well_shaped_spelling
+    assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), ProTacts::Birthday.from_value("1985-04-12")
+    assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), ProTacts::Birthday.from_value("1985-04-12T23:10:00Z")
+    assert_equal ProTacts::Birthday.new(month: 4, day: 12), ProTacts::Birthday.from_value("--04-12")
+    assert_equal ProTacts::Birthday.new(month: 4, day: 12), ProTacts::Birthday.from_value("--0412")
+    assert_equal ProTacts::Birthday.new(year: 1985, month: 4), ProTacts::Birthday.from_value("1985-04")
+    assert_equal ProTacts::Birthday.new(year: 1985), ProTacts::Birthday.from_value("1985")
+    assert_equal ProTacts::Birthday.new(month: 4), ProTacts::Birthday.from_value("--04")
+    assert_equal ProTacts::Birthday.new(day: 12), ProTacts::Birthday.from_value("---12")
+  end
+
+  # A bare 1604 date is a full date — the sentinel is the parameter's
+  # to claim, exactly as from_property reads it.
+  def test_from_value_reads_a_bare_1604_date_as_a_full_date
+    assert_equal ProTacts::Birthday.new(year: 1604, month: 4, day: 12), ProTacts::Birthday.from_value("1604-04-12")
+  end
+
+  # Anything else is nothing display can name, and the caller keeps
+  # the value as stored.
+  def test_from_value_refuses_what_it_cannot_read
+    ["banana", "1985-13-40", "19850412", ""].each do |value|
+      assert_nil ProTacts::Birthday.from_value(value), value
     end
   end
 

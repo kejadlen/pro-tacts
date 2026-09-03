@@ -6,6 +6,10 @@ module ProTacts
     FULL_DATE: Regexp
     OMIT_YEAR_DATE: Regexp
     OMIT_YEAR: String
+    YEAR_AND_MONTH: Regexp
+    YEAR_ALONE: Regexp
+    MONTH_ALONE: Regexp
+    DAY_ALONE: Regexp
     UNRENDERED_VALUES: Array[Regexp]
     REDUCED_DATE: Regexp
 
@@ -17,7 +21,11 @@ module ProTacts
 
     def to_line: () -> String?
 
+    def to_s: () -> String
+
     def served?: () -> bool
+
+    def self.from_value: (String value) -> Birthday?
 
     def self.from_property: (VCard::Parser::Property property) -> Birthday?
 
