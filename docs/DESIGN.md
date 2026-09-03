@@ -40,9 +40,11 @@ What that inheritance actually means:
   never shows two accents in a view. `-ink` and `-soft` re-derive themselves.
 - `--gl-color-success` and `--gl-color-danger` are **fixed** — they mean
   confirmed and destructive, never decoration, never emphasis.
-- Flat surfaces and hairline borders do the elevation work. At most one
-  `--gl-shadow-float` on screen — in this app that's the dialog or a toast.
-  Border or shadow, never both.
+- Surface contrast does the elevation work: a bounded surface reads by
+  being a step lighter than what surrounds it, never by an outline.
+  Hairlines are dividers inside a surface (a CardRow, a table rule), never
+  a boundary around one. At most one `--gl-shadow-float` on screen — in
+  this app that's the dialog or a toast.
 - Motion is `--gl-dur-fast` on hover and focus, named properties only, never
   `all`. Press is not animated. Nothing enters, nothing bounces.
 - Icons are Lucide at 16–20px, stroke in `currentColor`, never filled. Nothing
@@ -140,5 +142,7 @@ Ask, in order:
 4. Is it reachable from both sides of any relationship it participates in?
 5. Does Gloss already define the component? Use it as documented rather than
    restyling something adjacent.
-6. Is there a literal hex, duration, or new class in the diff? There shouldn't
+6. Does it pass Gloss' refusals checklist, the consolidated list of
+   generated-interface tells the system refuses to produce?
+7. Is there a literal hex, duration, or new class in the diff? There shouldn't
    be. Is there a Save button? There shouldn't be.
