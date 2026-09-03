@@ -1,6 +1,8 @@
 require "date"
 require "time"
 
+require "pro_tacts/birthday"
+
 module ProTacts
   module Admin
     # Small display helpers shared by the admin views. Presentation, not
@@ -23,13 +25,14 @@ module ProTacts
       end
 
       # The birthday a card carries, for display: the model's date when
-      # the model holds one, the raw property when it does not — a BDAY
-      # in a spelling the model doesn't recompose is kept in the card
-      # verbatim on write, so it's shown as stored.
+      # the model holds one, the reduced no-year spelling rendered as its
+      # day, and the raw property for anything else — a BDAY in a spelling
+      # the model doesn't recompose is kept in the card verbatim on write,
+      # so it's shown as stored.
       #: (Contact contact) -> String?
       def self.birthday(contact)
         birthday = contact.birthday
-        return raw_birthday(contact) if birthday.nil?
+        return reduced_no_year(contact) || raw_birthday(contact) if birthday.nil?
 
         if birthday.year
           Date.new(birthday.year, birthday.month, birthday.day).strftime("%B %-d, %Y")
@@ -48,6 +51,31 @@ module ProTacts
       #: (Contact contact) -> String?
       def self.raw_birthday(contact)
         contact.properties.find { it.name.casecmp?("BDAY") }&.value
+      end
+
+      # A no-year BDAY in the reduced spelling (Birthday::REDUCED_DATE):
+      # macOS reads it on a card it did not write, but the model
+      # recomposes only the two forms it serves, so the line stays in the
+      # card verbatim and this renders it as the day it names. Bare only,
+      # like the model's own reads — a grouped or parametered BDAY's
+      # pairing belongs to the card, not this row.
+      #: (Contact contact) -> String?
+      def self.reduced_no_year(contact)
+        property = contact.properties.find { it.name.casecmp?("BDAY") }
+        return nil if property.nil? || property.group || !property.parameters.empty?
+
+        match = property.value.match(Birthday::REDUCED_DATE)
+        return nil if match.nil?
+
+        # The pattern matches without capturing (it is a predicate
+        # elsewhere); the matched string carries the components — two
+        # digits of month and two of day, an optional dash between.
+        digits = match[0].delete_prefix("--").delete("-")
+        Date.new(2000, digits[0, 2].to_i, digits[2, 2].to_i).strftime("%B %-d")
+      rescue ArgumentError
+        # Calendar-nonsense in this spelling too (February 30): shown as
+        # stored, like the modeled branch above.
+        nil
       end
 
       # A card's updated_at, UTC ISO 8601 to the millisecond (see

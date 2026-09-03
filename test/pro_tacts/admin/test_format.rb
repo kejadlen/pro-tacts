@@ -68,6 +68,31 @@ class FormatTest < Minitest::Test
     assert_equal "December 10", ProTacts::Admin::Format.birthday(contact(no_year))
   end
 
+  # The reduced no-year spelling (Birthday::REDUCED_DATE), which macOS
+  # reads on a card it did not write: the model does not recompose it,
+  # so the line stays in the card verbatim — display renders it as a
+  # day all the same, not as the stored string.
+  def test_a_reduced_no_year_birthday_displays_its_day
+    reduced = CARD.sub("BDAY:1985-12-10", "BDAY:--12-10")
+
+    assert_equal "December 10", ProTacts::Admin::Format.birthday(contact(reduced))
+  end
+
+  # The undashed variant of the reduced spelling.
+  def test_an_undashed_reduced_no_year_birthday_displays_its_day
+    basic = CARD.sub("BDAY:1985-12-10", "BDAY:--1210")
+
+    assert_equal "December 10", ProTacts::Admin::Format.birthday(contact(basic))
+  end
+
+  # Calendar-nonsense in the reduced spelling, shown as stored like
+  # the modeled one below.
+  def test_a_calendar_nonsense_reduced_no_year_birthday_is_shown_as_stored
+    nonsense = CARD.sub("BDAY:1985-12-10", "BDAY:--02-30")
+
+    assert_equal "--02-30", ProTacts::Admin::Format.birthday(contact(nonsense))
+  end
+
   def test_a_birthday_that_will_not_parse_is_shown_as_stored
     unparseable = CARD.sub("BDAY:1985-12-10", "BDAY:not-a-date")
 
