@@ -23,8 +23,10 @@ module FixtureData
   # UI's recently-updated list, not specific values for anything to
   # assert on.
   AGO_SECONDS = [
-    0, 5 * 60, 45 * 60, 3 * 3600, 9 * 3600,
-    1 * 86_400, 3 * 86_400, 8 * 86_400, 15 * 86_400, 30 * 86_400, 75 * 86_400,
+    0, 3 * 60, 20 * 60, 90 * 60,
+    4 * 3_600, 18 * 3_600,
+    2 * 86_400, 5 * 86_400, 12 * 86_400, 26 * 86_400,
+    60 * 86_400, 130 * 86_400, 260 * 86_400, 380 * 86_400,
   ].freeze
 
   # Every seed card, keyed by the id its filename gives it.

@@ -16,8 +16,8 @@ Content-Type: text/xml
           <d:report><d:sync-collection/></d:report>
         </d:supported-report>
       </d:supported-report-set>
-      <cs:getctag>dd8f4d6dc8fa74f0ea9abdc089a0b2a9c1c5a548ee3f2812c3ee7e6abbfbf1cb</cs:getctag>
-      <d:sync-token>http://pro-tacts/sync/dd8f4d6dc8fa74f0ea9abdc089a0b2a9c1c5a548ee3f2812c3ee7e6abbfbf1cb</d:sync-token>
+      <cs:getctag>2feb58bb7e68a11ade71068bf8f63099f5789a487bd45b70a48868b70c9a4e3d</cs:getctag>
+      <d:sync-token>http://pro-tacts/sync/2feb58bb7e68a11ade71068bf8f63099f5789a487bd45b70a48868b70c9a4e3d</d:sync-token>
       <d:current-user-privilege-set>
         <d:privilege><d:read/></d:privilege>
         <d:privilege><d:write/></d:privilege>
