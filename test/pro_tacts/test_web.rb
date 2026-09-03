@@ -11,7 +11,8 @@ require "pro_tacts/store"
 require "pro_tacts/web"
 
 class WebTest < Minitest::Test
-  include CapturingSentry
+  include Sentry::TestHelper
+  include SentryMessages
   include Rack::Test::Methods
 
   def app
@@ -19,9 +20,15 @@ class WebTest < Minitest::Test
   end
 
   # Every request needs a Tailscale identity; the middleware refuses without
-  # one. Tests for that refusal are in TailscaleAuthTest.
+  # one. Tests for that refusal are in TailscaleAuthTest. The sentry setup
+  # pins the transport the app's reports land in; teardown clears it.
   def setup
+    setup_sentry
     header "Tailscale-User-Login", "test@example.com"
+  end
+
+  def teardown
+    teardown_sentry_test
   end
 
   def test_options_returns_dav_headers
@@ -409,9 +416,8 @@ class WebTest < Minitest::Test
     packed = card("new", "New").sub("FN:New\r\n", "FN:New\rNOTE:b\r\n")
 
     with_contacts({}) do
-      messages = capturing_sentry {
-        put_request "new", packed, "CONTENT_TYPE" => VCARD
-      }
+      put_request "new", packed, "CONTENT_TYPE" => VCARD
+      messages = sentry_messages
 
       assert_equal 201, last_response.status
       assert_equal 1, messages.length
@@ -422,9 +428,8 @@ class WebTest < Minitest::Test
   # Nothing else reports: an ordinary card arrives in silence.
   def test_put_of_an_ordinary_card_is_quiet
     with_contacts({}) do
-      messages = capturing_sentry {
-        put_request "new", card("new", "New"), "CONTENT_TYPE" => VCARD
-      }
+      put_request "new", card("new", "New"), "CONTENT_TYPE" => VCARD
+      messages = sentry_messages
 
       assert_equal 201, last_response.status
       assert_empty messages

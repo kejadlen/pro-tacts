@@ -8,7 +8,8 @@ require "sequel"
 require "pro_tacts/store"
 
 class StoreTest < Minitest::Test
-  include CapturingSentry
+  include Sentry::TestHelper
+  include SentryMessages
 
   AIDEN = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
   # UTC ISO 8601 to the millisecond, which is what SQLite is asked for.
@@ -26,6 +27,16 @@ class StoreTest < Minitest::Test
         yield store
       end
     end
+  end
+
+  # The store's reports land in the transport this pins for the test;
+  # teardown clears it so nothing carries into the next one.
+  def setup
+    setup_sentry
+  end
+
+  def teardown
+    teardown_sentry_test
   end
 
   ## Cards
@@ -551,7 +562,8 @@ class StoreTest < Minitest::Test
     shared = AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\rNOTE:b\r\nEND:VCARD\r\n")
 
     with_store({"aiden" => AIDEN_BORN}) do |store|
-      messages = capturing_sentry { store.put("aiden", shared) }
+      store.put("aiden", shared)
+      messages = sentry_messages
 
       assert_equal shared, store.contact("aiden").vcard
       assert_nil birthday_row(store, "aiden")
@@ -593,7 +605,8 @@ class StoreTest < Minitest::Test
     edited = AIDEN.sub("FN:Aiden", "FN:Aiden Smith")
 
     with_store({"aiden" => shared}) do |store|
-      messages = capturing_sentry { store.put("aiden", edited) }
+      store.put("aiden", edited)
+      messages = sentry_messages
 
       assert_equal edited, store.contact("aiden").vcard
       assert_equal 1, messages.length
@@ -618,12 +631,13 @@ class StoreTest < Minitest::Test
   # dropped, and nobody would know.
   def test_a_rewrite_dropping_an_unrecognized_bday_is_reported
     with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY:1985-13\r\nEND:VCARD\r\n")}) do |store|
-      messages = capturing_sentry {
-        store.put("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
-      }
+      # The seed's own arrival report is not this test's subject.
+      clear_sentry_events
+      store.put("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
+      messages = sentry_messages
 
       assert_equal 1, messages.length
-      assert_match /BDAY/, messages.fetch(0)
+      assert_match(/BDAY/, messages.fetch(0))
     end
   end
 
@@ -633,11 +647,9 @@ class StoreTest < Minitest::Test
   def test_a_rewrite_over_known_bdays_stays_quiet
     ["BDAY:--0412", "BDAY:1985-04"].each do |line|
       with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")}) do |store|
-        messages = capturing_sentry {
-          store.put("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
-        }
+        store.put("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
 
-        assert_empty messages, line
+        assert_empty sentry_messages, line
       end
     end
   end
@@ -650,11 +662,10 @@ class StoreTest < Minitest::Test
   def test_an_unrecognized_bday_arriving_is_reported
     ["BDAY:1985-13", "BDAY:--0432", "BDAY:19850412", "BDAY:1985-4"].each do |line|
       with_store({}) do |store|
-        messages = capturing_sentry {
-          store.put("aiden", AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"))
-        }
+        clear_sentry_events
+        store.put("aiden", AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"))
 
-        assert_equal 1, messages.length, line
+        assert_equal 1, sentry_messages.length, line
       end
     end
   end
@@ -663,11 +674,9 @@ class StoreTest < Minitest::Test
     ["BDAY:1985-04-12", "BDAY:1985-04-12T23:10:00Z", "BDAY;X-APPLE-OMIT-YEAR=1604:1604-04-12",
       "BDAY:--0412", "BDAY:--04-12", "BDAY:1985-04", "BDAY:1985"].each do |line|
       with_store({}) do |store|
-        messages = capturing_sentry {
-          store.put("aiden", AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"))
-        }
+        store.put("aiden", AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"))
 
-        assert_empty messages, line
+        assert_empty sentry_messages, line
       end
     end
   end

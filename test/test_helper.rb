@@ -44,30 +44,42 @@ File.truncate("log/test.log", 0) if File.exist?("log/test.log")
 
 require_relative "fixture_data"
 require "pro_tacts/web"
+require "sentry-ruby"
+require "sentry/test_helper"
+
+# Sentry is initialized here rather than left dormant because the gem's
+# test helper builds on an initialized SDK. The DSN is forced nil rather
+# than read from the environment, so a real SENTRY_DSN in this shell
+# cannot point a test run at a live project. init also registers
+# at_exit { close }, and the suite's runner requires minitest/autorun
+# before any of this loads — so Sentry's close fires before minitest's
+# at_exit runs the tests, and setup (SentryMessages#setup_sentry)
+# re-opens the SDK when it finds it closed. Before minitest/autorun
+# regardless, per the rule the header states, so direct single-file
+# runs — where this file is the entry — keep the close after the tests.
+Sentry.init { |sentry| sentry.dsn = nil }
+
 require "minitest/autorun"
 
 # Standing in for config.ru, which never runs here: build the store and
 # hand it to the app.
 ProTacts::Web.store = FixtureData.install(data_dir)
 
-# Sentry's capture_message, made observable for the length of a block and
-# restored after, so what one test captures cannot leak into the next.
-# Sentry is never initialized under test, so the original is inert
-# anyway — this only makes it observable. Returns what was captured.
-#
-# Here rather than in one test class because the reports are raised from
-# two layers: the web's PUT reports a broken parser assumption, the store
-# reports what its birthday model could not recompose.
-module CapturingSentry
-  def capturing_sentry
-    messages = []
-    original = Sentry.method(:capture_message)
-    Sentry.define_singleton_method(:capture_message) { |message, **| messages << message }
-    begin
-      yield messages
-    ensure
-      Sentry.define_singleton_method(:capture_message, original)
-    end
-    messages
+# The helper's other half: setup_sentry_test re-points the SDK at a
+# dummy DSN and a recording transport, so what the app reports is
+# observable in sentry_events without anything being sent and without
+# redefining Sentry.capture_message. This suite's assertions read
+# report texts, so the recorded Sentry::ErrorEvents also become the
+# message strings, in capture order. Shared by the two test classes
+# whose layers report — the web's PUT a broken parser assumption, the
+# store its birthday model what it cannot recompose.
+module SentryMessages
+  def setup_sentry
+    Sentry.init { |sentry| sentry.dsn = nil } unless Sentry.initialized?
+    setup_sentry_test
+  end
+
+  def sentry_messages
+    sentry_events.map { it.message }
   end
 end
