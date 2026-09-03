@@ -1,0 +1,21 @@
+.git
+.jj
+.github
+.claude
+.direnv
+.envrc
+.quire
+.ramekin
+# data/ is the real address book; log/ holds unhandled captures with
+# every header. Neither belongs in an image.
+data
+log
+tmp
+docs
+test
+servers
+clients
+monica
+baikal
+work
+carddav.mobileconfig
