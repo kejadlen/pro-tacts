@@ -16,7 +16,7 @@ module ProTacts
       #: (Contact contact) -> String
       def self.initials(contact)
         family, given = contact.name_components || []
-        letters = [given, family].filter_map { it[0] unless it.to_s.empty? }
+        letters = [given, family].filter_map { it[0] if it }
         return letters.join.upcase unless letters.empty?
 
         (contact.name || contact.id).to_s.strip[0].to_s.upcase

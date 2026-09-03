@@ -71,10 +71,10 @@ module ProTacts
       #: (Contact::Address address) -> Array[String]
       def address_lines(address)
         [
-          [address.extended, address.street].reject { |s| s.nil? || s.empty? }.join(" "),
-          [address.locality, address.region, address.postal_code].reject { |s| s.nil? || s.empty? }.join(", "),
+          [address.extended, address.street].compact.join(" "),
+          [address.locality, address.region, address.postal_code].compact.join(", "),
           address.country,
-        ].reject { |s| s.nil? || s.empty? }
+        ].compact.reject { it.empty? }
       end
 
       #: (String | Array[String] value) -> void

@@ -65,7 +65,7 @@ class ContactTest < Minitest::Test
   end
 
   def test_reads_the_name_components
-    assert_equal ["Lovelace", "Ada", "", "", ""], contact(STRUCTURED).name_components
+    assert_equal ["Lovelace", "Ada", nil, nil, nil], contact(STRUCTURED).name_components
   end
 
   def test_values_come_back_unescaped
@@ -88,8 +88,8 @@ class ContactTest < Minitest::Test
 
   def test_reads_an_address_as_its_seven_components
     address = contact(STRUCTURED).addresses.fetch(0)
-    assert_equal "", address.po_box
-    assert_equal "", address.extended
+    assert_nil address.po_box
+    assert_nil address.extended
     assert_equal "12 Analytical Way", address.street
     assert_equal "London", address.locality
     assert_equal "England", address.region
@@ -98,8 +98,8 @@ class ContactTest < Minitest::Test
     assert_equal "home", address.type
   end
 
-  # Components the card's value stopped short of are nil, not empty —
-  # only a delimiter the value actually carried makes an empty one.
+  # A blank position and one past the end of the value read the same:
+  # neither says anything the card did not.
   def test_address_components_beyond_the_value_are_nil
     short = STRUCTURED.sub(
       "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
@@ -111,6 +111,25 @@ class ContactTest < Minitest::Test
     assert_nil address.region
     assert_nil address.postal_code
     assert_nil address.country
+  end
+
+  # An empty value carries nothing a missing property would not, so
+  # the accessors read one as the other: FN:, NOTE:, TEL:, and EMAIL:
+  # come back absent, and an ADR blank throughout is no address.
+  def test_empty_values_read_as_absent
+    empty = STRUCTURED.sub("FN:Ada Lovelace", "FN:")
+      .sub("TEL;TYPE=mobile:+1-555-0100", "TEL;TYPE=mobile:")
+      .sub("TEL;TYPE=work:+1-555-0199", "TEL;TYPE=work:")
+      .sub("EMAIL;TYPE=home:ada@example.com", "EMAIL;TYPE=home:")
+      .sub("ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom", "ADR;TYPE=home:;")
+      .sub("NOTE:Countess\\, mathematician.", "NOTE:")
+
+    contact = contact(empty)
+    assert_nil contact.name
+    assert_empty contact.phones
+    assert_empty contact.emails
+    assert_empty contact.addresses
+    assert_nil contact.notes
   end
 
   def test_the_birthday_is_the_model_the_store_composed

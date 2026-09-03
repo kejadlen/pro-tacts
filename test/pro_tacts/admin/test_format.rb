@@ -31,10 +31,12 @@ class FormatTest < Minitest::Test
     assert_equal "Z", ProTacts::Admin::Format.initials(contact(bare, id: "znorth"))
   end
 
-  def test_initials_of_a_blank_name_is_blank
+  # A blank FN is no name — empty values read as absent (see
+  # Contact) — so initials fall back to the id like any nameless card.
+  def test_initials_of_a_blank_name_fall_back_to_the_id
     blank = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:\r\nUID:b\r\nEND:VCARD\r\n"
 
-    assert_equal "", ProTacts::Admin::Format.initials(contact(blank))
+    assert_equal "A", ProTacts::Admin::Format.initials(contact(blank))
   end
 
   # N with only one of given/family present (a mononym, or a card that

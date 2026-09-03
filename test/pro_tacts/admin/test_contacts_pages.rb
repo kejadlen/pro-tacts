@@ -133,6 +133,20 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # Empty values are absent by the time the view reads them (see
+  # Contact), so a present-but-empty property renders no row either.
+  def test_show_hides_attributes_whose_values_are_empty
+    empty = ADA.sub("TEL;TYPE=mobile:+1-555-0100", "TEL;TYPE=mobile:")
+      .sub("NOTE:Countess of Lovelace.", "NOTE:")
+
+    with_contacts({"ada" => empty}) do
+      get "/contacts/ada"
+
+      refute_includes last_response.body, '<dt class="type-label">phone</dt>'
+      refute_includes last_response.body, "notes"
+    end
+  end
+
   # No properties at all means no grid, not an empty one — an empty
   # <dl> would still eat the gap card-body puts before it, leaving the
   # name pinned near the top of the card instead of centered in it.

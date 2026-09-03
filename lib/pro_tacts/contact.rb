@@ -45,8 +45,8 @@ module ProTacts
     # for TEL (RFC 2426 section 3.3.1) and EMAIL (section 3.3.2), and
     # ADR's seven components (section 3.2.1: post office box, extended
     # address, street, locality, region, postal code, country — nil
-    # where the card's value stopped short of the position). Data
-    # classes, whose members the inline syntax cannot read; the
+    # where the card left the position blank or stopped short of it).
+    # Data classes, whose members the inline syntax cannot read; the
     # signatures live in sig/pro_tacts/contact.rbs.
     # @rbs skip
     Phone = Data.define(:value, :type)
@@ -109,8 +109,7 @@ module ProTacts
     # FN's value (RFC 2426 section 3.1.1), in text form.
     #: () -> String?
     def name
-      property = properties.find { it.name.casecmp?("FN") }
-      property && VCard.unescape(property.value)
+      text_of(properties.find { it.name.casecmp?("FN") })
     end
 
     # N's components (RFC 2426 section 3.1.2: family; given; additional;
@@ -118,25 +117,31 @@ module ProTacts
     # Structured data — reading initials off it is the real answer to
     # where a first/last split falls, rather than guessing in the
     # free-text FN.
-    #: () -> Array[String]?
+    #: () -> Array[String?]?
     def name_components
       property = properties.find { it.name.casecmp?("N") }
-      property && VCard.split_components(property.value)
+      property && components_of(property.value)
     end
 
     #: () -> Array[Phone]
     def phones
-      of_name("TEL").map { Phone.new(value: VCard.unescape(it.value), type: type_of(it)) }
+      of_name("TEL").filter_map do |property|
+        value = text_of(property)
+        Phone.new(value:, type: type_of(property)) if value
+      end
     end
 
     #: () -> Array[Email]
     def emails
-      of_name("EMAIL").map { Email.new(value: VCard.unescape(it.value), type: type_of(it)) }
+      of_name("EMAIL").filter_map do |property|
+        value = text_of(property)
+        Email.new(value:, type: type_of(property)) if value
+      end
     end
 
     #: () -> Array[Address]
     def addresses
-      of_name("ADR").map { address_of(it) }
+      of_name("ADR").filter_map { address_of(it) }
     end
 
     # The birthday the served card carries — the model the store
@@ -153,8 +158,7 @@ module ProTacts
     # The card's NOTE (RFC 2426 section 3.6.2), in text form.
     #: () -> String?
     def notes
-      property = properties.find { it.name.casecmp?("NOTE") }
-      property && VCard.unescape(property.value)
+      text_of(properties.find { it.name.casecmp?("NOTE") })
     end
 
     private
@@ -164,10 +168,33 @@ module ProTacts
       properties.select { it.name.casecmp?(name) }
     end
 
-    #: (VCard::Parser::Property property) -> Address
+    # A text property's value, with the empty one reading as absent:
+    # a property whose value carries nothing is one no caller has to
+    # tell apart from a property that is not there.
+    #: (VCard::Parser::Property? property) -> String?
+    def text_of(property)
+      return if property.nil?
+
+      value = VCard.unescape(property.value)
+      value.empty? ? nil : value
+    end
+
+    # A structured value's components, nil in the positions the card
+    # left blank: an empty component is as absent as one past the end
+    # of the value, and reads the same.
+    #: (String value) -> Array[String?]
+    def components_of(value)
+      VCard.split_components(value).map { it.empty? ? nil : it }
+    end
+
+    # ADR's components, with a value that is blank throughout reading
+    # as no address at all.
+    #: (VCard::Parser::Property property) -> Address?
     def address_of(property)
-      po_box, extended, street, locality, region, postal_code, country =
-        VCard.split_components(property.value)
+      components = components_of(property.value)
+      return if components.none?
+
+      po_box, extended, street, locality, region, postal_code, country = components
       Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, type: type_of(property))
     end
 
