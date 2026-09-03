@@ -106,6 +106,19 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # A value with no TYPE parameter still gets a key — the fallback
+  # names the kind of value, so every row in the grid is labeled.
+  def test_show_labels_untyped_values_with_the_property_name
+    untyped = ADA.sub("TEL;TYPE=mobile:", "TEL:").sub("EMAIL;TYPE=home:", "EMAIL:")
+
+    with_contacts({"ada" => untyped}) do
+      get "/contacts/ada"
+
+      assert_includes last_response.body, '<dt class="type-label">phone</dt>'
+      assert_includes last_response.body, '<dt class="type-label">email</dt>'
+    end
+  end
+
   # Empty attributes do not render (docs/DESIGN.md) — a bare card shows
   # only the header, not a scaffold of blank rows.
   def test_show_hides_attributes_the_contact_has_no_data_for

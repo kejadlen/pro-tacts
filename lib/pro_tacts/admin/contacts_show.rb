@@ -49,15 +49,17 @@ module ProTacts
           !@birthday.nil? || !@contact.notes.nil?
       end
 
+      # A missing TYPE parameter still gets a key: the fallback names
+      # the kind of value, so no row renders unlabeled in the grid.
       def rows
-        @contact.phones.each { |phone| row(phone.type, phone.value) }
-        @contact.emails.each { |email| row(email.type, email.value) }
+        @contact.phones.each { |phone| row(phone.type || "phone", phone.value) }
+        @contact.emails.each { |email| row(email.type || "email", email.value) }
         @contact.addresses.each { |address| row(address.type || "address", address_lines(address)) }
         row("birthday", @birthday) if @birthday
         row("notes", @contact.notes) if @contact.notes
       end
 
-      #: (String? type, String | Array[String] value) -> void
+      #: (String type, String | Array[String] value) -> void
       def row(type, value)
         dt(class: "type-label") { type }
         dd(class: "type-body-sm") { render_value(value) }
