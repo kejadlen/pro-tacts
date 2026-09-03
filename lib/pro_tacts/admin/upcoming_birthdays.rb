@@ -1,17 +1,16 @@
 require "phlex"
 
 require "pro_tacts/admin/format"
-require "pro_tacts/admin/layout"
 
 module ProTacts
   module Admin
-    # GET /birthdays — who has a birthday soon, in the order they
-    # arrive, each row opening the contact's card. The store's query
-    # has already decided the hard parts (arrival order, the year
-    # wrap, which partial shapes land on a day at all); this screen
-    # only renders what it hands back, and a birthday with no year
-    # shows its day without an age.
-    class Birthdays < Phlex::HTML
+    # The dashboard's ambient column: who has a birthday soon, in the
+    # order they arrive, each row opening the contact's card. The
+    # store's query has already decided the hard parts (arrival order,
+    # the year wrap, which partial shapes land on a day at all); this
+    # renders what it hands back, and a birthday without a year shows
+    # its day without an age.
+    class UpcomingBirthdays < Phlex::HTML
       LIMIT = 10
 
       #: (upcoming: Array[Store::UpcomingBirthday]) -> void
@@ -20,8 +19,8 @@ module ProTacts
       end
 
       def view_template
-        render Layout.new(title: "Birthdays") do
-          h1(class: "type-h1") { "Birthdays" }
+        section do
+          h2(class: "type-label") { "upcoming birthdays" }
           if @upcoming.empty?
             p(class: "type-body-sm") { "No birthdays to show." }
           else
@@ -35,13 +34,15 @@ module ProTacts
       #: (Store::UpcomingBirthday upcoming) -> void
       def render_row(upcoming)
         contact = upcoming.contact
-        a(href: "/contacts/#{contact.id}") do
-          span(class: "avatar") { Format.initials(contact) }
-          div(style: "flex: 1; min-width: 0;") do
-            div(style: "font-weight: 550;") { contact.name || contact.id }
-            div(class: "type-body-sm") { date_line(upcoming) }
+        li do
+          a(href: "/contacts/#{contact.id}") do
+            span(class: "avatar") { Format.initials(contact) }
+            div(style: "flex: 1; min-width: 0;") do
+              div(style: "font-weight: 550;") { contact.name || contact.id }
+              div(class: "type-body-sm") { date_line(upcoming) }
+            end
+            span(class: "type-label") { Format.time_until(upcoming.occurs_on) }
           end
-          span(class: "type-label") { Format.time_until(upcoming.occurs_on) }
         end
       end
 

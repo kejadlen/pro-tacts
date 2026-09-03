@@ -6,13 +6,15 @@ module ProTacts
     # vendored Gloss stylesheets (see public/vendor/gloss and
     # docs/DESIGN.md), and a one-line header naming the app in type —
     # "no brand mark" is one of the rules that document inherits from
-    # Gloss — with the screen-to-screen nav pushed to the far edge of
-    # it, quieter than the mark. No JavaScript: nothing served here yet
-    # needs any.
+    # Gloss. `wide` opts a screen out of the reading width a single
+    # column wants (see admin.css) — the dashboard root is the one
+    # screen that asks. No JavaScript: nothing served here yet needs
+    # any.
     class Layout < Phlex::HTML
-      #: (title: String) -> void
-      def initialize(title:)
+      #: (title: String, ?wide: bool) -> void
+      def initialize(title:, wide: false)
         @title = title
+        @wide = wide
       end
 
       def view_template
@@ -30,11 +32,8 @@ module ProTacts
             link(rel: "stylesheet", href: "/admin.css")
           end
           body do
-            header(class: "admin-header") do
-              a(href: "/") { "pro-tacts" }
-              nav { a(href: "/birthdays", class: "type-label") { "birthdays" } }
-            end
-            main(class: "admin-main") { yield }
+            header(class: "admin-header") { a(href: "/") { "pro-tacts" } }
+            main(class: "admin-main", **(@wide ? {data: {wide: true}} : {})) { yield }
           end
         end
       end

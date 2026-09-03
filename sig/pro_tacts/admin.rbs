@@ -11,13 +11,13 @@ module ProTacts
     end
 
     class ContactsIndex
-      def self.call: (recent: Array[Store::RecentContact], query: String?) -> String
+      def self.call: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?) -> String
     end
 
-    class Birthdays
+    # Rendered by ContactsIndex, not called from checked code; only
+    # its LIMIT is read in web.rb.
+    class UpcomingBirthdays
       LIMIT: Integer
-
-      def self.call: (upcoming: Array[Store::UpcomingBirthday]) -> String
     end
   end
 end

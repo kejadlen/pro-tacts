@@ -15,18 +15,6 @@
   text-decoration: none;
 }
 
-/* The header's nav sits at the far edge from the wordmark. Its links
-   carry the catalog-label look of .type-label; this rule exists only
-   because .admin-header a is more specific than .type-label and would
-   otherwise force the wordmark's size and ink back onto them. */
-.admin-header nav {
-  margin-inline-start: auto;
-}
-.admin-header nav a {
-  font-size: var(--gl-step--2);
-  color: var(--gl-color-text-secondary);
-}
-
 .admin-main {
   max-width: 34rem;
   margin: 0 auto;
@@ -34,6 +22,24 @@
   display: flex;
   flex-direction: column;
   gap: var(--gl-space-m);
+}
+
+/* The dashboard's width — two columns beside each other rather than
+   the reading width a single column wants. Set by the layout's `wide`
+   flag, the one screen that asks for it. */
+.admin-main[data-wide] {
+  max-width: 68rem;
+}
+
+/* The dashboard itself: equal fluid columns that collapse to one when
+   the viewport cannot hold two side by side, the ambient birthdays
+   column stacking under the primary one. `align-items: start` keeps a
+   short column from stretching its card to match its neighbor. */
+.dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--gl-space-m);
+  align-items: start;
 }
 
 /* field.css's `form { max-width: 28rem; }` is sized for the

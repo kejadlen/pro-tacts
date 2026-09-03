@@ -71,10 +71,14 @@ Recency is the answer to "what was I doing?", which is the actual question
 someone opening this app has. Match generously: a contact should be findable
 by name, by any of its values, and by the groups it belongs to.
 
-One screen is exempt from that shape: the upcoming-birthdays list is not a
-search target but a standing answer to "what's coming?" — a bounded list in
-arrival order, each row opening the contact's card. It is the one screen
-that browses, because its question is not "where is X?".
+The root screen is a dashboard of two columns. The primary column is the
+shape above. The ambient column beside it is a standing answer to "what's
+coming?": the next ten or so birthdays in arrival order, each row opening
+the contact's card. It is the one list that browses, because its question is
+not "where is X?", and it stands whether or not there is a query. The
+columns are equal and fluid, collapsing to one — birthdays under contacts —
+when the viewport cannot hold two side by side. Every other screen keeps a
+single reading column.
 
 ## Records are cards, not forms
 

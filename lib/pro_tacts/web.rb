@@ -8,7 +8,6 @@ require "rack/rewindable_input"
 require "nokogiri"
 require "roda"
 
-require "pro_tacts/admin/birthdays"
 require "pro_tacts/admin/contacts_index"
 require "pro_tacts/admin/contacts_show"
 require "pro_tacts/debug_logger"
@@ -102,24 +101,18 @@ module ProTacts
         end
       end
 
-      # The upcoming-birthdays screen: the coming-year question the
-      # birthdays table answers without a card in sight, one segment
-      # down like the browser and under the same auth gate.
-      r.on "birthdays" do
-        r.get do
-          response["Content-Type"] = "text/html; charset=utf-8"
-          Admin::Birthdays.call(upcoming: store.upcoming_birthdays(Admin::Birthdays::LIMIT))
-        end
-      end
-
       r.is "" do
-        # The contacts page itself: the root is the one human-facing
-        # screen's home (docs/DESIGN.md), a GET alongside the PROPFIND
-        # below it — same path, disjoint verbs, and a browser's plain
-        # GET is no DAV client's bootstrap.
+        # The dashboard home: the one human-facing screen's home
+        # (docs/DESIGN.md), a GET alongside the PROPFIND below it —
+        # same path, disjoint verbs, and a browser's plain GET is no
+        # DAV client's bootstrap.
         r.get do
           response["Content-Type"] = "text/html; charset=utf-8"
-          Admin::ContactsIndex.call(recent: store.contacts_by_recency, query: r.params["q"])
+          Admin::ContactsIndex.call(
+            recent: store.contacts_by_recency,
+            upcoming: store.upcoming_birthdays(Admin::UpcomingBirthdays::LIMIT),
+            query: r.params["q"],
+          )
         end
 
         # DAV:current-user-principal (RFC 5397 section 3) — what a client
