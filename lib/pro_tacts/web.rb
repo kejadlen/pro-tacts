@@ -331,17 +331,55 @@ module ProTacts
             # a value like the others rather than a return.
             case root.name
             when "sync-collection"
-              # DAV:sync-collection (RFC 6578 section 3.2). The warm-sync ask
-              # is etag-only; a changed etag sends the client back through
-              # multiget, so no address-data here.
+              # DAV:sync-collection (RFC 6578 section 3.2): the members
+              # added, changed, or removed since the token the client
+              # holds, and the token naming the state the answer reaches.
+              # The warm-sync ask is etag-only; a changed etag sends the
+              # client back through multiget, so no address-data here.
               #
-              # Knowingly violates that section twice: it requires the
-              # multistatus to carry a DAV:sync-token and to report only what
-              # changed since the client's token, and this returns every
-              # contact with no token. macOS resyncs the whole collection
-              # anyway, so it works; a client that trusts the token would
-              # break. Fixing it is the incremental-sync work in the backlog.
-              multistatus(contacts.map { etag_response(it) })
+              # The token carries the change log's sequence (see
+              # #sync_token), and the delta is the log after it: one
+              # response per member, the net of everything it did in the
+              # window — a member put twice since the token answers once,
+              # at its current etag, the multiple-changes case section 3.5
+              # allows one response for. A member whose net is a removal
+              # answers as section 3.2 spells it: href and 404, no
+              # propstat.              #
+              # Depth stays unread though the section defines the report
+              # only at 0: macOS sends Depth: 1 (fixture 08), and 400-ing
+              # the one real client over a header it ignores serves the
+              # letter over the exchange. sync-level likewise — 1 and
+              # infinite are the same answer here, the collection has no
+              # member collections (section 3.3).
+              token = doc.xpath("//sync-token").first&.text.to_s.strip
+              if token.empty?
+                # No token is the initial sync: every member, changed
+                # (section 3.4).
+                multistatus(contacts.map { etag_response(it) }, sync_token:)
+              elsif (sequence = token[%r{\Ahttp://pro-tacts/sync/(\d+)\z}, 1]) &&
+                  sequence.to_i <= store.latest_sequence
+                net = store.changes(after: sequence.to_i).map { it.card_id }.uniq
+                responses = net.map do |id|
+                  contact = contacts.find { it.id == id }
+                  contact ? etag_response(contact) : missing_response(contact_href(id))
+                end
+                multistatus(responses, sync_token:)
+              else
+                # A token this server never issued, or one naming a state
+                # past the present: the section's DAV:valid-sync-token
+                # precondition, marshalled per RFC 4918 section 16. 410
+                # rather than 403 because its fallback is a full resync —
+                # the request will not always fail, and the state the
+                # token names is gone.
+                response.status = 410
+
+                <<~XML
+                  <?xml version="1.0" encoding="UTF-8"?>
+                  <d:error xmlns:d="DAV:">
+                    <d:valid-sync-token/>
+                  </d:error>
+                XML
+              end
             when "addressbook-multiget"
               # CARDDAV:addressbook-multiget (RFC 6352 section 8.7); the
               # address-data the client asks for is section 10.4.
@@ -620,12 +658,16 @@ module ProTacts
       !existing.nil? && header.split(",").map(&:strip).include?(existing.etag)
     end
 
-    #: (Array[String] responses) -> String
-    def multistatus(responses)
+    # A 207 body. The trailing DAV:sync-token is RFC 6578 section 3.2's
+    # — a sync-collection response MUST carry one naming the state the
+    # answer reaches; no other multistatus here has a state to name.
+    #: (Array[String] responses, ?sync_token: String) -> String
+    def multistatus(responses, sync_token: nil)
+      trailing = sync_token ? "  <d:sync-token>#{sync_token}</d:sync-token>\n" : ""
       <<~XML
         <?xml version="1.0" encoding="UTF-8"?>
         <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
-          #{responses.join}
+          #{responses.join}#{trailing}
         </d:multistatus>
       XML
     end
@@ -669,6 +711,10 @@ module ProTacts
 
     # An href with no match is reported as a 404 inside the 207 rather than
     # failing the request (RFC 6352 section 8.7).
+    #: (String requested) -> String
+    # A member the collection does not answer for: the multiget miss,
+    # and the removal shape a sync-collection delta reports (RFC 6578
+    # section 3.2 — href and 404, no propstat).
     #: (String requested) -> String
     def missing_response(requested)
       <<~XML

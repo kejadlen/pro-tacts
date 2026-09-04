@@ -1,5 +1,4 @@
 require "date"
-require "digest"
 require "pathname"
 require "sequel"
 require "sentry-ruby"
@@ -147,20 +146,24 @@ module ProTacts
     # The collection's content tag: one value that changes when any card
     # is added, removed, or changed and never otherwise, so a client
     # comparing two of them learns whether to resync — never what
-    # changed. Sorting the id-and-etag lines keeps it independent of the
-    # order rows come back in while staying sensitive to membership and
-    # content.
-    #
-    # It costs a read of every card, because an etag is derived from a
-    # card's bytes rather than stored beside them. The changes table
-    # already holds a monotonic sequence that answers the same question
-    # for the price of one indexed read, and switching to it is part of
-    # the incremental-sync work: it would change the value a client
-    # holds, and it moves on every write rather than on every change,
-    # which is a different promise than the one this makes.
+    # changed. The change log's sequence is that value, for the one
+    # indexed read it costs. It moves on a rewrite that stores identical
+    # bytes too, where the hash this replaced did not: the promise
+    # trades a spurious resync — every etag unchanged, nothing fetched —
+    # for never missing a change.
     #: () -> String
     def ctag
-      Digest::SHA256.hexdigest(contacts.map { "#{it.id} #{it.etag}" }.sort.join("\n"))
+      latest_sequence.to_s
+    end
+
+    # The change log's current sequence: the collection's version, and
+    # the number a sync token carries (RFC 6578 section 3). Zero when
+    # nothing has ever been written. Ordered and taken rather than
+    # Dataset#max, which steep reads as Enumerable#max — an Integer
+    # argument, not a column.
+    #: () -> Integer
+    def latest_sequence
+      change_log.order(Sequel.desc(:sequence)).first&.fetch(:sequence).to_i
     end
 
     # Birthdays that land on a coming calendar day, in arrival order:
@@ -295,10 +298,11 @@ module ProTacts
       end
     end
 
-    # The change log from a sequence number on, oldest first. Nothing
-    # reads it yet — incremental sync is the task that will — but the
-    # entries have to be written from the very first card, because a gap
-    # in them is a change some client is never told about.
+    # The change log from a sequence number on, oldest first: the window
+    # a sync-collection report answers from (RFC 6578 section 3.2) — the
+    # entries after the client's token are the changes it has not seen.
+    # The entries have to be written from the very first card, because a
+    # gap in them is a change some client is never told about.
     #: (?after: Integer) -> Array[Change]
     def changes(after: 0)
       change_log.where(Sequel[:sequence] > after).order(:sequence).map { change_from(it) }

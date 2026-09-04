@@ -211,7 +211,12 @@ class StoreTest < Minitest::Test
     end
   end
 
-  def test_the_ctag_moves_with_membership_both_ways
+  # The ctag is the change log's sequence, so it moves forward on a
+  # removal too — it never returns to an earlier value, where the
+  # membership hash this replaced did. A client that saw the earlier
+  # value resyncs and finds every etag unchanged; the trade the
+  # sequence makes for one indexed read and a monotonic answer.
+  def test_the_ctag_moves_on_a_removal_and_never_returns
     with_store({"aiden" => AIDEN}) do |store|
       alone = store.ctag
 
@@ -219,7 +224,7 @@ class StoreTest < Minitest::Test
       refute_equal alone, store.ctag
 
       store.delete("znorth")
-      assert_equal alone, store.ctag
+      refute_equal alone, store.ctag
     end
   end
 

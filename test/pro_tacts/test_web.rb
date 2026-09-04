@@ -649,6 +649,21 @@ class WebTest < Minitest::Test
     XML
   end
 
+  # The warm-sync ask as macOS sends it (fixture 08): token, level,
+  # etag-only prop.
+  def sync_collection(token)
+    <<~XML
+      <?xml version="1.0" encoding="UTF-8"?>
+      <A:sync-collection xmlns:A="DAV:">
+        <A:sync-token>#{token}</A:sync-token>
+        <A:sync-level>1</A:sync-level>
+        <A:prop>
+          <A:getetag/>
+        </A:prop>
+      </A:sync-collection>
+    XML
+  end
+
   def multiget(*ids)
     hrefs = ids.map { "<A:href xmlns:A=\"DAV:\">/dav/addressbook/#{it}.vcf</A:href>" }.join("\n    ")
 
@@ -713,23 +728,79 @@ class WebTest < Minitest::Test
     end
   end
 
-  def test_sync_collection_returns_etags_only
-    with_contacts({"aiden" => "Aiden"}) do
-      request "/dav/addressbook/", method: "REPORT", input: <<~XML
-        <?xml version="1.0" encoding="UTF-8"?>
-        <A:sync-collection xmlns:A="DAV:">
-          <A:sync-token>http://pro-tacts/sync/1</A:sync-token>
-          <A:sync-level>1</A:sync-level>
-          <A:prop>
-            <A:getetag/>
-          </A:prop>
-        </A:sync-collection>
-      XML
+  # RFC 6578 section 3.2: the delta since the client's token, one
+  # response per net-changed member, and a DAV:sync-token naming the
+  # state the answer reaches. The warm-sync ask is etag-only; a changed
+  # etag sends the client back through multiget, so no address-data
+  # here.
+  def test_sync_collection_reports_the_delta_since_the_token
+    with_contacts({"aiden" => "Aiden"}) do |store|
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection("http://pro-tacts/sync/0")
 
       assert_equal 207, last_response.status
       assert_includes last_response.body, "/dav/addressbook/aiden.vcf"
-      assert_includes last_response.body, "getetag"
+      assert_includes last_response.body, "<d:getetag>"
       refute_includes last_response.body, "address-data"
+      token = last_response.body[%r{<d:sync-token>(.+)</d:sync-token>}, 1]
+
+      # Nothing new under the token it just handed out.
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(token)
+      assert_equal 207, last_response.status
+      refute_includes last_response.body, "d:response"
+      assert_includes last_response.body, "<d:sync-token>#{token}</d:sync-token>"
+
+      # A change after the token is the whole of the next delta.
+      store.put("aiden", card("aiden", "Aiden Smith"))
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(token)
+      assert_includes last_response.body, "/dav/addressbook/aiden.vcf"
+      refute_equal token, last_response.body[%r{<d:sync-token>(.+)</d:sync-token>}, 1]
+    end
+  end
+
+  # An empty token is the initial sync (RFC 6578 section 3.4): every
+  # member reported as changed.
+  def test_sync_collection_with_no_token_lists_every_member
+    with_contacts({"aiden" => "Aiden", "znorth" => "Znorth"}) do
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection("")
+
+      assert_equal 207, last_response.status
+      assert_includes last_response.body, "/dav/addressbook/aiden.vcf"
+      assert_includes last_response.body, "/dav/addressbook/znorth.vcf"
+      assert_includes last_response.body, "<d:sync-token>http://pro-tacts/sync/2</d:sync-token>"
+    end
+  end
+
+  # A removal answers as RFC 6578 section 3.2 spells it: href and 404,
+  # no propstat — and nothing else moves.
+  def test_sync_collection_reports_a_removal_as_404
+    with_contacts({"aiden" => "Aiden", "znorth" => "Znorth"}) do |store|
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection("http://pro-tacts/sync/2")
+      token = last_response.body[%r{<d:sync-token>(.+)</d:sync-token>}, 1]
+      store.delete("znorth")
+
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(token)
+
+      body = last_response.body
+      assert_equal 207, last_response.status
+      assert_includes body, "/dav/addressbook/znorth.vcf"
+      assert_includes body, "HTTP/1.1 404 Not Found"
+      refute_includes body, "aiden"
+    end
+  end
+
+  # A token this server never issued, or one naming a state past the
+  # present: the DAV:valid-sync-token precondition of RFC 6578
+  # section 3.2, marshalled per RFC 4918 section 16.
+  def test_sync_collection_refuses_a_token_it_never_issued
+    with_contacts({"aiden" => "Aiden"}) do
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection("http://pro-tacts/sync/9")
+
+      assert_equal 410, last_response.status
+      assert_includes last_response.body, "<d:valid-sync-token/>"
+
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection("https://elsewhere/sync/1")
+
+      assert_equal 410, last_response.status
     end
   end
 

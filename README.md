@@ -48,10 +48,11 @@ macOS Contacts displays them over Tailscale serve as of 2026-08-14, so
 later work has a known-good baseline to change. See
 `docs/plans/2026-08-12-one-card-on-macos.md` for what that milestone
 established. A contact's etag hashes the card it serves and the
-collection tags hash the membership, so a change to a card reaches synced
-clients on their next poll. Writes arrive the same way: PUT stores the
-submitted card verbatim (RFC 6352 section 6.3.2), and the change log the
-sync tokens count on is written with it, in one transaction.
+collection tags carry the change log's sequence, so a change to a card
+reaches synced clients on their next poll. Writes arrive the same way:
+PUT stores the submitted card verbatim (RFC 6352 section 6.3.2), and the
+change log the sync tokens count on is written with it, in one
+transaction.
 
 Requests are authenticated by the `Tailscale-User-Login` header that
 `tailscale serve` injects, which it strips from incoming requests so a
@@ -90,8 +91,12 @@ carry:
   the collection itself needs no self-entry.
 - `REPORT addressbook-multiget`: `getetag` plus `address-data` for each
   requested href.
-- `REPORT sync-collection`: `getetag` only — the client refetches changed
-  cards through multiget or `GET` on its own.
+- `REPORT sync-collection`: the members added, changed, or removed
+  since the client's token — `getetag` only, removals as bare 404s —
+  plus the new `DAV:sync-token`. A token the server never issued is a
+  410 naming `DAV:valid-sync-token`, the client's cue to resync from
+  scratch. The client refetches changed cards through multiget or `GET`
+  on its own.
 - `GET` a card: the vCard body plus an `ETag` header.
 - `PUT` a card: 201 for a create at an unmapped href, 204 for a replace,
   each carrying the strong `ETag` only when what is stored is what was
