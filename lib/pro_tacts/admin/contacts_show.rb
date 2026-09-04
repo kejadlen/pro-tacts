@@ -17,6 +17,13 @@ module ProTacts
     # keeps its mono type label for now. Revisit once Gloss or this
     # project settles on how icons ship.
     class ContactsShow < Phlex::HTML
+      # A PHOTO value at or under this many octets renders whole — a
+      # URI reference does; an inline payload never does, and a photo
+      # card's raw section would otherwise be a wall of folded base64
+      # (the seed photo card carries ~200KB of it).
+      ELIDE_PHOTO_ABOVE = 120 #: Integer
+      private_constant :ELIDE_PHOTO_ABOVE
+
       #: (Contact contact) -> void
       def initialize(contact:)
         @contact = contact
@@ -63,7 +70,7 @@ module ProTacts
             div(class: "card-body") do
               details do
                 summary(class: "type-label") { "raw vCard" }
-                pre(class: "type-mono") { @contact.vcard.to_s }
+                pre(class: "type-mono") { raw_card }
               end
             end
           end
@@ -113,6 +120,33 @@ module ProTacts
         else
           div(style: "white-space: pre-wrap;") { value }
         end
+      end
+
+      # The stored card for display: byte for byte, except a PHOTO
+      # value long enough to be nothing but a wall of folded base64,
+      # which renders as its octet count. The property stays visible —
+      # name and parameters whole, so what the card carries is still
+      # seeable — because the payload is not readable text and never
+      # was; the count says exactly what is there.
+      #: () -> String
+      def raw_card
+        @contact.vcard.lines.map { elide_photo(it) }.join
+      end
+
+      # One line of the display card: verbatim, unless it is a PHOTO
+      # whose value runs past ELIDE_PHOTO_ABOVE — then the value's
+      # octets stand in for it, under the line's own terminator so the
+      # card's line-break convention survives the elision.
+      #: (VCard::Parser::Line line) -> String
+      def elide_photo(line)
+        return line.verbatim unless line.names?("PHOTO")
+
+        prefix, value = line.verbatim.split(":", 2)
+        value = value.to_s
+        terminator = value.slice!(/\r?\n\z/) || "\r\n"
+        return line.verbatim if value.bytesize <= ELIDE_PHOTO_ABOVE
+
+        "#{prefix}:[#{value.bytesize} octets of base64 elided]#{terminator}"
       end
     end
   end

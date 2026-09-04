@@ -287,6 +287,23 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # A photo card's raw section elides the base64 wall to its octet
+  # count; the property's name and parameters, and every other line,
+  # stay byte for byte. The refuted chunk is a continuation line of
+  # the stored card itself — the one string guaranteed contiguous in
+  # an unelided render.
+  def test_show_elides_photo_payloads_in_the_raw_card
+    with_contacts({"pic" => PhotoCard.photo("pic", bytes: 256)}) do |store|
+      get "/contacts/pic"
+
+      body = last_response.body
+      assert_includes body, " octets of base64 elided]"
+      chunk = store.contact("pic").vcard.to_s.lines.grep(/\A /).first
+      refute_includes body, chunk
+      assert_includes body, "X-IMAGETYPE:PHOTO"
+    end
+  end
+
   # A card that will not parse is served from its bytes regardless —
   # the raw section is the one thing such a card has to show, so it
   # renders with no grid under the header, not instead of the page.
