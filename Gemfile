@@ -1,5 +1,6 @@
 source "https://rubygems.org"
 
+gem "base64"
 gem "logger"
 gem "nokogiri"
 gem "phlex"
