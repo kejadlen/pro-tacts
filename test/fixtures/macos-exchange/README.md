@@ -49,3 +49,6 @@ The capture also lost the body's final newline — 835 bytes declared,
 834 recorded — so the promoted card ends at `END:VCARD`. Captures with
 `PHOTO` bodies (34 KB and 338 KB cards) were left unpromoted: possibly
 real images, and the same code path as the 834-byte card that was.
+Their wire shapes — the unfolded parameter section, the payload folded
+at 76 octets a continuation — are built synthetically in
+`test/photo_card.rb` and documented in `docs/macos-contacts.md`.

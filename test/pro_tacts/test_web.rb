@@ -1,5 +1,7 @@
 
 require_relative "../test_helper"
+require_relative "../photo_card"
+
 require "digest"
 require "fileutils"
 require "pathname"
@@ -515,6 +517,66 @@ class WebTest < Minitest::Test
     end
   end
 
+  ## Pictures
+
+  # The sizing case on the wire: a 338 KB PUT — the client does not
+  # downscale before sending — stores octet for octet, so the answer
+  # carries the strong etag of exactly those bytes (RFC 6352 section
+  # 6.3.2.3) and the GET hands them back unchanged.
+  def test_put_of_a_photo_card_round_trips_octet_identically
+    card = PhotoCard.photo("new")
+
+    with_contacts({}) do
+      put_request "new", card, "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
+
+      assert_equal 201, last_response.status
+      assert_equal %("#{Digest::SHA256.hexdigest(card)}"), last_response["ETag"]
+
+      get "/dav/addressbook/new.vcf"
+
+      assert_equal card, last_response.body
+      assert_equal %("#{Digest::SHA256.hexdigest(card)}"), last_response["ETag"]
+    end
+  end
+
+  # A bare <C:address-data/> with no property filter is what macOS
+  # asks a multiget with (fixture 07-report-multiget), so a picture
+  # ships whole inside it — where the sizing case's cost lands.
+  def test_a_multiget_ships_a_photo_card_whole
+    card = PhotoCard.photo("new")
+
+    with_contacts({}) do
+      put_request "new", card, "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
+
+      request "/dav/addressbook/", method: "REPORT", input: multiget("new")
+
+      assert_equal 207, last_response.status
+      served = last_response.body[%r{<card:address-data>(.*)</card:address-data>}m, 1]
+      assert_equal card.chomp, xml_unescape(served)
+    end
+  end
+
+  # The captured write carries its BDAY above the picture trio, so the
+  # birthday's move to the model and back is the one difference the
+  # card sees: the PUT goes without the strong etag — the client
+  # refetches — and the refetch carries the picture and the birthday
+  # both.
+  def test_put_of_a_photo_card_with_a_birthday_moves_only_the_birthday
+    submitted = PhotoCard.photo("new", extra: ["BDAY;X-APPLE-OMIT-YEAR=1604:1604-01-01"])
+    expected = PhotoCard.photo("new").sub("END:VCARD\r\n", "BDAY;X-APPLE-OMIT-YEAR=1604:1604-01-01\r\nEND:VCARD\r\n")
+
+    with_contacts({}) do
+      put_request "new", submitted, "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
+
+      assert_equal 201, last_response.status
+      assert_nil last_response["ETag"]
+
+      get "/dav/addressbook/new.vcf"
+
+      assert_equal expected, last_response.body
+    end
+  end
+
   # A body arrives flagged ASCII-8BIT — Rack's rule for request input —
   # and becomes UTF-8 where the route meets the wire, so a card with
   # non-ASCII in it stores and serves as the UTF-8 it is.
@@ -548,6 +610,12 @@ class WebTest < Minitest::Test
   # against stored bytes rather than anything this test renders.
   def card(id, name)
     "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:#{name}\r\nUID:#{id}\r\nEND:VCARD\r\n"
+  end
+
+  # The route's xml_escape, reversed, for reading a card back out of
+  # a multiget body and comparing it with what was PUT.
+  def xml_unescape(text)
+    text.gsub("&lt;", "<").gsub("&gt;", ">").gsub("&amp;", "&")
   end
 
   # Hands the app a throwaway store so the multi-contact routes can be

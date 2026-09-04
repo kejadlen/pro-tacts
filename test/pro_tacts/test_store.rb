@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require_relative "../photo_card"
 
 require "pathname"
 require "tmpdir"
@@ -12,6 +13,9 @@ class StoreTest < Minitest::Test
   include SentryMessages
 
   AIDEN = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
+  # The no-year birthday line as macOS writes it — the shape the
+  # captured picture cards carry above their PHOTO trio.
+  APPLE_NO_YEAR = "BDAY;X-APPLE-OMIT-YEAR=1604:1604-01-01" #: String
   # UTC ISO 8601 to the millisecond, which is what SQLite is asked for.
   TIMESTAMP = /\A\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z\z/
   ZED = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Zed\r\nUID:znorth\r\nEND:VCARD\r\n"
@@ -59,6 +63,43 @@ class StoreTest < Minitest::Test
 
   def test_a_missing_contact_is_nil
     with_store { assert_nil it.contact("nobody") }
+  end
+
+  ## Pictures
+
+  # The sizing case, byte for byte: a photo card is 338 KB — most of
+  # it the PHOTO property's base64 folds — and the store's verbatim
+  # design means every fold comes back out exactly as it arrived. The
+  # memoji shape exercises the one physical line that runs 1,683
+  # octets.
+  def test_a_photo_card_round_trips_byte_for_byte
+    with_store({}) do |store|
+      store.put("ada", PhotoCard.photo("ada"))
+
+      assert_equal PhotoCard.photo("ada"), store.contact("ada").vcard.to_s
+    end
+  end
+
+  def test_a_memoji_card_round_trips_byte_for_byte
+    with_store({}) do |store|
+      store.put("ada", PhotoCard.memoji("ada"))
+
+      assert_equal PhotoCard.memoji("ada"), store.contact("ada").vcard.to_s
+    end
+  end
+
+  # The captured writes carry their BDAY above the picture trio, so
+  # the birthday's move to the model and back is the one difference a
+  # picture card sees: the PHOTO line, folds and all, is untouched.
+  def test_a_photo_card_moves_only_its_birthday
+    submitted = PhotoCard.photo("ada", extra: [APPLE_NO_YEAR])
+    expected = PhotoCard.photo("ada").sub("END:VCARD\r\n", "#{APPLE_NO_YEAR}\r\nEND:VCARD\r\n")
+
+    with_store({}) do |store|
+      store.put("ada", submitted)
+
+      assert_equal expected, store.contact("ada").vcard.to_s
+    end
   end
 
   ## UIDs

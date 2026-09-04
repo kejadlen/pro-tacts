@@ -1,5 +1,7 @@
 require_relative "../../test_helper"
+require_relative "../../photo_card"
 
+require "base64"
 require "hegel"
 
 require "pro_tacts/vcard/parser"
@@ -157,6 +159,57 @@ class VCardParserTest < Minitest::Test
 
   def test_a_continuation_may_start_with_a_tab
     assert_equal "abcd", properties(card("NOTE:ab", "\tcd")).first.value
+  end
+
+  ## Pictures
+
+  # The two shapes a picture arrives in, built as captured
+  # (test/photo_card.rb, from log/unhandled): the parameter section on
+  # one physical line however long, the base64 payload folded one
+  # break below it. The parser reads both without a length ceiling
+  # because the line split comes before the token scan — nothing here
+  # has to know how long any line is.
+  def test_a_photos_parameters_and_payload_read_whole
+    image = PhotoCard.image(600)
+    photo = PhotoCard.property(PhotoCard::PHOTO_PARAMETERS, image)
+    property = properties(card(photo)).first
+
+    assert_equal PhotoCard::PHOTO_PARAMETERS.map { it.split("=", 2) }, property.parameters
+    assert_equal Base64.strict_encode64(image), property.value
+  end
+
+  # The memoji shape adds VND-63-MEMOJI-DETAILS, whose base64 plist
+  # runs the parameter section to 1,683 octets on one line — past the
+  # 75-octet fold by an order of magnitude, with the payload folded
+  # correctly beneath it.
+  def test_a_memojis_unfolded_parameter_line_reads
+    image = PhotoCard.image(600)
+    memoji = PhotoCard.property(PhotoCard::MEMOJI_PARAMETERS, image)
+    property = properties(card(memoji)).first
+
+    assert_equal PhotoCard::MEMOJI_PARAMETERS.map { it.split("=", 2) }, property.parameters
+    assert_equal Base64.strict_encode64(image), property.value
+  end
+
+  # Any image and any memoji details, folded the client's way, read
+  # back whole — the parser's correctness rests on the fold shape,
+  # not on the two captured sizes.
+  def test_a_photo_folded_like_the_client_reads_back_whole
+    Hegel.test do |tc|
+      image = tc.draw(text(max_size: 4_000))
+      details = tc.draw(text(max_size: 2_000))
+      parameters = [
+        PhotoCard::MEMOJI_CROP,
+        "VND-63-MEMOJI-DETAILS=#{Base64.strict_encode64(details)}",
+        "ENCODING=b",
+        "TYPE=JPEG",
+      ]
+
+      property = properties(card(PhotoCard.property(parameters, image))).first
+
+      raise "payload did not survive" unless property.value == Base64.strict_encode64(image)
+      raise "parameters did not survive" unless property.parameters == parameters.map { it.split("=", 2) }
+    end
   end
 
   ## Lines

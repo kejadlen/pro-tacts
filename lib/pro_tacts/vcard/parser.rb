@@ -167,10 +167,13 @@ module ProTacts
       # The recorded macOS session folds nothing: it sent a 443-octet
       # X-ADDRESSING-GRAMMAR line and an 81-octet ADR unbroken, both
       # past the 75-octet limit, with no continuation in the card
-      # (test/fixtures/macos-exchange/10-put-contact-edit). That is one
-      # capture of one card, and the PHOTO bodies that would settle it
-      # went unpromoted, so this stays general rather than becoming
-      # another macOS assumption.
+      # (test/fixtures/macos-exchange/10-put-contact-edit). The PHOTO
+      # bodies that would settle the other half stayed unpromoted
+      # (test/photo_card.rb builds their shapes) and they settle it
+      # both ways: a picture's payload arrives folded, a space then 76
+      # octets a continuation, while its parameter section arrives not
+      # folded at all — 1,683 octets on one line for a memoji. A whole-
+      # line unfold reads both without caring which it was given.
       #: (String line) -> String
       def self.unfold(line)
         line.gsub(FOLD, "")

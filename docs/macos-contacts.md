@@ -187,6 +187,52 @@ The practical consequence is that any comparison between a card the server
 sent and the card that comes back has to be semantic. Comparing bytes
 reports every untouched property as modified. Verified 2026-08-24.
 
+## Profile pictures
+
+A contact with a picture carries it in the card, inline — `PHOTO` with
+`ENCODING=b;TYPE=JPEG` and a base64 payload (RFC 2426 section 3.1.4's
+second form), never a URI. A memoji card runs 34 KB, a real photo 338 KB
+— 323,900 octets of base64 for a 243 KB JPEG — because the client does
+not downscale before sending. A bare card is ~500 bytes, so photos are
+the sizing case; a memoji is not.
+
+The picture trio as it arrives:
+
+```
+X-IMAGEHASH:RKZaNYCmuYERD3AfbLtrIw==
+X-IMAGETYPE:PHOTO
+PHOTO;X-ABCROP-RECTANGLE=ABClipRect_1&38&0&769&768&RKZaNYCmuYERD3AfbLtrIw==;ENCODING=b;TYPE=JPEG:
+ <76 octets of base64>
+ ...
+```
+
+- `X-IMAGETYPE:PHOTO` sits directly above `PHOTO`, and the token
+  `X-ABCROP-RECTANGLE` ends with is `X-IMAGEHASH`'s value.
+- The crop rectangle can be a real crop — the photo's origin is (38,0),
+  not the whole image.
+- A memoji adds `VND-63-MEMOJI-DETAILS` — a base64 binary plist —
+  between the crop and the encoding, which alone runs the parameter
+  section to 1,683 octets on one physical line.
+
+RFC 2426 section 2.6's 75-octet fold is a SHOULD the client meets only
+after the colon: the payload is folded — a space, then 76 octets a
+continuation, 4,378 continuation lines for the photo — while the
+parameter section is not folded at all. A parser that assumes a
+folded-line ceiling, or that splits parameters before unfolding, breaks
+on the memoji card.
+
+Where the bytes land: warm sync asks only for etags, so polling stays
+~4 KB whatever the book holds. A cold sync — the etag listing plus one
+multiget with a bare `<C:address-data/>`, no property filter — ships
+every card whole, so one photo card makes that one response ~340 KB.
+Serving one contact, by GET or multiget, is the card's own size.
+Measured 2026-09-04 against a 13-contact book with one photo card:
+the multiget builds in ~2 ms and the PUT lands in ~17 ms, so the
+response size is the whole of the cost — the bytes are the floor, since
+the client needs the picture. Captured 2026-08-25, macOS 26.5.1
+(AddressBookCore/2732.600.11); the shapes are built synthetically in
+test/photo_card.rb, the captures being possibly real images.
+
 ## Birthdays without a year
 
 A birthday entered as a month and day carries Apple's own parameter, using
