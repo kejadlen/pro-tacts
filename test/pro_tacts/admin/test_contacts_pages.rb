@@ -283,20 +283,20 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The nickname is an attribute like the others here — a labeled
-  # grid row, leading the channels — not a second name in the header,
-  # which stays the name and the avatar alone.
-  def test_show_renders_the_nickname_as_a_row
+  # The nickname is a name-like fact, so it rides under the name in
+  # the header — muted, so the formal name stays the heading — and
+  # the grid keeps only what reaches the person.
+  def test_show_puts_the_nickname_under_the_name_in_the_header
     red = ADA.sub("FN:Ada Lovelace", "FN:Sarah\r\nNICKNAME:Red").sub("UID:ada", "UID:red")
 
     with_contacts({"red" => red}) do
       get "/contacts/red"
 
-      assert_includes last_response.body, '<dt class="type-label">nickname</dt>'
-      assert_includes last_response.body, "Red"
-      # The row leads the grid, ahead of the first phone.
       body = last_response.body
-      assert body.index('">nickname</dt>') < body.index('">mobile</dt>')
+      header = body.split("<dl").first
+      assert_includes header, "Sarah</h1>"
+      assert_includes header, ">Red<"
+      refute_includes body, '">nickname</dt>'
     end
   end
 

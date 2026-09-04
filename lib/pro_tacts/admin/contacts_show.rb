@@ -29,7 +29,16 @@ module ProTacts
           div(class: "card") do
             div(class: "card-body") do
               div(class: "detail-header") do
-                h1(class: "type-h2", style: "margin: 0;") { @contact.name || @contact.id }
+                div do
+                  h1(class: "type-h2", style: "margin: 0;") { @contact.name || @contact.id }
+                  # The nickname rides under the name, muted so the formal
+                  # name stays the heading. In the header rather than the
+                  # grid: the grid is what reaches the person, the header
+                  # is who they are.
+                  if @contact.nickname
+                    div(class: "type-body-sm gl-muted", style: "margin-top: var(--gl-space-2xs);") { @contact.nickname }
+                  end
+                end
                 # Only a picture earns this slot: an initials circle
                 # beside the name in type-h2 would repeat what the name
                 # already says. The dashboard rows keep theirs — there
@@ -50,17 +59,13 @@ module ProTacts
 
       #: () -> bool
       def has_data?
-        !@contact.nickname.nil? ||
-          @contact.phones.any? || @contact.emails.any? || @contact.addresses.any? ||
+        @contact.phones.any? || @contact.emails.any? || @contact.addresses.any? ||
           !@birthday.nil? || !@contact.notes.nil?
       end
 
       # A missing TYPE parameter still gets a key: the fallback names
       # the kind of value, so no row renders unlabeled in the grid.
       def rows
-        # The nickname leads the grid: closest to the name the header
-        # already shows, ahead of the channels that reach the person.
-        row("nickname", @contact.nickname) if @contact.nickname
         @contact.phones.each { |phone| row(phone.type || "phone", phone.value) }
         @contact.emails.each { |email| row(email.type || "email", email.value) }
         @contact.addresses.each { |address| row(address.type || "address", address_lines(address)) }
