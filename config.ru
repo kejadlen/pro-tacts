@@ -36,6 +36,13 @@ Sentry.init do |sentry|
   # locally either way, see ProTacts::UnhandledRequests.
   sentry.before_send = ProTacts::SentryScrubber
 
+  # The debug log is a local-only record of full exchanges, bodies and
+  # all. Sentry's sentry_logger hook would otherwise turn every one of
+  # its lines into a breadcrumb, and breadcrumbs reach Sentry without
+  # passing the scrubber above. Keyed on the progname DebugLogger#write
+  # passes with each line.
+  sentry.exclude_loggers = [ProTacts::DebugLogger::PROGNAME]
+
   sentry.traces_sample_rate = 1.0
 end
 

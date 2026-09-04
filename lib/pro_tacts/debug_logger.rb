@@ -15,6 +15,13 @@ module ProTacts
     # @rbs @app: Rack::_App
     # @rbs @logger: Logger
 
+    # Identifies this logger's lines to Sentry's sentry_logger
+    # breadcrumb hook, which keys its exclude list on the progname
+    # (see config.ru). Every line here is a local-only record of a
+    # full exchange — bodies included — so none of it may ride to
+    # Sentry as a breadcrumb, where SentryScrubber would never see it.
+    PROGNAME = "ProTacts::DebugLogger" #: String
+
     # Builds the Logger the middleware writes to: appended and unbuffered
     # (Logger syncs its own device), one timestamped line per dump. path
     # "stderr" writes to the process's stderr.
@@ -125,7 +132,11 @@ module ProTacts
     #: (String prefix, String text) -> void
     def write(prefix, text)
       text.to_s.lines(chomp: true).each do |line|
-        @logger.debug("#{prefix} #{line}")
+        # The progname form (block for the message) is what carries
+        # PROGNAME to Logger#add, where Sentry's hook reads it; the
+        # custom formatter ignores it, so the log's format is
+        # unchanged.
+        @logger.debug(PROGNAME) { "#{prefix} #{line}" }
       end
     end
   end
