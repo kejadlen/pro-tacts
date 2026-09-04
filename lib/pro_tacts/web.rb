@@ -1,5 +1,6 @@
 
 require "pathname"
+require "securerandom"
 
 require "pro_tacts"
 require "sentry-ruby"
@@ -8,6 +9,7 @@ require "rack/rewindable_input"
 require "nokogiri"
 require "roda"
 
+require "pro_tacts/admin/contact_dialog"
 require "pro_tacts/admin/contacts_index"
 require "pro_tacts/admin/contacts_show"
 require "pro_tacts/debug_logger"
@@ -89,6 +91,29 @@ module ProTacts
       # trusted" is the whole access model this app has, see README's
       # simplifying assumptions.
       r.on "contacts" do
+        # The browser's create, from the dashboard's dialog: POST is
+        # the one method the admin UI adds to the DAV set (see
+        # config/puma.rb, whose list Puma replaces rather than
+        # extends), and the collection is the resource a create
+        # names. Stored through Store#put like any client write, so
+        # the change log a sync token counts on lands with the card.
+        # A nameless create is a dashboard re-render with a toast: the
+        # browser cannot produce one (the dialog's first field is
+        # required), so this is the backstop, and a popover cannot be
+        # declared open in markup — the toast is the refusal the
+        # re-rendered page can actually show.
+        r.post do
+          first = r.params["first"].to_s.strip
+          last = r.params["last"].to_s.strip
+          if first.empty? && last.empty?
+            dashboard(query: r.params["q"], notice: "A contact needs a name.")
+          else
+            id = SecureRandom.uuid
+            store.put(id, new_contact_card(id, first, last))
+            r.redirect "/contacts/#{id}", 303
+          end
+        end
+
         r.on String do |id|
           # The picture the avatars render (Admin::Avatar): decoded
           # bytes under their own content type, served from a route
@@ -126,14 +151,10 @@ module ProTacts
         # The dashboard home: the one human-facing screen's home
         # (docs/DESIGN.md), a GET alongside the PROPFIND below it —
         # same path, disjoint verbs, and a browser's plain GET is no
-        # DAV client's bootstrap.
+        # DAV client's bootstrap. The create dialog rides along hidden
+        # in the render (see Admin::ContactDialog).
         r.get do
-          response["Content-Type"] = "text/html; charset=utf-8"
-          Admin::ContactsIndex.call(
-            recent: store.contacts_by_recency,
-            upcoming: store.upcoming_birthdays(Admin::UpcomingBirthdays::LIMIT),
-            query: r.params["q"],
-          )
+          dashboard(query: r.params["q"])
         end
 
         # DAV:current-user-principal (RFC 5397 section 3) — what a client
@@ -468,6 +489,20 @@ module ProTacts
       @ctag ||= store.ctag
     end
 
+    # The dashboard GET and a refused create render the same page,
+    # which is why the query travels both paths — a create refused
+    # under a search re-renders the results it was refused over.
+    #: (query: String?, ?notice: String?) -> String
+    def dashboard(query:, notice: nil)
+      response["Content-Type"] = "text/html; charset=utf-8"
+      Admin::ContactsIndex.call(
+        recent: store.contacts_by_recency,
+        upcoming: store.upcoming_birthdays(Admin::UpcomingBirthdays::LIMIT),
+        query:,
+        notice:,
+      )
+    end
+
     # Sync tokens are opaque to the client (RFC 6578 section 3); the URI
     # form is conventional. Built on the ctag so a client polling either
     # one sees changes at the same points.
@@ -563,6 +598,23 @@ module ProTacts
       # content-length onto the 204, which a bodyless status must not
       # carry (Rack 3's lint rejects both); nil leaves it bodyless.
       nil
+    end
+
+    # A created contact's card: the envelope RFC 2426 section 4
+    # requires — BEGIN, VERSION, and the N and FN that section makes
+    # mandatory — plus the UID this server's id model is (see
+    # Contact). Nothing else: a created card has no prior octets to
+    # preserve, and every other property arrives by editing the
+    # record later. The names escape, because a name is text — a
+    # comma or semicolon in one must not read as structure (RFC 2426
+    # section 2.4.2).
+    #: (String id, String first, String last) -> String
+    def new_contact_card(id, first, last)
+      "BEGIN:VCARD\r\nVERSION:3.0\r\n" \
+        "N:#{VCard.escape(last)};#{VCard.escape(first)};;;\r\n" \
+        "FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n" \
+        "UID:#{id}\r\n" \
+        "END:VCARD\r\n"
     end
 
     # A card that breaks one of the parser's assumptions is not bad

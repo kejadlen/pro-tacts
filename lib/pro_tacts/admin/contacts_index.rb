@@ -1,6 +1,7 @@
 require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/avatar"
+require "pro_tacts/admin/contact_dialog"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/layout"
 require "pro_tacts/admin/upcoming_birthdays"
@@ -11,8 +12,10 @@ module ProTacts
     # header, recency in the primary column, the birthdays the year is
     # about to bring in the ambient one beside it. A query narrows the
     # contacts column to matches across every contact; an empty query
-    # shows the ten most recently updated. Read-only: no add, no edit,
-    # nothing to commit, so there is no state here beyond the query.
+    # shows the ten most recently updated. The create dialog rides
+    # along hidden on every render — a popover opens where it sits, so
+    # the add button needs nothing from the server but the page it is
+    # already on.
     class ContactsIndex < Phlex::HTML
       RECENT_LIMIT = 10
       private_constant :RECENT_LIMIT
@@ -20,19 +23,31 @@ module ProTacts
       Row = Data.define(:contact, :updated_at)
       private_constant :Row
 
-      #: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?) -> void
-      def initialize(recent:, upcoming:, query:)
+      # @rbs @query: String
+      # @rbs @upcoming: Array[Store::UpcomingBirthday]
+      # @rbs @rows: Array[Row]
+      # @rbs @notice: String?
+
+      #: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, ?notice: String?) -> void
+      def initialize(recent:, upcoming:, query:, notice: nil)
         @query = query.to_s.strip
         @upcoming = upcoming
+        @notice = notice
         rows = recent.map { Row.new(contact: it.contact, updated_at: it.updated_at) }
         @rows = @query.empty? ? rows.first(RECENT_LIMIT) : rows.select { matches?(it, @query) }
       end
 
       def view_template
-        render Layout.new(title: "Contacts", wide: true, search: @query) do
+        render Layout.new(title: "Contacts", wide: true, search: @query, notice: @notice) do
           div(class: "dashboard") do
             section do
-              h2(class: "type-label") { @query.empty? ? "recently updated" : "results" }
+              div(class: "section-head") do
+                h2(class: "type-label") { @query.empty? ? "recently updated" : "results" }
+                # A button, not a link: it changes the page's state
+                # rather than navigating, and the Popover API is what
+                # it invokes (see ContactDialog).
+                button(data_size: "sm", popovertarget: "new-contact") { "add contact" }
+              end
               if @rows.empty?
                 p(class: "type-body-sm") { @query.empty? ? "No contacts yet." : "No contacts match." }
               else
@@ -41,6 +56,9 @@ module ProTacts
             end
             render UpcomingBirthdays.new(upcoming: @upcoming)
           end
+          # In the page but out of the columns: a popover opens from
+          # wherever it sits, and hidden is its resting state.
+          render ContactDialog.new(query: @query)
         end
       end
 

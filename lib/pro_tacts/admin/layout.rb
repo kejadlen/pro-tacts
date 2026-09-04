@@ -13,11 +13,12 @@ module ProTacts
     # root is the one screen that asks. No JavaScript: nothing served
     # here yet needs any.
     class Layout < Phlex::HTML
-      #: (title: String, ?wide: bool, ?search: String?) -> void
-      def initialize(title:, wide: false, search: nil)
+      #: (title: String, ?wide: bool, ?search: String?, ?notice: String?) -> void
+      def initialize(title:, wide: false, search: nil, notice: nil)
         @title = title
         @wide = wide
         @search = search
+        @notice = notice
       end
 
       def view_template
@@ -49,6 +50,15 @@ module ProTacts
               end
             end
             main(class: "admin-main", **(@wide ? {data: {wide: true}} : {})) { yield }
+            # A server-rendered toast, Gloss's [role=status] contract:
+            # the one line a refused write leaves behind, fixed to the
+            # corner until the next navigation carries it off — no
+            # dismiss control, because with no script there is nothing
+            # to dismiss it with, and "leave" is the design doc's own
+            # word for what a toast does next.
+            if @notice
+              div(role: "status", data: {fixed: true}) { span { @notice } }
+            end
           end
         end
       end

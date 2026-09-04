@@ -76,6 +76,29 @@ section > h2 {
   margin-bottom: var(--gl-space-s);
 }
 
+/* A section heading that carries an action at its right edge — the
+   contacts column's quiet add button. The button is centered on the
+   heading's line rather than in flow: a Gloss button is half again
+   taller than a type-label line, and in flow it pushes the heading's
+   baseline below the sibling column's (baseline alignment against
+   the taller box) and grows the row, dropping the card under it —
+   the two columns' headings and cards would no longer sit on shared
+   lines. Centered on the line it carries the row's own geometry,
+   and its text lands on the heading's: both are near-identical mono
+   sizes, so center-on-line is baseline-on-line. The h2 is no longer
+   the section's direct child, so the row takes over the heading's
+   spacing to the list below. */
+.section-head {
+  position: relative;
+  margin-bottom: var(--gl-space-s);
+}
+.section-head button {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 0;
+  translate: 0 -50%;
+}
+
 /* base/typography.css's `li + li { margin-top: var(--gl-space-3xs); }`
    is a prose-list rule (Markdown bullet lists) that also matches
    Card's row list, adding a stray gap below every row but the last. */

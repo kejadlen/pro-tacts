@@ -462,4 +462,96 @@ class AdminContactsPagesTest < Minitest::Test
       assert_equal "image/jpeg", last_response["Content-Type"]
     end
   end
+
+  ## Creating contacts
+
+  # The add affordance and the dialog it opens, both carried by the
+  # dashboard: a popovertarget button and a popover element, the
+  # Popover API's declarative pair (see Admin::ContactDialog).
+  # rack-test cannot open a popover, so this pins the wiring the same
+  # way the search-in-the-header test does — the attributes a browser
+  # acts on, asserted on the page a browser gets.
+  def test_the_dashboard_carries_the_new_contact_dialog
+    with_contacts({}) do
+      get "/"
+
+      body = last_response.body
+      assert_includes body, '<button data-size="sm" popovertarget="new-contact">add contact</button>'
+      assert_includes body, '<dialog id="new-contact" popover="auto">'
+      assert_includes body, '<form id="new-contact-form" action="/contacts" method="post">'
+      # The captions render — a bare string mid-block is void in
+      # Phlex, so the labels carry their text through plain (the
+      # assertion keeps a regression from rendering a silent label).
+      assert_includes body, '<label class="field">First<input type="text" name="first" required autofocus></label>'
+      assert_includes body, '<label class="field">Last<input type="text" name="last"></label>'
+      assert_includes body, 'popovertargetaction="hide"'
+    end
+  end
+
+  # A create lands through Store#put — change log, index, and all —
+  # and the answer is a redirect to the record, the details page
+  # where further editing belongs.
+  def test_creating_a_contact_from_the_dialog
+    with_contacts({}) do |store|
+      post "/contacts", first: "Grace", last: "Hopper"
+
+      assert_equal 303, last_response.status
+      id = last_response["Location"].delete_prefix("/contacts/")
+      assert_match(/\A[\w-]+\z/, id)
+
+      follow_redirect!
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "Grace Hopper"
+
+      # N and FN both written, per RFC 2426 section 4's mandatory set,
+      # and the card's UID is the id it is served under.
+      card = store.contact(id).vcard.to_s
+      assert_includes card, "N:Hopper;Grace;;;"
+      assert_includes card, "FN:Grace Hopper"
+      assert_includes card, "UID:#{id}"
+      assert(store.changes.any? { it.action == "put" && it.card_id == id })
+    end
+  end
+
+  # A single name is a fine contact: the model carries either half
+  # alone, and the card says exactly what was given.
+  def test_creating_a_contact_with_only_a_first_name
+    with_contacts({}) do |store|
+      post "/contacts", first: "Cher"
+
+      assert_equal 303, last_response.status
+      id = last_response["Location"].delete_prefix("/contacts/")
+      card = store.contact(id).vcard.to_s
+      assert_includes card, "N:;Cher;;;"
+      assert_includes card, "FN:Cher"
+    end
+  end
+
+  # A name is text, and the card is structure: a comma or semicolon
+  # in a name must not read as a component separator (RFC 2426
+  # section 2.4.2).
+  def test_names_with_punctuation_are_escaped_in_the_card
+    with_contacts({}) do |store|
+      post "/contacts", first: "Ada, Jr.", last: "Lovelace; Countess"
+
+      assert_equal 303, last_response.status
+      id = last_response["Location"].delete_prefix("/contacts/")
+      card = store.contact(id).vcard.to_s
+      assert_includes card, "N:Lovelace\\; Countess;Ada\\, Jr.;;;"
+      assert_includes card, "FN:Ada\\, Jr. Lovelace\\; Countess"
+    end
+  end
+
+  # The backstop for the one request no browser can send (the first
+  # field is required): a plain dashboard re-render with the refusal
+  # in a toast, and nothing stored.
+  def test_a_nameless_create_is_refused_with_a_toast
+    with_contacts({}) do |store|
+      post "/contacts", first: " ", last: ""
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, '<div role="status" data-fixed><span>A contact needs a name.</span></div>'
+      assert_empty store.contacts
+    end
+  end
 end
