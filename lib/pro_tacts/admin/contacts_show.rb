@@ -31,12 +31,12 @@ module ProTacts
               div(class: "detail-header") do
                 div do
                   h1(class: "type-h2", style: "margin: 0;") { @contact.name || @contact.id }
-                  # The nickname rides under the name, muted so the formal
-                  # name stays the heading. In the header rather than the
-                  # grid: the grid is what reaches the person, the header
-                  # is who they are.
+                  # The nickname rides under the name in the heading
+                  # family — type-h3 to the name's h2 — so it reads as
+                  # a name rather than a property value; muted, so the
+                  # formal name stays the heading.
                   if @contact.nickname
-                    div(class: "type-body-sm gl-muted", style: "margin-top: var(--gl-space-2xs);") { @contact.nickname }
+                    div(class: "type-h3 gl-muted", style: "margin-top: var(--gl-space-2xs);") { @contact.nickname }
                   end
                 end
                 # Only a picture earns this slot: an initials circle

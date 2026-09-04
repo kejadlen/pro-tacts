@@ -284,8 +284,9 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # The nickname is a name-like fact, so it rides under the name in
-  # the header — muted, so the formal name stays the heading — and
-  # the grid keeps only what reaches the person.
+  # the header, in the heading family but muted — a name, visibly
+  # secondary to the formal one — and the grid keeps only what
+  # reaches the person.
   def test_show_puts_the_nickname_under_the_name_in_the_header
     red = ADA.sub("FN:Ada Lovelace", "FN:Sarah\r\nNICKNAME:Red").sub("UID:ada", "UID:red")
 
@@ -295,6 +296,7 @@ class AdminContactsPagesTest < Minitest::Test
       body = last_response.body
       header = body.split("<dl").first
       assert_includes header, "Sarah</h1>"
+      assert_includes header, 'class="type-h3 gl-muted"'
       assert_includes header, ">Red<"
       refute_includes body, '">nickname</dt>'
     end
