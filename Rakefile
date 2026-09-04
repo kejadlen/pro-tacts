@@ -64,13 +64,15 @@ end
 desc "Render the macOS configuration profile (carddav.mobileconfig)"
 task profile: "carddav.mobileconfig"
 
-# Rebuilds when the template changes but not when PRO_TACTS_HOSTNAME does;
-# delete carddav.mobileconfig to force a rerender.
+# Rebuilds when the template changes but not when the environment does
+# (PRO_TACTS_HOSTNAME, PRO_TACTS_PROFILE_NAME); delete carddav.mobileconfig
+# to force a rerender.
 file "carddav.mobileconfig" => "lib/pro_tacts/profile.rb" do |task|
   require "pro_tacts/profile"
 
   File.write(task.name, ProTacts::Profile.render(
-    hostname: ENV.fetch("PRO_TACTS_HOSTNAME")
+    hostname: ENV.fetch("PRO_TACTS_HOSTNAME"),
+    name: ENV.fetch("PRO_TACTS_PROFILE_NAME", "pro-tacts")
   ))
 end
 
@@ -80,7 +82,8 @@ namespace :profile do
     require "pro_tacts/profile"
 
     File.write("carddav.mobileconfig", ProTacts::Profile.render(
-      hostname: ENV.fetch("PRO_TACTS_HOSTNAME")
+      hostname: ENV.fetch("PRO_TACTS_HOSTNAME"),
+      name: ENV.fetch("PRO_TACTS_PROFILE_NAME", "pro-tacts")
     ))
     sh "open", "carddav.mobileconfig"
     sh "open", "x-apple.systempreferences:com.apple.preferences.configurationprofiles"

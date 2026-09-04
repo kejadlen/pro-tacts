@@ -24,6 +24,21 @@ class ProfileTest < Minitest::Test
     assert_includes xml, "<string>carddav-dev</string>"
   end
 
+  # The name defaults to plain "pro-tacts"; an override (e.g. "pro-tacts
+  # (dev)") keeps a dev install distinguishable from production, both in
+  # Contacts' account list and in System Settings when both are installed.
+  def test_name_defaults_to_pro_tacts
+    assert_includes render, "<string>pro-tacts</string>"
+  end
+
+  def test_name_can_be_overridden
+    xml = ProTacts::Profile.render(hostname: "example.ts.net", name: "pro-tacts (dev)")
+
+    assert_match(%r{<key>CardDAVAccountDescription</key>\s*<string>pro-tacts \(dev\)</string>}, xml)
+    assert_includes xml, "<string>pro-tacts (dev) CardDAV</string>"
+    assert_includes xml, "<string>example.ts.net</string>"
+  end
+
   def test_enables_ssl
     assert_match(/<key>CardDAVUseSSL<\/key>\s*<true\/>/, render)
   end

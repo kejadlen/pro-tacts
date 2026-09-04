@@ -21,12 +21,13 @@ module ProTacts
     # injects (see ProTacts::TailscaleAuth). They stay in the template
     # because the account form expects the fields; dropping them is
     # untested.
-    #: (hostname: String) -> String
-    def self.render(hostname:)
+    #: (hostname: String, ?name: String) -> String
+    def self.render(hostname:, name: "pro-tacts")
       identifier = "#{IDENTIFIER_PREFIX}-#{unique_hex}"
 
       template % {
         hostname: escape(hostname),
+        name: escape(name),
         identifier:,
         account_identifier: "#{identifier}.account",
         top_level_uuid: uuid,
@@ -65,11 +66,11 @@ module ProTacts
               <key>PayloadUUID</key>
               <string>%{payload_uuid}</string>
               <key>PayloadDisplayName</key>
-              <string>pro-tacts</string>
+              <string>%{name}</string>
               <key>PayloadOrganization</key>
               <string>pro-tacts</string>
               <key>CardDAVAccountDescription</key>
-              <string>pro-tacts</string>
+              <string>%{name}</string>
               <key>CardDAVHostName</key>
               <string>%{hostname}</string>
               <key>CardDAVUsername</key>
@@ -81,7 +82,7 @@ module ProTacts
             </dict>
           </array>
           <key>PayloadDisplayName</key>
-          <string>pro-tacts CardDAV</string>
+          <string>%{name} CardDAV</string>
           <key>PayloadIdentifier</key>
           <string>%{identifier}</string>
           <key>PayloadOrganization</key>
