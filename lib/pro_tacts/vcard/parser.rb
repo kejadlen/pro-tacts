@@ -104,6 +104,14 @@ module ProTacts
         # know the error taxonomy to tell the two apart.
         #: () -> bool
         def broke_assumption? = error.is_a?(BrokenAssumption)
+
+        # Whether this line failed to read without breaking an
+        # assumption: ordinary bad input, against the news a broken
+        # assumption is. Asked here for the same reason
+        # broke_assumption? is, so no caller has to know the error
+        # taxonomy to tell the two apart.
+        #: () -> bool
+        def unreadable? = !error.nil? && !broke_assumption?
       end
 
       # The content line, RFC 2426 section 4:

@@ -407,11 +407,11 @@ class WebTest < Minitest::Test
     end
   end
 
-  # The one report left in the app: a card that breaks an assumption
-  # about what macOS Contacts sends is news that the assumption is
-  # wrong, and an arrival is the event worth a message — a read happens
-  # on every page load. A bare CR packs two content lines into one
-  # line's bytes, which is the assumption this card breaks.
+  # A card that breaks an assumption about what macOS Contacts sends
+  # is news that the assumption is wrong, and an arrival is the event
+  # worth a message — a read happens on every page load. A bare CR
+  # packs two content lines into one line's bytes, which is the
+  # assumption this card breaks.
   def test_put_of_a_card_breaking_a_parser_assumption_is_reported
     packed = card("new", "New").sub("FN:New\r\n", "FN:New\rNOTE:b\r\n")
 
@@ -422,6 +422,37 @@ class WebTest < Minitest::Test
       assert_equal 201, last_response.status
       assert_equal 1, messages.length
       assert_match "broke 1 parser assumption", messages.fetch(0)
+    end
+  end
+
+  # The ordinary half of the arrival reports: a line that will not
+  # read is bad input, not news, so it warns — once, at the arrival,
+  # and never on the reads that serve the card afterwards.
+  def test_put_of_a_card_with_an_unreadable_line_warns
+    unreadable = card("new", "New").sub("FN:New\r\n", "FN:New\r\nTEL;HOME:+1-555-1234\r\n")
+
+    with_contacts({}) do
+      put_request "new", unreadable, "CONTENT_TYPE" => VCARD
+      messages = sentry_messages
+
+      assert_equal 201, last_response.status
+      assert_equal 1, messages.length
+      assert_match "carried 1 line", messages.fetch(0)
+    end
+  end
+
+  # A card can carry both, and a line reports once: the unreadable
+  # line warns on its own, the broken assumption errors on its own.
+  def test_put_of_a_card_with_both_reports_each_once
+    both = card("new", "New").sub("FN:New\r\n", "FN:New\rX\r\nTEL;HOME:+1-555-1234\r\n")
+
+    with_contacts({}) do
+      put_request "new", both, "CONTENT_TYPE" => VCARD
+      messages = sentry_messages
+
+      assert_equal 2, messages.length
+      assert_match "carried 1 line", messages.fetch(0)
+      assert_match "broke 1 parser assumption", messages.fetch(1)
     end
   end
 

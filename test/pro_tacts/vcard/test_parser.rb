@@ -208,6 +208,13 @@ class VCardParserTest < Minitest::Test
     assert lines("FN:A\rNOTE:n\r\n").fetch(0).broke_assumption?
   end
 
+  # unreadable? is the other half of that split: the ordinary bad line
+  # reads as unreadable, the blank line and the break do not.
+  def test_only_a_plain_parse_failure_reads_as_unreadable
+    assert_equal [false, false, true], lines("FN:A\r\n\r\nBDAY;=;:\r\n").map { it.unreadable? }
+    assert_equal false, lines("FN:A\rNOTE:n\r\n").fetch(0).unreadable?
+  end
+
   def test_a_line_that_will_not_read_carries_its_error_and_keeps_its_bytes
     line = ProTacts::VCard::Parser.lines("BDAY;=;:\r\n").fetch(0)
 

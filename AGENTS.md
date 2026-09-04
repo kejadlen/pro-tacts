@@ -174,11 +174,13 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   its bytes regardless, `VCard` and `Contact` answer from the lines
   that read, and the index holds what this server understood. There is
   no repair to make, which is why no caller is asked to look for one.
-- The one exception is `Web#report_broken_assumptions`, and it is not
+- The one exception is the arrival reports at the PUT, and it is not
   handling: a broken assumption is news that something this server was
-  built on is wrong. It lives at the PUT because that is the arrival —
-  a read happens on every page load, and one bad card must not alert
-  once per page view.
+  built on is wrong and reports as an error, and an unreadable line is
+  ordinary bad input and warns (`Web#report_broken_assumptions`,
+  `Web#report_unreadable_lines`). They live at the PUT because that is
+  the arrival — a read happens on every page load, and one bad card
+  must not alert once per page view.
 - `vcard.rb` no longer raises on what it does not recognize, and must
   not start again. It used to render a hand-edited format, where an
   unknown key meant a typo silently losing data; it now reads stored

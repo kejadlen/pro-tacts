@@ -485,6 +485,7 @@ module ProTacts
       if_none_match = request.env["HTTP_IF_NONE_MATCH"]
       return plain_412 if if_none_match && if_none_match_failed?(if_none_match, existing)
 
+      report_unreadable_lines(card)
       report_broken_assumptions(card)
 
       stored = store.put(id, vcard)
@@ -507,9 +508,11 @@ module ProTacts
 
     # A card that breaks one of the parser's assumptions is not bad
     # input, it is news that the assumption is wrong and every
-    # simplification resting on it is now suspect. Nothing else would
-    # say so: the card is accepted, stored, and served either way, and
-    # a line that will not read costs it only its index rows.
+    # simplification resting on it is now suspect — an error, where a
+    # line that merely would not read is ordinary bad input and warns
+    # instead (report_unreadable_lines, below). The card is accepted,
+    # stored, and served either way, and a line that will not read
+    # costs it only its index rows.
     #
     # Here rather than in the parser, which is where the break is
     # found: a read happens on every look at a card — the admin index
@@ -526,6 +529,22 @@ module ProTacts
       Sentry.capture_message(
         "a submitted card broke #{broken} parser assumption(s) about what macOS Contacts sends",
         level: :error,
+      )
+    end
+
+    # The ordinary half of the arrival reports: a line that would not
+    # read is bad input rather than news, so it warns — the level and
+    # the no-card-content line the store's BDAY reports already use.
+    # BrokenAssumption lines are excluded, so a line reports once; why
+    # this lives at the PUT is the comment above, and holds for both.
+    #: (VCard card) -> void
+    def report_unreadable_lines(card)
+      unreadable = card.lines.count { it.unreadable? }
+      return if unreadable.zero?
+
+      Sentry.capture_message(
+        "a submitted card carried #{unreadable} line(s) that would not read — stored verbatim, missing from the index",
+        level: :warning,
       )
     end
 
