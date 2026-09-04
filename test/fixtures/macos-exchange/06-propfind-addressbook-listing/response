@@ -104,10 +104,46 @@ Content-Type: text/xml
   </d:propstat>
 </d:response>
 <d:response>
+  <d:href>/dav/addressbook/emoji.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"2962d3be364ecc3de905b70e8e4005b678df17abcd2160037de1c6ff0990ed91"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/memoji.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"523bd3654e426826c637c91e1e7548b4bd2cfe0fa2506d7be130b99a0cb825d6"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/monogram.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"b762400cd81a6747dbda0e2c54270d1c4594291e5240552d55644acb7c68cea3"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
   <d:href>/dav/addressbook/oqmvpzooywwmtwwx.vcf</d:href>
   <d:propstat>
     <d:prop>
       <d:getetag>"0d07279dcc669c2424d9dc5d393d3d3b9bcad064d1639cdfb8170ccde76b233d"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/photo.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"66ae58b3976a02941b38bc63a460c09246594a0f452a155b63d9e98832325b09"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>

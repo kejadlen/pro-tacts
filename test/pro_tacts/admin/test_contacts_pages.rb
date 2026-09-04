@@ -319,4 +319,24 @@ class AdminContactsPagesTest < Minitest::Test
       assert_equal 404, last_response.status
     end
   end
+
+  # The seed book carries one fixture card per picture kind macOS
+  # sends — photo, emoji, memoji, monogram, promoted from real client
+  # sessions (see test/fixtures/cards and docs/macos-contacts.md) —
+  # and these tests are what keeps them exercising the path: a seed
+  # that stops parsing, or stops sniffing to an image, fails here
+  # rather than passing silently as an initials avatar. Runs against
+  # the suite's fixture store rather than a with_contacts throwaway,
+  # because the seeds themselves are the thing under test.
+  %w[photo emoji memoji monogram].each do |id|
+    define_method("test_the_#{id}_seed_serves_its_picture") do
+      get "/contacts/#{id}"
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "src=\"/contacts/#{id}/photo\""
+
+      get "/contacts/#{id}/photo"
+      assert_equal 200, last_response.status
+      assert_equal "image/jpeg", last_response["Content-Type"]
+    end
+  end
 end

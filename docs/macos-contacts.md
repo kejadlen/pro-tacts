@@ -191,12 +191,21 @@ reports every untouched property as modified. Verified 2026-08-24.
 
 A contact with a picture carries it in the card, inline — `PHOTO` with
 `ENCODING=b;TYPE=JPEG` and a base64 payload (RFC 2426 section 3.1.4's
-second form), never a URI. A memoji card runs 34 KB, a real photo 338 KB
-— 323,900 octets of base64 for a 243 KB JPEG — because the client does
-not downscale before sending. A bare card is ~500 bytes, so photos are
-the sizing case; a memoji is not.
+second form), never a URI. A real photo runs the card to 216–338 KB
+because the client does not downscale before sending; a memoji,
+monogram, or emoji sits around 31–43 KB; a bare card is ~500 bytes.
+Photos are the sizing case; the rendered kinds are not.
 
-The picture trio as it arrives:
+Four kinds have been captured, and the properties do not name all of
+them — `X-IMAGETYPE` carries `PHOTO` or `MONOGRAM`, and an emoji is
+labeled `MONOGRAM` too: the client renders it as a glyph on a
+background exactly as it renders initials, so the wire shape is
+identical and the distinction lives in the image bytes alone. A
+memoji is the one kind with its own property — `VND-63-MEMOJI-DETAILS`,
+a base64 binary plist, which runs the parameter section to 1,683
+octets on a single physical line.
+
+The picture trio as a photo arrives:
 
 ```
 X-IMAGEHASH:RKZaNYCmuYERD3AfbLtrIw==
@@ -208,18 +217,22 @@ PHOTO;X-ABCROP-RECTANGLE=ABClipRect_1&38&0&769&768&RKZaNYCmuYERD3AfbLtrIw==;ENCO
 
 - `X-IMAGETYPE:PHOTO` sits directly above `PHOTO`, and the token
   `X-ABCROP-RECTANGLE` ends with is `X-IMAGEHASH`'s value.
-- The crop rectangle can be a real crop — the photo's origin is (38,0),
-  not the whole image.
-- A memoji adds `VND-63-MEMOJI-DETAILS` — a base64 binary plist —
-  between the crop and the encoding, which alone runs the parameter
-  section to 1,683 octets on one physical line.
+- The crop rectangle can be a real crop — the photo's origin is (38,0);
+  the rendered kinds carry whole-image crops.
 
 RFC 2426 section 2.6's 75-octet fold is a SHOULD the client meets only
 after the colon: the payload is folded — a space, then 76 octets a
-continuation, 4,378 continuation lines for the photo — while the
-parameter section is not folded at all. A parser that assumes a
+continuation, 4,378 continuation lines for the largest photo — while
+the parameter section is not folded at all. A parser that assumes a
 folded-line ceiling, or that splits parameters before unfolding, breaks
 on the memoji card.
+
+One more arrival shape, observed once: after the server's state was
+reset under the client (a dev database rebuilt from seeds), its
+re-pushed cards carried the picture bare — `PHOTO;ENCODING=b;TYPE=JPEG:`
+with no crop, no hash, no type line, the same image it had sent with
+the full trio minutes before. A bare PHOTO is therefore a real shape,
+not malformed input. Observed 2026-09-04.
 
 Where the bytes land: warm sync asks only for etags, so polling stays
 ~4 KB whatever the book holds. A cold sync — the etag listing plus one
@@ -229,9 +242,15 @@ Serving one contact, by GET or multiget, is the card's own size.
 Measured 2026-09-04 against a 13-contact book with one photo card:
 the multiget builds in ~2 ms and the PUT lands in ~17 ms, so the
 response size is the whole of the cost — the bytes are the floor, since
-the client needs the picture. Captured 2026-08-25, macOS 26.5.1
-(AddressBookCore/2732.600.11); the shapes are built synthetically in
-test/photo_card.rb, the captures being possibly real images.
+the client needs the picture.
+
+Captured 2026-08-25 and 2026-09-04, macOS 26.5.1
+(AddressBookCore/2732.600.11). One fixture card per kind — `photo`,
+`emoji`, `memoji`, `monogram` — is seeded in test/fixtures/cards/ from
+the 2026-09-04 session (pictures set deliberately on synthetic
+contacts, ids rewritten); the 2026-08-25 captures remain unpromoted,
+being unprompted and possibly real images, with their shapes built
+synthetically in test/photo_card.rb.
 
 ## Birthdays without a year
 
