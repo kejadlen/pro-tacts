@@ -217,9 +217,7 @@ module ProTacts
     # What is stored is the card minus its birthday, which moves into
     # the birthdays table — vCard 3.0 cannot carry a partial date, so
     # no stored card carries the model's BDAY and every read composes
-    # it back in (docs/plans/2026-08-31-partial-birthdays.md). The
-    # Contact this returns is the composed one, and the logged etag is
-    # its hash, so a client's token describes the card it downloads.
+    # it back in (docs/plans/2026-08-31-partial-birthdays.md).
     #
     # The strings are UTF-8 by contract, and the adapter holds the store
     # to it: the sqlite3 gem encodes every bound value to UTF-8, so a

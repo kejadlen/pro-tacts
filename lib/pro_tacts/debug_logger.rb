@@ -10,9 +10,7 @@ module ProTacts
   # Every line is prefixed ">>" (request) or "<<" (response) so multi-line
   # XML/vCard bodies stay readable.
   #
-  # Off by default because it logs contact data. The only card right now is
-  # fictional, so the debug path stays verbose while the normal one-line path
-  # (Roda's common_logger) can be narrowed later without losing this.
+  # Off by default because it logs contact data.
   class DebugLogger
     # @rbs @app: Rack::_App
     # @rbs @logger: Logger

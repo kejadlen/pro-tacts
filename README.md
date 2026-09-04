@@ -111,6 +111,14 @@ Three properties are load-bearing in non-obvious ways, documented in
 client asks for — displayname, privileges, owner, quotas, push transports,
 me-card, principal-URL, the multiget/query advertisements — is optional.
 
+sabre/dav's [notes on the macOS Address Book client][sabre-osx] are the best
+single source of client quirks beyond this list, and they explain several
+failures that look like protocol bugs but are not. See `docs/macos-contacts.md`
+for the details worth keeping close, including how to turn on the client's own
+debug logging.
+
+[sabre-osx]: https://sabre.io/dav/clients/osx-addressbook/
+
 ## Protocol references
 
 CardDAV is a stack of extensions rather than a single specification, so
@@ -150,15 +158,6 @@ CalendarServer, which is archived but still the only written source:
 
 [ctag]: https://github.com/apple/ccs-calendarserver/blob/master/doc/Extensions/caldav-ctag.txt
 [pubsub]: https://github.com/apple/ccs-calendarserver/blob/master/doc/Extensions/caldav-pubsubdiscovery.txt
-
-## What macOS Contacts needs
-
-sabre/dav's [notes on the macOS Address Book client][sabre-osx] are the best
-single source of client quirks, and they explain several failures that look
-like protocol bugs but are not. See `docs/macos-contacts.md` for the details
-worth keeping close, including how to turn on the client's own debug logging.
-
-[sabre-osx]: https://sabre.io/dav/clients/osx-addressbook/
 
 ## Reference implementations
 

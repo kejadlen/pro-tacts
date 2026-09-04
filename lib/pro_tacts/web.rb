@@ -220,7 +220,6 @@ module ProTacts
             # 10.2, and the 207 body it returns section 13.
             depth = request.env.fetch("HTTP_DEPTH", "infinity")
 
-            # Check if this is an etag-only request (Depth:1 listing)
             etag_only = body.include?("getetag") && !body.include?("displayname") && !body.include?("resourcetype")
 
             # Etag-only asks want the members; the collection self-entry

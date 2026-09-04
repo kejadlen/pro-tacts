@@ -24,7 +24,6 @@ ProTacts::Web.store = ProTacts::Store.at(config.database_path)
 Sentry.init do |sentry|
   sentry.dsn = config.sentry_dsn
 
-  # Get breadcrumbs from logs
   sentry.breadcrumbs_logger = [:sentry_logger, :http_logger]
 
   # On: request bodies are worth having on a 404, and nothing else this
@@ -37,7 +36,6 @@ Sentry.init do |sentry|
   # locally either way, see ProTacts::UnhandledRequests.
   sentry.before_send = ProTacts::SentryScrubber
 
-  # Trace all the things!
   sentry.traces_sample_rate = 1.0
 end
 
