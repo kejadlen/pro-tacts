@@ -80,8 +80,13 @@ module ProTacts
     # A card is made of UTF-8 text, and refuses to be made of anything
     # else: bytes that are not valid UTF-8 raise here, at the boundary,
     # rather than leaking an ArgumentError out of whatever regex first
-    # trips over them. A PUT gates this with its own 412 first, and the
-    # store's bind holds the same line again below the card.
+    # trips over them. Raising rather than answering, because no caller
+    # is meant to be asking — a card's bytes come from a column that can
+    # hold nothing else or from a body already decoded, and whether some
+    # bytes are text at all is that decode's question, settled before
+    # anything here sees them (ProTacts::Web's write_card). This is the
+    # assertion under those callers, not a check any of them makes; the
+    # store's bind holds the same line a third time below the card.
     #: (String bytes) -> void
     def initialize(bytes)
       raise ArgumentError, "not valid UTF-8: a card is text" unless bytes.valid_encoding?

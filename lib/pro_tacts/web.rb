@@ -432,32 +432,35 @@ module ProTacts
     # CARDDAV:valid-address-data even when its If-Match is stale too.
     #: (String id) -> String?
     def write_card(id)
-      # The body is the one binary input: Rack requires input in
-      # ASCII-8BIT and Rack::RewindableInput enforces it again. Relabel
-      # rather than convert — the bytes are untouched, and the charset
-      # check below is what judges them. Paths need no counterpart:
-      # Puma hands PATH_INFO over still percent-encoded, so an id off
-      # the wire is ASCII.
-      vcard = request.body.read.force_encoding(Encoding::UTF_8)
-
       # CARDDAV:supported-address-data (RFC 6352 section 6.3.2.1): what
       # arrived must be a vCard, and text/vcard is the one media type
-      # this server stores.
+      # this server stores. Asked before the body is read because it is
+      # a question about the request, not about what the request
+      # carried.
       return precondition("supported-address-data") unless request.media_type == "text/vcard"
 
-      # CARDDAV:valid-address-data: bytes that are the UTF-8 the media
-      # type declares, carrying the envelope RFC 2426 section 4
-      # requires. Invalid UTF-8 would otherwise surface as a 500 out of
-      # SQLite on the insert, past the point where the client could be
-      # told what was wrong with the body.
-      #
-      # The envelope is the whole test. A line inside it this parser
-      # cannot read is not grounds for refusing the card: RFC 6352
-      # section 6.3.2.2 has the server keep what it does not
-      # understand, and it is kept — the stored bytes are what goes
-      # back out.
+      # Decoding the body, both halves of it: Rack requires input in
+      # ASCII-8BIT and Rack::RewindableInput enforces it again, so the
+      # bytes are relabelled rather than converted — untouched — and the
+      # label is checked honest in the same breath, because a
+      # force_encoding nobody validates is a lie every later reader
+      # inherits. That the bytes are not the UTF-8 the media type
+      # promised is a fact about this body, not about any card, which is
+      # why it is settled here and VCard is never handed the question
+      # (CARDDAV:valid-address-data, RFC 6352 section 6.3.2.1). Left
+      # unsettled it would surface as a 500 out of SQLite on the insert,
+      # past the point where the client could be told what was wrong.
+      # Paths need no counterpart: Puma hands PATH_INFO over still
+      # percent-encoded, so an id off the wire is ASCII.
+      vcard = request.body.read.force_encoding(Encoding::UTF_8)
       return precondition("valid-address-data") unless vcard.valid_encoding?
 
+      # CARDDAV:valid-address-data again, on the card this time: the
+      # envelope RFC 2426 section 4 requires. That is the whole test. A
+      # line inside it this parser cannot read is not grounds for
+      # refusing the card: RFC 6352 section 6.3.2.2 has the server keep
+      # what it does not understand, and it is kept — the stored bytes
+      # are what goes back out.
       card = VCard.new(vcard)
       return precondition("valid-address-data") unless card.card?
 
