@@ -297,10 +297,41 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/pic"
 
       body = last_response.body
-      assert_includes body, " octets of base64 elided]"
+      assert_includes body, " octets elided]"
       chunk = store.contact("pic").vcard.to_s.lines.grep(/\A /).first
       refute_includes body, chunk
       assert_includes body, "X-IMAGETYPE:PHOTO"
+    end
+  end
+
+  # A memoji's parameter section is itself 1,685 octets of base64 on
+  # one line — a long parameter value elides like a long property
+  # value, and the short parameters around it render whole.
+  def test_show_elides_long_parameter_values_in_the_raw_card
+    with_contacts({"mochi" => PhotoCard.memoji("mochi")}) do |store|
+      get "/contacts/mochi"
+
+      body = last_response.body
+      assert_includes body, "VND-63-MEMOJI-DETAILS=["
+      assert_includes body, ";ENCODING=b;TYPE=JPEG:["
+      details = store.contact("mochi").properties
+        .find { it.name.casecmp?("PHOTO") }.parameters
+        .find { |name, _| name.casecmp?("VND-63-MEMOJI-DETAILS") }.last
+      refute_includes body, details[0, 60]
+    end
+  end
+
+  # Any overly long value elides, not only a picture's: a long NOTE
+  # renders as its count in the raw card while the grid above still
+  # shows the text itself.
+  def test_show_elides_any_overly_long_value
+    note = "n" * 200
+    card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Wordy\r\nNOTE:#{note}\r\nUID:wordy\r\nEND:VCARD\r\n"
+
+    with_contacts({"wordy" => card}) do
+      get "/contacts/wordy"
+
+      assert_includes last_response.body, "NOTE:[#{note.bytesize} octets elided]"
     end
   end
 

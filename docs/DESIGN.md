@@ -93,9 +93,10 @@ Consequences worth keeping:
   row, not a scaffold of blank fields. The card's height is the record's real
   weight — an unfilled record should look unfilled.
 - **The stored card is reachable.** In its own card beneath the record, the
-  raw vCard sits collapsed by default, its inline photo payloads elided to
-  their size — the interpretation is the interface, but nothing a card
-  carries is invisible from it.
+  raw vCard sits collapsed by default, with overly long values (a photo's
+  base64 payload, a memoji's binary parameter) elided to their size — the
+  interpretation is the interface, but nothing a card carries is invisible
+  from it.
 - **Adding is explicit.** A quiet add affordance opens a native `dialog` that
   names the attribute types available. Multi-part additions (picking a group,
   then a role) are steps inside that one dialog, never a chain of popovers —

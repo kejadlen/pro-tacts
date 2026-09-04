@@ -17,12 +17,12 @@ module ProTacts
     # keeps its mono type label for now. Revisit once Gloss or this
     # project settles on how icons ship.
     class ContactsShow < Phlex::HTML
-      # A PHOTO value at or under this many octets renders whole — a
-      # URI reference does; an inline payload never does, and a photo
-      # card's raw section would otherwise be a wall of folded base64
-      # (the seed photo card carries ~200KB of it).
-      ELIDE_PHOTO_ABOVE = 120 #: Integer
-      private_constant :ELIDE_PHOTO_ABOVE
+      # A value — a property's or a parameter's — at or under this many
+      # octets renders whole. Anything longer is a wall of folded or
+      # unbroken octets (an inline PHOTO payload, a memoji's binary
+      # plist parameter, a novel-length NOTE) and renders as its count.
+      ELIDE_ABOVE = 120 #: Integer
+      private_constant :ELIDE_ABOVE
 
       #: (Contact contact) -> void
       def initialize(contact:)
@@ -122,31 +122,53 @@ module ProTacts
         end
       end
 
-      # The stored card for display: byte for byte, except a PHOTO
-      # value long enough to be nothing but a wall of folded base64,
-      # which renders as its octet count. The property stays visible —
-      # name and parameters whole, so what the card carries is still
-      # seeable — because the payload is not readable text and never
-      # was; the count says exactly what is there.
+      # The stored card for display: byte for byte, except a value — a
+      # property's or a parameter's — long enough to be a wall, which
+      # renders as its octet count. The count says exactly what is
+      # there; what it stands in for is not readable text.
       #: () -> String
       def raw_card
-        @contact.vcard.lines.map { elide_photo(it) }.join
+        @contact.vcard.lines.map { elide(it) }.join
       end
 
-      # One line of the display card: verbatim, unless it is a PHOTO
-      # whose value runs past ELIDE_PHOTO_ABOVE — then the value's
-      # octets stand in for it, under the line's own terminator so the
-      # card's line-break convention survives the elision.
+      # One line of the display card: verbatim when nothing in it runs
+      # past ELIDE_ABOVE; rebuilt from its parse when something does,
+      # each long value standing in as its count. The rebuild is the
+      # parser's spelling rather than the bytes' — an elided line is a
+      # rendering — and the line keeps its own terminator so the
+      # card's line-break convention survives.
       #: (VCard::Parser::Line line) -> String
-      def elide_photo(line)
-        return line.verbatim unless line.names?("PHOTO")
+      def elide(line)
+        property = line.property
+        return elide_unparsed(line.verbatim) if property.nil?
 
-        prefix, value = line.verbatim.split(":", 2)
-        value = value.to_s
-        terminator = value.slice!(/\r?\n\z/) || "\r\n"
-        return line.verbatim if value.bytesize <= ELIDE_PHOTO_ABOVE
+        long = property.parameters.any? { |_, value| value.bytesize > ELIDE_ABOVE } ||
+          property.value.bytesize > ELIDE_ABOVE
+        return line.verbatim unless long
 
-        "#{prefix}:[#{value.bytesize} octets of base64 elided]#{terminator}"
+        header = property.group ? "#{property.group}.#{property.name}" : property.name
+        params = property.parameters.map { |name, value| "#{name}=#{count_octets(value)}" }
+        terminator = line.verbatim[/\r?\n\z/] || "\r\n"
+        "#{[header, *params].join(';')}:#{count_octets(property.value)}#{terminator}"
+      end
+
+      # A value over the threshold stands in as its octet count;
+      # anything shorter renders as it is.
+      #: (String value) -> String
+      def count_octets(value)
+        value.bytesize > ELIDE_ABOVE ? "[#{value.bytesize} octets elided]" : value
+      end
+
+      # A line that would not parse has no structure to rebuild from,
+      # so its value is elided by surgery on the bytes: everything up
+      # to the first colon stands, and the rest is the count.
+      #: (String verbatim) -> String
+      def elide_unparsed(verbatim)
+        prefix, value = verbatim.split(":", 2)
+        return verbatim if value.nil?
+
+        terminator = value.slice!(/\r?\n\z/) || ""
+        "#{prefix}:#{count_octets(value)}#{terminator}"
       end
     end
   end
