@@ -443,6 +443,22 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # The collection's half of fail open: a card the parser cannot read
+  # costs the listing nothing, every other contact serves beside it,
+  # and the ctag moves on its arrival — the broken card is served from
+  # its bytes like any other, so the tag counts it.
+  def test_every_other_contact_serves_beside_one_unparseable_card
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      good_cards = store.ctag
+      store.put("broken", "this is not a vCard\r\n")
+
+      assert_equal %w[aiden broken znorth], store.contacts.map { it.id }
+      assert_equal AIDEN, store.contact("aiden").vcard.to_s
+      assert_equal ZED, store.contact("znorth").vcard.to_s
+      refute_equal good_cards, store.ctag
+    end
+  end
+
   # One line the parser cannot read does not cost the card the lines
   # that read: the index is what this server understood, not an
   # all-or-nothing verdict on the card.
