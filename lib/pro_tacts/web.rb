@@ -374,7 +374,7 @@ module ProTacts
               # RFC 7232 section 2.3; must match the getetag reported for
               # this contact in PROPFIND and REPORT.
               response["ETag"] = contact.etag
-              contact.vcard
+              contact.vcard.to_s
             end
           end
 
@@ -498,7 +498,7 @@ module ProTacts
       # PUT that carried one stores a different card than it was handed
       # and the client refetches; a card with nothing to subtract still
       # stores octet for octet and still gets the tag.
-      response["ETag"] = stored.etag if stored.vcard == vcard
+      response["ETag"] = stored.etag if stored.vcard.to_s == vcard
 
       # A returned "" would land in the body and pin text/html and
       # content-length onto the 204, which a bodyless status must not
@@ -620,7 +620,7 @@ module ProTacts
           <d:propstat>
             <d:prop>
               <d:getetag>#{contact.etag}</d:getetag>
-              <card:address-data>#{xml_escape(contact.vcard.chomp)}</card:address-data>
+              <card:address-data>#{xml_escape(contact.vcard.to_s.chomp)}</card:address-data>
             </d:prop>
             <d:status>HTTP/1.1 200 OK</d:status>
           </d:propstat>

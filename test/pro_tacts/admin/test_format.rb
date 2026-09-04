@@ -2,13 +2,14 @@ require_relative "../../test_helper"
 
 require "pro_tacts/admin/format"
 require "pro_tacts/contact"
+require "pro_tacts/vcard"
 
 class FormatTest < Minitest::Test
   CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada Lovelace\r\nN:Lovelace;Ada;;;\r\n" \
     "BDAY:1985-12-10\r\nUID:ada\r\nEND:VCARD\r\n"
 
   def contact(vcard = CARD, id: "aiden")
-    ProTacts::Contact.for(id:, vcard:)
+    ProTacts::Contact.for(id:, vcard: ProTacts::VCard.new(vcard))
   end
 
   # Initials come from the structured N property (given + family),

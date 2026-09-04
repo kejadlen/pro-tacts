@@ -43,7 +43,7 @@ class StoreTest < Minitest::Test
 
   def test_a_stored_card_comes_back_byte_for_byte
     with_store({"aiden" => AIDEN}) do |store|
-      assert_equal AIDEN, store.contact("aiden").vcard
+      assert_equal AIDEN, store.contact("aiden").vcard.to_s
     end
   end
 
@@ -92,7 +92,7 @@ class StoreTest < Minitest::Test
       updated = AIDEN.sub("Aiden", "Aiden Smith")
       store.put("aiden", updated)
 
-      assert_equal [updated], store.contacts.map { it.vcard }
+      assert_equal [updated], store.contacts.map { it.vcard.to_s }
     end
   end
 
@@ -129,7 +129,7 @@ class StoreTest < Minitest::Test
       ProTacts::Store.connect(path) { it.put("aiden", AIDEN) }
 
       ProTacts::Store.connect(path) do |store|
-        assert_equal AIDEN, store.contact("aiden").vcard
+        assert_equal AIDEN, store.contact("aiden").vcard.to_s
       end
     end
   end
@@ -149,7 +149,7 @@ class StoreTest < Minitest::Test
 
       # Pure ASCII carries no such byte, so a binary-flagged id still
       # finds its row.
-      assert_equal AIDEN, store.contact("aiden".b).vcard
+      assert_equal AIDEN, store.contact("aiden".b).vcard.to_s
     end
   end
 
@@ -438,7 +438,7 @@ class StoreTest < Minitest::Test
   # nothing to the index and cost the index nothing else.
   def test_an_unparseable_card_is_still_stored_and_served
     with_store({"broken" => "this is not a vCard\r\n"}) do |store|
-      assert_equal "this is not a vCard\r\n", store.contact("broken").vcard
+      assert_equal "this is not a vCard\r\n", store.contact("broken").vcard.to_s
       assert_empty indexed_names(store, "broken")
     end
   end
@@ -450,7 +450,7 @@ class StoreTest < Minitest::Test
     unreadable = AIDEN.sub("FN:Aiden\r\n", "FN:Aiden\r\nTEL;HOME:+1-555-1234\r\n")
     with_store({"aiden" => unreadable}) do |store|
       assert_equal %w[BEGIN VERSION FN UID END], indexed_names(store, "aiden")
-      assert_equal unreadable, store.contact("aiden").vcard
+      assert_equal unreadable, store.contact("aiden").vcard.to_s
     end
   end
 
@@ -465,7 +465,7 @@ class StoreTest < Minitest::Test
   def test_a_birthday_is_stored_beside_the_card_and_served_within_it
     with_store({"aiden" => AIDEN_BORN}) do |store|
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
-      assert_equal AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n"), store.contact("aiden").vcard
+      assert_equal AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n"), store.contact("aiden").vcard.to_s
     end
   end
 
@@ -506,7 +506,7 @@ class StoreTest < Minitest::Test
       store.put("aiden", AIDEN)
 
       assert_nil birthday_row(store, "aiden")
-      assert_equal AIDEN, store.contact("aiden").vcard
+      assert_equal AIDEN, store.contact("aiden").vcard.to_s
     end
   end
 
@@ -520,7 +520,7 @@ class StoreTest < Minitest::Test
       store.put("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
 
       assert_equal ProTacts::Birthday.new(year: 1985), birthday_row(store, "aiden")
-      assert_equal AIDEN.sub("FN:Aiden", "FN:Aiden Smith"), store.contact("aiden").vcard
+      assert_equal AIDEN.sub("FN:Aiden", "FN:Aiden Smith"), store.contact("aiden").vcard.to_s
     end
   end
 
@@ -538,7 +538,7 @@ class StoreTest < Minitest::Test
       with_store({"aiden" => AIDEN_BORN}) do |store|
         store.put("aiden", unmodeled)
 
-        assert_equal unmodeled, store.contact("aiden").vcard, bday
+        assert_equal unmodeled, store.contact("aiden").vcard.to_s, bday
         assert_nil birthday_row(store, "aiden"), bday
       end
     end
@@ -565,7 +565,7 @@ class StoreTest < Minitest::Test
       store.put("aiden", shared)
       messages = sentry_messages
 
-      assert_equal shared, store.contact("aiden").vcard
+      assert_equal shared, store.contact("aiden").vcard.to_s
       assert_nil birthday_row(store, "aiden")
       assert_empty messages
     end
@@ -578,7 +578,7 @@ class StoreTest < Minitest::Test
 
         store.put("aiden", edited)
 
-        assert_equal edited.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"), store.contact("aiden").vcard, line
+        assert_equal edited.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"), store.contact("aiden").vcard.to_s, line
         assert_nil birthday_row(store, "aiden"), line
       end
     end
@@ -592,7 +592,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n")}) do |store|
       store.put("aiden", AIDEN)
 
-      assert_equal AIDEN, store.contact("aiden").vcard
+      assert_equal AIDEN, store.contact("aiden").vcard.to_s
       assert_nil birthday_row(store, "aiden")
     end
   end
@@ -608,7 +608,7 @@ class StoreTest < Minitest::Test
       store.put("aiden", edited)
       messages = sentry_messages
 
-      assert_equal edited, store.contact("aiden").vcard
+      assert_equal edited, store.contact("aiden").vcard.to_s
       assert_equal 1, messages.length
     end
   end
@@ -622,7 +622,7 @@ class StoreTest < Minitest::Test
       store.put("aiden", born)
 
       assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), birthday_row(store, "aiden")
-      assert_equal born, store.contact("aiden").vcard
+      assert_equal born, store.contact("aiden").vcard.to_s
     end
   end
 
@@ -822,16 +822,16 @@ class StoreTest < Minitest::Test
       ProTacts::Store.connect(path) do |store|
         assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
         assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), birthday_row(store, "aiden")
-        assert_equal AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n"), store.contact("aiden").vcard
+        assert_equal AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n"), store.contact("aiden").vcard.to_s
 
         # Unmodeled: byte-identical, no birthday row beside it.
-        assert_equal ZED.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n"), store.contact("znorth").vcard
+        assert_equal ZED.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n"), store.contact("znorth").vcard.to_s
         assert_nil birthday_row(store, "znorth")
 
         # A BDAY sharing its line's bytes stays put: the line moves as
         # one or not at all, where the first property alone would have
         # moved the birthday and dropped the NOTE unwitnessed.
-        assert_equal shared, store.contact("xavi").vcard
+        assert_equal shared, store.contact("xavi").vcard.to_s
         assert_nil birthday_row(store, "xavi")
       end
     end

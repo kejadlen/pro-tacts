@@ -146,7 +146,7 @@ class VCardLinesTest < Minitest::Test
   ## insert
 
   def test_insert_takes_the_end_lines_terminator_for_a_bare_line
-    inserted = VCARD.new(CARD).insert(["BDAY:1985-04\r\n"])
+    inserted = VCARD.new(CARD).insert(["BDAY:1985-04\r\n"]).to_s
 
     assert_equal CARD.sub("END:VCARD\r\n", "BDAY:1985-04\r\nEND:VCARD\r\n"), inserted
     assert_operator inserted.index("BDAY"), :<, inserted.index("END:VCARD")
@@ -159,17 +159,17 @@ class VCardLinesTest < Minitest::Test
     folded = "BDAY:1985-\r\n 04\r\n"
 
     assert_equal CARD.sub("END:VCARD\r\n", "BDAY:1985-\r\n 04\r\nEND:VCARD\r\n"),
-      VCARD.new(CARD).insert([folded])
+      VCARD.new(CARD).insert([folded]).to_s
     assert_equal "BEGIN:VCARD\nEND:VCARD\n".sub("END:VCARD\n", "NOTE:x\nEND:VCARD\n"),
-      VCARD.new("BEGIN:VCARD\nEND:VCARD\n").insert(["NOTE:x\n"])
+      VCARD.new("BEGIN:VCARD\nEND:VCARD\n").insert(["NOTE:x\n"]).to_s
   end
 
   def test_insert_appends_with_crlf_when_there_is_no_end
     assert_equal "not a card\r\nBDAY:1985-04\r\n",
-      VCARD.new("not a card\r\n").insert(["BDAY:1985-04\r\n"])
+      VCARD.new("not a card\r\n").insert(["BDAY:1985-04\r\n"]).to_s
   end
 
   def test_insert_with_nothing_leaves_the_card_alone
-    assert_equal CARD, VCARD.new(CARD).insert([])
+    assert_equal CARD, VCARD.new(CARD).insert([]).to_s
   end
 end

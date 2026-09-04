@@ -164,18 +164,22 @@ module ProTacts
     # single-convention; a terminated line keeps its own, folds and
     # all. With no END to anchor to there is no envelope worth
     # respecting, and the lines are appended with CRLF.
-    #: (Array[String] lines) -> String
+    #
+    # A card back, like #extract's remainder: text with text put into it
+    # is still text, so there is nothing here for a caller to re-read or
+    # re-judge, and one that wants the bytes asks #to_s for them.
+    #: (Array[String] lines) -> VCard
     def insert(lines)
-      return @bytes if lines.empty?
+      return self if lines.empty?
 
       physical = physical_lines
       index = physical.rindex { it.match?(END_LINE) }
       if index
         terminator = terminator_of(physical.fetch(index))
         physical.insert(index, *lines.map { it.end_with?("\n") ? it : it + terminator })
-        physical.join
+        VCard.new(physical.join)
       else
-        @bytes + lines.map { it.end_with?("\n") ? it : it + "\r\n" }.join
+        VCard.new(@bytes + lines.map { it.end_with?("\n") ? it : it + "\r\n" }.join)
       end
     end
 

@@ -5,11 +5,16 @@ require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
 module ProTacts
-  # One contact: its id, the vCard bytes served for it, the etag over
-  # those bytes, and the structured read of them — the one model of a
-  # contact (docs/plans/2026-09-01-contact-is-the-model.md). The id is
-  # the vCard's UID and the name in its href (see
+  # One contact: its id, the card served for it, and the etag over that
+  # card's bytes — the one model of a contact
+  # (docs/plans/2026-09-01-contact-is-the-model.md). The id is the
+  # vCard's UID and the name in its href (see
   # docs/plans/2026-01-12-carddav-architecture.md).
+  #
+  # A VCard rather than the bytes, because a contact that held bytes
+  # would have to make a card out of them to answer anything, and every
+  # caller handing one over already had a card in hand to make the bytes
+  # from. One card is built per contact and every read is asked of it.
   #
   # The etag hashes the card that goes out, so it changes exactly when
   # what the client downloads changes. It is derived here and stored
@@ -20,22 +25,19 @@ module ProTacts
   # both the ETag header and getetag properties carry.
   #
   # The structured accessors are that idea applied to the card's
-  # contents: everything derives from the bytes, lazily, on the first
-  # structured read. The CardDAV paths never take one — they answer in
-  # bytes — and ctag and the listing reads build a contact per row
-  # without reading structure, so deferring the parse keeps every
-  # serving path as cheap as it was without the accessors. A regular
-  # class rather than a Data one because the memoized parse needs an
-  # ivar and Data freezes its instances.
+  # contents: everything derives from the bytes, and the card defers the
+  # walk that reads them until something asks. The CardDAV paths never
+  # ask — they answer in bytes — so the serving paths pay for no parse
+  # they do not use, and that laziness is VCard's to keep rather than
+  # this class's to arrange.
   #
   # The accessors are deliberately shallow, like the parser: a card can
   # carry properties no accessor knows, and CardDAV still serves every
   # one. #properties is the read for those.
   class Contact
     # @rbs @id: String
-    # @rbs @vcard: String
+    # @rbs @vcard: VCard
     # @rbs @etag: String
-    # @rbs @properties: Array[VCard::Parser::Property]
 
     # Ids end up in paths and arrive from client-supplied hrefs, so an id
     # outside this charset cannot be served.
@@ -67,19 +69,19 @@ module ProTacts
     # A contact from its id and its card. The only way to make one: an
     # etag that came from anywhere but the card in hand is an etag that
     # can be wrong.
-    #: (id: String, vcard: String) -> Contact
+    #: (id: String, vcard: VCard) -> Contact
     def self.for(id:, vcard:)
       raise ArgumentError, "invalid contact id: #{id}" unless id.match?(ID_FORMAT)
 
       new(id, vcard, etag_for(vcard))
     end
 
-    #: (String vcard) -> String
+    #: (VCard vcard) -> String
     def self.etag_for(vcard)
-      %("#{Digest::SHA256.hexdigest(vcard)}")
+      %("#{Digest::SHA256.hexdigest(vcard.to_s)}")
     end
 
-    #: (String id, String vcard, String etag) -> void
+    #: (String id, VCard vcard, String etag) -> void
     def initialize(id, vcard, etag)
       @id = id
       @vcard = vcard
@@ -92,19 +94,14 @@ module ProTacts
 
     attr_reader :etag
 
-    # The card's properties, parsed once and memoized — the substrate
-    # the typed accessors sit on, and the read for what none of them
-    # models. Every line that read, and no complaint about one that did
-    # not: a contact is served from its bytes, so a line this parser
-    # cannot read costs an accessor its answer and costs the contact
-    # nothing. There is no repair to make and nobody to make it, which
-    # is why nothing here looks for one.
+    # The card's properties — the substrate the typed accessors sit on,
+    # and the read for what none of them models. Every line that read,
+    # and no complaint about one that did not: a contact is served from
+    # its bytes, so a line this parser cannot read costs an accessor its
+    # answer and costs the contact nothing. There is no repair to make
+    # and nobody to make it, which is why nothing here looks for one.
     #: () -> Array[VCard::Parser::Property]
-    def properties
-      return @properties if defined?(@properties)
-
-      @properties = VCard.new(@vcard).properties
-    end
+    def properties = @vcard.properties
 
     # FN's value (RFC 2426 section 3.1.1), in text form.
     #: () -> String?

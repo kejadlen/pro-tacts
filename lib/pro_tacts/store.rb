@@ -226,8 +226,9 @@ module ProTacts
     # binary-flagged byte above 7 bits raises at the bind, and bytes
     # that are not UTF-8 at all stop at the insert, which SQLite refuses
     # to store as text. The body — the one binary input — is relabelled
-    # where it is read, in write_card, and refused at the card itself
-    # before that: VCard raises on bytes that are not text.
+    # and judged in the same breath where it is read, in write_card, so
+    # nothing that is not text gets this far; VCard's own raise is the
+    # assertion under that, and the bind is the third line.
     #: (String id, String vcard) -> Contact
     def put(id, vcard)
       # The birthday half of the split a write makes, one arm per shape
@@ -254,12 +255,12 @@ module ProTacts
           report_unrecognized_bday_lines([line])
           property = bday_of(line)
           birthday = property && Birthday.from_property(property)
-          [birthday, birthday ? rest.to_s : vcard]
+          [birthday, birthday ? rest : card]
         in [[], _]
           # The rewrite arm: carry the unrendered lines out of the
           # stored card, report the unrecognized ones' loss, and keep
           # whatever an unseen model row holds.
-          carried, lost = carried_and_lost_bday_lines(stored_vcard(id))
+          carried, lost = carried_and_lost_bday_lines(stored_card(id))
           kept = existing && !existing.served? ? existing : nil
           report_lost_bday_lines(lost)
           [kept, card.insert(carried)]
@@ -267,7 +268,7 @@ module ProTacts
           # More than one BDAY: cardinality-broken data, kept verbatim
           # and reported like any other unrecognized line.
           report_unrecognized_bday_lines(lines)
-          [nil, vcard]
+          [nil, card]
         end
 
       # The Contact this returns is the composed one, and the logged
@@ -277,7 +278,7 @@ module ProTacts
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
-          .insert(id: contact.id, vcard: stored)
+          .insert(id: contact.id, vcard: stored.to_s)
         write_birthday(contact.id, birthday)
         record(contact.id, "put", contact.etag)
         reindex(contact.id, stored)
@@ -314,7 +315,7 @@ module ProTacts
     def rebuild_index
       @database.transaction do
         card_properties.delete
-        cards.order(:id).all.each { reindex(it.fetch(:id).to_s, it.fetch(:vcard).to_s) }
+        cards.order(:id).all.each { reindex(it.fetch(:id).to_s, VCard.new(it.fetch(:vcard).to_s)) }
       end
     end
 
@@ -358,13 +359,13 @@ module ProTacts
     # parser cannot read. Takes the stored card — with the birthday
     # already subtracted — so the index never sees a BDAY no stored
     # card carries.
-    #: (String id, String vcard) -> void
-    def reindex(id, vcard)
+    #: (String id, VCard card) -> void
+    def reindex(id, card)
       # Before the parse, so that a card which has stopped parsing does
       # not keep the rows from when it did.
       card_properties.where(card_id: id).delete
 
-      properties_of(vcard).each.with_index do |property, position|
+      card.properties.each.with_index do |property, position|
         card_properties.insert(
           card_id: id,
           position:,
@@ -376,12 +377,6 @@ module ProTacts
           card_parameters.insert(card_id: id, position:, name:, value:)
         end
       end
-    end
-
-    # A card's properties: every line of it that read.
-    #: (String vcard) -> Array[VCard::Parser::Property]
-    def properties_of(vcard)
-      VCard.new(vcard).properties
     end
 
     # Applies whatever migrations the database has not seen. On one it is
@@ -396,10 +391,10 @@ module ProTacts
     # The card currently stored for an id, or nil for a card being
     # created. A plain `first` read: the primary key leaves `sole`
     # nothing to catch, and no row is the ordinary answer.
-    #: (String id) -> String?
-    def stored_vcard(id)
+    #: (String id) -> VCard?
+    def stored_card(id)
       row = cards.where(id:).first
-      row && row.fetch(:vcard).to_s
+      row && VCard.new(row.fetch(:vcard).to_s)
     end
 
     # The BDAY a decision may be made of: the line's property, when it
@@ -420,11 +415,11 @@ module ProTacts
     # it drops unwitnessed, which no client renders and no whitelist
     # recognizes. Lines a client rendered are in neither pile: their
     # absence is a deletion the rewrite already honors.
-    #: (String? vcard) -> [Array[String], Array[VCard::Parser::Line]]
-    def carried_and_lost_bday_lines(vcard)
-      return [[], []] if vcard.nil?
+    #: (VCard? card) -> [Array[String], Array[VCard::Parser::Line]]
+    def carried_and_lost_bday_lines(card)
+      return [[], []] if card.nil?
 
-      bdays, = VCard.new(vcard).extract("BDAY")
+      bdays, = card.extract("BDAY")
       carried, rest = bdays.partition { |line|
         property = bday_of(line)
         property && Birthday.unrendered_value?(property.value)
@@ -482,19 +477,19 @@ module ProTacts
     def contact_from(row, birthday)
       Contact.for(
         id: row.fetch(:id).to_s,
-        vcard: with_birthday(row.fetch(:vcard).to_s, birthday),
+        vcard: with_birthday(VCard.new(row.fetch(:vcard).to_s), birthday),
       )
     end
 
     # The card to serve: the stored card with its birthday composed
     # back in, immediately before END:VCARD. A birthday with no wire
     # form, or none at all, leaves the card exactly as it is.
-    #: (String card, Birthday? birthday) -> String
+    #: (VCard card, Birthday? birthday) -> VCard
     def with_birthday(card, birthday)
       line = birthday && birthday.to_line
       return card if line.nil?
 
-      VCard.new(card).insert([line])
+      card.insert([line])
     end
 
     # The model's half of a write: hold the birthday the card gave up,
