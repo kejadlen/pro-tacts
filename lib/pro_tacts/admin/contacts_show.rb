@@ -1,5 +1,6 @@
 require "pro_tacts/admin/phlex"
 
+require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/layout"
 
@@ -28,7 +29,7 @@ module ProTacts
           div(class: "card") do
             div(class: "card-body") do
               div(class: "detail-header") do
-                span(class: "avatar", data_size: "lg") { Format.initials(@contact) }
+                render Avatar.new(contact: @contact, size: "lg")
                 h1(class: "type-h2", style: "margin: 0;") { @contact.name || @contact.id }
               end
               # Only rendered when there's something to show: an empty

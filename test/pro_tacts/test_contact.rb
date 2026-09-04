@@ -1,5 +1,7 @@
 require_relative "../test_helper"
+require_relative "../photo_card"
 
+require "base64"
 require "digest"
 
 require "pro_tacts/contact"
@@ -172,5 +174,52 @@ class ContactTest < Minitest::Test
     assert_empty contact("not a vCard at all").phones
     assert_empty contact("not a vCard at all").properties
     assert_equal "Aiden", contact("FN:Aiden\r\nTEL;HOME:+1-555-1234\r\n").name
+  end
+
+  ## Photos
+
+  # The picture the card carries, decoded: PHOTO's base64 payload as
+  # bytes, with the mime type read off the decoded bytes themselves —
+  # magic bytes cannot mislabel what they are — rather than the TYPE
+  # parameter. The synthetic payload carries the JPEG signature the
+  # builder gives every image.
+  def test_a_photo_reads_decoded_with_a_sniffed_type
+    photo = contact(PhotoCard.photo("aiden", bytes: 64)).photo
+
+    assert_equal "image/jpeg", photo.mime_type
+    assert_equal PhotoCard.image(64), photo.bytes
+  end
+
+  # The sniff's other rows: a picture named PNG or GIF reads as what
+  # its bytes are, whatever the TYPE parameter said.
+  def test_png_and_gif_payloads_sniff_to_their_types
+    png = CARD.sub("FN:Aiden\r\n", photo_property("\x89PNG\r\n\x1A\nx"))
+    gif = CARD.sub("FN:Aiden\r\n", photo_property("GIF89ax"))
+
+    assert_equal "image/png", contact(png).photo&.mime_type
+    assert_equal "image/gif", contact(gif).photo&.mime_type
+  end
+
+  def test_a_card_without_a_photo_has_none
+    assert_nil contact.photo
+  end
+
+  # A URI-form PHOTO never reaches the sniff: a URI's ":" is not in
+  # base64's alphabet and the strict decode refuses the value. Same
+  # nil for a payload that is not an image a browser can show — the
+  # initials an avatar falls back to, an ordinary absence.
+  def test_a_photo_that_is_not_showable_has_none
+    uri = CARD.sub("FN:Aiden\r\n", "PHOTO;VALUE=uri:https://example.com/me.jpg\r\n")
+    undecodable = CARD.sub("FN:Aiden\r\n", "PHOTO;ENCODING=b:not base64!!\r\n")
+    not_an_image = CARD.sub("FN:Aiden\r\n", "PHOTO;ENCODING=b:#{Base64.strict_encode64("text, not an image")}\r\n")
+
+    assert_nil contact(uri).photo
+    assert_nil contact(undecodable).photo
+    assert_nil contact(not_an_image).photo
+  end
+
+  # One PHOTO property carrying a PNG payload, for the sniff's rows.
+  def photo_property(payload)
+    "PHOTO;ENCODING=b;TYPE=JPEG:#{Base64.strict_encode64(payload)}\r\n"
   end
 end

@@ -95,6 +95,15 @@ section > h2 {
   align-self: flex-start;
 }
 
+/* A contact's picture fills the avatar the initials otherwise occupy.
+   Gloss's .avatar is already round and clipped (overflow hidden), so a
+   picture needs only to cover the box — object-fit rather than a
+   resize, because the bytes are the card's own and nothing recodes
+   them. No width/height to add: .avatar sets both. */
+img.avatar {
+  object-fit: cover;
+}
+
 .detail-header {
   display: flex;
   align-items: center;

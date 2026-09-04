@@ -1,4 +1,5 @@
 require_relative "../../test_helper"
+require_relative "../../photo_card"
 
 require "date"
 require "pathname"
@@ -260,5 +261,62 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({}) { get "/contacts/nope" }
 
     assert_equal 404, last_response.status
+  end
+
+  ## Photos
+
+  # A contact with a picture renders it where the initials were —
+  # here the detail header's large avatar — pointing at the photo
+  # route rather than carrying the bytes in the page. Alt is empty:
+  # the name is the heading right beside it.
+  def test_show_renders_the_cards_picture_as_the_avatar
+    with_contacts({"pic" => PhotoCard.photo("pic", bytes: 256)}) do
+      get "/contacts/pic"
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, '<img class="avatar" src="/contacts/pic/photo" alt=""'
+      assert_includes last_response.body, 'data-size="lg"'
+      refute_includes last_response.body, '<span class="avatar"'
+    end
+  end
+
+  # The dashboard rows render the same avatar — one component, every
+  # slot — so a picture shows in recently updated and in results.
+  def test_the_index_rows_render_the_picture_too
+    with_contacts({"pic" => PhotoCard.photo("pic", bytes: 256)}) do
+      get "/"
+
+      assert_includes last_response.body, 'src="/contacts/pic/photo"'
+
+      get "/", q: "no-match-for-this"
+      refute_includes last_response.body, 'src="/contacts/pic/photo"'
+    end
+  end
+
+  # The route the avatars point at: the decoded bytes under the type
+  # their own magic bytes name, with the contact's etag — so a picture
+  # changes exactly when its card does.
+  def test_the_photo_route_serves_the_decoded_bytes
+    with_contacts({"pic" => PhotoCard.photo("pic", bytes: 256)}) do |store|
+      get "/contacts/pic/photo"
+
+      assert_equal 200, last_response.status
+      assert_equal "image/jpeg", last_response["Content-Type"]
+      assert_equal store.contact("pic").photo.bytes, last_response.body
+      assert_equal store.contact("pic").etag, last_response["ETag"]
+    end
+  end
+
+  # A contact whose card carries no picture a browser can show is no
+  # match at the route — the views never point at one — same 404 as an
+  # unknown contact.
+  def test_the_photo_route_is_404_without_a_picture
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada/photo"
+      assert_equal 404, last_response.status
+
+      get "/contacts/nobody/photo"
+      assert_equal 404, last_response.status
+    end
   end
 end

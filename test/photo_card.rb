@@ -75,10 +75,12 @@ module PhotoCard
   # Synthetic image bytes: never decoded — a card's payload is stored
   # and served as the base64 text it arrives as — so a repeating
   # pattern stands in, deterministic so a fixture's etag does not vary
-  # per run.
+  # per run. Binary, as decoded bytes are: the JPEG signature is not
+  # UTF-8, and the equality a test wants against Base64's output is
+  # byte equality, which a UTF-8 flag would break.
   #: (Integer bytes) -> String
   def self.image(bytes)
-    ("\xFF\xD8\xFF\xE0" + "synthetic photo payload" * (bytes / 22 + 1)).byteslice(0, bytes)
+    ("\xFF\xD8\xFF\xE0".b + "synthetic photo payload".b * (bytes / 22 + 1)).byteslice(0, bytes)
   end
 
   # A card with a real photo attached: the 338 KB capture's shape. A

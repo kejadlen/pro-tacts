@@ -1,5 +1,6 @@
 require "pro_tacts/admin/phlex"
 
+require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/format"
 
 module ProTacts
@@ -36,7 +37,7 @@ module ProTacts
         contact = upcoming.contact
         li do
           a(href: "/contacts/#{contact.id}") do
-            span(class: "avatar") { Format.initials(contact) }
+            render Avatar.new(contact: contact)
             div(style: "flex: 1; min-width: 0;") do
               div(style: "font-weight: 550;") { contact.name || contact.id }
               div(class: "type-body-sm") { date_line(upcoming) }

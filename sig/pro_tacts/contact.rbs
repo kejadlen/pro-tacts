@@ -1,4 +1,4 @@
-# Contact::Phone, ::Email, and ::Address are Data classes, whose
+# Contact::Phone, ::Email, ::Photo, and ::Address are Data classes, whose
 # members the inline parser cannot read (see sig/pro_tacts/birthday.rbs
 # for the same limit). Each is marked `@rbs skip` in contact.rb and
 # signed here; Contact itself is a plain class and carries its
@@ -17,6 +17,13 @@ module ProTacts
       attr_reader type: String?
 
       def self.new: (value: String, type: String?) -> instance
+    end
+
+    class Photo
+      attr_reader mime_type: String
+      attr_reader bytes: String
+
+      def self.new: (mime_type: String, bytes: String) -> instance
     end
 
     class Address

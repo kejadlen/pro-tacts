@@ -89,14 +89,35 @@ module ProTacts
       # trusted" is the whole access model this app has, see README's
       # simplifying assumptions.
       r.on "contacts" do
-        r.get String do |id|
-          contact = store.contact(id)
+        r.on String do |id|
+          # The picture the avatars render (Admin::Avatar): decoded
+          # bytes under their own content type, served from a route
+          # rather than inlined as base64 so a page of avatars is a
+          # page of cacheable image requests instead of ten 330 KB
+          # payloads stitched into the HTML. The contact's etag, so a
+          # picture changes exactly when its card does.
+          r.get "photo" do
+            contact = store.contact(id)
 
-          # No match falls through to the empty-body 404 the
-          # not_found handler fills in, same as the CardDAV GET.
-          if contact
-            response["Content-Type"] = "text/html; charset=utf-8"
-            Admin::ContactsShow.call(contact:)
+            # A contact with no picture a browser can show is no
+            # match here, same fall-through-to-404 as the page below —
+            # the views never point at a photo the card lacks.
+            if contact && (photo = contact.photo)
+              response["Content-Type"] = photo.mime_type
+              response["ETag"] = contact.etag
+              photo.bytes
+            end
+          end
+
+          r.get do
+            contact = store.contact(id)
+
+            # No match falls through to the empty-body 404 the
+            # not_found handler fills in, same as the CardDAV GET.
+            if contact
+              response["Content-Type"] = "text/html; charset=utf-8"
+              Admin::ContactsShow.call(contact:)
+            end
           end
         end
       end

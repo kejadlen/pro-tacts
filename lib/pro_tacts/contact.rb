@@ -1,3 +1,4 @@
+require "base64"
 require "digest"
 
 require "pro_tacts/birthday"
@@ -55,6 +56,8 @@ module ProTacts
     # @rbs skip
     Email = Data.define(:value, :type)
     # @rbs skip
+    Photo = Data.define(:mime_type, :bytes)
+    # @rbs skip
     Address = Data.define(
       :po_box,
       :extended,
@@ -93,6 +96,43 @@ module ProTacts
     attr_reader :vcard
 
     attr_reader :etag
+
+    # The image formats a decoded PHOTO is recognized by, prefix to
+    # mime type. A picture's type is read off the decoded bytes rather
+    # than the TYPE parameter because magic bytes cannot mislabel what
+    # they are and no allowlist of client spellings has to be kept;
+    # binary literals, because the decoded payload is.
+    PHOTO_SIGNATURES = [
+      ["\xFF\xD8\xFF".b, "image/jpeg"],
+      ["\x89PNG\r\n\x1A\n".b, "image/png"],
+      ["GIF87a".b, "image/gif"],
+      ["GIF89a".b, "image/gif"],
+    ].freeze #: Array[[String, String]]
+
+    # The picture the card carries, when it carries one a browser can
+    # show: PHOTO's value base64-decoded and named by its own magic
+    # bytes. The inline spelling is the one macOS sends; a URI-form
+    # PHOTO never reaches the sniff, because a URI's ":" is not in
+    # base64's alphabet and the strict decode refuses it. Nil for no
+    # PHOTO, an undecodable one, or one that sniffs to no known format
+    # — the initials an avatar falls back to, an ordinary absence
+    # rather than an error, exactly like the other accessors' nils.
+    #: () -> Photo?
+    def photo
+      property = properties.find { it.name.casecmp?("PHOTO") }
+      return if property.nil?
+
+      begin
+        bytes = Base64.strict_decode64(property.value)
+      rescue ArgumentError
+        return
+      end
+
+      signature = PHOTO_SIGNATURES.find { bytes.start_with?(it.first) }
+      return if signature.nil?
+
+      Photo.new(mime_type: signature.fetch(1), bytes:)
+    end
 
     # The card's properties — the substrate the typed accessors sit on,
     # and the read for what none of them models. Every line that read,

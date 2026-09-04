@@ -1,0 +1,9 @@
+# Base64 ships no signatures (a default gem), so this declares the one
+# method pro-tacts calls: the strict decoder, which raises on any
+# character outside the alphabet rather than skipping it — the refusal
+# is what keeps a URI-form PHOTO from decoding as one.
+#
+# Written against base64 0.3.0 (lib/base64.rb).
+module Base64
+  def self.strict_decode64: (String str) -> String
+end

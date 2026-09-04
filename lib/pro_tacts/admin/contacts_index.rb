@@ -1,5 +1,6 @@
 require "pro_tacts/admin/phlex"
 
+require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/layout"
 require "pro_tacts/admin/upcoming_birthdays"
@@ -59,7 +60,7 @@ module ProTacts
       def render_row(row)
         li do
           a(href: "/contacts/#{row.contact.id}") do
-            span(class: "avatar") { Format.initials(row.contact) }
+            render Avatar.new(contact: row.contact)
             div(style: "flex: 1; min-width: 0;") do
               div(style: "font-weight: 550;") { row.contact.name || row.contact.id }
             end
