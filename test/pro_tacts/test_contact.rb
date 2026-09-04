@@ -66,6 +66,13 @@ class ContactTest < Minitest::Test
     assert_equal ["Lovelace", "Ada", nil, nil, nil], contact(STRUCTURED).name_components
   end
 
+  def test_reads_the_nickname
+    nicknamed = CARD.sub("FN:Aiden\r\n", "FN:Aiden\r\nNICKNAME:Red\r\n")
+
+    assert_equal "Red", contact(nicknamed).nickname
+    assert_nil contact(CARD).nickname
+  end
+
   def test_values_come_back_unescaped
     escaped = STRUCTURED.sub("FN:Ada Lovelace", "FN:Ada\\, Countess of Lovelace")
 
@@ -159,6 +166,7 @@ class ContactTest < Minitest::Test
 
     assert_nil bare.name
     assert_nil bare.name_components
+    assert_nil bare.nickname
     assert_empty bare.phones
     assert_empty bare.emails
     assert_empty bare.addresses

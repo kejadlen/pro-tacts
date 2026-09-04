@@ -160,6 +160,13 @@ module ProTacts
       property && components_of(property.value)
     end
 
+    # NICKNAME's value (RFC 2426 section 3.1.3), in text form — the
+    # whole value, as the card spells it, when it comma-lists several.
+    #: () -> String?
+    def nickname
+      text_of(properties.find { it.name.casecmp?("NICKNAME") })
+    end
+
     #: () -> Array[Phone]
     def phones
       of_name("TEL").filter_map do |property|

@@ -46,6 +46,21 @@ module ProTacts
 
       private
 
+      # The row's label: "Nickname (Name)" when the card carries a
+      # NICKNAME — the name someone is known by, the formal one kept
+      # beside it — and the plain name otherwise. The composition is
+      # this screen's, not Contact's: the card holds the two facts
+      # independently, and other screens (the detail card, the
+      # birthdays column) show the plain name.
+      #: (Contact contact) -> String
+      def label_of(contact)
+        nickname = contact.nickname
+        name = contact.name
+        return "#{nickname} (#{name})" if nickname && name
+
+        nickname || name || contact.id
+      end
+
       #: (Row row, String query) -> bool
       def matches?(row, query)
         q = query.downcase
@@ -62,7 +77,7 @@ module ProTacts
           a(href: "/contacts/#{row.contact.id}") do
             render Avatar.new(contact: row.contact, size: "lg")
             div(style: "flex: 1; min-width: 0;") do
-              div(style: "font-weight: 550;") { row.contact.name || row.contact.id }
+              div(style: "font-weight: 550;") { label_of(row.contact) }
             end
             span(class: "type-label") { Format.time_ago(row.updated_at) }
           end

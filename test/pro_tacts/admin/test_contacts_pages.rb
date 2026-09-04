@@ -55,6 +55,19 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # A card with a NICKNAME lists as "Nickname (Name)" — the name
+  # someone is known by, the formal one kept beside it. The plain-name
+  # row is what every other index test already shows.
+  def test_index_lists_a_nicknamed_contact_as_nickname_and_name
+    red = ADA.sub("FN:Ada Lovelace", "FN:Sarah\r\nNICKNAME:Red").sub("UID:ada", "UID:red")
+
+    with_contacts({"red" => red}) do
+      get "/"
+
+      assert_includes last_response.body, "Red (Sarah)"
+    end
+  end
+
   def test_index_with_no_contacts_says_so
     with_contacts({}) { get "/" }
 
