@@ -193,6 +193,18 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # The nickname is a name the contact lists under, so it finds the
+  # contact the same way the name does.
+  def test_search_matches_the_nickname
+    red = ADA.sub("FN:Ada Lovelace", "FN:Sarah\r\nNICKNAME:Red").sub("UID:ada", "UID:red")
+
+    with_contacts({"red" => red}) do
+      get "/", q: "red"
+
+      assert_includes last_response.body, "Red (Sarah)"
+    end
+  end
+
   def test_search_with_no_matches_says_so
     with_contacts({"ada" => ADA}) do
       get "/", q: "nobody"

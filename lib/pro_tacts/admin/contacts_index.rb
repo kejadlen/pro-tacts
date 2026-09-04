@@ -61,10 +61,14 @@ module ProTacts
         nickname || name || contact.id
       end
 
+      # Match generously (docs/DESIGN.md): a contact is findable by
+      # name — the nickname too, being the name it lists under — any
+      # of its values, or the groups it belongs to.
       #: (Row row, String query) -> bool
       def matches?(row, query)
         q = query.downcase
         return true if row.contact.name&.downcase&.include?(q)
+        return true if row.contact.nickname&.downcase&.include?(q)
         return true if row.contact.phones.any? { it.value.downcase.include?(q) }
         return true if row.contact.emails.any? { it.value.downcase.include?(q) }
 
