@@ -16,8 +16,8 @@ Content-Type: text/xml
           <d:report><d:sync-collection/></d:report>
         </d:supported-report>
       </d:supported-report-set>
-      <cs:getctag>401bae9a9b56accbe627415c136505e0a163b62ad1e70f4bd4a9cdd190530886</cs:getctag>
-      <d:sync-token>http://pro-tacts/sync/401bae9a9b56accbe627415c136505e0a163b62ad1e70f4bd4a9cdd190530886</d:sync-token>
+      <cs:getctag>cc1e93c3b52f3466d606a491c2a232823697d5a385dd53384b626dd1baaafcd9</cs:getctag>
+      <d:sync-token>http://pro-tacts/sync/cc1e93c3b52f3466d606a491c2a232823697d5a385dd53384b626dd1baaafcd9</d:sync-token>
       <d:current-user-privilege-set>
         <d:privilege><d:read/></d:privilege>
         <d:privilege><d:write/></d:privilege>
@@ -132,7 +132,7 @@ Content-Type: text/xml
   <d:href>/dav/addressbook/emoji.vcf</d:href>
   <d:propstat>
     <d:prop>
-      <d:getetag>"2962d3be364ecc3de905b70e8e4005b678df17abcd2160037de1c6ff0990ed91"</d:getetag>
+      <d:getetag>"f2de8c9cbbc34e304510ff6f076ed3275e620802bc15731550b5d43b0d0ae994"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
@@ -141,7 +141,7 @@ Content-Type: text/xml
   <d:href>/dav/addressbook/memoji.vcf</d:href>
   <d:propstat>
     <d:prop>
-      <d:getetag>"523bd3654e426826c637c91e1e7548b4bd2cfe0fa2506d7be130b99a0cb825d6"</d:getetag>
+      <d:getetag>"bb0734ee418c5bb60047503ea7675ccb46151d8e0084af665ba628bfc4acd804"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
@@ -150,7 +150,7 @@ Content-Type: text/xml
   <d:href>/dav/addressbook/monogram.vcf</d:href>
   <d:propstat>
     <d:prop>
-      <d:getetag>"b762400cd81a6747dbda0e2c54270d1c4594291e5240552d55644acb7c68cea3"</d:getetag>
+      <d:getetag>"845e1761ad2a8a8b28e2c8e4a0af274de5288302c0b66c79d0c9537f822b1185"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
@@ -168,7 +168,7 @@ Content-Type: text/xml
   <d:href>/dav/addressbook/photo.vcf</d:href>
   <d:propstat>
     <d:prop>
-      <d:getetag>"66ae58b3976a02941b38bc63a460c09246594a0f452a155b63d9e98832325b09"</d:getetag>
+      <d:getetag>"9bd93308c95dc178599a5102bdc6f194f8cb02f838262f421fbe7e2d7c1ab281"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>

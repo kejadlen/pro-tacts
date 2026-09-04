@@ -1,8 +1,8 @@
 BEGIN:VCARD
 VERSION:3.0
 PRODID:-//Apple Inc.//macOS 26.5.1//EN
-N:Contact;Test;;;
-FN:Test Contact
+N:Contact;Photo;;;
+FN:Photo Contact
 NOTE:Test
 X-IMAGEHASH:3KkHYbVDe7USm87oBfsxnQ==
 X-IMAGETYPE:PHOTO
