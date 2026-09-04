@@ -159,3 +159,16 @@ img.avatar {
   grid-column: 2;
   margin: 0;
 }
+
+/* The stored card in its own collapsed card under the record — the
+   column's gap spaces the two, so no margin here. <details> is native,
+   keeping the admin UI script-free; the summary rides the label
+   register, the pre scrolls rather than wraps: the bytes are the wire
+   format, folded lines and all. */
+.card-body summary {
+  cursor: pointer;
+}
+.card-body pre {
+  margin: var(--gl-space-2xs) 0 0;
+  overflow-x: auto;
+}

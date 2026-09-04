@@ -270,9 +270,26 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # No properties at all means no grid, not an empty one — an empty
-  # <dl> would still eat the gap card-body puts before it, leaving the
-  # name pinned near the top of the card instead of centered in it.
+  # The stored bytes are the truth the grid interprets, so the exact
+  # bytes stay reachable in their own card under the record —
+  # collapsed by default, so a PHOTO-heavy card does not push the page
+  # around. The stored card is the assertion's source of truth, not
+  # the input: a write composes the modeled BDAY back in, so what is
+  # served can be ordered differently from what was put.
+  def test_show_offers_the_raw_card_collapsed
+    with_contacts({"ada" => ADA}) do |store|
+      get "/contacts/ada"
+
+      body = last_response.body
+      assert_includes body, '<details><summary class="type-label">raw vCard</summary>'
+      assert_includes body, store.contact("ada").vcard.to_s
+      refute_includes body, "<details open"
+    end
+  end
+
+  # A card that will not parse is served from its bytes regardless —
+  # the raw section is the one thing such a card has to show, so it
+  # renders with no grid under the header, not instead of the page.
   def test_show_of_a_bare_contact_renders_no_grid
     bare = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Bare Contact\r\nUID:bare\r\nEND:VCARD\r\n"
 
@@ -280,6 +297,7 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/bare"
 
       refute_includes last_response.body, "detail-grid"
+      assert_includes last_response.body, "<details"
     end
   end
 

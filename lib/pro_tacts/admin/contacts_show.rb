@@ -52,6 +52,21 @@ module ProTacts
               dl(class: "detail-grid") { rows } if has_data?
             end
           end
+          # The stored card in its own card under the record: the bytes
+          # are the truth the grid above interprets, and they stay
+          # reachable — collapsed by default, because the record is
+          # about the person and the bytes are about the wire. Native
+          # <details>, so the admin UI stays script-free (see Layout);
+          # and the one thing a card that will not parse has to show
+          # (see Parser: no repair to make).
+          div(class: "card") do
+            div(class: "card-body") do
+              details do
+                summary(class: "type-label") { "raw vCard" }
+                pre(class: "type-mono") { @contact.vcard.to_s }
+              end
+            end
+          end
         end
       end
 
