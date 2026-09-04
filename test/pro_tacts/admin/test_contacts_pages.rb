@@ -265,6 +265,18 @@ class AdminContactsPagesTest < Minitest::Test
 
   ## Photos
 
+  # No picture, no avatar: an initials circle beside the name in
+  # type-h2 would repeat what the name already says, so a contact
+  # without a photo renders the header as the name alone.
+  def test_show_without_a_picture_renders_no_avatar
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada"
+
+      assert_equal 200, last_response.status
+      refute_includes last_response.body, 'class="avatar"'
+    end
+  end
+
   # A contact with a picture renders it where the initials were —
   # here the detail header's large avatar — pointing at the photo
   # route rather than carrying the bytes in the page. Alt is empty:

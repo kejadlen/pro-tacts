@@ -30,7 +30,11 @@ module ProTacts
             div(class: "card-body") do
               div(class: "detail-header") do
                 h1(class: "type-h2", style: "margin: 0;") { @contact.name || @contact.id }
-                render Avatar.new(contact: @contact, size: "xl")
+                # Only a picture earns this slot: an initials circle
+                # beside the name in type-h2 would repeat what the name
+                # already says. The dashboard rows keep theirs — there
+                # the avatar is the row's visual anchor, not a caption.
+                render Avatar.new(contact: @contact, size: "xl") if @contact.photo
               end
               # Only rendered when there's something to show: an empty
               # <dl> would still take up the gap card-body puts between
