@@ -85,7 +85,7 @@ section > h2 {
 
 /* Both dashboard lists lead their rows with an avatar, and both are
    growing rows taller than one line (the birthdays rows already are,
-   the contacts rows will be). A 1.875rem avatar centered against
+   the contacts rows will be). A 2.25rem avatar centered against
    multi-line text floats mid-row, so it leads from the top, level
    with the name — no change today for single-line rows, where the
    avatar is the tallest thing in the row either way. Scoped to
@@ -104,10 +104,28 @@ img.avatar {
   object-fit: cover;
 }
 
+/* The detail header's avatar, one step past Gloss's scale — its lg is
+   the dashboard rows' size, and the header's picture should anchor the
+   card the way a contacts app's does: bigger than the name beside it,
+   not level with it. With the top-right corner to itself, 5.5rem reads
+   as photo-dominant without crowding the type-h2; the initials ride
+   at step-3 to keep the same share of the circle the default sizes
+   give them, rather than floating small in the bigger box. */
+.avatar[data-size="xl"] {
+  --_size: 5.5rem;
+  font-size: var(--gl-step-3);
+}
+
+/* The detail card's masthead: the name in its own column at the left,
+   the avatar anchored top-right (grid rather than float because
+   .card-body is a flex column — floats on its children are ignored),
+   the property grid below spanning the full width with no corner
+   reserved. */
 .detail-header {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr auto;
   gap: var(--gl-space-s);
+  align-items: start;
 }
 /* Breathing room before the property grid — but only when there's a
    grid to make room for. A contact with no properties renders no

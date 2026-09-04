@@ -29,8 +29,8 @@ module ProTacts
           div(class: "card") do
             div(class: "card-body") do
               div(class: "detail-header") do
-                render Avatar.new(contact: @contact, size: "lg")
                 h1(class: "type-h2", style: "margin: 0;") { @contact.name || @contact.id }
+                render Avatar.new(contact: @contact, size: "xl")
               end
               # Only rendered when there's something to show: an empty
               # <dl> would still take up the gap card-body puts between

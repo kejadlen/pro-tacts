@@ -37,7 +37,7 @@ module ProTacts
         contact = upcoming.contact
         li do
           a(href: "/contacts/#{contact.id}") do
-            render Avatar.new(contact: contact)
+            render Avatar.new(contact: contact, size: "lg")
             div(style: "flex: 1; min-width: 0;") do
               div(style: "font-weight: 550;") { contact.name || contact.id }
               div(class: "type-body-sm") { date_line(upcoming) }

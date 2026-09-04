@@ -275,7 +275,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 200, last_response.status
       assert_includes last_response.body, '<img class="avatar" src="/contacts/pic/photo" alt=""'
-      assert_includes last_response.body, 'data-size="lg"'
+      assert_includes last_response.body, 'data-size="xl"'
       refute_includes last_response.body, '<span class="avatar"'
     end
   end
