@@ -50,13 +50,17 @@ module ProTacts
 
       #: () -> bool
       def has_data?
-        @contact.phones.any? || @contact.emails.any? || @contact.addresses.any? ||
+        !@contact.nickname.nil? ||
+          @contact.phones.any? || @contact.emails.any? || @contact.addresses.any? ||
           !@birthday.nil? || !@contact.notes.nil?
       end
 
       # A missing TYPE parameter still gets a key: the fallback names
       # the kind of value, so no row renders unlabeled in the grid.
       def rows
+        # The nickname leads the grid: closest to the name the header
+        # already shows, ahead of the channels that reach the person.
+        row("nickname", @contact.nickname) if @contact.nickname
         @contact.phones.each { |phone| row(phone.type || "phone", phone.value) }
         @contact.emails.each { |email| row(email.type || "email", email.value) }
         @contact.addresses.each { |address| row(address.type || "address", address_lines(address)) }

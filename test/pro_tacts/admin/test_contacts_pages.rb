@@ -250,6 +250,7 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/bare"
 
       assert_equal 200, last_response.status
+      refute_includes last_response.body, '<dt class="type-label">nickname</dt>'
       refute_includes last_response.body, '<dt class="type-label">notes</dt>'
       refute_includes last_response.body, '<dt class="type-label">birthday</dt>'
     end
@@ -279,6 +280,23 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/bare"
 
       refute_includes last_response.body, "detail-grid"
+    end
+  end
+
+  # The nickname is an attribute like the others here — a labeled
+  # grid row, leading the channels — not a second name in the header,
+  # which stays the name and the avatar alone.
+  def test_show_renders_the_nickname_as_a_row
+    red = ADA.sub("FN:Ada Lovelace", "FN:Sarah\r\nNICKNAME:Red").sub("UID:ada", "UID:red")
+
+    with_contacts({"red" => red}) do
+      get "/contacts/red"
+
+      assert_includes last_response.body, '<dt class="type-label">nickname</dt>'
+      assert_includes last_response.body, "Red"
+      # The row leads the grid, ahead of the first phone.
+      body = last_response.body
+      assert body.index('">nickname</dt>') < body.index('">mobile</dt>')
     end
   end
 
