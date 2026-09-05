@@ -6,18 +6,24 @@ module ProTacts
     # vendored Gloss stylesheets (see public/vendor/gloss and
     # docs/DESIGN.md), and a one-line header naming the app in type —
     # "no brand mark" is one of the rules that document inherits from
-    # Gloss. A screen that passes `search` renders the collection
-    # search in that header, beside the name (docs/DESIGN.md's
-    # search-first rule). `wide` opts a screen out of the reading
-    # width a single column wants (see admin.css) — the dashboard
-    # root is the one screen that asks. No JavaScript: nothing served
-    # here yet needs any.
+    # Gloss — with the collection search beside the name on every
+    # screen: a header that grew and shrank with the search made the
+    # chrome jump between pages, and search-first (docs/DESIGN.md)
+    # wants finding a contact possible from anywhere. `query` carries
+    # the dashboard's current search into the input's value;
+    # `autofocus` is a screen saying its entry point is the search —
+    # the dashboard with an empty query, the one place the design
+    # doc wants "focused and ready". `wide` opts a screen out of the
+    # reading width a single column wants (see admin.css) — the
+    # dashboard root is the one screen that asks. No JavaScript:
+    # nothing served here yet needs any.
     class Layout < Phlex::HTML
-      #: (title: String, ?wide: bool, ?search: String?, ?notice: String?) -> void
-      def initialize(title:, wide: false, search: nil, notice: nil)
+      #: (title: String, ?wide: bool, ?query: String?, ?autofocus: bool, ?notice: String?) -> void
+      def initialize(title:, wide: false, query: nil, autofocus: false, notice: nil)
         @title = title
         @wide = wide
-        @search = search
+        @query = query
+        @autofocus = autofocus
         @notice = notice
       end
 
@@ -38,15 +44,13 @@ module ProTacts
           body do
             header(class: "admin-header") do
               a(href: "/") { "pro-tacts" }
-              # The dashboard's query follows the search into the
-              # header: the input keeps its value across a search, and
-              # focuses only when the query is empty — a results page
-              # has somewhere to be besides the input.
-              if @search
-                form(action: "/", method: "get", class: "search-form") do
-                  input(type: "search", name: "q", value: @search,
-                        placeholder: "Search contacts", autofocus: @search.to_s.empty?)
-                end
+              # Every screen's chrome, not the dashboard's alone: the
+              # input keeps the query it carries — a results page has
+              # somewhere to be besides the input — and focuses only
+              # where the screen asked for it.
+              form(action: "/", method: "get", class: "search-form") do
+                input(type: "search", name: "q", value: @query,
+                      placeholder: "Search contacts", autofocus: @autofocus)
               end
             end
             main(class: "admin-main", **(@wide ? {data: {wide: true}} : {})) { yield }

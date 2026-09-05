@@ -132,9 +132,11 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # The search lives in the page header (docs/DESIGN.md), rendered by
-  # the layout when a screen asks for it. A screen that forgets to ask
-  # loses the input with no route failing — search still works through
-  # the URL — so this pins the wiring, not just the behavior.
+  # the layout on every screen now — not just the dashboard's — so
+  # the header's height never changes between pages and finding a
+  # contact never requires going home first. This pins the wiring,
+  # not just the behavior: a screen that forgets `autofocus` loses
+  # the focused-and-ready entry point with no route failing.
   def test_the_search_lives_in_the_header
     with_contacts({"ada" => ADA}) do
       get "/"
@@ -146,6 +148,23 @@ class AdminContactsPagesTest < Minitest::Test
       get "/", q: "ada"
       header = last_response.body.split("<main").first
       assert_includes header, "value=\"ada\""
+      refute_includes header, "autofocus"
+    end
+  end
+
+  # The same chrome on a record's own page: the search rides the
+  # header there too, empty and unfocused — the record is that
+  # page's content, not a query.
+  def test_the_search_renders_on_detail_pages_too
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada"
+
+      header = last_response.body.split("<main").first
+      assert_includes header, "search-form"
+      # No value attribute at all — the record's page carries no
+      # query, and Phlex omits the attribute for nil rather than
+      # rendering it empty.
+      assert_includes header, '<input type="search" name="q" placeholder="Search contacts">'
       refute_includes header, "autofocus"
     end
   end

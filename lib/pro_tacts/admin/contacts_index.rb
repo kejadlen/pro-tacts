@@ -38,7 +38,8 @@ module ProTacts
       end
 
       def view_template
-        render Layout.new(title: "Contacts", wide: true, search: @query, notice: @notice) do
+        render Layout.new(title: "Contacts", wide: true, query: @query,
+                          autofocus: @query.empty?, notice: @notice) do
           div(class: "dashboard") do
             section do
               div(class: "section-head") do
