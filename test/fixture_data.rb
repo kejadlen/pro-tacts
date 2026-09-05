@@ -17,17 +17,20 @@ require "pro_tacts/store"
 module FixtureData
   CARDS = Pathname.new(__dir__) / "fixtures" / "cards"
 
-  # How long ago each successive card (in #cards' own order) last
-  # changed, cycling if there are ever more cards than entries. Spread
-  # rather than exact: what backdate wants is variety for the admin
-  # UI's recently-updated list, not specific values for anything to
-  # assert on.
-  AGO_SECONDS = [
-    0, 3 * 60, 20 * 60, 90 * 60,
-    4 * 3_600, 18 * 3_600,
-    2 * 86_400, 5 * 86_400, 12 * 86_400, 26 * 86_400,
-    60 * 86_400, 130 * 86_400, 260 * 86_400, 380 * 86_400,
-  ].freeze
+  # The first card is stamped now and each one after it is #SPREAD times
+  # older than the last, so the seed book runs from this minute out to
+  # about five months at sixteen cards. Computed rather than tabulated
+  # because a table runs out: adding cards past the end of one either
+  # wraps — two cards sharing a stamp, and a recently-updated list that
+  # opens on a tie — or leaves the tail unstamped. Spread rather than
+  # exact: what backdate wants is variety for the admin UI's
+  # recently-updated list, not specific values for anything to assert on.
+  SPREAD = 2.4
+
+  #: (Integer index) -> Integer
+  def self.ago_seconds(index)
+    index.zero? ? 0 : (60 * SPREAD**(index - 1)).round
+  end
 
   # Every seed card, keyed by the id its filename gives it.
   def self.cards
@@ -63,8 +66,7 @@ module FixtureData
     database = store.instance_variable_get(:@database)
     now = Time.now.utc
     ids.each_with_index do |id, index|
-      ago = AGO_SECONDS.fetch(index % AGO_SECONDS.length)
-      stamp = (now - ago).strftime("%Y-%m-%dT%H:%M:%S.%3NZ")
+      stamp = (now - ago_seconds(index)).strftime("%Y-%m-%dT%H:%M:%S.%3NZ")
       database[:cards].where(id:).update(updated_at: stamp)
     end
   end
