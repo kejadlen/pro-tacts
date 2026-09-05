@@ -106,18 +106,6 @@ section > h2 {
   margin: 0;
 }
 
-/* Both dashboard lists lead their rows with an avatar, and both are
-   growing rows taller than one line (the birthdays rows already are,
-   the contacts rows will be). A 2.25rem avatar centered against
-   multi-line text floats mid-row, so it leads from the top, level
-   with the name — no change today for single-line rows, where the
-   avatar is the tallest thing in the row either way. Scoped to
-   card-row links, so the contact detail header's centered avatar is
-   untouched. */
-.card > li > a:only-child .avatar {
-  align-self: flex-start;
-}
-
 /* A contact's picture fills the avatar the initials otherwise occupy.
    Gloss's .avatar is already round and clipped (overflow hidden), so a
    picture needs only to cover the box — object-fit rather than a
