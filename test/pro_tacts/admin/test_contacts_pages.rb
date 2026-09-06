@@ -131,6 +131,27 @@ class AdminContactsPagesTest < Minitest::Test
     assert_includes last_response.body, "No birthdays to show."
   end
 
+  # The caption row's height comes from .record-nav's own inherited
+  # line box, not from the type-label inside it (see admin.css), so
+  # the two record pages have to open the block the same way. A bare
+  # link on one of them is the shorter row, and the card under it —
+  # along with the line itself — moves when you switch modes.
+  def test_both_record_pages_open_the_block_with_the_same_row
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada"
+      show = last_response.body
+
+      get "/contacts/ada/edit"
+      edit = last_response.body
+
+      {"details" => show, "edit" => edit}.each do |page, body|
+        record = body.split('<div class="record">').last
+        assert_match(/\A<div class="record-nav"><a href="[^"]+" class="type-label">/,
+          record, "the #{page} page opens .record with a different row")
+      end
+    end
+  end
+
   # The search lives in the page header (docs/DESIGN.md), rendered by
   # the layout on every screen now — not just the dashboard's — so
   # the header's height never changes between pages and finding a

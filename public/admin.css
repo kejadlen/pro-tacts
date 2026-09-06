@@ -94,10 +94,11 @@
    the right edge, pinned the way the dashboard's section-head pins
    its action. In flow the button — half again taller than a
    type-label line — grew the row, and the card under it moved with
-   it: the details page's row was the button's height while the edit
-   page's was the label's, so the mode change shifted the line and the
-   card together. Pinned, the row is the label's own height on both
-   pages and nothing jumps. */
+   it. Pinning takes the button out of flow, which leaves the row at
+   this element's own inherited line box — step-0/1.55, not the inline
+   label's step--2/1 — so both record pages have to wrap the back link
+   in this div. A bare link is a flex item of the label's height
+   instead, a good 15px shorter, and the card jumps between modes. */
 .record-nav {
   position: relative;
 }

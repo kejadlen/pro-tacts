@@ -40,11 +40,17 @@ module ProTacts
       def view_template
         render Layout.new(title: "Edit #{@contact.name || @contact.id}", notice: @notice) do
           # The caption-to-card block the details page uses (.record in
-          # admin.css): the back link is this card's caption row too.
+          # admin.css): the back link is this card's caption row too,
+          # inside the .record-nav that page wraps it in. The row's
+          # height comes from that element rather than the label, so a
+          # bare link here is the shorter of the two rows and the card
+          # under it lands higher than it does on the details page.
           div(class: "record") do
-            a(href: "/contacts/#{@contact.id}", class: "type-label") {
-              "‹ #{@contact.name || @contact.id}"
-            }
+            div(class: "record-nav") do
+              a(href: "/contacts/#{@contact.id}", class: "type-label") {
+                "‹ #{@contact.name || @contact.id}"
+              }
+            end
             div(class: "card") do
               div(class: "card-body") do
                 form(action: "/contacts/#{@contact.id}", method: "post", class: "field-stack") do
