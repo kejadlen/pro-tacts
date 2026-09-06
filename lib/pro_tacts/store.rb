@@ -287,6 +287,30 @@ module ProTacts
       contact
     end
 
+    # The store's own editor changed a stored card: upsert the bytes,
+    # reindex, and record the change-log entry carrying the composed
+    # etag a client would download — and touch nothing else. Not #put,
+    # which answers a client's submission and reads a BDAY-less card as
+    # a birthday the client dropped (its rewrite arm deletes the model
+    # row accordingly): an editor's save carries no BDAY line by
+    # construction, so running it through put would delete every edited
+    # contact's birthday. rewrite's input is the stored card by
+    # definition, and the model row rides along untouched
+    # (docs/plans/2026-09-05-web-card-editor.md).
+    #: (String id, String vcard) -> Contact
+    def rewrite(id, vcard)
+      card = VCard.new(vcard)
+      contact = Contact.for(id:, stored: card, birthday: birthday_of(id))
+      @database.transaction do
+        cards
+          .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
+          .insert(id: contact.id, vcard: card.to_s)
+        record(contact.id, "edit", contact.etag)
+        reindex(contact.id, card)
+      end
+      contact
+    end
+
     # Removes a card, leaving the tombstone that tells a syncing client
     # it is gone. Returns whether there was anything to remove.
     #: (String id) -> bool

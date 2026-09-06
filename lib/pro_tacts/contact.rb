@@ -111,6 +111,13 @@ module ProTacts
 
     attr_reader :id
 
+    # The stored card, without the birthday composed in — the editor's
+    # handle on the bytes it mutates (docs/plans/2026-09-05-web-card-editor.md).
+    # Everything else this class answers describes #vcard, the card a
+    # client downloads; the stored one is what a surgical edit applies
+    # to, and what the store writes back after it.
+    attr_reader :stored
+
     # The model held beside the card (see the class comment) — the
     # store's fact, not a parse of the served one. Nil over a card
     # carrying an unmodeled BDAY spelling; showing that is

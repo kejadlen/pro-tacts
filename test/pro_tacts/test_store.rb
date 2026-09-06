@@ -331,6 +331,42 @@ class StoreTest < Minitest::Test
     end
   end
 
+  ## The editor's write
+
+  # rewrite is the store's own editor's path: the bytes land byte for
+  # byte, the change-log entry carries the composed etag a client
+  # would download, and the action names the side that wrote it — put
+  # is a client's submission, edit is the admin's save.
+  def test_a_rewrite_stores_the_card_and_logs_the_composed_etag
+    with_store({"aiden" => AIDEN_BORN}) do |store|
+      edited = AIDEN.sub("FN:Aiden", "FN:Aiden Smith")
+
+      contact = store.rewrite("aiden", edited)
+
+      assert_equal edited, card_row(store, "aiden").fetch(:vcard)
+      composed = edited.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n")
+      assert_equal composed, contact.vcard.to_s
+      assert_equal ProTacts::Contact.etag_for(composed), contact.etag
+      change = store.changes.last
+      assert_equal %w[aiden edit], [change.card_id, change.action]
+      assert_equal ProTacts::Contact.etag_for(composed), change.etag
+    end
+  end
+
+  # The hazard rewrite exists for: an editor's save carries no BDAY
+  # line by construction, and put reads exactly that as a birthday the
+  # client dropped — so running the save through put would delete the
+  # model row and the contact's birthday with it. rewrite touches
+  # nothing but the card, the log, and the index.
+  def test_a_rewrite_leaves_the_birthday_alone
+    with_store({"aiden" => AIDEN_BORN}) do |store|
+      store.rewrite("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
+
+      assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), birthday_row(store, "aiden")
+      assert_includes store.contact("aiden").vcard.to_s, "BDAY:1985-04-12"
+    end
+  end
+
   def test_a_delete_leaves_a_tombstone_behind
     with_store({"aiden" => AIDEN}) do |store|
       assert store.delete("aiden")
@@ -866,6 +902,34 @@ class StoreTest < Minitest::Test
   end
 
   ## The migration
+
+  # A database at the old action vocabulary — put and delete only — is
+  # carried over with its sequences intact: they are every client's
+  # sync token state, and a rebuilt table that skipped or reused one
+  # would silently drop a change from some client's window.
+  def test_the_migration_carries_the_change_log_and_its_sequences
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 2)
+        db[:changes].insert(card_id: "aiden", action: "put", etag: '"a1"')
+        db[:changes].insert(card_id: "aiden", action: "delete", etag: nil)
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        assert_equal [%w[aiden put], %w[aiden delete]], store.changes.map { [it.card_id, it.action] }
+        assert_equal [1, 2], store.changes.map(&:sequence)
+
+        # The widened vocabulary admits the editor's action, and the
+        # sequence continues past the copied high-water mark.
+        store.put("aiden", AIDEN)
+        store.rewrite("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
+        change = store.changes.last
+        assert_equal %w[aiden edit], [change.card_id, change.action]
+        assert_equal 4, change.sequence
+      end
+    end
+  end
 
   # A database at the old shape — BDAY in the card, no birthdays table
   # — is carried over by the same subtraction a write makes: modeled
