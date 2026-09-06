@@ -10,6 +10,7 @@ require "nokogiri"
 require "roda"
 
 require "pro_tacts/admin/contact_dialog"
+require "pro_tacts/admin/contacts_edit"
 require "pro_tacts/admin/contacts_index"
 require "pro_tacts/admin/contacts_show"
 require "pro_tacts/debug_logger"
@@ -101,20 +102,48 @@ module ProTacts
         # browser cannot produce one (the dialog's first field is
         # required), so this is the backstop, and a popover cannot be
         # declared open in markup — the toast is the refusal the
-        # re-rendered page can actually show.
-        r.post do
-          first = r.params["first"].to_s.strip
-          last = r.params["last"].to_s.strip
-          if first.empty? && last.empty?
-            dashboard(query: r.params["q"], notice: "A contact needs a name.")
-          else
-            id = SecureRandom.uuid
-            store.put(id, new_contact_card(id, first, last))
-            r.redirect "/contacts/#{id}", 303
+        # re-rendered page can actually show. `r.is` because a bare
+        # verb block matches any remaining path in Roda — without it,
+        # the collection's create would swallow the record's apply,
+        # POST /contacts/:id below.
+        r.is do
+          r.post do
+            first = r.params["first"].to_s.strip
+            last = r.params["last"].to_s.strip
+            if first.empty? && last.empty?
+              dashboard(query: r.params["q"], notice: "A contact needs a name.")
+            else
+              id = SecureRandom.uuid
+              store.put(id, new_contact_card(id, first, last))
+              r.redirect "/contacts/#{id}", 303
+            end
           end
         end
 
         r.on String do |id|
+          # The browser's edit of one contact
+          # (docs/plans/2026-09-05-web-card-editor.md): an explicit
+          # mode — GET renders the form, POST applies it, success is a
+          # 303 back to the details page so the back button cannot
+          # double-submit. POST stays the wire verb, the create's
+          # precedent: HTML forms speak only GET and POST, and the
+          # admin surface's one client is the form.
+          r.get "edit" do
+            contact = store.contact(id)
+
+            # No match falls through to the empty-body 404 the
+            # not_found handler fills in, same as the page below.
+            if contact
+              response["Content-Type"] = "text/html; charset=utf-8"
+              Admin::ContactsEdit.call(contact:)
+            end
+          end
+
+          # The edit's apply, under the same fall-through-to-404 rule.
+          r.post do
+            apply_edit(r, id)
+          end
+
           # The picture the avatars render (Admin::Avatar): decoded
           # bytes under their own content type, served from a route
           # rather than inlined as base64 so a page of avatars is a
@@ -600,6 +629,47 @@ module ProTacts
       nil
     end
 
+    # The whole of the edit POST, a private method for the same reason
+    # write_card is one: a Roda route block cannot return early, so each
+    # refusal is a value the block ends with rather than a branch it
+    # exits. The checks run in write_card's order — the request's own
+    # validity first, the conditionals on stored state after.
+    #: (untyped r, String id) -> String?
+    def apply_edit(r, id)
+      # No match is nil, which falls through to the empty-body 404 the
+      # not_found handler fills in — the GET handler's rule.
+      contact = store.contact(id)
+      return if contact.nil?
+
+      # N and FN are mandatory (RFC 2426 section 4), so a save blank
+      # throughout is refused — the toast is the backstop, the form's
+      # required field being the browser's own refusal of the same.
+      first = r.params["first"].to_s.strip
+      last = r.params["last"].to_s.strip
+      return edit_screen(contact, notice: "A contact needs a name.") if first.empty? && last.empty?
+
+      # The snapshot guard, the lost-update half If-Match gives DAV
+      # clients (RFC 7232 section 3.1): the form carried the etag of
+      # the card it was rendered from, and a contact that hashes
+      # differently now was edited in between — another tab, or a
+      # client sync — so applying this save over that one would revert
+      # it. The refusal re-renders from the current card, so the screen
+      # shows what changed; the check shares write_card's millisecond
+      # race window between check and write, noted there.
+      return edit_screen(contact, notice: "This contact changed since the page loaded; nothing was saved.") if r.params["etag"].to_s != contact.etag
+
+      store.rewrite(id, edited_card(contact, first, last, r.params).to_s)
+      r.redirect "/contacts/#{id}", 303
+    end
+
+    # The re-render a refused save answers with: the edit screen again,
+    # from the current card, with the refusal as its toast.
+    #: (Contact contact, ?notice: String) -> String
+    def edit_screen(contact, notice: nil)
+      response["Content-Type"] = "text/html; charset=utf-8"
+      Admin::ContactsEdit.call(contact:, notice:)
+    end
+
     # A created contact's card: the envelope RFC 2426 section 4
     # requires — BEGIN, VERSION, and the N and FN that section makes
     # mandatory — plus the UID this server's id model is (see
@@ -615,6 +685,57 @@ module ProTacts
         "FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n" \
         "UID:#{id}\r\n" \
         "END:VCARD\r\n"
+    end
+
+    # The surgical save (docs/plans/2026-09-05-web-card-editor.md):
+    # each field names the property it replaces on the stored card's
+    # own bytes, and a property the form has no field for is never
+    # mentioned — what is never mentioned cannot be lost. Blank equals
+    # absent throughout, the reader's own rule (Contact#text_of) in the
+    # other direction: a blank nickname or note removes the property,
+    # and a blank name was already refused above. REV is not touched —
+    # the change log is the record of when, and macOS re-stamps REV on
+    # its own next rewrite.
+    #: (Contact contact, String first, String last, Hash[String, untyped] params) -> VCard
+    def edited_card(contact, first, last, params)
+      nickname = params["nickname"].to_s.strip
+      note = params["note"].to_s.strip
+
+      card = contact.stored
+      card = card.replace("N", [n_line(card, first, last)])
+      card = card.replace("FN", ["FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n"])
+      card = card.replace("NICKNAME", text_lines("NICKNAME", nickname))
+      card = card.replace("NOTE", text_lines("NOTE", note))
+      card
+    end
+
+    # A text property's replacement lines: the escaped value (RFC 2426
+    # section 2.4.2 — the value is text, the line is structure), or none
+    # at all — blank equals absent, the whole-property rule.
+    #: (String name, String value) -> Array[String]
+    def text_lines(name, value)
+      return [] if value.empty?
+
+      ["#{name}:#{VCard.escape(value)}\r\n"]
+    end
+
+    # N's replacement line: a splice over the still-escaped value
+    # (VCard.split_raw_components), not an unescape-then-re-escape round
+    # trip, which is not byte-stable. The first two components are the
+    # form's; the remaining three — additional, prefixes, suffixes (RFC
+    # 2426 section 3.1.2) — rejoin byte for byte. A card with no N a
+    # form can read (none, or a line that would not) splices into a
+    # bare five-component value; one short of five is padded, the same
+    # empties a whole-N writer would leave.
+    #: (VCard card, String first, String last) -> String
+    def n_line(card, first, last)
+      property = card.properties.find { it.name.casecmp?("N") }
+      components = [] #: Array[String]
+      components.replace(VCard.split_raw_components(property.value)) if property
+      components << "" while components.length < 5
+      components[0] = VCard.escape(last)
+      components[1] = VCard.escape(first)
+      "N:#{components.join(";")}\r\n"
     end
 
     # A card that breaks one of the parser's assumptions is not bad

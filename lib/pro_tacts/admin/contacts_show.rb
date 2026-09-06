@@ -45,6 +45,13 @@ module ProTacts
                   if @contact.nickname
                     div(class: "type-h3 gl-muted", style: "margin-top: var(--gl-space-2xs);") { @contact.nickname }
                   end
+                  # The record's one action, quiet and under the name
+                  # — the edit screen is this page's other mode (see
+                  # Admin::ContactsEdit). A link in Gloss's `.btn`
+                  # contract: navigation wearing a button's clothes.
+                  div(style: "margin-top: var(--gl-space-2xs);") do
+                    a(href: "/contacts/#{@contact.id}/edit", class: "btn", data_size: "sm") { "edit" }
+                  end
                 end
                 # Only a picture earns this slot: an initials circle
                 # beside the name in type-h2 would repeat what the name

@@ -4,6 +4,39 @@
    rem width in the spirit of card.css's own max-width: 18rem; nothing
    here is a hex, a px, or a duration. */
 
+/* The editor's submit row: the buttons sit beside each other under
+   the stacked fields, rather than in the stack's own gap. */
+.form-actions {
+  display: flex;
+  gap: var(--gl-space-2xs);
+}
+
+/* Gloss's field contract styles input and select but not textarea
+   (base.css only resets it), and the editor's note field is one —
+   multiline text under a .field caption. The box mirrors field.css's
+   input rule in the vars that rule itself uses, so the two controls
+   read as one component; resize stays vertical, the one freedom a
+   text area has that a text input does not. */
+textarea {
+  width: 100%;
+  padding: var(--gl-space-xs) var(--gl-space-s);
+  background: var(--gl-color-surface-card);
+  border: 1px solid var(--gl-color-border-default);
+  border-radius: var(--gl-radius-sm);
+  color: var(--gl-color-text-primary);
+  font-family: var(--gl-font-sans);
+  font-size: var(--gl-step--1);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+  outline: none;
+  resize: vertical;
+}
+textarea:focus {
+  border-color: var(--gl-color-accent);
+  box-shadow: 0 0 0 2px var(--gl-color-accent-soft);
+}
+
 /* A chrome bar, not a content gutter: the block padding is the
    scale's second-smallest step, so the header hugs its one line of
    content instead of spacing it like page copy. Inline padding stays

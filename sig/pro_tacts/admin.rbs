@@ -10,6 +10,10 @@ module ProTacts
       def self.call: (contact: Contact) -> String
     end
 
+    class ContactsEdit
+      def self.call: (contact: Contact, ?notice: String?) -> String
+    end
+
     class ContactsIndex
       def self.call: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, ?notice: String?) -> String
     end

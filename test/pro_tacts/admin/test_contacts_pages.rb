@@ -573,4 +573,186 @@ class AdminContactsPagesTest < Minitest::Test
       assert_empty store.contacts
     end
   end
+
+  ## Editing contacts
+
+  # The edit screen: one form prefilled from the card — N's two
+  # leading components as the name fields, the accessors' unescaped
+  # readings as the rest — carrying the etag of the card it renders
+  # from, the snapshot guard's hidden half.
+  def test_the_edit_screen_prefills_the_cards_values
+    red = ADA.sub("FN:Ada Lovelace", "FN:Sarah\r\nNICKNAME:Red").sub("UID:ada", "UID:red")
+
+    with_contacts({"red" => red}) do |store|
+      get "/contacts/red/edit"
+
+      assert_equal 200, last_response.status
+      body = last_response.body
+      assert_includes body, '<form action="/contacts/red" method="post" class="field-stack">'
+      assert_includes body, '<input type="text" name="first" value="Ada" required autofocus>'
+      assert_includes body, '<input type="text" name="last" value="Lovelace">'
+      assert_includes body, '<input type="text" name="nickname" value="Red">'
+      assert_includes body, "<textarea name=\"note\" rows=\"4\">Countess of Lovelace.</textarea>"
+      # The etag carries its quotes, HTML-escaped in the attribute.
+      assert_includes body, %(<input type="hidden" name="etag" value="&quot;#{store.contact("red").etag.delete('"')}&quot;">)
+    end
+  end
+
+  def test_the_edit_screen_of_an_unknown_contact_is_404
+    with_contacts({}) { get "/contacts/nope/edit" }
+
+    assert_equal 404, last_response.status
+  end
+
+  # The details page names its other mode: the edit link sits under
+  # the name, the record's one action.
+  def test_the_details_page_links_to_the_edit_screen
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada"
+
+      assert_includes last_response.body, 'href="/contacts/ada/edit"'
+    end
+  end
+
+  # The save is addressed operations, and this is the whole design:
+  # the four properties the form names are replaced, every other line
+  # of the stored card is byte-identical, and the write lands through
+  # Store#rewrite with its change-log entry.
+  def test_saving_the_edit_replaces_only_the_addressed_properties
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "King", nickname: "Countess",
+                               note: "First programmer.", etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      assert_equal "/contacts/ada", last_response["Location"]
+
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "N:King;Ada;;;"
+      assert_includes card, "FN:Ada King"
+      assert_includes card, "NICKNAME:Countess"
+      assert_includes card, "NOTE:First programmer."
+      assert_includes card, "TEL;TYPE=mobile:+1-555-0100\r\n"
+      assert_includes card, "EMAIL;TYPE=home:ada@example.com\r\n"
+      assert_includes card, "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
+      assert_includes card, "UID:ada\r\n"
+      # The birthday is model state the edit never touched, composed
+      # back into the served card.
+      assert_includes card, "BDAY:1985-12-10\r\n"
+      assert(store.changes.any? { it.action == "edit" && it.card_id == "ada" })
+    end
+  end
+
+  # Blank equals absent on the way back: a blank nickname or note
+  # removes the property, as a blank value is absent to the reader
+  # (Contact#text_of) — and filling one in adds it where the card
+  # carried none.
+  def test_a_blank_nickname_or_note_removes_the_property
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", nickname: "", note: "", etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      refute_includes card, "NICKNAME"
+      refute_includes card, "NOTE"
+    end
+  end
+
+  # N's unedited components — additional, prefixes, suffixes — splice
+  # through byte for byte, the still-escaped value never rounding
+  # through unescape and re-escape. The escaped semicolon inside the
+  # additional component is the one an unescaped split would break on;
+  # the seed's four components leave the fifth to the padding rule.
+  def test_the_names_unedited_components_are_preserved_byte_for_byte
+    honorific = ADA.sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;Byron\\; Countess;Countess of Lovelace")
+
+    with_contacts({"ada" => honorific}) do |store|
+      post "/contacts/ada", first: "Ada", last: "King", etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s,
+        "N:King;Ada;Byron\\; Countess;Countess of Lovelace;\r\n"
+    end
+  end
+
+  # A card whose N stops short of five components is padded with the
+  # same empties a whole-N writer would leave.
+  def test_a_short_n_is_padded_to_five_components
+    short = ADA.sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada")
+
+    with_contacts({"ada" => short}) do |store|
+      post "/contacts/ada", first: "Ada", last: "King", etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s, "N:King;Ada;;;\r\n"
+    end
+  end
+
+  # Values are text and the card is structure: punctuation escapes in
+  # the written lines, and a note's line breaks travel as the escape
+  # rather than ending the property's line.
+  def test_punctuation_and_line_breaks_escape_in_the_written_lines
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "King",
+                               nickname: "Countess, of mathematics", note: "line one\nline two",
+                               etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "NICKNAME:Countess\\, of mathematics\r\n"
+      assert_includes card, "NOTE:line one\\nline two\r\n"
+
+      follow_redirect!
+      assert_includes last_response.body, "Countess, of mathematics"
+    end
+  end
+
+  # A fold on a line the save never mentioned is the byte-identity
+  # claim at its sharpest: the continuation survives with its own
+  # bytes, not normalized into the unfolded reading.
+  def test_a_folded_line_the_save_never_mentioned_is_left_alone
+    folded = ADA.sub("TEL;TYPE=mobile:+1-555-0100\r\n", "TEL;TYPE=mobile:+1-555-\r\n 0100\r\n")
+
+    with_contacts({"ada" => folded}) do |store|
+      post "/contacts/ada", first: "Ada", last: "King", etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s, "TEL;TYPE=mobile:+1-555-\r\n 0100\r\n"
+    end
+  end
+
+  # The snapshot guard: a save whose etag names a card the store no
+  # longer holds is refused with a toast, and nothing is written —
+  # another tab or a client sync edited the contact in between, and
+  # the save would have reverted it.
+  def test_a_save_over_a_stale_snapshot_is_refused
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "King", etag: '"stale"'
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body,
+        '<div role="status" data-fixed><span>This contact changed since the page loaded; nothing was saved.</span></div>'
+      # The refusal re-renders the screen from the current card.
+      assert_includes last_response.body, 'value="Ada"'
+      assert_includes store.contact("ada").vcard.to_s, "FN:Ada Lovelace"
+    end
+  end
+
+  # The backstop for the one request no browser can send (the first
+  # field is required): a refused save, nothing written — N and FN are
+  # mandatory, so a name blank throughout cannot be saved.
+  def test_a_nameless_edit_is_refused_with_a_toast
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: " ", last: "", etag: store.contact("ada").etag
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, '<div role="status" data-fixed><span>A contact needs a name.</span></div>'
+      assert_includes store.contact("ada").vcard.to_s, "FN:Ada Lovelace"
+    end
+  end
+
+  def test_saving_an_unknown_contact_is_404
+    with_contacts({}) { post "/contacts/nope", first: "No", etag: '"x"' }
+
+    assert_equal 404, last_response.status
+  end
 end
