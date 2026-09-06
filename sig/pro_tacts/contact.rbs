@@ -8,8 +8,9 @@ module ProTacts
     class Phone
       attr_reader value: String
       attr_reader type: String?
+      attr_reader line: VCard::Parser::Line
 
-      def self.new: (value: String, type: String?) -> instance
+      def self.new: (value: String, type: String?, line: VCard::Parser::Line) -> instance
     end
 
     class Email

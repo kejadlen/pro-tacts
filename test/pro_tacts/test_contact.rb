@@ -110,6 +110,29 @@ class ContactTest < Minitest::Test
       contact(STRUCTURED).phones.map { [it.value, it.type] }
   end
 
+  # Each phone carries the line it was read from — the address a save
+  # names the row by, and the bytes a value-only edit spares. The digest
+  # is over the served card's line; composition only inserts the BDAY
+  # before END, so it names the stored card's line too.
+  def test_every_phone_carries_the_line_it_was_read_from
+    with_birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
+    phones = contact(STRUCTURED, birthday: with_birthday).phones
+
+    assert_equal ["TEL;TYPE=mobile:+1-555-0100\r\n", "TEL;TYPE=work:+1-555-0199\r\n"],
+      phones.map { it.line.verbatim }
+    assert_equal Digest::SHA256.hexdigest("TEL;TYPE=mobile:+1-555-0100\r\n"),
+      phones.first.line.digest
+  end
+
+  # A line that would not read is a row no form can address: it reads
+  # as no phone, and stays in the card's lines, served from its bytes.
+  def test_a_phone_line_that_would_not_read_is_no_phone
+    broken = STRUCTURED.sub("TEL;TYPE=mobile:+1-555-0100\r\n", "TEL;=;:+1-555-0100\r\n")
+
+    assert_equal [["+1-555-0199", "work"]], contact(broken).phones.map { [it.value, it.type] }
+    assert contact(broken).vcard.lines.any? { it.names?("TEL") && it.property.nil? }
+  end
+
   def test_reads_email
     emails = contact(STRUCTURED).emails
     assert_equal 1, emails.length

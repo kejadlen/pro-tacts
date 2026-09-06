@@ -61,10 +61,16 @@ module ProTacts
     # ADR's seven components (section 3.2.1: post office box, extended
     # address, street, locality, region, postal code, country — nil
     # where the card left the position blank or stopped short of it).
+    # Phone also carries `line`, the parsed line its value was read
+    # from: the address a save names that phone's row by
+    # (docs/plans/2026-09-05-web-card-editor.md) — the accessors fold
+    # lines into typed values, and without provenance no form could
+    # say "edit this phone." Email and Address gain their own with
+    # their stage.
     # Data classes, whose members the inline syntax cannot read; the
     # signatures live in sig/pro_tacts/contact.rbs.
     # @rbs skip
-    Phone = Data.define(:value, :type)
+    Phone = Data.define(:value, :type, :line)
     # @rbs skip
     Email = Data.define(:value, :type)
     # @rbs skip
@@ -240,9 +246,12 @@ module ProTacts
 
     #: () -> Array[Phone]
     def phones
-      of_name("TEL").filter_map do |property|
+      of_line("TEL").filter_map do |line|
+        property = line.property
+        next if property.nil?
+
         value = text_of(property)
-        Phone.new(value:, type: type_of(property)) if value
+        Phone.new(value:, type: type_of(property), line:) if value
       end
     end
 
@@ -270,6 +279,16 @@ module ProTacts
     #: (String name) -> Array[VCard::Parser::Property]
     def of_name(name)
       properties.select { it.name.casecmp?(name) }
+    end
+
+    # The lines naming `name`, parsed beside their bytes — the walk the
+    # provenance-carrying accessors read from, so a row can carry the
+    # line it was read from as its address. A line that would not
+    # read is a row no form can address and no accessor reads; it
+    # stays enumerable in VCard#lines, served from its bytes.
+    #: (String name) -> Array[VCard::Parser::Line]
+    def of_line(name)
+      vcard.lines.select { it.names?(name) }
     end
 
     # A text property's value, with the empty one reading as absent:
