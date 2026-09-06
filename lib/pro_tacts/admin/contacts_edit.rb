@@ -39,36 +39,40 @@ module ProTacts
 
       def view_template
         render Layout.new(title: "Edit #{@contact.name || @contact.id}", notice: @notice) do
-          a(href: "/contacts/#{@contact.id}", class: "type-label") {
-            "‹ #{@contact.name || @contact.id}"
-          }
-          div(class: "card") do
-            div(class: "card-body") do
-              form(action: "/contacts/#{@contact.id}", method: "post", class: "field-stack") do
-                input(type: "hidden", name: "etag", value: @contact.etag)
-                label(class: "field") do
-                  plain "First"
-                  input(type: "text", name: "first", value: @first,
-                        required: true, autofocus: true)
-                end
-                label(class: "field") do
-                  plain "Last"
-                  input(type: "text", name: "last", value: @last)
-                end
-                label(class: "field") do
-                  plain "Nickname"
-                  input(type: "text", name: "nickname", value: @contact.nickname)
-                end
-                label(class: "field") do
-                  plain "Note"
-                  textarea(name: "note", rows: 4) { @contact.notes.to_s }
-                end
-                # Save is the form's submit; Cancel is navigation — a
-                # link in Gloss's `.btn` contract, which is what an
-                # anchor that acts like a button opts into.
-                div(class: "form-actions") do
-                  button(type: "submit", data: {variant: "primary"}) { "Save" }
-                  a(href: "/contacts/#{@contact.id}", class: "btn") { "Cancel" }
+          # The caption-to-card block the details page uses (.record in
+          # admin.css): the back link is this card's caption row too.
+          div(class: "record") do
+            a(href: "/contacts/#{@contact.id}", class: "type-label") {
+              "‹ #{@contact.name || @contact.id}"
+            }
+            div(class: "card") do
+              div(class: "card-body") do
+                form(action: "/contacts/#{@contact.id}", method: "post", class: "field-stack") do
+                  input(type: "hidden", name: "etag", value: @contact.etag)
+                  label(class: "field") do
+                    plain "First"
+                    input(type: "text", name: "first", value: @first,
+                          required: true, autofocus: true)
+                  end
+                  label(class: "field") do
+                    plain "Last"
+                    input(type: "text", name: "last", value: @last)
+                  end
+                  label(class: "field") do
+                    plain "Nickname"
+                    input(type: "text", name: "nickname", value: @contact.nickname)
+                  end
+                  label(class: "field") do
+                    plain "Note"
+                    textarea(name: "note", rows: 4) { @contact.notes.to_s }
+                  end
+                  # Save is the form's submit; Cancel is navigation — a
+                  # link in Gloss's `.btn` contract, which is what an
+                  # anchor that acts like a button opts into.
+                  div(class: "form-actions") do
+                    button(type: "submit", data: {variant: "primary"}) { "Save" }
+                    a(href: "/contacts/#{@contact.id}", class: "btn") { "Cancel" }
+                  end
                 end
               end
             end

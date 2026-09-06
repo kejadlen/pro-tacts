@@ -26,6 +26,18 @@
   justify-content: space-between;
 }
 
+/* A form in a card keeps a tighter rhythm than Gloss's form-body
+   defaults: the stack closes from s to xs, and the boxes shed half
+   their block padding — the same shedding the header's search does —
+   so short boxes sit close under their captions. Scoped to the
+   card-body form rather than overriding field.css globally; the
+   label in the input selector out-specifies field.css's input rule
+   rather than relying on stylesheet order (see the header search's
+   note). */
+.card-body .field-stack { gap: var(--gl-space-xs); }
+.card-body label.field > input,
+.card-body label.field > textarea { padding-block: var(--gl-space-2xs); }
+
 /* The editor's submit row: the buttons sit beside each other under
    the stacked fields, rather than in the stack's own gap. */
 .form-actions {
