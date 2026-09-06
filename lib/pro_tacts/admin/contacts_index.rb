@@ -20,12 +20,9 @@ module ProTacts
       RECENT_LIMIT = 10
       private_constant :RECENT_LIMIT
 
-      Row = Data.define(:contact, :updated_at)
-      private_constant :Row
-
       # @rbs @query: String
       # @rbs @upcoming: Array[Store::UpcomingBirthday]
-      # @rbs @rows: Array[Row]
+      # @rbs @rows: Array[Store::RecentContact]
       # @rbs @notice: String?
 
       #: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, ?notice: String?) -> void
@@ -33,8 +30,7 @@ module ProTacts
         @query = query.to_s.strip
         @upcoming = upcoming
         @notice = notice
-        rows = recent.map { Row.new(contact: it.contact, updated_at: it.updated_at) }
-        @rows = @query.empty? ? rows.first(RECENT_LIMIT) : rows.select { matches?(it, @query) }
+        @rows = @query.empty? ? recent.first(RECENT_LIMIT) : recent.select { matches?(it, @query) }
       end
 
       def view_template
@@ -83,7 +79,7 @@ module ProTacts
       # Match generously (docs/DESIGN.md): a contact is findable by
       # name — the nickname too, being the name it lists under — any
       # of its values, or the groups it belongs to.
-      #: (Row row, String query) -> bool
+      #: (Store::RecentContact row, String query) -> bool
       def matches?(row, query)
         q = query.downcase
         return true if row.contact.name&.downcase&.include?(q)
@@ -94,7 +90,7 @@ module ProTacts
         false
       end
 
-      #: (Row row) -> void
+      #: (Store::RecentContact row) -> void
       def render_row(row)
         li do
           a(href: "/contacts/#{row.contact.id}") do
