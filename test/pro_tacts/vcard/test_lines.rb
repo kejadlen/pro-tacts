@@ -1,5 +1,7 @@
 require_relative "../../test_helper"
 
+require "digest"
+
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
@@ -104,6 +106,18 @@ class VCardLinesTest < Minitest::Test
     assert_equal "BDAY:1985-04-\r\n 12\r\n", bday&.verbatim
   end
 
+  # The line's address for a save: the SHA-256 of the verbatim bytes,
+  # so identical lines digest alike — the one pair no address tells
+  # apart — and any other difference is a different address.
+  def test_a_lines_digest_addresses_its_bytes
+    born = CARD.sub("UID:ada\r\n", "UID:ada\r\nBDAY:1985-04-12\r\n")
+    bday = VCARD.new(born).lines.find { it.names?("BDAY") }
+
+    assert_equal Digest::SHA256.hexdigest("BDAY:1985-04-12\r\n"), bday.digest
+    assert_equal bday.digest, VCARD.new(born + "BDAY:1985-04-12\r\n").lines.last.digest
+    refute_equal bday.digest, VCARD.new(born.sub("1985", "1986")).lines.find { it.names?("BDAY") }.digest
+  end
+
   # A group prefix counts as naming the property; anything else does
   # not, and a line that will not parse is a fact about the line,
   # carried as data rather than raised.
@@ -195,6 +209,69 @@ class VCardLinesTest < Minitest::Test
       VCARD.new(lf).replace("NICKNAME", ["NICKNAME:Crimson"]).to_s
     assert_equal "BEGIN:VCARD\nFN:Ada\nNICKNAME:Crimson\r\nEND:VCARD\n",
       VCARD.new(lf).replace("NICKNAME", ["NICKNAME:Crimson\r\n"]).to_s
+  end
+
+  ## substitute
+
+  # The one-line edit: the line whose bytes digest to the address
+  # swaps in place, and every other line keeps its own bytes — the
+  # fold on the untouched neighbor is the byte-identity claim at its
+  # sharpest.
+  def test_substitute_swaps_the_addressed_line_and_no_other
+    card = CARD.sub("FN:Ada\r\n", "FN:Ada\r\nTEL:+1-555-0100\r\nADR:;;12 Way\r\n")
+    digest = VCARD.new(card).lines.find { it.names?("TEL") }.digest
+
+    assert_equal card.sub("TEL:+1-555-0100\r\n", "TEL:+1-555-0199\r\n"),
+      VCARD.new(card).substitute(digest, ["TEL:+1-555-0199\r\n"]).to_s
+
+    folded = CARD.sub("FN:Ada\r\n", "FN:Ada\r\nTEL:+1-555-0100\r\nADR:;;12 \r\n Way\r\n")
+
+    assert_includes VCARD.new(folded).substitute(digest, ["TEL:+1-555-0199\r\n"]).to_s,
+      "ADR:;;12 \r\n Way\r\n"
+  end
+
+  # Empty lines remove the addressed line — the blank-equals-absent
+  # rule for a row the form names by digest.
+  def test_substitute_with_nothing_removes_the_addressed_line
+    card = CARD.sub("FN:Ada\r\n", "FN:Ada\r\nTEL:+1-555-0100\r\n")
+    digest = VCARD.new(card).lines.find { it.names?("TEL") }.digest
+
+    assert_equal CARD, VCARD.new(card).substitute(digest, []).to_s
+  end
+
+  # A digest matching no line is the caller's anomaly — the snapshot
+  # guard means a miss is news, not an ordinary case — and refuses
+  # loudly rather than guessing.
+  def test_substitute_of_a_digest_no_line_hashes_to_raises
+    card = CARD.sub("FN:Ada\r\n", "FN:Ada\r\nTEL:+1-555-0100\r\n")
+
+    error = assert_raises(KeyError) { VCARD.new(card).substitute("0" * 64, []) }
+
+    assert_match "no line", error.message
+  end
+
+  # A bare replacement line takes the substituted line's own
+  # terminator, #replace's convention rule; a terminated one keeps
+  # its own.
+  def test_substitute_matches_the_cards_line_break_convention
+    lf = "BEGIN:VCARD\nFN:Ada\nTEL:+1-555-0100\nEND:VCARD\n"
+    digest = VCARD.new(lf).lines.find { it.names?("TEL") }.digest
+
+    assert_equal "BEGIN:VCARD\nFN:Ada\nTEL:+1-555-0199\nEND:VCARD\n",
+      VCARD.new(lf).substitute(digest, ["TEL:+1-555-0199"]).to_s
+    assert_equal "BEGIN:VCARD\nFN:Ada\nTEL:+1-555-0199\r\nEND:VCARD\n",
+      VCARD.new(lf).substitute(digest, ["TEL:+1-555-0199\r\n"]).to_s
+  end
+
+  # Identical bytes digest alike, which is the one pair of lines no
+  # address can tell apart: the first is substituted, the second
+  # keeps its bytes.
+  def test_substitute_addresses_the_first_of_identical_lines
+    card = CARD.sub("FN:Ada\r\n", "FN:Ada\r\nTEL:+1-555-0100\r\nTEL:+1-555-0100\r\n")
+    digest = VCARD.new(card).lines.find { it.names?("TEL") }.digest
+
+    assert_equal CARD.sub("FN:Ada\r\n", "FN:Ada\r\nTEL:+1-555-0199\r\nTEL:+1-555-0100\r\n"),
+      VCARD.new(card).substitute(digest, ["TEL:+1-555-0199\r\n"]).to_s
   end
 
   ## insert

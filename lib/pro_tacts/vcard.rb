@@ -68,6 +68,27 @@ module ProTacts
       split_raw_components(value).map { unescape(it) }
     end
 
+    # A property's content line up to its colon — group, name,
+    # parameters — re-rendered, for an edit that swaps the value and
+    # keeps the header: a phone's line (say) carries parameters no
+    # form models, and macOS writes three TYPE parameters on one TEL
+    # (test/fixtures/cards/emoji.vcf), so a save that rebuilt the
+    # header from the form's fields would drop what the form never
+    # showed. The param values render as the grammar's own two
+    # spellings allow: bare when every char is PTEXT, quoted
+    # otherwise — the same line the parser read, either way. A folded
+    # header re-renders unfolded, a normalization a save applies only
+    # to the line it was asked to change.
+    #: (Parser::Property property) -> String
+    def self.header_of(property)
+      prefix = property.group ? "#{property.group}." : ""
+      parameters = property.parameters.map do |name, value|
+        bare = /\A#{Parser::PTEXT}\z/.match?(value)
+        ";#{name}=#{bare ? value : "\"#{value}\""}"
+      end
+      "#{prefix}#{property.name}#{parameters.join}:"
+    end
+
     # Folds a logical line into physical lines of at most LINE_LIMIT
     # octets, each continuation starting with a single space (RFC 2426
     # section 2.6). The walk is character-wise so a multibyte character
@@ -196,6 +217,32 @@ module ProTacts
       # `first` still names the splice point: the lines before it are
       # untouched, and every line it counted past was a named one.
       kept.insert(first, *replacements)
+      VCard.new(kept.join)
+    end
+
+    # The one-line edit, for a property a card carries many of (TEL,
+    # EMAIL, ADR): the line whose verbatim bytes hash to `digest`
+    # swaps for the given ones, or is removed when they are empty.
+    # Which line a digest names was settled by the caller that watched
+    # the card render; a digest matching no line here is that
+    # caller's anomaly and raises (KeyError) rather than guessing —
+    # the snapshot guard makes a miss news, not an ordinary case. A
+    # card carrying the same line twice is addressed as one row by
+    # both copies (they hash alike), and this substitutes the first;
+    # the digests cannot tell identical bytes apart. A replacement
+    # line with no terminator of its own takes the substituted line's,
+    # #replace's own convention rule.
+    #: (String digest, Array[String] lines) -> VCard
+    def substitute(digest, lines)
+      all = self.lines
+      index = all.index { it.digest == digest }
+      raise KeyError, "no line of this card hashes to #{digest}" if index.nil?
+
+      terminator = terminator_of(all.fetch(index).verbatim)
+      replacements = lines.map { it.end_with?("\n") ? it : it + terminator }
+      kept = all.map(&:verbatim)
+      kept.delete_at(index)
+      kept.insert(index, *replacements)
       VCard.new(kept.join)
     end
 

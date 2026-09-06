@@ -1,4 +1,5 @@
 
+require "digest"
 require "strscan"
 
 require "pro_tacts/vcard"
@@ -131,6 +132,16 @@ module ProTacts
         # taxonomy to tell the two apart.
         #: () -> bool
         def unreadable? = !error.nil? && !broke_assumption?
+
+        # The line's address for a save that names it: the SHA-256 of
+        # the verbatim bytes, folds and terminator included — constant
+        # size, pure ASCII, and no card content hidden in the page
+        # (docs/plans/2026-09-05-web-card-editor.md). Stable across
+        # the render-to-save cycle the snapshot guard certifies, and
+        # blind otherwise: identical bytes digest alike, which is the
+        # one pair of lines no address can tell apart.
+        #: () -> String
+        def digest = Digest::SHA256.hexdigest(verbatim)
       end
 
       # The content line, RFC 2426 section 4:

@@ -83,6 +83,41 @@ class VCardTest < Minitest::Test
       ProTacts::VCard.split_raw_components("Smith\\; Jr.;John;a\\xb").join(";")
   end
 
+  # The writer's line header, for a value-only edit: group, name,
+  # and every parameter re-render as they read, so a save swaps the
+  # value and keeps what the form never modeled. The macOS triple
+  # TYPE is the case the editor exists for; an unfolded, unquoted
+  # line re-renders as its own bytes.
+  def test_header_of_renders_group_name_and_every_parameter
+    card = ProTacts::VCard.new(
+      "BEGIN:VCARD\r\n" \
+      "TEL;type=CELL;type=VOICE;type=pref:+1-555-0100\r\n" \
+      "item1.EMAIL;TYPE=INTERNET:ada@example.com\r\n" \
+      "END:VCARD\r\n"
+    )
+    tel = card.properties.find { it.name.casecmp?("TEL") }
+    email = card.properties.find { it.name.casecmp?("EMAIL") }
+
+    assert_equal "TEL;type=CELL;type=VOICE;type=pref:", ProTacts::VCard.header_of(tel)
+    assert_equal "item1.EMAIL;TYPE=INTERNET:", ProTacts::VCard.header_of(email)
+
+    tel_line = card.lines.find { it.names?("TEL") }
+    assert_equal tel_line.verbatim, "#{ProTacts::VCard.header_of(tel)}#{tel.value}\r\n"
+  end
+
+  # A parameter value PTEXT cannot hold — the grammar's quote-worthy
+  # chars — renders in the grammar's other spelling, quoted; a value
+  # that fits renders bare, either way the line the parser read.
+  def test_header_of_quotes_what_ptext_cannot_hold
+    bare = ProTacts::VCard::Parser::Property.new(group: nil, name: "TEL",
+      parameters: [["TYPE", "cell"]], value: "+1")
+    quoted = ProTacts::VCard::Parser::Property.new(group: nil, name: "TEL",
+      parameters: [["X-FOO", "a:b,c"]], value: "+1")
+
+    assert_equal "TEL;TYPE=cell:", ProTacts::VCard.header_of(bare)
+    assert_equal 'TEL;X-FOO="a:b,c":', ProTacts::VCard.header_of(quoted)
+  end
+
   ## Property tests
 
   def test_unfolding_reverses_folding
