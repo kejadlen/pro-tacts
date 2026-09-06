@@ -50,10 +50,22 @@ module ProTacts
 
     # Splits a structured value's ";"-delimited components (RFC 2426
     # section 3.2.1, e.g. ADR and N) without breaking on an escaped
-    # "\;", and unescapes each component in the same pass.
+    # "\;" — the writer's half of the split, over the still-escaped
+    # value: a splice replaces some components and joins the rest back
+    # byte for byte, where unescape-then-re-escape is not byte-stable
+    # (#unescape leaves an unrecognized escape like "\x" alone, and
+    # #escape would double its backslash).
+    #: (String value) -> Array[String]
+    def self.split_raw_components(value)
+      value.split(/(?<!\\);/, -1)
+    end
+
+    # split_raw_components with each component unescaped — the
+    # reader's half, for a caller asking what the components say
+    # rather than splicing them.
     #: (String value) -> Array[String]
     def self.split_components(value)
-      value.split(/(?<!\\);/, -1).map { unescape(it) }
+      split_raw_components(value).map { unescape(it) }
     end
 
     # Folds a logical line into physical lines of at most LINE_LIMIT
@@ -157,6 +169,34 @@ module ProTacts
       return @lines if defined?(@lines)
 
       @lines = Parser.lines(@bytes)
+    end
+
+    # The lines naming `name` swapped for the given ones, at the first
+    # match's position — the operation a property a card carries one of
+    # (N, FN, NICKNAME, NOTE) is edited through, which must not drag
+    # the property to the card's end the way #extract plus #insert
+    # would. Empty lines remove the property: blank is absent, the
+    # reader's own rule (Contact#text_of) in the other direction. A
+    # card lacking the property is #insert's case, the lines landing
+    # before END:VCARD. Every other line keeps its own bytes, which is
+    # the editor's whole safety: a line a save never mentioned cannot
+    # be lost by an operation that only touches the lines it names.
+    #: (String name, Array[String] lines) -> VCard
+    def replace(name, lines)
+      all = self.lines
+      first = all.index { it.names?(name) }
+      return insert(lines) if first.nil?
+
+      # The replaced line's own terminator, so a card written in one
+      # line-break convention stays single-convention; a terminated
+      # replacement line keeps its own, folds and all.
+      terminator = terminator_of(all.fetch(first).verbatim)
+      replacements = lines.map { it.end_with?("\n") ? it : it + terminator }
+      kept = all.reject { it.names?(name) }.map(&:verbatim)
+      # `first` still names the splice point: the lines before it are
+      # untouched, and every line it counted past was a named one.
+      kept.insert(first, *replacements)
+      VCard.new(kept.join)
     end
 
     # Lines into the card immediately before END:VCARD. A line with no

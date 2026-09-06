@@ -143,6 +143,60 @@ class VCardLinesTest < Minitest::Test
     refute VCARD.new(CARD).lines.any? { it.broke_assumption? }
   end
 
+  ## replace
+
+  # The cardinality-1 edit: the named lines swap for the new one at
+  # the first match's position — not dragged to the card's end — and
+  # every other line keeps its own bytes, folds and all.
+  def test_replace_swaps_a_property_in_place
+    card = CARD.sub("FN:Ada\r\n", "FN:Ada\r\nNICKNAME:Red\r\n")
+
+    assert_equal card.sub("NICKNAME:Red\r\n", "NICKNAME:Crimson\r\n"),
+      VCARD.new(card).replace("NICKNAME", ["NICKNAME:Crimson\r\n"]).to_s
+
+    folded = VCARD.new(CARD.sub("UID:ada\r\n", "UID:ada\r\nTEL:+1-555-\r\n 0100\r\n"))
+
+    assert_includes folded.replace("FN", ["FN:Grace\r\n"]).to_s, "TEL:+1-555-\r\n 0100\r\n"
+  end
+
+  # Empty lines remove the property — blank equals absent, the
+  # reader's rule (see Contact#text_of) in the other direction.
+  def test_replace_with_nothing_removes_the_property
+    card = CARD.sub("FN:Ada\r\n", "FN:Ada\r\nNICKNAME:Red\r\n")
+
+    assert_equal CARD, VCARD.new(card).replace("NICKNAME", []).to_s
+  end
+
+  # A card lacking the property is insert's case: the lines land
+  # before END:VCARD, and nothing at all happens for an empty ask.
+  def test_replace_inserts_when_the_card_lacks_the_property
+    assert_equal CARD.sub("END:VCARD\r\n", "NICKNAME:Red\r\nEND:VCARD\r\n"),
+      VCARD.new(CARD).replace("NICKNAME", ["NICKNAME:Red\r\n"]).to_s
+    assert_equal CARD, VCARD.new(CARD).replace("NICKNAME", []).to_s
+  end
+
+  # A card that carries the property twice is cardinality-broken
+  # data, and the one replacement line this writes is the repair:
+  # all the named lines go, not one of them.
+  def test_replace_takes_every_line_naming_the_property
+    twice = CARD.sub("FN:Ada\r\n", "FN:Ada\r\nNICKNAME:Red\r\nNICKNAME:Ruby\r\n")
+
+    assert_equal CARD.sub("FN:Ada\r\n", "FN:Ada\r\nNICKNAME:Crimson\r\n"),
+      VCARD.new(twice).replace("NICKNAME", ["NICKNAME:Crimson\r\n"]).to_s
+  end
+
+  # A bare replacement line takes the replaced line's own terminator,
+  # so a card the wire writes in LF stays single-convention; a
+  # terminated one keeps its own.
+  def test_replace_matches_the_cards_line_break_convention
+    lf = "BEGIN:VCARD\nFN:Ada\nNICKNAME:Red\nEND:VCARD\n"
+
+    assert_equal "BEGIN:VCARD\nFN:Ada\nNICKNAME:Crimson\nEND:VCARD\n",
+      VCARD.new(lf).replace("NICKNAME", ["NICKNAME:Crimson"]).to_s
+    assert_equal "BEGIN:VCARD\nFN:Ada\nNICKNAME:Crimson\r\nEND:VCARD\n",
+      VCARD.new(lf).replace("NICKNAME", ["NICKNAME:Crimson\r\n"]).to_s
+  end
+
   ## insert
 
   def test_insert_takes_the_end_lines_terminator_for_a_bare_line

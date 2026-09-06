@@ -72,6 +72,17 @@ class VCardTest < Minitest::Test
     assert_equal ["Smith; Jr.", "John"], ProTacts::VCard.split_components("Smith\\; Jr.;John")
   end
 
+  # The writer's splice: the same split with the escaping left alone,
+  # so components rejoin byte for byte — unescape-then-re-escape is
+  # not byte-stable (unescape leaves an unrecognized escape like "\\x"
+  # alone, and escape would double its backslash).
+  def test_split_raw_components_leaves_each_component_escaped
+    assert_equal ["Smith\\; Jr.", "John", "a\\xb"],
+      ProTacts::VCard.split_raw_components("Smith\\; Jr.;John;a\\xb")
+    assert_equal "Smith\\; Jr.;John;a\\xb",
+      ProTacts::VCard.split_raw_components("Smith\\; Jr.;John;a\\xb").join(";")
+  end
+
   ## Property tests
 
   def test_unfolding_reverses_folding
