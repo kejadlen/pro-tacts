@@ -32,37 +32,41 @@ module ProTacts
 
       def view_template
         render Layout.new(title: @contact.name || @contact.id) do
-          # The record's one action rides the back-link's line, at its
-          # right edge — the dashboard's section-head gesture — so the
-          # card below stays a clean read of the record.
-          div(class: "record-nav") do
-            a(href: "/", class: "type-label") { "‹ contacts" }
-            a(href: "/contacts/#{@contact.id}/edit", class: "btn", data_size: "sm") { "edit" }
-          end
-          div(class: "card") do
-            div(class: "card-body") do
-              div(class: "detail-header") do
-                div do
-                  h1(class: "type-h2", style: "margin: 0;") { @contact.name || @contact.id }
-                  # The nickname rides under the name in the heading
-                  # family — type-h3 to the name's h2 — so it reads as
-                  # a name rather than a property value; muted, so the
-                  # formal name stays the heading.
-                  if @contact.nickname
-                    div(class: "type-h3 gl-muted", style: "margin-top: var(--gl-space-2xs);") { @contact.nickname }
+          # The back-link line and the record card are one block, the
+          # line its caption row: spaced like the dashboard's
+          # section-head over its card (see .record in admin.css), not
+          # like a block of the column's own. The raw vCard card below
+          # stays a sibling at the column's rhythm.
+          div(class: "record") do
+            div(class: "record-nav") do
+              a(href: "/", class: "type-label") { "‹ contacts" }
+              a(href: "/contacts/#{@contact.id}/edit", class: "btn", data_size: "sm") { "edit" }
+            end
+            div(class: "card") do
+              div(class: "card-body") do
+                div(class: "detail-header") do
+                  div do
+                    h1(class: "type-h2", style: "margin: 0;") { @contact.name || @contact.id }
+                    # The nickname rides under the name in the heading
+                    # family — type-h3 to the name's h2 — so it reads as
+                    # a name rather than a property value; muted, so the
+                    # formal name stays the heading.
+                    if @contact.nickname
+                      div(class: "type-h3 gl-muted", style: "margin-top: var(--gl-space-2xs);") { @contact.nickname }
+                    end
                   end
+                  # Only a picture earns this slot: an initials circle
+                  # beside the name in type-h2 would repeat what the name
+                  # already says. The dashboard rows keep theirs — there
+                  # the avatar is the row's visual anchor, not a caption.
+                  render Avatar.new(contact: @contact, size: "xl") if @contact.photo
                 end
-                # Only a picture earns this slot: an initials circle
-                # beside the name in type-h2 would repeat what the name
-                # already says. The dashboard rows keep theirs — there
-                # the avatar is the row's visual anchor, not a caption.
-                render Avatar.new(contact: @contact, size: "xl") if @contact.photo
+                # Only rendered when there's something to show: an empty
+                # <dl> would still take up the gap card-body puts between
+                # its children, leaving the header off-center in a card
+                # with nothing else in it.
+                dl(class: "detail-grid") { rows } if has_data?
               end
-              # Only rendered when there's something to show: an empty
-              # <dl> would still take up the gap card-body puts between
-              # its children, leaving the header off-center in a card
-              # with nothing else in it.
-              dl(class: "detail-grid") { rows } if has_data?
             end
           end
           # The stored card in its own card under the record: the bytes

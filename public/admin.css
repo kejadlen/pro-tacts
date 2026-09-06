@@ -4,12 +4,22 @@
    rem width in the spirit of card.css's own max-width: 18rem; nothing
    here is a hex, a px, or a duration. */
 
+/* The record: its caption row and its card, one block. The gap is
+   the dashboard's section-head-to-card step (s, not the column's m)
+   because the back-link line is a caption for the card, the same
+   relationship a section heading has to its list — a full column step
+   between them read the line as its own block instead. */
+.record {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-s);
+}
+
 /* The record page's one action, on the back-link's line: edit at the
    right edge, the same quiet gesture as the dashboard's section-head,
    in flow here because no sibling column shares the line — the
    baseline problem that makes section-head pin its button absolutely
-   does not arise. The main column's gap spaces the line from the
-   card, so no margin of its own. */
+   does not arise. */
 .record-nav {
   display: flex;
   align-items: center;
