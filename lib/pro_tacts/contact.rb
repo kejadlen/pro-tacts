@@ -162,11 +162,14 @@ module ProTacts
     # PHOTO, an undecodable one, or one that sniffs to no known format
     # — the initials an avatar falls back to, an ordinary absence
     # rather than an error, exactly like the other accessors' nils.
-    # The undecodable nil is the one departure, and reports on its way
-    # there — warning-grade, carrying no card content — because a
-    # PHOTO this server cannot read is news, the URI form included:
-    # legal vCard (RFC 2426 section 3.1.4) that no client here sends
-    # yet. At the read rather than the arrival, unlike the parser's
+    # The two failures among those nils report on the way there —
+    # warning-grade, carrying no card content — because a PHOTO this
+    # server cannot read is news either way it fails: a decode
+    # refusal could be the URI form, legal vCard (RFC 2426 section
+    # 3.1.4) that no client here sends yet, and a decode that sniffs
+    # to nothing is either junk that happened to decode or an image
+    # format the signature list does not cover yet. At the read
+    # rather than the arrival, unlike the parser's
     # reports (Web#report_broken_assumptions): no arrival probe reads
     # PHOTO, and a stored card can predate the report, while the
     # decode runs only where an avatar renders and Sentry groups the
@@ -184,7 +187,13 @@ module ProTacts
       end
 
       signature = PHOTO_SIGNATURES.find { bytes.start_with?(it.first) }
-      return if signature.nil?
+      if signature.nil?
+        Sentry.capture_message(
+          "a card's PHOTO decoded to no image format this server recognizes",
+          level: :warning,
+        )
+        return
+      end
 
       Photo.new(mime_type: signature.fetch(1), bytes:)
     end

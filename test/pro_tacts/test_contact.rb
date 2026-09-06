@@ -257,6 +257,9 @@ class ContactTest < Minitest::Test
 
   def test_a_card_without_a_photo_has_none
     assert_nil contact.photo
+
+    # The one nil that stays quiet: no PHOTO is no news.
+    assert_empty sentry_events
   end
 
   # A URI-form PHOTO never reaches the sniff: a URI's ":" is not in
@@ -288,14 +291,17 @@ class ContactTest < Minitest::Test
     assert_equal "ArgumentError", event.exception.values.first.type
   end
 
-  # The other nils stay quiet: an image that decodes but sniffs to no
-  # known format is an allowlist gap with no exception to name, an
-  # ordinary absence exactly like no PHOTO at all.
-  def test_a_photo_of_no_known_format_stays_quiet
+  # The sniff's nil reports too, a message rather than an exception —
+  # there is no error to name, only bytes whose format the signature
+  # list does not know, and the message is the record that they
+  # arrived.
+  def test_a_photo_of_no_known_format_warns
     unknown = CARD.sub("FN:Aiden\r\n", "PHOTO;ENCODING=b:#{Base64.strict_encode64("RIFF____WEBP")}\r\n")
 
     assert_nil contact(unknown).photo
-    assert_empty sentry_events
+
+    assert_equal 1, sentry_messages.length
+    assert_match(/PHOTO decoded to no image format/, sentry_messages.fetch(0))
   end
 
   # One PHOTO property carrying a PNG payload, for the sniff's rows.
