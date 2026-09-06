@@ -748,7 +748,8 @@ class AdminContactsPagesTest < Minitest::Test
 
   # The phone rows: one value field per line, named by the line's
   # digest — the address the save substitutes — beside the type's own
-  # caption, and one add-row beneath them.
+  # caption. The blank row a new phone goes in is in the add dialog,
+  # not the card (see below).
   def test_the_edit_screen_renders_a_digest_named_field_per_phone
     with_contacts({"ada" => ADA}) do |store|
       get "/contacts/ada/edit"
@@ -756,7 +757,72 @@ class AdminContactsPagesTest < Minitest::Test
       digest = store.contact("ada").phones.first.line.digest
       body = last_response.body
       assert_includes body, '<label class="field"><span>mobile</span><input type="tel" name="phone[' + digest + ']" value="+1-555-0100"></label>'
-      assert_includes body, '<input type="tel" name="new_phone">'
+    end
+  end
+
+  ## Adding a property
+
+  # The add affordance: a trigger on the back link's line — the place
+  # the details page puts its edit link — and a dialog that names
+  # types rather than collecting values.
+  def test_the_edit_screen_opens_an_add_dialog_from_the_record_nav
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada/edit"
+
+      body = last_response.body
+      assert_includes body,
+        '<a href="/contacts/ada" class="type-label">‹ Ada Lovelace</a>' \
+        '<button type="button" data-size="sm" popovertarget="add-property">add property</button></div>'
+      assert_includes body, '<dialog id="add-property" popover="auto">'
+      # A radio group of one today: ADDABLE_TYPES is what grows, and
+      # neither the dialog nor the row template changes when it does.
+      # The shared `name` is what makes them a native group; it is
+      # never submitted, the dialog having no form owner.
+      assert_includes body,
+        '<div class="field-stack" role="radiogroup" aria-label="Type">' \
+        '<label><input type="radio" name="add-type" value="phone" x-model="type">phone</label></div>'
+      assert_includes body,
+        '<button type="button" popovertarget="add-property" popovertargetaction="hide">Cancel</button>'
+      # Add makes the row and then hides the popover, in that order —
+      # the row has to exist before x-init's focus can land on it.
+      assert_includes body, %(@click="added.push(type); $el.closest('dialog').hidePopover()")
+    end
+  end
+
+  # The card carries no blank row at rest: the rows are a template
+  # Alpine fills from `added`, so none stands waiting to be used and
+  # none lingers after one is. The dialog and the form share a scope
+  # because Alpine scopes by ancestry.
+  def test_added_rows_are_a_template_the_dialog_appends_to
+    with_contacts({"ada" => ADA}) do
+      body = (get("/contacts/ada/edit") && last_response.body)
+
+      assert_includes body, %(<div x-data="{ added: [], type: 'phone' }">)
+      assert_includes body,
+        '<template x-for="(kind, i) in added" :key="i"><label class="field">' \
+        '<span x-text="kind"></span>' \
+        '<input type="tel" :name="`new_${kind}[]`" x-init="$el.focus()"></label></template>'
+      # The template is inside the edit form, so one Save writes every
+      # row it made along with everything else. Indexed from the
+      # form's start, the header's search form closing before both.
+      edit_form = body.index('<form action="/contacts/ada" method="post"')
+      assert_operator body.index("<template"), :<, body.index("</form>", edit_form)
+      # No standing row, and no field the server would read if Alpine
+      # never ran.
+      refute_includes body, 'name="new_phone[]"'
+    end
+  end
+
+  # One pass adds as many phones as rows were made for it. The blanks
+  # among them are rows nobody typed in, and they cost nothing.
+  def test_a_single_save_adds_every_phone_that_was_typed
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               new_phone: ["+1-555-0177", "+1-555-0188", "", ""]
+
+      assert_equal 303, last_response.status
+      assert_equal ["+1-555-0100", "+1-555-0177", "+1-555-0188"],
+        store.contact("ada").phones.map(&:value)
     end
   end
 
@@ -833,9 +899,9 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The add-row: a value lands as a bare TEL before END:VCARD — the
-  # served card composes the BDAY in under it — and a blank one
-  # inserts nothing, inserting absence being a no-op.
+  # The revealed row: a value lands as a bare TEL before
+  # END:VCARD — the served card composes the BDAY in under it — and a
+  # blank one inserts nothing, inserting absence being a no-op.
   def test_an_added_phone_lands_as_a_bare_tel_before_the_end
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,

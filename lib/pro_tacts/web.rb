@@ -740,9 +740,18 @@ module ProTacts
         end
       end
 
-      new_phone = params["new_phone"].to_s.strip
-      added = [] #: Array[String]
-      added.replace(["TEL:#{VCard.escape(new_phone)}\r\n"]) unless new_phone.empty?
+      # The rows the add dialog reveals (Admin::ContactsEdit): each
+      # value lands as a bare TEL before END:VCARD, and a blank one
+      # inserts nothing — inserting absence is a no-op, the plan's
+      # rule for new rows, and the reason the rows nobody typed in
+      # cost nothing whether they were on screen or not. Array()
+      # because the field is a list and a request carrying one value
+      # is still a list of one.
+      submitted = Array(params["new_phone"]) #: Array[untyped]
+      added = submitted.filter_map do
+        value = it.to_s.strip
+        "TEL:#{VCard.escape(value)}\r\n" unless value.empty?
+      end #: Array[String]
       card.insert(added)
     end
 

@@ -73,7 +73,8 @@ module ProTacts
           # are the truth the grid above interprets, and they stay
           # reachable — collapsed by default, because the record is
           # about the person and the bytes are about the wire. Native
-          # <details>, so the admin UI stays script-free (see Layout);
+          # <details>, because a disclosure needs no script (see
+          # Layout — Alpine is loaded, and this is not what for);
           # and the one thing a card that will not parse has to show
           # (see Parser: no repair to make).
           div(class: "card") do

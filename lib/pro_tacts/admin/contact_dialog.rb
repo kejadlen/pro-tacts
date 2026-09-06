@@ -9,8 +9,9 @@ module ProTacts
     # layer, a painted ::backdrop (Gloss's own dialog::backdrop rule),
     # light dismiss, Esc. That is the whole reason this dialog is a
     # popover and not a `showModal()` dialog: the admin UI is
-    # script-free (see Layout), and a popover is the one declarative
-    # way to get modal behavior out of markup alone. Values survive a
+    # not scripted (see Layout — Alpine is loaded, and opening a
+    # dialog is not what it is there for), and a popover is the one
+    # declarative way to get modal behavior out of markup alone. Values survive a
     # light dismiss — the element stays in the page, only hidden — so
     # an accidental outside click costs nothing.
     #

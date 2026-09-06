@@ -15,8 +15,18 @@ module ProTacts
     # the dashboard with an empty query, the one place the design
     # doc wants "focused and ready". `wide` opts a screen out of the
     # reading width a single column wants (see admin.css) — the
-    # dashboard root is the one screen that asks. No JavaScript:
-    # nothing served here yet needs any.
+    # dashboard root is the one screen that asks.
+    #
+    # Alpine loads on every screen, and it is the only script here.
+    # The admin UI was script-free until the edit screen needed to
+    # add a row to a form without a round trip: CSS can reveal a
+    # fixed set of elements but cannot make one, so every version of
+    # that built out of `:has()` and hidden inputs traded a real
+    # affordance away — a cap on how many, or a field that stayed
+    # behind after it was used. Alpine is the smallest thing that
+    # buys back the missing verb. Where markup alone still does the
+    # job it keeps doing it: the popovers open and close by the
+    # Popover API, not by script.
     class Layout < Phlex::HTML
       #: (title: String, ?wide: bool, ?query: String?, ?autofocus: bool, ?notice: String?) -> void
       def initialize(title:, wide: false, query: nil, autofocus: false, notice: nil)
@@ -40,6 +50,14 @@ module ProTacts
             link(rel: "stylesheet", href: "/vendor/gloss/base.css")
             link(rel: "stylesheet", href: "/vendor/gloss/components.css")
             link(rel: "stylesheet", href: "/admin.css")
+            # Alpine, vendored and pinned (rake alpine:vendor) rather
+            # than pulled from a CDN, for the reason the Gloss CSS is:
+            # this app is reachable only over Tailscale and should not
+            # need anything else reachable to render. `defer` is
+            # Alpine's own requirement — it initializes on
+            # DOMContentLoaded and must not run before the markup it
+            # reads exists.
+            script(defer: true, src: "/vendor/alpine/alpine.min.js")
           end
           body do
             header(class: "admin-header") do

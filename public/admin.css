@@ -90,19 +90,24 @@
   gap: var(--gl-space-s);
 }
 
-/* The record page's one action, on the back-link's line: edit at
-   the right edge, pinned the way the dashboard's section-head pins
-   its action. In flow the button — half again taller than a
-   type-label line — grew the row, and the card under it moved with
-   it. Pinning takes the button out of flow, which leaves the row at
-   this element's own inherited line box — step-0/1.55, not the inline
-   label's step--2/1 — so both record pages have to wrap the back link
-   in this div. A bare link is a flex item of the label's height
-   instead, a good 15px shorter, and the card jumps between modes. */
+/* Each record page's one action, on the back-link's line: the
+   details page's edit link at the right edge, the editor's add
+   button in the same place, pinned the way the dashboard's
+   section-head pins its action. In flow the control — half again
+   taller than a type-label line — grew the row, and the card under
+   it moved with it. Pinning takes it out of flow, which leaves the
+   row at this element's own inherited line box — step-0/1.55, not
+   the inline label's step--2/1 — so both record pages have to wrap
+   the back link in this div. A bare link is a flex item of the
+   label's height instead, a good 15px shorter, and the card jumps
+   between modes. Both the anchor and the button, because the two
+   modes reach for different elements: navigation is a link, and
+   opening a popover is a button. */
 .record-nav {
   position: relative;
 }
-.record-nav .btn {
+.record-nav .btn,
+.record-nav button {
   position: absolute;
   inset-block-start: 50%;
   inset-inline-end: 0;
@@ -124,10 +129,14 @@
    too. Scoped to the card-body form rather than overriding field.css
    globally; the label in the input selector out-specifies field.css's
    input rule rather than relying on stylesheet order (see the header
-   search's note). */
-.card-body .field-stack { gap: var(--gl-space-2xs); }
-.card-body label.field > input,
-.card-body label.field > textarea { padding-block: var(--gl-space-2xs); }
+   search's note). Everything here reaches the record's own rows by
+   the child combinator rather than by descent: these rules are the
+   record's, and both dialogs' fields keep Gloss's own — a 26rem
+   popover is not a record, and the two should not diverge just
+   because one of them opens over this screen. */
+.card-body form.field-stack { gap: var(--gl-space-2xs); }
+.card-body form.field-stack > label.field > input,
+.card-body form.field-stack > label.field > textarea { padding-block: var(--gl-space-2xs); }
 
 /* An editor row is a detail row that happens to be editable: caption
    in the type column, control in the value column, on .detail-grid's
@@ -139,10 +148,8 @@
    eight rows deep before a contact has an email. Baseline for the
    reason .detail-grid gives — caption and control carry different
    type sizes, so lining their boxes up leaves their text on
-   different lines. Scoped to the card body: the create dialog's two
-   fields keep the stacked shape, which is what a narrow popover
-   wants. */
-.card-body label.field {
+   different lines. */
+.card-body form.field-stack > label.field {
   display: grid;
   grid-template-columns: var(--type-column) 1fr;
   column-gap: var(--gl-space-s);
@@ -156,10 +163,10 @@
    holds the textarea's first line off its own edge: the block
    padding above plus the border. Derived, not eyeballed, so the two
    move together if either changes. */
-.card-body label.field:has(textarea) {
+.card-body form.field-stack > label.field:has(textarea) {
   align-items: start;
 }
-.card-body label.field:has(textarea) > span {
+.card-body form.field-stack > label.field:has(textarea) > span {
   padding-block-start: calc(var(--gl-space-2xs) + 1px);
 }
 
