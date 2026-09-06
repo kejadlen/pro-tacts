@@ -14,14 +14,27 @@ class ContactTest < Minitest::Test
     "TEL;TYPE=mobile:+1-555-0100\r\nTEL;TYPE=work:+1-555-0199\r\n" \
     "EMAIL;TYPE=home:ada@example.com\r\n" \
     "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
-    "BDAY:1985-12-10\r\nNOTE:Countess\\, mathematician.\r\nUID:ada\r\nEND:VCARD\r\n"
+    "NOTE:Countess\\, mathematician.\r\nUID:ada\r\nEND:VCARD\r\n"
 
-  def contact(vcard = CARD, id: "aiden")
-    ProTacts::Contact.for(id:, vcard: ProTacts::VCard.new(vcard))
+  # The production shapes (see the class comment): a modeled birthday
+  # passes a BDAY-free card beside a Birthday, and a fallback case
+  # passes a card carrying an unmodeled BDAY beside nil — no stored
+  # card ever carries a BDAY the model recomposes.
+  def contact(vcard = CARD, id: "aiden", birthday: nil)
+    ProTacts::Contact.for(id:, stored: ProTacts::VCard.new(vcard), birthday:)
   end
 
   def test_the_etag_hashes_the_card
     assert_equal %("#{Digest::SHA256.hexdigest(CARD)}"), contact.etag
+  end
+
+  # The etag hashes the composed card, not the stored one, so it moves
+  # when a birthday moves even though the bytes on disk do not.
+  def test_the_etag_hashes_the_composed_card
+    birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
+    composed = CARD.sub("END:VCARD\r\n", "BDAY:1985-12-10\r\nEND:VCARD\r\n")
+
+    assert_equal %("#{Digest::SHA256.hexdigest(composed)}"), contact(CARD, birthday:).etag
   end
 
   def test_the_etag_moves_with_the_card
@@ -137,15 +150,36 @@ class ContactTest < Minitest::Test
     assert_nil contact.notes
   end
 
-  def test_the_birthday_is_the_model_the_store_composed
-    assert_equal ProTacts::Birthday.new(year: 1985, month: 12, day: 10), contact(STRUCTURED).birthday
+  # The birthday is the model held beside the card, not a parse of
+  # the card it composes into — the reader returns the store's fact.
+  def test_the_birthday_is_the_one_held_beside_the_card
+    birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
+
+    assert_equal birthday, contact(STRUCTURED, birthday:).birthday
+  end
+
+  # The served card is the stored one with the birthday's line composed
+  # in immediately before END:VCARD — the bytes a client downloads.
+  def test_the_served_card_composes_the_birthday_in
+    birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
+    composed = STRUCTURED.sub("END:VCARD\r\n", "BDAY:1985-12-10\r\nEND:VCARD\r\n")
+
+    assert_equal composed, contact(STRUCTURED, birthday:).vcard.to_s
+  end
+
+  # A birthday with no wire form — the shapes no client renders —
+  # composes nothing, and the stored card serves exactly as it is.
+  def test_a_birthday_with_no_wire_form_leaves_the_card_as_stored
+    year_alone = ProTacts::Birthday.new(year: 1985)
+
+    assert_equal STRUCTURED, contact(STRUCTURED, birthday: year_alone).vcard.to_s
   end
 
   # A BDAY in a spelling the model does not recompose stays in the card
-  # verbatim; the accessor reads nil, and showing it as stored is the
-  # substrate's job (Format.birthday).
+  # verbatim; the reader answers nil over it, and showing it as stored
+  # is the substrate's job (Format.birthday).
   def test_an_unmodeled_birthday_spelling_reads_nil
-    unmodeled = STRUCTURED.sub("BDAY:1985-12-10", "BDAY:not-a-date")
+    unmodeled = STRUCTURED.sub("END:VCARD\r\n", "BDAY:not-a-date\r\nEND:VCARD\r\n")
 
     assert_nil contact(unmodeled).birthday
   end

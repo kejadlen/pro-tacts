@@ -29,9 +29,9 @@ module ProTacts
   # again from nothing.
   #
   # Every Contact this store hands out is composed, never the stored
-  # card alone: a birthday is subtracted out of a card on the way in
-  # and composed back in on the way out, so the vcard and the etag a
-  # caller sees — and the etag the change log records — describe the
+  # card alone: a birthday is subtracted out of a card on the way in,
+  # and Contact composes it back in on read, so the vcard and the etag
+  # a caller sees — and the etag the change log records — describe the
   # card a client downloads, not the bytes on disk.
   #
   # Sequel's transactions join one already open rather than failing on
@@ -275,7 +275,7 @@ module ProTacts
       # The Contact this returns is the composed one, and the logged
       # etag is its hash, so a client's token describes the card it
       # downloads.
-      contact = Contact.for(id:, vcard: with_birthday(stored, birthday))
+      contact = Contact.for(id:, stored:, birthday:)
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
@@ -471,27 +471,17 @@ module ProTacts
       )
     end
 
-    # The etag comes back out of the card rather than out of a column, so
-    # a row can never carry one that disagrees with the bytes beside it.
-    # The card is composed with its birthday first, so both halves
-    # describe what a client downloads.
+    # The birthday travels beside the card rather than inside it, and
+    # Contact composes the served one — its vcard, its etag, everything
+    # a caller reads — so both describe what a client downloads rather
+    # than the bytes on disk.
     #: (Hash[Symbol, untyped] row, Birthday? birthday) -> Contact
     def contact_from(row, birthday)
       Contact.for(
         id: row.fetch(:id).to_s,
-        vcard: with_birthday(VCard.new(row.fetch(:vcard).to_s), birthday),
+        stored: VCard.new(row.fetch(:vcard).to_s),
+        birthday:,
       )
-    end
-
-    # The card to serve: the stored card with its birthday composed
-    # back in, immediately before END:VCARD. A birthday with no wire
-    # form, or none at all, leaves the card exactly as it is.
-    #: (VCard card, Birthday? birthday) -> VCard
-    def with_birthday(card, birthday)
-      line = birthday && birthday.to_line
-      return card if line.nil?
-
-      card.insert([line])
     end
 
     # The model's half of a write: hold the birthday the card gave up,

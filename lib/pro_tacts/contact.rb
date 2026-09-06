@@ -17,6 +17,15 @@ module ProTacts
   # caller handing one over already had a card in hand to make the bytes
   # from. One card is built per contact and every read is asked of it.
   #
+  # The card this holds is the stored one, and the birthday sits beside
+  # it rather than being parsed back out of the card it was composed
+  # into (docs/plans/2026-09-05-contact-takes-its-structure.md): Store's
+  # write either moves a BDAY line into the model or leaves it in the
+  # card, never both, so the two facts are independent and #vcard
+  # composes the served card from them. An unmodeled BDAY spelling is
+  # the card's own — #properties shows it, and #birthday reads nil over
+  # it.
+  #
   # The etag hashes the card that goes out, so it changes exactly when
   # what the client downloads changes. It is derived here and stored
   # nowhere: a contact read back from the store hashes its card the same
@@ -26,8 +35,8 @@ module ProTacts
   # both the ETag header and getetag properties carry.
   #
   # The structured accessors are that idea applied to the card's
-  # contents: everything derives from the bytes, and the card defers the
-  # walk that reads them until something asks. The CardDAV paths never
+  # contents: everything else derives from the bytes, and the card defers
+  # the walk that reads them until something asks. The CardDAV paths never
   # ask — they answer in bytes — so the serving paths pay for no parse
   # they do not use, and that laziness is VCard's to keep rather than
   # this class's to arrange.
@@ -37,6 +46,8 @@ module ProTacts
   # one. #properties is the read for those.
   class Contact
     # @rbs @id: String
+    # @rbs @stored: VCard
+    # @rbs @birthday: Birthday?
     # @rbs @vcard: VCard
     # @rbs @etag: String
 
@@ -69,14 +80,20 @@ module ProTacts
       :type,
     )
 
-    # A contact from its id and its card. The only way to make one: an
-    # etag that came from anywhere but the card in hand is an etag that
-    # can be wrong.
-    #: (id: String, vcard: VCard) -> Contact
-    def self.for(id:, vcard:)
+    # A contact from its id, its stored card, and its birthday. The
+    # only way to make one: an etag that came from anywhere but the
+    # card in hand is an etag that can be wrong, and a birthday from
+    # anywhere but the store is wrong the same way — which is why
+    # `birthday:` is required and carries no default, since an
+    # optional nil would let a caller quietly get no birthday off a
+    # card that has one. Named `stored:` rather than `vcard:` because
+    # what #vcard returns is composed, and an argument that is not
+    # what the reader hands back is a trap.
+    #: (id: String, stored: VCard, birthday: Birthday?) -> Contact
+    def self.for(id:, stored:, birthday:)
       raise ArgumentError, "invalid contact id: #{id}" unless id.match?(ID_FORMAT)
 
-      new(id, vcard, etag_for(vcard))
+      new(id, stored, birthday)
     end
 
     #: (VCard vcard) -> String
@@ -84,18 +101,45 @@ module ProTacts
       %("#{Digest::SHA256.hexdigest(vcard.to_s)}")
     end
 
-    #: (String id, VCard vcard, String etag) -> void
-    def initialize(id, vcard, etag)
+    #: (String id, VCard stored, Birthday? birthday) -> void
+    def initialize(id, stored, birthday)
       @id = id
-      @vcard = vcard
-      @etag = etag
+      @stored = stored
+      @birthday = birthday
     end
 
     attr_reader :id
 
-    attr_reader :vcard
+    # The model held beside the card (see the class comment) — the
+    # store's fact, not a parse of the served one. Nil over a card
+    # carrying an unmodeled BDAY spelling; showing that is
+    # #properties' job.
+    attr_reader :birthday
 
-    attr_reader :etag
+    # The card to serve: the stored one with the birthday composed back
+    # in, immediately before END:VCARD — the same insert over the same
+    # two inputs Store composed at each read path before, so the bytes
+    # a client downloads do not move. A birthday with no wire form, or
+    # none at all, serves the stored card exactly as it is. Composed on
+    # first ask and memoized, and the etag's derivation deferred with
+    # it: a caller that reads neither — and the listing paths read
+    # neither — pays for no composition of its own.
+    #: () -> VCard
+    def vcard
+      return @vcard if defined?(@vcard)
+
+      line = @birthday && @birthday.to_line
+      @vcard = line ? @stored.insert([line]) : @stored
+    end
+
+    # The etag over #vcard's bytes, derived here on first ask and
+    # memoized with the card it hashes.
+    #: () -> String
+    def etag
+      return @etag if defined?(@etag)
+
+      @etag = self.class.etag_for(vcard)
+    end
 
     # The image formats a decoded PHOTO is recognized by, prefix to
     # mime type. A picture's type is read off the decoded bytes rather
@@ -141,7 +185,7 @@ module ProTacts
     # answer and costs the contact nothing. There is no repair to make
     # and nobody to make it, which is why nothing here looks for one.
     #: () -> Array[VCard::Parser::Property]
-    def properties = @vcard.properties
+    def properties = vcard.properties
 
     # FN's value (RFC 2426 section 3.1.1), in text form.
     #: () -> String?
@@ -186,17 +230,6 @@ module ProTacts
     #: () -> Array[Address]
     def addresses
       of_name("ADR").filter_map { address_of(it) }
-    end
-
-    # The birthday the served card carries — the model the store
-    # composed into it (see Birthday), parsed back out because the two
-    # forms Birthday serves are exactly the two from_property accepts.
-    # Nil when the card carries no BDAY the model recomposes; an
-    # unmodeled spelling stays in the card and is #properties' to show.
-    #: () -> Birthday?
-    def birthday
-      property = properties.find { it.name.casecmp?("BDAY") }
-      property && Birthday.from_property(property)
     end
 
     # The card's NOTE (RFC 2426 section 3.6.2), in text form.
