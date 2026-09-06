@@ -8,6 +8,9 @@ require "pro_tacts/contact"
 require "pro_tacts/vcard"
 
 class ContactTest < Minitest::Test
+  include Sentry::TestHelper
+  include SentryMessages
+
   CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nEND:VCARD\r\n"
 
   STRUCTURED = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada Lovelace\r\nN:Lovelace;Ada;;;\r\n" \
@@ -22,6 +25,16 @@ class ContactTest < Minitest::Test
   # card ever carries a BDAY the model recomposes.
   def contact(vcard = CARD, id: "aiden", birthday: nil)
     ProTacts::Contact.for(id:, stored: ProTacts::VCard.new(vcard), birthday:)
+  end
+
+  # The decode's refusal reports (see #photo); the transport this pins
+  # holds it for the assertions below, and teardown clears it.
+  def setup
+    setup_sentry
+  end
+
+  def teardown
+    teardown_sentry_test
   end
 
   def test_the_etag_hashes_the_card
@@ -258,6 +271,31 @@ class ContactTest < Minitest::Test
     assert_nil contact(uri).photo
     assert_nil contact(undecodable).photo
     assert_nil contact(not_an_image).photo
+  end
+
+  # The departure from the accessor's ordinary nils: a value the
+  # strict decoder refuses reports on its way to nil — warning-grade,
+  # bad-input level, no card content — so a PHOTO this server cannot
+  # read is news rather than initials with no why.
+  def test_an_undecodable_photo_reports_the_refusal
+    undecodable = CARD.sub("FN:Aiden\r\n", "PHOTO;ENCODING=b:not base64!!\r\n")
+
+    assert_nil contact(undecodable).photo
+
+    assert_equal 1, sentry_events.length
+    event = sentry_events.fetch(0)
+    assert_equal :warning, event.level
+    assert_equal "ArgumentError", event.exception.values.first.type
+  end
+
+  # The other nils stay quiet: an image that decodes but sniffs to no
+  # known format is an allowlist gap with no exception to name, an
+  # ordinary absence exactly like no PHOTO at all.
+  def test_a_photo_of_no_known_format_stays_quiet
+    unknown = CARD.sub("FN:Aiden\r\n", "PHOTO;ENCODING=b:#{Base64.strict_encode64("RIFF____WEBP")}\r\n")
+
+    assert_nil contact(unknown).photo
+    assert_empty sentry_events
   end
 
   # One PHOTO property carrying a PNG payload, for the sniff's rows.

@@ -1,5 +1,6 @@
 require "base64"
 require "digest"
+require "sentry-ruby"
 
 require "pro_tacts/birthday"
 require "pro_tacts/vcard"
@@ -161,6 +162,15 @@ module ProTacts
     # PHOTO, an undecodable one, or one that sniffs to no known format
     # — the initials an avatar falls back to, an ordinary absence
     # rather than an error, exactly like the other accessors' nils.
+    # The undecodable nil is the one departure, and reports on its way
+    # there — warning-grade, carrying no card content — because a
+    # PHOTO this server cannot read is news, the URI form included:
+    # legal vCard (RFC 2426 section 3.1.4) that no client here sends
+    # yet. At the read rather than the arrival, unlike the parser's
+    # reports (Web#report_broken_assumptions): no arrival probe reads
+    # PHOTO, and a stored card can predate the report, while the
+    # decode runs only where an avatar renders and Sentry groups the
+    # repeats into one issue.
     #: () -> Photo?
     def photo
       property = properties.find { it.name.casecmp?("PHOTO") }
@@ -168,7 +178,8 @@ module ProTacts
 
       begin
         bytes = Base64.strict_decode64(property.value)
-      rescue ArgumentError
+      rescue ArgumentError => error
+        Sentry.capture_exception(error, level: :warning)
         return
       end
 
