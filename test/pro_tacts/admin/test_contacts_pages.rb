@@ -744,6 +744,133 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  ## Editing phones
+
+  # The phone rows: one value field per line, named by the line's
+  # digest — the address the save substitutes — under the type's own
+  # caption, and one add-row beneath them.
+  def test_the_edit_screen_renders_a_digest_named_field_per_phone
+    with_contacts({"ada" => ADA}) do |store|
+      get "/contacts/ada/edit"
+
+      digest = store.contact("ada").phones.first.line.digest
+      body = last_response.body
+      assert_includes body, '<label class="field">mobile<input type="tel" name="phone[' + digest + ']" value="+1-555-0100"></label>'
+      assert_includes body, '<input type="tel" name="new_phone">'
+    end
+  end
+
+  # The addressed edit at work: the submitted row swaps its line's
+  # value under the line's own header, and every other byte of the
+  # stored card — the other TEL-able lines included — stands
+  # untouched.
+  def test_saving_a_changed_phone_replaces_only_its_line
+    two = ADA.sub("TEL;TYPE=mobile:+1-555-0100\r\n", "TEL;TYPE=mobile:+1-555-0100\r\nTEL;TYPE=work:+1-555-0199\r\n")
+
+    with_contacts({"ada" => two}) do |store|
+      digest = store.contact("ada").phones.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               phone: {digest => "+1-555-0150"}
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "TEL;TYPE=mobile:+1-555-0150\r\n"
+      assert_includes card, "TEL;TYPE=work:+1-555-0199\r\n"
+      refute_includes card, "+1-555-0100"
+
+      follow_redirect!
+      assert_includes last_response.body, "+1-555-0150"
+    end
+  end
+
+  # The header is the line's own, kept byte for byte: macOS writes
+  # three TYPE parameters on one TEL, and a save that rebuilt the
+  # header from a type field would drop the two the form never
+  # showed. The value is the only thing that moves.
+  def test_a_saved_phone_keeps_its_lines_own_parameters
+    apple = ADA.sub("TEL;TYPE=mobile:+1-555-0100", "TEL;type=CELL;type=VOICE;type=pref:+1-555-0100")
+
+    with_contacts({"ada" => apple}) do |store|
+      digest = store.contact("ada").phones.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               phone: {digest => "+1-555-0150"}
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s,
+        "TEL;type=CELL;type=VOICE;type=pref:+1-555-0150\r\n"
+    end
+  end
+
+  # Blank equals absent for a row with a digest: the blank removes
+  # the line, the reader's own rule in the other direction. The FN
+  # assertion keeps an empty-card regression from passing vacuously.
+  def test_a_blank_phone_row_removes_the_line
+    with_contacts({"ada" => ADA}) do |store|
+      digest = store.contact("ada").phones.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               phone: {digest => " "}
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      refute_includes card, "TEL"
+      assert_includes card, "FN:Ada Lovelace\r\n"
+    end
+  end
+
+  # An unchanged row never rewrites its line — byte identity by
+  # construction, not by faithful re-rendering — and the whole save
+  # leaves the stored card byte for byte as it lay.
+  def test_an_unchanged_phone_leaves_the_stored_card_byte_identical
+    with_contacts({"ada" => ADA}) do |store|
+      before = store.contact("ada").stored.to_s
+      digest = store.contact("ada").phones.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
+                               etag: store.contact("ada").etag, new_phone: "",
+                               phone: {digest => " +1-555-0100 "}
+
+      assert_equal 303, last_response.status
+      assert_equal before, store.contact("ada").stored.to_s
+    end
+  end
+
+  # The add-row: a value lands as a bare TEL before END:VCARD — the
+  # served card composes the BDAY in under it — and a blank one
+  # inserts nothing, inserting absence being a no-op.
+  def test_an_added_phone_lands_as_a_bare_tel_before_the_end
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               new_phone: "+1 (555) 020-0700, x9"
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "TEL:+1 (555) 020-0700\\, x9\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n"
+      assert_includes card, "TEL;TYPE=mobile:+1-555-0100\r\n"
+    end
+  end
+
+  def test_a_blank_add_row_inserts_nothing
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               new_phone: " "
+
+      assert_equal 303, last_response.status
+      assert_equal 1, store.contact("ada").phones.length
+    end
+  end
+
+  # The addresses come from the contact, never the request: a
+  # doctored digest names no row and touches nothing, where a
+  # doctored index into a list would have rewritten some other line.
+  def test_a_digest_the_card_never_had_is_ignored
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               phone: {"0" * 64 => "+1-555-9999"}
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s, "TEL;TYPE=mobile:+1-555-0100\r\n"
+    end
+  end
+
   # The snapshot guard: a save whose etag names a card the store no
   # longer holds is refused with a toast, and nothing is written —
   # another tab or a client sync edited the contact in between, and

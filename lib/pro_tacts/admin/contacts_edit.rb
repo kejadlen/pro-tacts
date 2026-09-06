@@ -7,10 +7,11 @@ module ProTacts
     # GET /contacts/:id/edit — the editor
     # (docs/plans/2026-09-05-web-card-editor.md): an explicit mode
     # rather than an always-editable page, one form over the
-    # properties the save knows how to address. This stage carries the
-    # cardinality-1 set — name, nickname, note — whose save is
-    # VCard#replace under each field; phones, emails, and addresses
-    # arrive with their own stages, birthday last.
+    # properties the save knows how to address. The cardinality-1 set
+    # — name, nickname, note — saves through VCard#replace under each
+    # field; the phone rows save through VCard#substitute, each named
+    # by its line's digest. Emails and addresses arrive with their
+    # own stage, birthday last.
     #
     # The fields prefill from the accessors' unescaped readings, and
     # blank equals absent on the way back (Web#edited_card), so write
@@ -67,6 +68,31 @@ module ProTacts
                   label(class: "field") do
                     plain "Nickname"
                     input(type: "text", name: "nickname", value: @contact.nickname)
+                  end
+                  # A phone row edits its value and nothing else: the
+                  # TYPE parameters ride in the line's own header,
+                  # which the save keeps (VCard.header_of) — a header
+                  # rebuilt from form fields would drop the parameters
+                  # no field models, and macOS writes three TYPE
+                  # parameters on one TEL. The digest in the field's
+                  # name is the row's address, and a blank value
+                  # removes the line. Identical duplicate lines share a
+                  # digest and therefore a field name, and Rack keeps
+                  # the last value of a duplicated name — editing one
+                  # of a pair of byte-identical rows means blanking
+                  # one, saving, then editing the other.
+                  @contact.phones.each do |phone|
+                    label(class: "field") do
+                      plain phone.type || "phone"
+                      input(type: "tel", name: "phone[#{phone.line.digest}]", value: phone.value)
+                    end
+                  end
+                  # One add-row: a value lands as a bare TEL before
+                  # END:VCARD, and blank inserts nothing — inserting
+                  # absence is a no-op, the plan's rule for new rows.
+                  label(class: "field") do
+                    plain "add phone"
+                    input(type: "tel", name: "new_phone")
                   end
                   label(class: "field") do
                     plain "Note"

@@ -706,7 +706,44 @@ module ProTacts
       card = card.replace("FN", ["FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n"])
       card = card.replace("NICKNAME", text_lines("NICKNAME", nickname))
       card = card.replace("NOTE", text_lines("NOTE", note))
-      card
+      edited_phones(contact, card, params)
+    end
+
+    # The phones' half of the surgical save: each row names its line
+    # by digest, so a row the request leaves out is a line the save
+    # never mentions, and an unchanged row is skipped — the line keeps
+    # its own bytes by construction, not by careful re-rendering. A
+    # blank row removes its line; a changed row swaps the value under
+    # the line's own header (VCard.header_of), where the TYPE
+    # parameters no field models ride. The addresses come from the
+    # contact, never the request, so a doctored digest names nothing
+    # and a missing one touches nothing.
+    #: (Contact contact, VCard card, Hash[String, untyped] params) -> VCard
+    def edited_phones(contact, card, params)
+      rows = params["phone"]
+      if rows.is_a?(Hash)
+        contact.phones.each do |phone|
+          # The property is nil only for a line that would not read,
+          # and phones read from lines that did; the guard is the
+          # type's honesty, not a reachable case (n_line's own shape).
+          property = phone.line.property
+          next if property.nil?
+
+          submitted = rows[phone.line.digest]
+          next if submitted.nil? || submitted.to_s.strip == phone.value
+
+          value = submitted.to_s.strip
+          card = card.substitute(
+            phone.line.digest,
+            value.empty? ? [] : ["#{VCard.header_of(property)}#{VCard.escape(value)}"]
+          )
+        end
+      end
+
+      new_phone = params["new_phone"].to_s.strip
+      added = [] #: Array[String]
+      added.replace(["TEL:#{VCard.escape(new_phone)}\r\n"]) unless new_phone.empty?
+      card.insert(added)
     end
 
     # A text property's replacement lines: the escaped value (RFC 2426
