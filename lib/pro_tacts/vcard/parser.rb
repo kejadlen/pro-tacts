@@ -60,14 +60,35 @@ module ProTacts
       # same thing — both arrive here as two pairs.
       #
       # `value` is the value's text, unfolded and otherwise exactly as it
-      # was stored, still escaped. Unescaping it and splitting it on the
-      # component separator are per-property semantics, and this layer has
-      # none.
+      # was stored, still escaped — the one representation it keeps, a
+      # served card being these bytes going back out unparsed. #text and
+      # #components are the two readings of it, derived on demand rather
+      # than stored beside it: which reading applies depends on the
+      # property's value type, which this layer does not know.
       #
       # The signature lives in sig/pro_tacts/vcard/parser.rbs: a Data
       # class has no constant super class for the inline syntax to read.
       # @rbs skip
       Property = Data.define(:group, :name, :parameters, :value)
+
+      # Reopened rather than defined in the block above: steep reads a
+      # define block's self as this class's, not the constant's, so the
+      # methods could not live there.
+      class Property
+        # The whole value unescaped (RFC 2426 section 2.4.2), for a
+        # property whose value is free text. A structured value read this
+        # way comes back with its separators melted into the text, which
+        # is why the choice is the caller's.
+        #: () -> String
+        def text = VCard.unescape(value)
+
+        # The value's components, for a structured one (RFC 2426 section
+        # 3.2.1). Splitting before unescaping is the whole point of
+        # keeping `value` escaped: an escaped "\;" stays inside its
+        # component instead of ending it.
+        #: () -> Array[String]
+        def components = VCard.split_components(value)
+      end
 
       # One logical line of a card, parsed beside the exact bytes that
       # carried it: `property` is the content line it read, nil when it
@@ -86,9 +107,7 @@ module ProTacts
       # @rbs skip
       Line = Data.define(:property, :verbatim, :error)
 
-      # Reopened rather than defined in the block above: steep reads a
-      # define block's self as this class's, not the constant's, so the
-      # methods could not live there.
+      # Reopened for the reason Property is.
       class Line
         # Whether this line names the property, a group prefix
         # (`item1.BDAY`) counting as naming it. Asked of the line rather

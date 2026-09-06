@@ -221,7 +221,7 @@ module ProTacts
     #: () -> Array[String?]?
     def name_components
       property = properties.find { it.name.casecmp?("N") }
-      property && components_of(property.value)
+      property && components_of(property)
     end
 
     # NICKNAME's value (RFC 2426 section 3.1.3), in text form — the
@@ -272,23 +272,23 @@ module ProTacts
     def text_of(property)
       return if property.nil?
 
-      value = VCard.unescape(property.value)
+      value = property.text
       value.empty? ? nil : value
     end
 
     # A structured value's components, nil in the positions the card
     # left blank: an empty component is as absent as one past the end
     # of the value, and reads the same.
-    #: (String value) -> Array[String?]
-    def components_of(value)
-      VCard.split_components(value).map { it.empty? ? nil : it }
+    #: (VCard::Parser::Property property) -> Array[String?]
+    def components_of(property)
+      property.components.map { it.empty? ? nil : it }
     end
 
     # ADR's components, with a value that is blank throughout reading
     # as no address at all.
     #: (VCard::Parser::Property property) -> Address?
     def address_of(property)
-      components = components_of(property.value)
+      components = components_of(property)
       return if components.none?
 
       po_box, extended, street, locality, region, postal_code, country = components

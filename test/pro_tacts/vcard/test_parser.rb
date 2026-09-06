@@ -356,4 +356,15 @@ class VCardParserTest < Minitest::Test
       raise "parameters did not survive" unless property.parameters == values.map { [name, it] }
     end
   end
+
+  # One value, two readings, and only the caller knows which its property
+  # wants: N is structured, so the escaped "\;" is a character inside a
+  # component — read as text it comes back spelled like the separator
+  # between them.
+  def test_a_value_reads_as_text_or_as_components
+    property = properties(card("N:Smith\\; Jr.;John;;;")).fetch(0)
+
+    assert_equal "Smith; Jr.;John;;;", property.text
+    assert_equal ["Smith; Jr.", "John", "", "", ""], property.components
+  end
 end
