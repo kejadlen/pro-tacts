@@ -109,28 +109,72 @@
   translate: 0 -50%;
 }
 
+/* The type column both record modes share: the details grid's label
+   column and the editor's caption column are the same column, read
+   from one place so they cannot drift apart. The one structural rem
+   width this layer names — see .detail-grid for what it holds. */
+:root {
+  --type-column: 6rem;
+}
+
 /* A form in a card keeps a tighter rhythm than Gloss's form-body
-   defaults: the stack closes from s to xs, and the boxes shed half
-   their block padding — the same shedding the header's search does —
-   so short boxes sit close under their captions. Scoped to the
-   card-body form rather than overriding field.css globally; the
-   label in the input selector out-specifies field.css's input rule
-   rather than relying on stylesheet order (see the header search's
-   note). */
-.card-body .field-stack { gap: var(--gl-space-xs); }
+   defaults: the boxes shed half their block padding — the same
+   shedding the header's search does — and the stack closes to the
+   detail grid's row gap, because a row is now one line tall there
+   too. Scoped to the card-body form rather than overriding field.css
+   globally; the label in the input selector out-specifies field.css's
+   input rule rather than relying on stylesheet order (see the header
+   search's note). */
+.card-body .field-stack { gap: var(--gl-space-2xs); }
 .card-body label.field > input,
 .card-body label.field > textarea { padding-block: var(--gl-space-2xs); }
 
+/* An editor row is a detail row that happens to be editable: caption
+   in the type column, control in the value column, on .detail-grid's
+   own template (docs/DESIGN.md, "Alignment is the layout" — the same
+   record before and after an edit should read as the same object).
+   Gloss's .field stacks its caption over its control, which is right
+   for the settings-form pattern it was written for and wrong for a
+   record: it spends a line and a gap on every row, and this card is
+   eight rows deep before a contact has an email. Baseline for the
+   reason .detail-grid gives — caption and control carry different
+   type sizes, so lining their boxes up leaves their text on
+   different lines. Scoped to the card body: the create dialog's two
+   fields keep the stacked shape, which is what a narrow popover
+   wants. */
+.card-body label.field {
+  display: grid;
+  grid-template-columns: var(--type-column) 1fr;
+  column-gap: var(--gl-space-s);
+  align-items: baseline;
+}
+/* A multiline control has no single line to align a caption to, and
+   what a browser calls its baseline is not settled — a scroll
+   container's can be synthesized from its border box, which would
+   drop the caption to the bottom of the note. So this row aligns at
+   the top instead, and the caption is pushed down by exactly what
+   holds the textarea's first line off its own edge: the block
+   padding above plus the border. Derived, not eyeballed, so the two
+   move together if either changes. */
+.card-body label.field:has(textarea) {
+  align-items: start;
+}
+.card-body label.field:has(textarea) > span {
+  padding-block-start: calc(var(--gl-space-2xs) + 1px);
+}
+
 /* The editor's submit row: the buttons sit beside each other under
-   the stacked fields, rather than in the stack's own gap. */
+   the fields, rather than in the stack's own gap, and start at the
+   value column so the form keeps one edge down its whole height. */
 .form-actions {
   display: flex;
   gap: var(--gl-space-2xs);
+  margin-inline-start: calc(var(--type-column) + var(--gl-space-s));
 }
 
 /* Gloss's field contract styles input and select but not textarea
    (base.css only resets it), and the editor's note field is one —
-   multiline text under a .field caption. The box mirrors field.css's
+   multiline text beside a .field caption. The box mirrors field.css's
    input rule in the vars that rule itself uses, so the two controls
    read as one component; resize stays vertical, the one freedom a
    text area has that a text input does not. */
@@ -307,7 +351,7 @@ img.avatar {
    text sitting at different heights. Baseline lines up the text itself. */
 .detail-grid {
   display: grid;
-  grid-template-columns: 6rem 1fr;
+  grid-template-columns: var(--type-column) 1fr;
   row-gap: var(--gl-space-2xs);
   column-gap: var(--gl-space-s);
   align-items: baseline;

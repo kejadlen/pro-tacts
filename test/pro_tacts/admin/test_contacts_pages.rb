@@ -747,7 +747,7 @@ class AdminContactsPagesTest < Minitest::Test
   ## Editing phones
 
   # The phone rows: one value field per line, named by the line's
-  # digest — the address the save substitutes — under the type's own
+  # digest — the address the save substitutes — beside the type's own
   # caption, and one add-row beneath them.
   def test_the_edit_screen_renders_a_digest_named_field_per_phone
     with_contacts({"ada" => ADA}) do |store|
@@ -755,7 +755,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       digest = store.contact("ada").phones.first.line.digest
       body = last_response.body
-      assert_includes body, '<label class="field">mobile<input type="tel" name="phone[' + digest + ']" value="+1-555-0100"></label>'
+      assert_includes body, '<label class="field"><span>mobile</span><input type="tel" name="phone[' + digest + ']" value="+1-555-0100"></label>'
       assert_includes body, '<input type="tel" name="new_phone">'
     end
   end

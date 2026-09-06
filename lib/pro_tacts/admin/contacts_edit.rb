@@ -56,17 +56,22 @@ module ProTacts
               div(class: "card-body") do
                 form(action: "/contacts/#{@contact.id}", method: "post", class: "field-stack") do
                   input(type: "hidden", name: "etag", value: @contact.etag)
+                  # The caption is an element rather than bare text
+                  # because the row is a grid (admin.css): a text node
+                  # would still land in the type column as an
+                  # anonymous grid item, but nothing could then reach
+                  # it, and the note's caption needs reaching.
                   label(class: "field") do
-                    plain "First"
+                    span { "First" }
                     input(type: "text", name: "first", value: @first,
                           required: true, autofocus: true)
                   end
                   label(class: "field") do
-                    plain "Last"
+                    span { "Last" }
                     input(type: "text", name: "last", value: @last)
                   end
                   label(class: "field") do
-                    plain "Nickname"
+                    span { "Nickname" }
                     input(type: "text", name: "nickname", value: @contact.nickname)
                   end
                   # A phone row edits its value and nothing else: the
@@ -83,7 +88,7 @@ module ProTacts
                   # one, saving, then editing the other.
                   @contact.phones.each do |phone|
                     label(class: "field") do
-                      plain phone.type || "phone"
+                      span { phone.type || "phone" }
                       input(type: "tel", name: "phone[#{phone.line.digest}]", value: phone.value)
                     end
                   end
@@ -91,11 +96,11 @@ module ProTacts
                   # END:VCARD, and blank inserts nothing — inserting
                   # absence is a no-op, the plan's rule for new rows.
                   label(class: "field") do
-                    plain "add phone"
+                    span { "add phone" }
                     input(type: "tel", name: "new_phone")
                   end
                   label(class: "field") do
-                    plain "Note"
+                    span { "Note" }
                     textarea(name: "note", rows: 4) { @contact.notes.to_s }
                   end
                   # Save is the form's submit; Cancel is navigation — a
