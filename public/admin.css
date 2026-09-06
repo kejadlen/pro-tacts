@@ -4,6 +4,18 @@
    rem width in the spirit of card.css's own max-width: 18rem; nothing
    here is a hex, a px, or a duration. */
 
+/* The record page's one action, on the back-link's line: edit at the
+   right edge, the same quiet gesture as the dashboard's section-head,
+   in flow here because no sibling column shares the line — the
+   baseline problem that makes section-head pin its button absolutely
+   does not arise. The main column's gap spaces the line from the
+   card, so no margin of its own. */
+.record-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 /* The editor's submit row: the buttons sit beside each other under
    the stacked fields, rather than in the stack's own gap. */
 .form-actions {

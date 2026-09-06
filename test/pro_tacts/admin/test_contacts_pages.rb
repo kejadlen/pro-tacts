@@ -604,13 +604,16 @@ class AdminContactsPagesTest < Minitest::Test
     assert_equal 404, last_response.status
   end
 
-  # The details page names its other mode: the edit link sits under
-  # the name, the record's one action.
+  # The details page names its other mode: the edit link rides the
+  # back-link's line at the right edge, so the card below stays a
+  # clean read of the record.
   def test_the_details_page_links_to_the_edit_screen
     with_contacts({"ada" => ADA}) do
       get "/contacts/ada"
 
-      assert_includes last_response.body, 'href="/contacts/ada/edit"'
+      assert_includes last_response.body,
+        '<div class="record-nav"><a href="/" class="type-label">‹ contacts</a>' \
+        '<a href="/contacts/ada/edit" class="btn" data-size="sm">edit</a></div>'
     end
   end
 

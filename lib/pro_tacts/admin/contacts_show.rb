@@ -32,7 +32,13 @@ module ProTacts
 
       def view_template
         render Layout.new(title: @contact.name || @contact.id) do
-          a(href: "/", class: "type-label") { "‹ contacts" }
+          # The record's one action rides the back-link's line, at its
+          # right edge — the dashboard's section-head gesture — so the
+          # card below stays a clean read of the record.
+          div(class: "record-nav") do
+            a(href: "/", class: "type-label") { "‹ contacts" }
+            a(href: "/contacts/#{@contact.id}/edit", class: "btn", data_size: "sm") { "edit" }
+          end
           div(class: "card") do
             div(class: "card-body") do
               div(class: "detail-header") do
@@ -44,13 +50,6 @@ module ProTacts
                   # formal name stays the heading.
                   if @contact.nickname
                     div(class: "type-h3 gl-muted", style: "margin-top: var(--gl-space-2xs);") { @contact.nickname }
-                  end
-                  # The record's one action, quiet and under the name
-                  # — the edit screen is this page's other mode (see
-                  # Admin::ContactsEdit). A link in Gloss's `.btn`
-                  # contract: navigation wearing a button's clothes.
-                  div(style: "margin-top: var(--gl-space-2xs);") do
-                    a(href: "/contacts/#{@contact.id}/edit", class: "btn", data_size: "sm") { "edit" }
                   end
                 end
                 # Only a picture earns this slot: an initials circle
