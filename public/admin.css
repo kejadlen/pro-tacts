@@ -1,3 +1,78 @@
+/* IBM Plex Mono, self-hosted (the woff2s and their OFL license in
+   public/vendor/ibm-plex-mono). The font came from Google Fonts'
+   remote CSS with display=swap, which painted every page in the
+   fallback first — a flash of unstyled text, and a metric shift that
+   moved the record page's caption line and card between the details
+   and edit screens. Same-origin faces land with the page's own CSS,
+   so there is no swap window to speak of. The weights and the two
+   subsets are Google's own splits; the ranges are their
+   unicode-ranges verbatim. */
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/vendor/ibm-plex-mono/ibm-plex-mono-400-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/vendor/ibm-plex-mono/ibm-plex-mono-400-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/vendor/ibm-plex-mono/ibm-plex-mono-500-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/vendor/ibm-plex-mono/ibm-plex-mono-500-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/vendor/ibm-plex-mono/ibm-plex-mono-600-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/vendor/ibm-plex-mono/ibm-plex-mono-600-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+ 
+/* Light mode's page sits a hair under the card (#faf9f7 under
+   #fdfdfb) — a step too fine to read as the contrast Gloss's surface
+   system elevates by. The page takes the fill step instead: one
+   alias repointed to a value already on the ramp, no new color. Dark
+   keeps its own block in tokens.css (its page/card step already
+   reads), so the repoint carries tokens.css's own scoping — the
+   media-query light block plus forced light, both excluding forced
+   dark — and wins by stylesheet order on equal specificity. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --gl-color-surface-page: var(--gl-color-surface-fill);
+  }
+}
+:root[data-theme="light"] {
+  --gl-color-surface-page: var(--gl-color-surface-fill);
+}
+
 /* Pro-tacts' own layer on top of Gloss (see docs/DESIGN.md) — page
    chrome and the detail grid, neither of which Gloss defines a
    component for. Every value below is a var(--gl-*) or a structural
