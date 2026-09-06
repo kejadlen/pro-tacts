@@ -15,15 +15,22 @@
   gap: var(--gl-space-s);
 }
 
-/* The record page's one action, on the back-link's line: edit at the
-   right edge, the same quiet gesture as the dashboard's section-head,
-   in flow here because no sibling column shares the line — the
-   baseline problem that makes section-head pin its button absolutely
-   does not arise. */
+/* The record page's one action, on the back-link's line: edit at
+   the right edge, pinned the way the dashboard's section-head pins
+   its action. In flow the button — half again taller than a
+   type-label line — grew the row, and the card under it moved with
+   it: the details page's row was the button's height while the edit
+   page's was the label's, so the mode change shifted the line and the
+   card together. Pinned, the row is the label's own height on both
+   pages and nothing jumps. */
 .record-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  position: relative;
+}
+.record-nav .btn {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 0;
+  translate: 0 -50%;
 }
 
 /* A form in a card keeps a tighter rhythm than Gloss's form-body
