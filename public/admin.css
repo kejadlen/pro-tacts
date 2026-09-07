@@ -159,6 +159,49 @@
 .card-body form.field-stack .field > .date-row > .icon-button:hover {
   color: var(--gl-color-danger);
 }
+
+/* The date line breaks in two when its row cannot hold a whole
+   date: a month name, two year boxes, and the remove button need
+   ~20rem side by side, and on a phone the value column has a
+   fraction of that — three controls squeezed into it rendered each
+   a stub. The narrow shape is two lines with the button in a
+   column of its own: the month over the day and year, the month
+   name being the wide value and the two digit boxes pairing, and
+   the button beside the month, where desktop's line has it. The
+   digit boxes shed their desktop width to fill their half-tracks,
+   the address row's stacked fields the same reading. The row is
+   the query container rather than the viewport because the value
+   column's width is the thing being asked about, and the reading
+   column, the type column, and the viewport all conspire to set it
+   differently per screen; inline-size containment is safe here
+   because the field row's width comes from the form's grid track,
+   never from its contents. Threshold in the row's own terms: 20rem
+   of value column plus the type column and its gap is 27rem. The
+   selectors inside repeat the desktop rules' own specificity — a
+   container query adds none, and the width it undoes would
+   otherwise win. */
+.card-body form.field-stack > .field:has(> .date-row) {
+  container-type: inline-size;
+}
+@container (width < 27rem) {
+  .card-body form.field-stack .field > .date-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+  }
+  .card-body form.field-stack .field > .date-row > select {
+    grid-area: 1 / 1 / 2 / 3;
+  }
+  .card-body form.field-stack .field > .date-row > input {
+    grid-area: 2 / 1;
+    width: auto;
+  }
+  .card-body form.field-stack .field > .date-row > input:last-of-type {
+    grid-area: 2 / 2;
+  }
+  .card-body form.field-stack .field > .date-row > .icon-button {
+    grid-area: 1 / 3;
+  }
+}
 /* A multiline control has no single line to align a caption to, and
    what a browser calls its baseline is not settled — a scroll
    container's can be synthesized from its border box, which would
