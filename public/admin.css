@@ -117,14 +117,15 @@
 /* The birthday row's three controls — month, day, year — sit on one
    line in the value column: a date is one value, not three fields,
    and the line it reads on matches the prose the details page
-   renders (Birthday#to_s's "December 10, 1985"). The month select
-   grows to carry "September"; the number inputs hold their own
-   widths, which are the digits and spinner they must show plus the
-   box's own chrome — border-box widths count the padding and border
-   inside, so a bare 6ch left ~1ch of content and nothing to click a
-   caret into. Derived from the padding var so the pair moves with
-   the token; the same block-padding shed every other record control
-   gets. */
+   renders (Birthday#to_s's "December 10, 1985"). The three share the
+   line's space equally beyond their own bases — the select grows to
+   carry "September", the inputs grow with it so the column's width
+   does not pool in one box. Their base width is the digits and
+   spinner they must show plus the box's own chrome — border-box
+   widths count the padding and border inside, so a bare 6ch left
+   ~1ch of content and nothing to click a caret into. Derived from
+   the padding var so the pair moves with the token; the same
+   block-padding shed every other record control gets. */
 .card-body form.field-stack .field > .date-row {
   display: flex;
   gap: var(--gl-space-2xs);
@@ -134,7 +135,7 @@
   padding-block: var(--gl-space-2xs);
 }
 .card-body form.field-stack .field > .date-row > input {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   width: calc(7ch + 2 * var(--gl-space-s) + 2px);
   padding-block: var(--gl-space-2xs);
 }
@@ -207,8 +208,12 @@ textarea:focus {
   text-decoration: none;
 }
 
+/* The reading column's width: wide enough that the editor's widest
+   row — the birthday's three controls, ~343px at minimum — fits the
+   value column with room for the month select to grow (the value
+   column at 40rem is ~412px), which 34rem missed by ~30px. */
 .admin-main {
-  max-width: 34rem;
+  max-width: 40rem;
   margin: 0 auto;
   padding: var(--gl-space-l) var(--gl-space-m);
   display: flex;
