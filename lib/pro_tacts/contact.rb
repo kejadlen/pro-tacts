@@ -61,18 +61,17 @@ module ProTacts
     # ADR's seven components (section 3.2.1: post office box, extended
     # address, street, locality, region, postal code, country — nil
     # where the card left the position blank or stopped short of it).
-    # Phone also carries `line`, the parsed line its value was read
-    # from: the address a save names that phone's row by
+    # Each also carries `line`, the parsed line the value was read
+    # from: the address a save names that row by
     # (docs/plans/2026-09-05-web-card-editor.md) — the accessors fold
     # lines into typed values, and without provenance no form could
-    # say "edit this phone." Email and Address gain their own with
-    # their stage.
+    # say "edit this phone."
     # Data classes, whose members the inline syntax cannot read; the
     # signatures live in sig/pro_tacts/contact.rbs.
     # @rbs skip
     Phone = Data.define(:value, :type, :line)
     # @rbs skip
-    Email = Data.define(:value, :type)
+    Email = Data.define(:value, :type, :line)
     # @rbs skip
     Photo = Data.define(:mime_type, :bytes)
     # @rbs skip
@@ -85,6 +84,7 @@ module ProTacts
       :postal_code,
       :country,
       :type,
+      :line,
     )
 
     # A contact from its id, its stored card, and its birthday. The
@@ -257,15 +257,23 @@ module ProTacts
 
     #: () -> Array[Email]
     def emails
-      of_name("EMAIL").filter_map do |property|
+      of_line("EMAIL").filter_map do |line|
+        property = line.property
+        next if property.nil?
+
         value = text_of(property)
-        Email.new(value:, type: type_of(property)) if value
+        Email.new(value:, type: type_of(property), line:) if value
       end
     end
 
     #: () -> Array[Address]
     def addresses
-      of_name("ADR").filter_map { address_of(it) }
+      of_line("ADR").filter_map do |line|
+        property = line.property
+        next if property.nil?
+
+        address_of(property, line:)
+      end
     end
 
     # The card's NOTE (RFC 2426 section 3.6.2), in text form.
@@ -275,11 +283,6 @@ module ProTacts
     end
 
     private
-
-    #: (String name) -> Array[VCard::Parser::Property]
-    def of_name(name)
-      properties.select { it.name.casecmp?(name) }
-    end
 
     # The lines naming `name`, parsed beside their bytes — the walk the
     # provenance-carrying accessors read from, so a row can carry the
@@ -311,14 +314,15 @@ module ProTacts
     end
 
     # ADR's components, with a value that is blank throughout reading
-    # as no address at all.
-    #: (VCard::Parser::Property property) -> Address?
-    def address_of(property)
+    # as no address at all. Carries the line it was read from, the
+    # other provenance-carrying shapes' own address for a save.
+    #: (VCard::Parser::Property property, line: VCard::Parser::Line) -> Address?
+    def address_of(property, line:)
       components = components_of(property)
       return if components.none?
 
       po_box, extended, street, locality, region, postal_code, country = components
-      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, type: type_of(property))
+      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, type: type_of(property), line:)
     end
 
     # RFC 2426 section 3.3.1: TYPE can repeat (TYPE=work;TYPE=voice) or

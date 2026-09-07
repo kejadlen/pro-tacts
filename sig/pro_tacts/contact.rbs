@@ -16,8 +16,9 @@ module ProTacts
     class Email
       attr_reader value: String
       attr_reader type: String?
+      attr_reader line: VCard::Parser::Line
 
-      def self.new: (value: String, type: String?) -> instance
+      def self.new: (value: String, type: String?, line: VCard::Parser::Line) -> instance
     end
 
     class Photo
@@ -36,6 +37,7 @@ module ProTacts
       attr_reader postal_code: String?
       attr_reader country: String?
       attr_reader type: String?
+      attr_reader line: VCard::Parser::Line
 
       def self.new: (
         po_box: String?,
@@ -45,7 +47,8 @@ module ProTacts
         region: String?,
         postal_code: String?,
         country: String?,
-        type: String?
+        type: String?,
+        line: VCard::Parser::Line
       ) -> instance
     end
   end

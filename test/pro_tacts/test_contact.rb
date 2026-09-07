@@ -140,6 +140,26 @@ class ContactTest < Minitest::Test
     assert_equal "home", emails.fetch(0).type
   end
 
+  # Each email carries the line it was read from, the phones' own
+  # address for a save: the digest names the served card's line, which
+  # is the stored one's too — composition only inserts the BDAY.
+  def test_every_email_carries_the_line_it_was_read_from
+    email = contact(STRUCTURED).emails.fetch(0)
+
+    assert_equal "EMAIL;TYPE=home:ada@example.com\r\n", email.line.verbatim
+    assert_equal Digest::SHA256.hexdigest("EMAIL;TYPE=home:ada@example.com\r\n"),
+      email.line.digest
+  end
+
+  # A line that would not read is a row no form can address: it reads
+  # as no email, and stays in the card's lines, served from its bytes.
+  def test_an_email_line_that_would_not_read_is_no_email
+    broken = STRUCTURED.sub("EMAIL;TYPE=home:ada@example.com\r\n", "EMAIL;=;:ada@example.com\r\n")
+
+    assert_empty contact(broken).emails
+    assert contact(broken).vcard.lines.any? { it.names?("EMAIL") && it.property.nil? }
+  end
+
   def test_reads_an_address_as_its_seven_components
     address = contact(STRUCTURED).addresses.fetch(0)
     assert_nil address.po_box
@@ -150,6 +170,30 @@ class ContactTest < Minitest::Test
     assert_equal "NW1 1AA", address.postal_code
     assert_equal "United Kingdom", address.country
     assert_equal "home", address.type
+  end
+
+  # The address carries its line like the single-valued shapes do —
+  # the digest is the row's address in a save.
+  def test_every_address_carries_the_line_it_was_read_from
+    address = contact(STRUCTURED).addresses.fetch(0)
+
+    assert_equal "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",
+      address.line.verbatim
+    assert_equal Digest::SHA256.hexdigest(
+      "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",
+    ), address.line.digest
+  end
+
+  # A line that would not read is a row no form can address — no
+  # address reads, and the line stays enumerable, served from its bytes.
+  def test_an_adr_line_that_would_not_read_is_no_address
+    broken = STRUCTURED.sub(
+      "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",
+      "ADR;=;:;;12 Analytical Way\r\n",
+    )
+
+    assert_empty contact(broken).addresses
+    assert contact(broken).vcard.lines.any? { it.names?("ADR") && it.property.nil? }
   end
 
   # A blank position and one past the end of the value read the same:
