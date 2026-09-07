@@ -65,21 +65,22 @@
 }
 
 /* A form in a card keeps a tighter rhythm than Gloss's form-body
-   defaults: the boxes shed half their block padding — the same
-   shedding the header's search does — and the stack closes to the
-   detail grid's row gap, because a row is now one line tall there
-   too. Scoped to the card-body form rather than overriding field.css
-   globally; the label in the input selector out-specifies field.css's
-   input rule rather than relying on stylesheet order (see the header
-   search's note). Everything here reaches the record's own rows by
-   the child combinator rather than by descent: these rules are the
-   record's, and both dialogs' fields keep Gloss's own — a 26rem
-   popover is not a record, and the two should not diverge just
-   because one of them opens over this screen. The cap lifts for the
-   same reason: Gloss bounds a bare form at 28rem for the
-   settings-form pattern, and the record's form is the card's whole
-   content — the reading column is its bound (invisible until the
-   column passed 28rem, then half a card of dead space). */
+   defaults: the boxes shed their block padding down to the scale's
+   smallest step — the same shedding the header's search does — and
+   the stack closes to the detail grid's row gap, because a row is
+   now one line tall there too. Scoped to the card-body form rather
+   than overriding field.css globally; the label in the input
+   selector out-specifies field.css's input rule rather than relying
+   on stylesheet order (see the header search's note). Everything
+   here reaches the record's own rows by the child combinator rather
+   than by descent: these rules are the record's, and both dialogs'
+   fields keep Gloss's own — a 26rem popover is not a record, and the
+   two should not diverge just because one of them opens over this
+   screen. The cap lifts for the same reason: Gloss bounds a bare
+   form at 28rem for the settings-form pattern, and the record's form
+   is the card's whole content — the reading column is its bound
+   (invisible until the column passed 28rem, then half a card of
+   dead space). */
 .card-body form.field-stack {
   gap: var(--gl-space-2xs);
   max-width: none;
@@ -87,7 +88,7 @@
 .card-body form.field-stack > .field > input,
 .card-body form.field-stack > .field > textarea,
 .card-body form.field-stack > .field > .field-stack > input {
-  padding-block: var(--gl-space-2xs);
+  padding-block: var(--gl-space-3xs);
 }
 
 /* An editor row is a detail row that happens to be editable: caption
@@ -139,12 +140,12 @@
 }
 .card-body form.field-stack .field > .date-row > select {
   flex: 1 1 auto;
-  padding-block: var(--gl-space-2xs);
+  padding-block: var(--gl-space-3xs);
 }
 .card-body form.field-stack .field > .date-row > input {
   flex: 1 1 auto;
   width: calc(7ch + 2 * var(--gl-space-s) + 2px);
-  padding-block: var(--gl-space-2xs);
+  padding-block: var(--gl-space-3xs);
 }
 /* A multiline control has no single line to align a caption to, and
    what a browser calls its baseline is not settled — a scroll
@@ -158,7 +159,7 @@
   align-items: start;
 }
 .card-body form.field-stack > .field:has(textarea) > span {
-  padding-block-start: calc(var(--gl-space-2xs) + 1px);
+  padding-block-start: calc(var(--gl-space-3xs) + 1px);
 }
 
 /* The editor's submit row: the buttons sit beside each other under
