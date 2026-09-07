@@ -29,17 +29,18 @@ module ProTacts
     # destructive is what that color means there, carried by the
     # caption rather than the boxes' borders, a blank row being a
     # valid save and Gloss's danger border the aria-invalid
-    # contract. The birthday row earns a remove control of its own
-    # over a held birthday, three separate blanks being a rule
-    # nobody can guess: one click empties the row (Alpine's own
-    # verb, a mutation markup cannot do) and the blank rule does the
-    # rest. The state itself is CSS over :placeholder-shown, not
+    # contract. The birthday row renders only over a held birthday —
+    # absence is added by the dialog like any other property — and
+    # earns a remove control of its own, three separate blanks
+    # being a rule nobody can guess: one click empties the row
+    # (Alpine's own verb, a mutation markup cannot do) and the blank
+    # rule does the rest. The state itself is CSS over :placeholder-shown, not
     # Alpine — revealing a state over standing elements is markup's
     # job (see Layout). The rows the add dialog reveals wear none of
-    # it, their blank a no-op rather than a removal; the rows that
-    # render whether or not the property exists wear it only over
-    # something to lose (each such row's comment says which). The
-    # etag rides
+    # it, their blank a no-op rather than a removal; the nickname
+    # and note rows, which render whether or not the card carries
+    # the property, wear it only over something to lose (each row's
+    # own comment says which). The etag rides
     # along hidden — the snapshot guard's half, the POST's refusal
     # being the other. `autofocus` on the first field: this screen's
     # entry point is the name, not the header search.
@@ -48,12 +49,15 @@ module ProTacts
       # lists them — exactly the rows the save can insert
       # (docs/plans/2026-09-05-web-card-editor.md), because a type
       # listed here that the save cannot write would be a row that
-      # silently does nothing. Each name is both the radio's value
-      # and the row's field name: `new_<type>[]` for the single-value
-      # kinds, `new_address[<i>][<component>]` for the structured
-      # one, the bare [] unable to carry a component set (Rack
-      # refuses a key after an empty one).
-      ADDABLE_TYPES = %w[phone email address].freeze #: Array[String]
+      # silently does nothing. Each name is the radio's value;
+      # `new_<type>[]` is the single-value kinds' field name and
+      # `new_address[<i>][<component>]` the structured one's, the
+      # bare [] unable to carry a component set (Rack refuses a key
+      # after an empty one). The birthday is the exception: its
+      # added row names the model's own `birthday[]` group, there
+      # being no card line to insert and room for but one — see
+      # #addable_types for when the dialog offers it.
+      ADDABLE_TYPES = %w[phone email address birthday].freeze #: Array[String]
       private_constant :ADDABLE_TYPES
 
       # The address row's component fields, stacked in the value
@@ -223,7 +227,7 @@ module ProTacts
             # The single-value kinds: one input, its type and name
             # bound to the kind — the keyboard a phone number or an
             # email address wants, on the one client that has one.
-            template("x-if": "kind !== 'address'") do
+            template("x-if": "kind !== 'address' && kind !== 'birthday'") do
               input(":type": "kind === 'phone' ? 'tel' : kind", ":name": "`new_${kind}[]`",
                     ":aria-label": "kind", "x-init": "$el.focus()")
             end
@@ -241,6 +245,22 @@ module ProTacts
                 end
               end
             end
+            # The birthday kind: the standing row's own three
+            # controls with nothing prefilled, naming the model's
+            # birthday[] group rather than a new_* name — no card
+            # line exists to insert, the save parses the group into
+            # the model, and no digest is needed when a contact can
+            # hold but one. No removal state, the added rows'
+            # exemption: three blanks over a contact with no
+            # birthday is nothing, not a removal. A second one
+            # cannot arrive — the dialog stops offering the type
+            # once this row stands, and Add's handler guards the
+            # push anyway.
+            template("x-if": "kind === 'birthday'") do
+              div(class: "date-row") do
+                birthday_controls(nil, focus: true)
+              end
+            end
           end
         end
       end
@@ -249,53 +269,66 @@ module ProTacts
       # than the card's bytes (docs/plans/2026-09-07-web-birthday-editor.md)
       # — a partial date has no vCard 3.0 spelling, so there is no
       # line to address and the prefill is the model
-      # (Contact#birthday), not a reading off the card. Three controls
-      # in the value column, month-day-year to match the prose
-      # Birthday#to_s renders; a select for the month because a name
-      # is the friendlier read and constrains the value by
-      # construction, number inputs with native ranges for the day and
-      # year. A blank component is an absence and three blanks remove
-      # the birthday, the form's blank-equals-absent; a day without
-      # its month is refused at the save, the grammar's own rule.
-      # Every shape the grammar admits is editable, including the ones
-      # no client renders — they live here and go nowhere, their
-      # documented fate. The removal state rides only on a held
-      # birthday — the row renders empty without one, and three blanks
-      # over no birthday delete nothing.
+      # (Contact#birthday), not a reading off the card. It renders
+      # only over a held birthday: an empty row was an attribute
+      # rendering nothing (docs/DESIGN.md), and the way a birthday
+      # arrives is the add dialog's, like every other property. A
+      # blank component is an absence and three blanks remove the
+      # birthday, the form's blank-equals-absent; a day without its
+      # month is refused at the save, the grammar's own rule. Every
+      # shape the grammar admits is editable, including the ones no
+      # client renders — they live here and go nowhere, their
+      # documented fate. Every standing row holds a birthday, so
+      # the removal state rides on it unconditionally.
       #: () -> void
       def birthday_row
         birthday = @contact.birthday
-        div(class: "field", data: {blank_removes: !!birthday}) do
+        return unless birthday
+
+        div(class: "field", data: {blank_removes: true}) do
           span { "birthday" }
           div(class: "date-row") do
-            select(name: "birthday[month]", aria_label: "month") do
-              option(value: "", selected: birthday&.month.nil?) { "month" }
-              Date::MONTHNAMES.compact.each_with_index do |name, index|
-                option(value: index + 1, selected: birthday&.month == index + 1) { name }
-              end
-            end
-            input(type: "number", name: "birthday[day]", value: birthday&.day,
-                  min: 1, max: 31, placeholder: "day", aria_label: "day")
-            input(type: "number", name: "birthday[year]", value: birthday&.year,
-                  min: 1, max: 9999, placeholder: "year", aria_label: "year")
-            # The remove control, over a held birthday only: three
-            # blanks is the rule that removes and this is its
-            # one-click spelling — @click empties the row's controls,
-            # the blank rule and the struck caption do the rest, and
-            # retyping the date is the undo. Gloss's IconButton (the
-            # one sanctioned class) carrying the Lucide x
-            # (Admin::Icon), its aria-label the name the glyph cannot
-            # show; the card UI's removal register — low-contrast at
-            # rest, danger on hover — is admin.css's.
-            if birthday
-              clear = "$el.closest('.date-row').querySelectorAll('select, input').forEach(el => el.value = '')"
-              button(type: "button", class: "icon-button", data_size: "sm",
-                     aria_label: "Remove birthday", "@click": clear) do
-                render Icon.new(:x)
-              end
+            birthday_controls(birthday)
+            # The remove control: three blanks is the rule that
+            # removes and this is its one-click spelling — @click
+            # empties the row's controls, the blank rule and the
+            # struck caption do the rest, and retyping the date is
+            # the undo. Gloss's IconButton (the one sanctioned
+            # class) carrying the Lucide x (Admin::Icon), its
+            # aria-label the name the glyph cannot show; the card
+            # UI's removal register — low-contrast at rest, danger
+            # on hover — is admin.css's.
+            clear = "$el.closest('.date-row').querySelectorAll('select, input').forEach(el => el.value = '')"
+            button(type: "button", class: "icon-button", data_size: "sm",
+                   aria_label: "Remove birthday", "@click": clear) do
+              render Icon.new(:x)
             end
           end
         end
+      end
+
+      # The birthday row's three controls, shared by the standing
+      # row and the add dialog's — month-day-year to match the prose
+      # Birthday#to_s renders; a select for the month because a name
+      # is the friendlier read and constrains the value by
+      # construction, number inputs with native ranges for the day
+      # and year. The same names for both callers is the point: a
+      # birthday needs no digest, there being at most one, and the
+      # save reads either caller's row identically. A nil birthday
+      # is the added row — nothing selected, nothing prefilled.
+      #: (Birthday? birthday, ?focus: bool) -> void
+      def birthday_controls(birthday, focus: false)
+        select(name: "birthday[month]", aria_label: "month",
+               "x-init": focus ? "$el.focus()" : nil) do
+          option(value: "", selected: birthday&.month.nil?) { "month" }
+          Date::MONTHNAMES.compact.each_with_index do |name, index|
+            option(value: index + 1, selected: birthday&.month == index + 1) { name }
+          end
+        end
+        input(type: "number", name: "birthday[day]", value: birthday&.day,
+              min: 1, max: 31, placeholder: "day", aria_label: "day")
+        input(type: "number", name: "birthday[year]", value: birthday&.year,
+              min: 1, max: 9999, placeholder: "year", aria_label: "year")
       end
 
       # An address row: the type's caption and a stack of component
@@ -341,8 +374,10 @@ module ProTacts
       # the form, and what it changes is visible in the card the
       # moment the popover closes.
       #
-      # The three options are the three kinds of row the save can
-      # insert; a fourth, birthday, arrives with its own doc.
+      # The options are the kinds of row the save can insert, the
+      # birthday only over a contact that holds none (#addable_types)
+      # — and its radio leaves the list the moment its row stands,
+      # so the dialog never names what cannot be added again.
       #
       # The radios share a `name` so they are one native group —
       # arrow-key navigation and "1 of n" come from that, not from
@@ -360,10 +395,14 @@ module ProTacts
         dialog(id: "add-property", popover: "auto") do
           header { "Add a property" }
           div(class: "field-stack", role: "radiogroup", aria_label: "Type") do
-            ADDABLE_TYPES.each do |kind|
+            addable_types.each do |kind|
               # A label wrapping its own radio is Gloss's Radio, told
               # apart from Field structurally rather than by class.
-              label do
+              # The birthday's radio leaves the list once its row
+              # stands — x-show rather than a template x-if, so the
+              # native group keeps its shape and the option only
+              # disappears.
+              label("x-show": kind == "birthday" ? "!added.includes('birthday')" : nil) do
                 input(type: "radio", name: "add-type", value: kind, "x-model": "type")
                 plain kind
               end
@@ -376,11 +415,27 @@ module ProTacts
             # `popovertargetaction`: a button cannot both run this
             # handler and carry the declarative hide, and the row has
             # to exist before the dialog goes away or `x-init`'s focus
-            # lands on an element nobody can see.
+            # lands on an element nobody can see. The guard on the
+            # push is the birthday's: a hidden radio can stay the
+            # model's pick (x-model holds its last value), so Add
+            # itself refuses a second one — the row that cannot usefully
+            # repeat, its fields a group Rack would collapse to the
+            # last copy.
             button(type: "button", data: {variant: "primary"},
-                   "@click": "added.push(type); $el.closest('dialog').hidePopover()") { "Add" }
+                   "@click": "(type !== 'birthday' || !added.includes('birthday')) && added.push(type); " \
+                            "$el.closest('dialog').hidePopover()") { "Add" }
           end
         end
+      end
+
+      # The dialog's list: everything the save can insert, minus a
+      # birthday the contact already holds — one being the most a
+      # card carries, and the dialog naming only what can still be
+      # added. The row is the same guard from the other side,
+      # rendering only over a held birthday.
+      #: () -> Array[String]
+      def addable_types
+        @contact.birthday ? ADDABLE_TYPES - ["birthday"] : ADDABLE_TYPES
       end
     end
   end

@@ -665,10 +665,13 @@ module ProTacts
 
       # The birthday row's parse — request validity, standing with the
       # name check rather than the stored-state conditionals below
-      # (write_card's ordering rule). A POST from anything but this
-      # form carries no birthday group and keeps the model, the
-      # phones' is-a-Hash posture; a group of three blanks is the
-      # row's blank-equals-absent, a removal. The browser's number
+      # (write_card's ordering rule). A POST that carries no birthday
+      # group keeps the model, the phones' is-a-Hash posture — this
+      # form's own save does when it rendered no birthday row, no
+      # birthday held and none added from the dialog
+      # (Admin::ContactsEdit), and anything else never carried one; a
+      # group of three blanks is the row's blank-equals-absent, a
+      # removal. The browser's number
       # inputs make garbage a hand-crafted POST's own, so the refusal
       # is the name toast's backstop sibling: the constructor's
       # ArgumentError is the grammar's own refusal, caught at the one

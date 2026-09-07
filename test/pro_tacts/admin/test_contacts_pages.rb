@@ -649,10 +649,13 @@ class AdminContactsPagesTest < Minitest::Test
     assert_equal 404, last_response.status
   end
 
-  # The removal state rides only where blanking deletes: nickname,
-  # note, and birthday render whether or not the contact carries
-  # one, and a box that rendered empty cannot lose anything — no
-  # attribute, no "removed on save" in it, no remove button.
+  # The removal state rides only where blanking deletes: nickname
+  # and note render whether or not the contact carries one, and a
+  # box that rendered empty cannot lose anything — no attribute, no
+  # "removed on save" in it, no remove button. The birthday row
+  # does not render at all over a birthday unheld: absence is added
+  # by the dialog like any other property, not scaffolded as an
+  # empty row — the radio leaves the list the moment its row stands.
   def test_rows_without_a_property_to_lose_state_no_removal
     bare = ADA.sub("NOTE:Countess of Lovelace.\r\n", "").sub("BDAY:1985-12-10\r\n", "")
 
@@ -662,7 +665,9 @@ class AdminContactsPagesTest < Minitest::Test
       body = last_response.body
       assert_includes body, '<label class="field"><span>Nickname</span><input type="text" name="nickname"></label>'
       assert_includes body, '<textarea name="note" rows="4"></textarea>'
-      assert_includes body, '<div class="field"><span>birthday</span><div class="date-row">'
+      refute_includes body, '<span>birthday</span>'
+      assert_includes body,
+        '<label x-show="!added.includes(\'birthday\')"><input type="radio" name="add-type" value="birthday" x-model="type">birthday</label>'
       refute_includes body, "icon-button"
     end
   end
@@ -1126,6 +1131,9 @@ class AdminContactsPagesTest < Minitest::Test
       # glyph carries the label.
       assert_includes body,
         %(<button type="button" class="icon-button" data-size="sm" aria-label="Remove birthday" @click="$el.closest('.date-row').querySelectorAll('select, input').forEach(el => el.value = '')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>)
+      # A held birthday is not addable again: the dialog's list drops
+      # the type.
+      refute_includes body, 'value="birthday"'
     end
   end
 
@@ -1197,9 +1205,32 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # A POST from anything but this form carries no birthday group and
-  # keeps the model, the phones' is-a-Hash posture — a group the
-  # request never carried touches nothing.
+  # A birthday added from the dialog saves like one edited: the
+  # added row names the same birthday[] group the standing row
+  # would, the group parses into the model, and the served card
+  # composes the line over the card's untouched bytes.
+  def test_a_birthday_added_from_the_dialog_saves
+    bare = ADA.sub("BDAY:1985-12-10\r\n", "")
+
+    with_contacts({"ada" => bare}) do |store|
+      assert_nil store.contact("ada").birthday
+
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               birthday: {"month" => "3", "day" => "14", "year" => "1879"}
+
+      assert_equal 303, last_response.status
+      contact = store.contact("ada")
+      assert_equal ProTacts::Birthday.new(year: 1879, month: 3, day: 14), contact.birthday
+      assert_includes contact.vcard.to_s, "BDAY:1879-03-14\r\n"
+
+      follow_redirect!
+      assert_includes last_response.body, "March 14, 1879"
+    end
+  end
+
+  # A POST that carries no birthday group keeps the model, the
+  # phones' is-a-Hash posture — a group the request never carried
+  # touches nothing, this form's own no-row save included.
   def test_a_save_without_birthday_fields_leaves_the_model_alone
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag
@@ -1278,9 +1309,10 @@ class AdminContactsPagesTest < Minitest::Test
         '<a href="/contacts/ada" class="type-label">‹ Ada Lovelace</a>' \
         '<button type="button" data-size="sm" popovertarget="add-property">add property</button></div>'
       assert_includes body, '<dialog id="add-property" popover="auto">'
-      # A radio group of every kind the save can insert: ADDABLE_TYPES
-      # is the list. The shared `name` is what makes them a native
-      # group; it is never submitted, the dialog having no form owner.
+      # A radio group of the kinds the save can insert, minus the
+      # birthday this contact holds (#addable_types). The shared
+      # `name` is what makes them a native group; it is never
+      # submitted, the dialog having no form owner.
       assert_includes body,
         '<div class="field-stack" role="radiogroup" aria-label="Type">' \
         '<label><input type="radio" name="add-type" value="phone" x-model="type">phone</label>' \
@@ -1290,7 +1322,11 @@ class AdminContactsPagesTest < Minitest::Test
         '<button type="button" popovertarget="add-property" popovertargetaction="hide">Cancel</button>'
       # Add makes the row and then hides the popover, in that order —
       # the row has to exist before x-init's focus can land on it.
-      assert_includes body, %(@click="added.push(type); $el.closest('dialog').hidePopover()")
+      # The guard refuses a second birthday: a hidden radio can stay
+      # x-model's pick, and the row's fields are one group Rack
+      # would collapse to the last copy.
+      assert_includes body,
+        %(@click="(type !== 'birthday' || !added.includes('birthday')) && added.push(type); $el.closest('dialog').hidePopover()")
     end
   end
 
@@ -1310,7 +1346,7 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes body,
         '<template x-for="(kind, i) in added" :key="i"><div class="field">' \
         '<span x-text="kind"></span>' \
-        '<template x-if="kind !== \'address\'">' \
+        '<template x-if="kind !== \'address\' && kind !== \'birthday\'">' \
         '<input :type="kind === \'phone\' ? \'tel\' : kind" :name="`new_${kind}[]`" :aria-label="kind" x-init="$el.focus()">' \
         '</template>' \
         '<template x-if="kind === \'address\'">' \
@@ -1321,6 +1357,19 @@ class AdminContactsPagesTest < Minitest::Test
         '<input type="text" :name="`new_address[${i}][region]`" placeholder="region" aria-label="region">' \
         '<input type="text" :name="`new_address[${i}][postal_code]`" placeholder="postal code" aria-label="postal code">' \
         '<input type="text" :name="`new_address[${i}][country]`" placeholder="country" aria-label="country">' \
+        '</div></template>'
+      # The birthday kind: the standing row's own three controls with
+      # nothing prefilled, naming the model's birthday[] group — no
+      # digest, a contact holding at most one, and no removal state,
+      # the added rows' exemption. Asserted in two contiguous pieces:
+      # the month names sit between the empty option and December.
+      assert_includes body,
+        '<template x-if="kind === \'birthday\'"><div class="date-row">' \
+        '<select name="birthday[month]" aria-label="month" x-init="$el.focus()"><option value="" selected>month</option>'
+      assert_includes body,
+        '<option value="12">December</option></select>' \
+        '<input type="number" name="birthday[day]" min="1" max="31" placeholder="day" aria-label="day">' \
+        '<input type="number" name="birthday[year]" min="1" max="9999" placeholder="year" aria-label="year">' \
         '</div></template></div></template>'
       # The template is inside the edit form, so one Save writes every
       # row it made along with everything else. Indexed from the
