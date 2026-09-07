@@ -1059,6 +1059,164 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  ## Editing the birthday
+
+  # The one row that saves to the model rather than the card: the
+  # prefill is Contact#birthday, three controls on one line — a month
+  # select (names, constrained by construction) and ranged number
+  # inputs — in the value column, month-day-year matching the prose
+  # the details page renders.
+  def test_the_edit_screen_renders_the_birthday_row
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada/edit"
+
+      body = last_response.body
+      assert_includes body,
+        '<div class="field"><span>birthday</span><div class="date-row">' \
+        '<select name="birthday[month]" aria-label="month"><option value="">month</option>'
+      assert_includes body, '<option value="12" selected>December</option></select>'
+      assert_includes body,
+        '<input type="number" name="birthday[day]" value="10" min="1" max="31" placeholder="day" aria-label="day">'
+      assert_includes body,
+        '<input type="number" name="birthday[year]" value="1985" min="1" max="9999" placeholder="year" aria-label="year">'
+    end
+  end
+
+  # A birthday edit is a model write: the served card composes the new
+  # BDAY, the stored bytes never move, and the change-log entry carries
+  # the new composed etag — a client's token sees what a device
+  # downloads (Store#rewrite).
+  def test_saving_a_changed_birthday_moves_the_served_card_only
+    with_contacts({"ada" => ADA}) do |store|
+      before = store.contact("ada").stored.to_s
+      post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
+                               etag: store.contact("ada").etag,
+                               birthday: {"month" => "4", "day" => "12", "year" => "1990"}
+
+      assert_equal 303, last_response.status
+      contact = store.contact("ada")
+      assert_equal before, contact.stored.to_s
+      assert_includes contact.vcard.to_s, "BDAY:1990-04-12\r\n"
+      assert_equal contact.etag, store.changes.last.etag
+
+      follow_redirect!
+      assert_includes last_response.body, "April 12, 1990"
+    end
+  end
+
+  # A birthday without a year is the one partial shape the wire
+  # carries — composed as Apple's sentinel, the form a client has been
+  # verified to accept (docs/plans/2026-08-31-partial-birthdays.md).
+  def test_a_birthday_without_a_year_is_saved_and_served_apples_way
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               birthday: {"month" => "12", "day" => "10", "year" => ""}
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s,
+        "BDAY;X-APPLE-OMIT-YEAR=1604:1604-12-10\r\n"
+    end
+  end
+
+  # The shapes no client renders are editable all the same — the model
+  # holds them, the web UI shows them, and nothing composes on their
+  # behalf: their documented fate.
+  def test_a_month_alone_is_saved_and_serves_nothing
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               birthday: {"month" => "4", "day" => "", "year" => ""}
+
+      assert_equal 303, last_response.status
+      contact = store.contact("ada")
+      assert_equal ProTacts::Birthday.new(month: 4), contact.birthday
+      refute_includes contact.vcard.to_s, "BDAY:"
+
+      follow_redirect!
+      assert_includes last_response.body, "April"
+    end
+  end
+
+  # Three blanks remove the birthday, the form's blank-equals-absent —
+  # the model row goes and the composed card with it.
+  def test_a_blank_birthday_removes_it
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               birthday: {"month" => "", "day" => "", "year" => ""}
+
+      assert_equal 303, last_response.status
+      contact = store.contact("ada")
+      assert_nil contact.birthday
+      refute_includes contact.vcard.to_s, "BDAY"
+    end
+  end
+
+  # A POST from anything but this form carries no birthday group and
+  # keeps the model, the phones' is-a-Hash posture — a group the
+  # request never carried touches nothing.
+  def test_a_save_without_birthday_fields_leaves_the_model_alone
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      assert_equal ProTacts::Birthday.new(year: 1985, month: 12, day: 10),
+        store.contact("ada").birthday
+    end
+  end
+
+  # A shape the grammar refuses — a year and a day with no month
+  # between them — is a toast and nothing written: the constructor's
+  # ArgumentError is the refusal, caught where a re-render is the
+  # fallback. The browser's number inputs make this a hand-crafted
+  # POST's own, the name toast's backstop sibling.
+  def test_a_year_and_day_without_a_month_is_refused
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               birthday: {"month" => "", "day" => "12", "year" => "1985"}
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body,
+        '<div role="status" data-fixed><span>That birthday is not a shape a date can take.</span></div>'
+      assert_equal ProTacts::Birthday.new(year: 1985, month: 12, day: 10),
+        store.contact("ada").birthday
+    end
+  end
+
+  def test_nonsense_in_a_birthday_field_is_refused
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               birthday: {"month" => "4", "day" => "12", "year" => "19x5"}
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "That birthday is not a shape a date can take."
+      assert_equal ProTacts::Birthday.new(year: 1985, month: 12, day: 10),
+        store.contact("ada").birthday
+    end
+  end
+
+  # The one state the row cannot write: a stored card carrying its own
+  # BDAY spelling (the model refused it, so it stayed in the card) — a
+  # submitted birthday would compose a second BDAY beside it. Refused
+  # whole, name edit included: one submit, one write.
+  def test_a_birthday_against_a_cards_own_spelling_is_refused
+    resident = ADA.sub("BDAY:1985-12-10\r\n", "BDAY:1985-04\r\n")
+
+    with_contacts({"ada" => resident}) do |store|
+      assert_nil store.contact("ada").birthday
+
+      post "/contacts/ada", first: "Grace", last: "Hopper", etag: store.contact("ada").etag,
+                               birthday: {"month" => "4", "day" => "", "year" => "1985"}
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body,
+        '<div role="status" data-fixed><span>This contact&#39;s card carries its own birthday spelling; nothing was saved.</span></div>'
+      contact = store.contact("ada")
+      assert_nil contact.birthday
+      assert_equal 1, contact.vcard.to_s.scan("BDAY").length
+      assert_includes contact.vcard.to_s, "BDAY:1985-04\r\n"
+      assert_includes contact.vcard.to_s, "FN:Ada Lovelace\r\n"
+    end
+  end
+
   ## Adding a property
 
   # The add affordance: a trigger on the back link's line — the place

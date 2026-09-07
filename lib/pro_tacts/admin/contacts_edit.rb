@@ -1,3 +1,5 @@
+require "date"
+
 require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/layout"
@@ -10,8 +12,9 @@ module ProTacts
     # properties the save knows how to address. The cardinality-1 set
     # — name, nickname, note — saves through VCard#replace under each
     # field; the phone, email, and address rows save through
-    # VCard#substitute, each named by its line's digest. Birthday
-    # arrives last, with its own doc.
+    # VCard#substitute, each named by its line's digest; the birthday
+    # row saves to the model, no card line existing to address
+    # (docs/plans/2026-09-07-web-birthday-editor.md).
     #
     # The fields prefill from the accessors' unescaped readings, and
     # blank equals absent on the way back (Web#edited_card), so write
@@ -137,6 +140,7 @@ module ProTacts
                     end
                   end
                   @contact.addresses.each { address_row(it) }
+                  birthday_row
                   added_rows
                   label(class: "field") do
                     span { "Note" }
@@ -204,6 +208,41 @@ module ProTacts
                 end
               end
             end
+          end
+        end
+      end
+
+      # The birthday row: the one row that saves to the model rather
+      # than the card's bytes (docs/plans/2026-09-07-web-birthday-editor.md)
+      # — a partial date has no vCard 3.0 spelling, so there is no
+      # line to address and the prefill is the model
+      # (Contact#birthday), not a reading off the card. Three controls
+      # in the value column, month-day-year to match the prose
+      # Birthday#to_s renders; a select for the month because a name
+      # is the friendlier read and constrains the value by
+      # construction, number inputs with native ranges for the day and
+      # year. A blank component is an absence and three blanks remove
+      # the birthday, the form's blank-equals-absent; a day without
+      # its month is refused at the save, the grammar's own rule.
+      # Every shape the grammar admits is editable, including the ones
+      # no client renders — they live here and go nowhere, their
+      # documented fate.
+      #: () -> void
+      def birthday_row
+        birthday = @contact.birthday
+        div(class: "field") do
+          span { "birthday" }
+          div(class: "date-row") do
+            select(name: "birthday[month]", aria_label: "month") do
+              option(value: "", selected: birthday&.month.nil?) { "month" }
+              Date::MONTHNAMES.compact.each_with_index do |name, index|
+                option(value: index + 1, selected: birthday&.month == index + 1) { name }
+              end
+            end
+            input(type: "number", name: "birthday[day]", value: birthday&.day,
+                  min: 1, max: 31, placeholder: "day", aria_label: "day")
+            input(type: "number", name: "birthday[year]", value: birthday&.year,
+                  min: 1, max: 9999, placeholder: "year", aria_label: "year")
           end
         end
       end

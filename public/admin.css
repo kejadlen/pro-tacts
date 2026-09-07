@@ -114,6 +114,26 @@
 .card-body form.field-stack .field > .field-stack {
   gap: var(--gl-space-2xs);
 }
+/* The birthday row's three controls — month, day, year — sit on one
+   line in the value column: a date is one value, not three fields,
+   and the line it reads on matches the prose the details page
+   renders (Birthday#to_s's "December 10, 1985"). The month select
+   grows to carry "September"; the number inputs hold their own
+   widths and shed the same block padding every other record control
+   sheds. */
+.card-body form.field-stack .field > .date-row {
+  display: flex;
+  gap: var(--gl-space-2xs);
+}
+.card-body form.field-stack .field > .date-row > select {
+  flex: 1 1 auto;
+  padding-block: var(--gl-space-2xs);
+}
+.card-body form.field-stack .field > .date-row > input {
+  flex: 0 0 auto;
+  width: 6ch;
+  padding-block: var(--gl-space-2xs);
+}
 /* A multiline control has no single line to align a caption to, and
    what a browser calls its baseline is not settled — a scroll
    container's can be synthesized from its border box, which would

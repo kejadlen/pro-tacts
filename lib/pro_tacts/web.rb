@@ -663,6 +663,27 @@ module ProTacts
       last = r.params["last"].to_s.strip
       return edit_screen(contact, notice: "A contact needs a name.") if first.empty? && last.empty?
 
+      # The birthday row's parse — request validity, standing with the
+      # name check rather than the stored-state conditionals below
+      # (write_card's ordering rule). A POST from anything but this
+      # form carries no birthday group and keeps the model, the
+      # phones' is-a-Hash posture; a group of three blanks is the
+      # row's blank-equals-absent, a removal. The browser's number
+      # inputs make garbage a hand-crafted POST's own, so the refusal
+      # is the name toast's backstop sibling: the constructor's
+      # ArgumentError is the grammar's own refusal, caught at the one
+      # boundary with a re-render to fall back to.
+      birthday =
+        if (fields = r.params["birthday"]).is_a?(Hash)
+          begin
+            parse_birthday(fields)
+          rescue ArgumentError
+            return edit_screen(contact, notice: "That birthday is not a shape a date can take.")
+          end
+        else
+          contact.birthday
+        end
+
       # The snapshot guard, the lost-update half If-Match gives DAV
       # clients (RFC 7232 section 3.1): the form carried the etag of
       # the card it was rendered from, and a contact that hashes
@@ -673,7 +694,19 @@ module ProTacts
       # race window between check and write, noted there.
       return edit_screen(contact, notice: "This contact changed since the page loaded; nothing was saved.") if r.params["etag"].to_s != contact.etag
 
-      store.rewrite(id, edited_card(contact, first, last, r.params).to_s, birthday: contact.birthday)
+      # A stored card carrying its own BDAY lines is the one state the
+      # birthday row cannot write: the model is empty and the spelling
+      # stayed in the card because no served form recomposes it
+      # (Store#put's case analysis), so a birthday submitted here would
+      # compose a second BDAY beside the card's own. Refused whole —
+      # one submit, one etag check, one write
+      # (docs/plans/2026-09-07-web-birthday-editor.md, which also
+      # records the migration not taken).
+      if birthday && contact.stored.lines.any? { it.names?("BDAY") }
+        return edit_screen(contact, notice: "This contact's card carries its own birthday spelling; nothing was saved.")
+      end
+
+      store.rewrite(id, edited_card(contact, first, last, r.params).to_s, birthday:)
       r.redirect "/contacts/#{id}", 303
     end
 
@@ -882,6 +915,38 @@ module ProTacts
 
       header = property ? VCard.header_of(property) : "ADR:"
       "#{header}#{components.join(";")}\r\n"
+    end
+
+    # The birthday row's parse: each blank component is an absence
+    # and three blanks are no birthday, so Birthday's constructor is
+    # the whole grammar — six shapes, ranges standing where the
+    # components stand — and the digit check before it keeps to_i
+    # honest (a "19x5" is not the year 19). All three blank returns
+    # before the constructor, the grammar refusing nothing-at-all;
+    # raises ArgumentError otherwise, the constructor's own refusal
+    # class, for the save to catch and re-render — nothing here
+    # reaches Sentry, bad input being ordinary and the toast the
+    # fallback.
+    #: (untyped fields) -> Birthday?
+    def parse_birthday(fields)
+      year = birthday_component(fields["year"])
+      month = birthday_component(fields["month"])
+      day = birthday_component(fields["day"])
+      return if year.nil? && month.nil? && day.nil?
+
+      Birthday.new(year:, month:, day:)
+    end
+
+    # One component off the wire: nil for blank, the integer it names
+    # otherwise. Digits only — a month select and ranged number inputs
+    # are the browser's own constraint, and this is the server's.
+    #: (untyped submitted) -> Integer?
+    def birthday_component(submitted)
+      value = submitted.to_s.strip
+      return nil if value.empty?
+      raise ArgumentError, "not a number a birthday holds: #{value.inspect}" unless value.match?(/\A\d{1,4}\z/)
+
+      value.to_i
     end
 
     # A text property's replacement lines: the escaped value (RFC 2426

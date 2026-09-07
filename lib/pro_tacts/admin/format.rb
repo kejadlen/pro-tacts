@@ -23,16 +23,18 @@ module ProTacts
         (contact.name || contact.id).to_s.strip[0].to_s.upcase
       end
 
-      # The birthday a card carries, for display: the model's when the
-      # card carries one it recomposes, otherwise any well-shaped
-      # stored spelling parsed by Birthday.from_value — bare properties
-      # only, like the model's own reads — and the raw value for
-      # everything else, shown as stored. The prose itself is
+      # A contact's birthday, for display: the model's — composed into
+      # the served card when a client can carry it, held alone when no
+      # form serves it (the editor can save a shape nothing renders,
+      # and the details page still shows what the record holds) — then
+      # any well-shaped stored spelling parsed by Birthday.from_value,
+      # bare properties only, like the model's own reads, and the raw
+      # value for everything else, shown as stored. The prose itself is
       # Birthday#to_s, every shape's one rendering.
       #: (Contact contact) -> String?
       def self.birthday(contact)
         property = contact.properties.find { it.name.casecmp?("BDAY") }
-        return nil if property.nil?
+        return contact.birthday&.to_s if property.nil?
 
         birthday = contact.birthday
         if birthday.nil? && property.group.nil? && property.parameters.empty?
