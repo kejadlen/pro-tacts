@@ -673,7 +673,7 @@ module ProTacts
       # race window between check and write, noted there.
       return edit_screen(contact, notice: "This contact changed since the page loaded; nothing was saved.") if r.params["etag"].to_s != contact.etag
 
-      store.rewrite(id, edited_card(contact, first, last, r.params).to_s)
+      store.rewrite(id, edited_card(contact, first, last, r.params).to_s, birthday: contact.birthday)
       r.redirect "/contacts/#{id}", 303
     end
 

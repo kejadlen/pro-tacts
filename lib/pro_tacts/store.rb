@@ -287,24 +287,28 @@ module ProTacts
       contact
     end
 
-    # The store's own editor changed a stored card: upsert the bytes,
-    # reindex, and record the change-log entry carrying the composed
-    # etag a client would download — and touch nothing else. Not #put,
-    # which answers a client's submission and reads a BDAY-less card as
-    # a birthday the client dropped (its rewrite arm deletes the model
+    # The store's own editor changed a contact: upsert the card's
+    # bytes and the birthday beside it, reindex, and record one
+    # change-log entry carrying the composed etag a client would
+    # download — the served card moves when either half moves, so one
+    # save is one entry however it split between them. Not #put, which
+    # answers a client's submission and reads a BDAY-less card as a
+    # birthday the client dropped (its rewrite arm deletes the model
     # row accordingly): an editor's save carries no BDAY line by
-    # construction, so running it through put would delete every edited
-    # contact's birthday. rewrite's input is the stored card by
-    # definition, and the model row rides along untouched
-    # (docs/plans/2026-09-05-web-card-editor.md).
-    #: (String id, String vcard) -> Contact
-    def rewrite(id, vcard)
+    # construction, so running it through put would delete every
+    # edited contact's birthday. rewrite's card input is the stored
+    # one by definition, and the birthday passed beside it is the
+    # model's whole new state — an upsert or a delete, never a splice
+    # (docs/plans/2026-09-07-web-birthday-editor.md).
+    #: (String id, String vcard, birthday: Birthday?) -> Contact
+    def rewrite(id, vcard, birthday:)
       card = VCard.new(vcard)
-      contact = Contact.for(id:, stored: card, birthday: birthday_of(id))
+      contact = Contact.for(id:, stored: card, birthday:)
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
           .insert(id: contact.id, vcard: card.to_s)
+        write_birthday(contact.id, birthday)
         record(contact.id, "edit", contact.etag)
         reindex(contact.id, card)
       end
