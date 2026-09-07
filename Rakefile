@@ -20,6 +20,9 @@ task :dev do
   # a fresh `rake dev` is what resets to the fixtures. The data lives in
   # a session-scoped tmpdir: two servers running at once each get their
   # own database, and the directory goes when the task does.
+  # entr's watch list is fd's snapshot at launch: a file created
+  # after `rake dev` starts is never watched, and edits to it never
+  # reload the server — restart the task when work adds a file.
   # A dev session's debug exchanges go to their own log, truncated per
   # start, so reading a session back never means picking it out of older
   # ones — log/debug.log stays the deployment default. An exported
