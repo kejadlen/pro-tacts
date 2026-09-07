@@ -173,7 +173,10 @@
    name being the wide value and the two digit boxes pairing, and
    the button beside the month, where desktop's line has it. The
    digit boxes shed their desktop width to fill their half-tracks,
-   the address row's stacked fields the same reading. The row is
+   the address row's stacked fields the same reading. A second
+   break, at 21rem, gives each field its own line — the digit pair
+   wants its desktop width a box, and a half-track that cannot
+   hold its digits is not a pair. The row is
    the query container rather than the viewport because the value
    column's width is the thing being asked about, and the reading
    column, the type column, and the viewport all conspire to set it
@@ -207,6 +210,27 @@
   }
   .card-body form.field-stack .field > .date-row > .icon-button {
     grid-area: 1 / 3;
+  }
+}
+/* The second break: two columns — field and button — one row per
+   field. Every grid-area restates the first block's own, because a
+   query that matches both resolves ties by file order and the
+   narrower block sits later. */
+@container (width < 21rem) {
+  .card-body form.field-stack .field > .date-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .card-body form.field-stack .field > .date-row > select {
+    grid-area: 1 / 1;
+  }
+  .card-body form.field-stack .field > .date-row > input {
+    grid-area: 2 / 1;
+  }
+  .card-body form.field-stack .field > .date-row > input:last-of-type {
+    grid-area: 3 / 1;
+  }
+  .card-body form.field-stack .field > .date-row > .icon-button {
+    grid-area: 1 / 2;
   }
 }
 /* A multiline control has no single line to align a caption to, and
