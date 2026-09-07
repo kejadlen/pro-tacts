@@ -633,8 +633,11 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes body, '<form action="/contacts/red" method="post" class="field-stack">'
       assert_includes body, '<input type="text" name="first" value="Ada" required autofocus>'
       assert_includes body, '<input type="text" name="last" value="Lovelace">'
-      assert_includes body, '<input type="text" name="nickname" value="Red">'
-      assert_includes body, "<textarea name=\"note\" rows=\"4\">Countess of Lovelace.</textarea>"
+      assert_includes body,
+        '<label class="field" data-blank-removes><span>Nickname</span>' \
+        '<input type="text" name="nickname" value="Red" placeholder="removed on save"></label>'
+      assert_includes body,
+        "<textarea name=\"note\" rows=\"4\" placeholder=\"removed on save\">Countess of Lovelace.</textarea>"
       # The etag carries its quotes, HTML-escaped in the attribute.
       assert_includes body, %(<input type="hidden" name="etag" value="&quot;#{store.contact("red").etag.delete('"')}&quot;">)
     end
@@ -644,6 +647,42 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({}) { get "/contacts/nope/edit" }
 
     assert_equal 404, last_response.status
+  end
+
+  # The removal state rides only where blanking deletes: nickname,
+  # note, and birthday render whether or not the contact carries
+  # one, and a box that rendered empty cannot lose anything — no
+  # attribute, no "removed on save" in it, no remove button.
+  def test_rows_without_a_property_to_lose_state_no_removal
+    bare = ADA.sub("NOTE:Countess of Lovelace.\r\n", "").sub("BDAY:1985-12-10\r\n", "")
+
+    with_contacts({"ada" => bare}) do
+      get "/contacts/ada/edit"
+
+      body = last_response.body
+      assert_includes body, '<label class="field"><span>Nickname</span><input type="text" name="nickname"></label>'
+      assert_includes body, '<textarea name="note" rows="4"></textarea>'
+      assert_includes body, '<div class="field"><span>birthday</span><div class="date-row">'
+      refute_includes body, "icon-button"
+    end
+  end
+
+  # A po box has no field, and the save's removal is blank throughout,
+  # po box included (Web#address_line) — so a line surviving by its po
+  # box alone cannot be removed from this form, and its row, blank as
+  # it renders, wears no removal state.
+  def test_a_po_box_only_address_row_wears_no_removal_state
+    po = ADA.sub(
+      "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
+      "ADR;TYPE=home:PO Box 1;;;;;",
+    )
+
+    with_contacts({"ada" => po}) do
+      get "/contacts/ada/edit"
+
+      assert_includes last_response.body,
+        '<div class="field"><span>home</span><div class="field-stack">'
+    end
   end
 
   # The details page names its other mode: the edit link rides the
@@ -777,7 +816,9 @@ class AdminContactsPagesTest < Minitest::Test
 
       digest = store.contact("ada").phones.first.line.digest
       body = last_response.body
-      assert_includes body, '<label class="field"><span>mobile</span><input type="tel" name="phone[' + digest + ']" value="+1-555-0100"></label>'
+      assert_includes body,
+        '<label class="field" data-blank-removes><span>mobile</span>' \
+        '<input type="tel" name="phone[' + digest + ']" value="+1-555-0100" placeholder="removed on save"></label>'
     end
   end
 
@@ -792,7 +833,8 @@ class AdminContactsPagesTest < Minitest::Test
 
       digest = store.contact("ada").emails.first.line.digest
       assert_includes last_response.body,
-        '<label class="field"><span>home</span><input type="email" name="email[' + digest + ']" value="ada@example.com"></label>'
+        '<label class="field" data-blank-removes><span>home</span>' \
+        '<input type="email" name="email[' + digest + ']" value="ada@example.com" placeholder="removed on save"></label>'
     end
   end
 
@@ -895,7 +937,7 @@ class AdminContactsPagesTest < Minitest::Test
       digest = store.contact("ada").addresses.first.line.digest
       body = last_response.body
       assert_includes body,
-        '<div class="field"><span>home</span><div class="field-stack">' \
+        '<div class="field" data-blank-removes><span>home</span><div class="field-stack">' \
         '<input type="text" name="address[' + digest + '][street]" value="12 Analytical Way" placeholder="street" aria-label="street">' \
         '<input type="text" name="address[' + digest + '][extended]" placeholder="street 2" aria-label="street 2">' \
         '<input type="text" name="address[' + digest + '][locality]" value="London" placeholder="city" aria-label="city">'
@@ -1072,13 +1114,18 @@ class AdminContactsPagesTest < Minitest::Test
 
       body = last_response.body
       assert_includes body,
-        '<div class="field"><span>birthday</span><div class="date-row">' \
+        '<div class="field" data-blank-removes><span>birthday</span><div class="date-row">' \
         '<select name="birthday[month]" aria-label="month"><option value="">month</option>'
       assert_includes body, '<option value="12" selected>December</option></select>'
       assert_includes body,
         '<input type="number" name="birthday[day]" value="10" min="1" max="31" placeholder="day" aria-label="day">'
       assert_includes body,
         '<input type="number" name="birthday[year]" value="1985" min="1" max="9999" placeholder="year" aria-label="year">'
+      # The remove control: one click that speaks the three-blank
+      # rule, over a held birthday only — Gloss's IconButton, so the
+      # glyph carries the label.
+      assert_includes body,
+        %(<button type="button" class="icon-button" data-size="sm" aria-label="Remove birthday" @click="$el.closest('.date-row').querySelectorAll('select, input').forEach(el => el.value = '')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>)
     end
   end
 

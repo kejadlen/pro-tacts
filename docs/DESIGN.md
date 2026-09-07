@@ -50,9 +50,10 @@ What that inheritance actually means:
   this app that's the dialog or a toast.
 - Motion is `--gl-dur-fast` on hover and focus, named properties only, never
   `all`. Press is not animated. Nothing enters, nothing bounces.
-- Icons are Lucide at 16–20px, stroke in `currentColor`, never filled. Nothing
-  under `lib/pro_tacts/admin` vendors an icon set yet — until one lands, a
-  screen leads a row with its mono type label instead of an icon rather than
+- Icons are Lucide at 16–20px, stroke in `currentColor`, never filled. The
+  set is vendored glyph by glyph in `lib/pro_tacts/admin/icons.rb`, inlined
+  because `currentColor` cannot cross an `<img>` — until the glyph a screen
+  wants lands there, it leads the row with its mono type label rather than
   inventing a substitute.
 - No gradients, no blur, no translucency, no photography, no brand mark —
   "Pro-tacts" is rendered in type wherever a mark would go.

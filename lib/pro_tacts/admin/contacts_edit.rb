@@ -2,6 +2,7 @@ require "date"
 
 require "pro_tacts/admin/phlex"
 
+require "pro_tacts/admin/icons"
 require "pro_tacts/admin/layout"
 
 module ProTacts
@@ -18,7 +19,27 @@ module ProTacts
     #
     # The fields prefill from the accessors' unescaped readings, and
     # blank equals absent on the way back (Web#edited_card), so write
-    # and read agree on what an empty value means. The etag rides
+    # and read agree on what an empty value means. Blank's meaning is
+    # stated before the save, not only enforced by it: a standing row
+    # whose blanking deletes — a phone, email, or address line, the
+    # nickname or note property, a held birthday — wears
+    # `data-blank-removes`, its single-value box says "removed on
+    # save" in its blank, and admin.css strikes the caption in
+    # Gloss's danger color once every value in the row reads blank —
+    # destructive is what that color means there, carried by the
+    # caption rather than the boxes' borders, a blank row being a
+    # valid save and Gloss's danger border the aria-invalid
+    # contract. The birthday row earns a remove control of its own
+    # over a held birthday, three separate blanks being a rule
+    # nobody can guess: one click empties the row (Alpine's own
+    # verb, a mutation markup cannot do) and the blank rule does the
+    # rest. The state itself is CSS over :placeholder-shown, not
+    # Alpine — revealing a state over standing elements is markup's
+    # job (see Layout). The rows the add dialog reveals wear none of
+    # it, their blank a no-op rather than a removal; the rows that
+    # render whether or not the property exists wear it only over
+    # something to lose (each such row's comment says which). The
+    # etag rides
     # along hidden — the snapshot guard's half, the POST's refusal
     # being the other. `autofocus` on the first field: this screen's
     # entry point is the name, not the header search.
@@ -110,9 +131,15 @@ module ProTacts
                     span { "Last" }
                     input(type: "text", name: "last", value: @last)
                   end
-                  label(class: "field") do
+                  # The whole-property rows wear the removal state only
+                  # over a property the card carries: both render empty
+                  # when it does not, and a box that started blank
+                  # cannot lose anything — "removed on save" in it
+                  # would be a false alarm.
+                  label(class: "field", data: {blank_removes: !!@contact.nickname}) do
                     span { "Nickname" }
-                    input(type: "text", name: "nickname", value: @contact.nickname)
+                    input(type: "text", name: "nickname", value: @contact.nickname,
+                          placeholder: @contact.nickname ? "removed on save" : nil)
                   end
                   # A phone row edits its value and nothing else: the
                   # TYPE parameters ride in the line's own header,
@@ -127,24 +154,27 @@ module ProTacts
                   # of a pair of byte-identical rows means blanking
                   # one, saving, then editing the other.
                   @contact.phones.each do |phone|
-                    label(class: "field") do
+                    label(class: "field", data: {blank_removes: true}) do
                       span { phone.type || "phone" }
-                      input(type: "tel", name: "phone[#{phone.line.digest}]", value: phone.value)
+                      input(type: "tel", name: "phone[#{phone.line.digest}]",
+                            value: phone.value, placeholder: "removed on save")
                     end
                   end
                   # An email row, the phone row's own shape over EMAIL.
                   @contact.emails.each do |email|
-                    label(class: "field") do
+                    label(class: "field", data: {blank_removes: true}) do
                       span { email.type || "email" }
-                      input(type: "email", name: "email[#{email.line.digest}]", value: email.value)
+                      input(type: "email", name: "email[#{email.line.digest}]",
+                            value: email.value, placeholder: "removed on save")
                     end
                   end
                   @contact.addresses.each { address_row(it) }
                   birthday_row
                   added_rows
-                  label(class: "field") do
+                  label(class: "field", data: {blank_removes: !!@contact.notes}) do
                     span { "Note" }
-                    textarea(name: "note", rows: 4) { @contact.notes.to_s }
+                    textarea(name: "note", rows: 4,
+                             placeholder: @contact.notes ? "removed on save" : nil) { @contact.notes.to_s }
                   end
                   # Save is the form's submit; Cancel is navigation — a
                   # link in Gloss's `.btn` contract, which is what an
@@ -170,6 +200,9 @@ module ProTacts
       # nothing lingers after: an empty row waiting to be used is the
       # scaffold docs/DESIGN.md refuses, and a trailing one left over
       # from a row already filled is the same scaffold arriving late.
+      # A blank added row is a no-op rather than a removal
+      # (Web#edited_phones), so these rows wear no removal state —
+      # the class comment's exemption.
       # That verb — make a row, now, without a round trip — is what
       # CSS could not do and what Alpine is here for (see Layout).
       #
@@ -226,11 +259,13 @@ module ProTacts
       # its month is refused at the save, the grammar's own rule.
       # Every shape the grammar admits is editable, including the ones
       # no client renders — they live here and go nowhere, their
-      # documented fate.
+      # documented fate. The removal state rides only on a held
+      # birthday — the row renders empty without one, and three blanks
+      # over no birthday delete nothing.
       #: () -> void
       def birthday_row
         birthday = @contact.birthday
-        div(class: "field") do
+        div(class: "field", data: {blank_removes: !!birthday}) do
           span { "birthday" }
           div(class: "date-row") do
             select(name: "birthday[month]", aria_label: "month") do
@@ -243,6 +278,22 @@ module ProTacts
                   min: 1, max: 31, placeholder: "day", aria_label: "day")
             input(type: "number", name: "birthday[year]", value: birthday&.year,
                   min: 1, max: 9999, placeholder: "year", aria_label: "year")
+            # The remove control, over a held birthday only: three
+            # blanks is the rule that removes and this is its
+            # one-click spelling — @click empties the row's controls,
+            # the blank rule and the struck caption do the rest, and
+            # retyping the date is the undo. Gloss's IconButton (the
+            # one sanctioned class) carrying the Lucide x
+            # (Admin::Icon), its aria-label the name the glyph cannot
+            # show; the card UI's removal register — low-contrast at
+            # rest, danger on hover — is admin.css's.
+            if birthday
+              clear = "$el.closest('.date-row').querySelectorAll('select, input').forEach(el => el.value = '')"
+              button(type: "button", class: "icon-button", data_size: "sm",
+                     aria_label: "Remove birthday", "@click": clear) do
+                render Icon.new(:x)
+              end
+            end
           end
         end
       end
@@ -255,10 +306,15 @@ module ProTacts
       # names one — each input carries its placeholder as its
       # aria-label instead, and the caption is the type's. The digest
       # in each field's name is the row's address; the po box has no
-      # field, and the save preserves its bytes.
+      # field, and the save preserves its bytes. The removal state
+      # rides only on a line with no po box: the save's removal is
+      # blank throughout, po box included (Web#address_line), so a
+      # line surviving by its po box alone cannot be removed from
+      # this form at all — its row wears no state however blank it
+      # renders.
       #: (Contact::Address address) -> void
       def address_row(address)
-        div(class: "field") do
+        div(class: "field", data: {blank_removes: address.po_box.nil?}) do
           span { address.type || "address" }
           div(class: "field-stack") do
             ADDRESS_FIELDS.each do |component, label|

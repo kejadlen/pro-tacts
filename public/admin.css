@@ -147,6 +147,18 @@
   width: calc(7ch + 2 * var(--gl-space-s) + 2px);
   padding-block: var(--gl-space-3xs);
 }
+/* The birthday row's remove control (Admin::ContactsEdit): Gloss's
+   IconButton is already square, flex-none, and quiet — the one thing
+   this layer adds is centering it on the date line, whose children
+   stretch, and the removal register the card UI claims for itself
+   (docs/DESIGN.md): danger only on hover, the icon's stroke
+   inheriting it. */
+.card-body form.field-stack .field > .date-row > .icon-button {
+  align-self: center;
+}
+.card-body form.field-stack .field > .date-row > .icon-button:hover {
+  color: var(--gl-color-danger);
+}
 /* A multiline control has no single line to align a caption to, and
    what a browser calls its baseline is not settled — a scroll
    container's can be synthesized from its border box, which would
@@ -160,6 +172,38 @@
 }
 .card-body form.field-stack > .field:has(textarea) > span {
   padding-block-start: calc(var(--gl-space-3xs) + 1px);
+}
+
+/* Blank-equals-absent, stated before the save: a row wearing
+   data-blank-removes is one whose blanking deletes something
+   (Admin::ContactsEdit owns each row's decision to wear it), and
+   once every value in the row reads blank the caption strikes and
+   takes the danger color — the row's own name crossed out in the
+   color Gloss reserves for destructive, which this pending
+   deletion is. CSS over :placeholder-shown rather than Alpine,
+   because revealing a state over standing elements is the job
+   markup keeps here (see Admin::Layout). The single-value rows
+   also say it in the blanked box itself, their placeholder dyed
+   to match; the structured rows carry the struck caption alone,
+   each selector naming its row's own removal condition — an
+   address only blank throughout its components, a partial blank
+   keeping the line, and the birthday only with the month's own
+   empty option picked, both the save's rules. The boxes keep
+   their neutral borders: Gloss's danger border is the
+   aria-invalid contract, and a blank row is a valid save, not a
+   refused one. One gap, noted rather than scripted: a
+   whitespace-only value hides the placeholder and the strike with
+   it, while the save strips before it compares. */
+.field[data-blank-removes]:has(> input:placeholder-shown) > span,
+.field[data-blank-removes]:has(> textarea:placeholder-shown) > span,
+.field[data-blank-removes]:has(> .field-stack):not(:has(input:not(:placeholder-shown))) > span,
+.field[data-blank-removes]:has(> .date-row):has(option[value=""]:checked):not(:has(input:not(:placeholder-shown))) > span {
+  text-decoration: line-through;
+  color: var(--gl-color-danger);
+}
+.field[data-blank-removes]:has(> input:placeholder-shown) > input::placeholder,
+.field[data-blank-removes]:has(> textarea:placeholder-shown) > textarea::placeholder {
+  color: var(--gl-color-danger);
 }
 
 /* The editor's submit row: the buttons sit beside each other under

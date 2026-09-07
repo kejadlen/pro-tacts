@@ -8,7 +8,10 @@ require "pro_tacts/warnings"
 # own files eagerly inside the silence; the views require this file
 # instead of phlex, and every later require or autoload hit is a
 # no-op. sgml/state is in the set because it loads later still, at
-# the first render, and carries its own warning.
+# the first render, and carries its own warning. phlex/svg is in the
+# set because Admin::Icon (icons.rb) builds on it and because its
+# element methods re-register over SGML's, one redefined-method
+# warning per tag.
 #
 # Two warnings survive on purpose: sgml.rb passes &block to
 # before_template and after_template, which ignore it, and Ruby warns
@@ -19,5 +22,6 @@ require "pro_tacts/warnings"
 ProTacts.silence_warnings do
   require "phlex"
   require "phlex/html"
+  require "phlex/svg"
   require "phlex/sgml/state"
 end
