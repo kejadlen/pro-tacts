@@ -19,9 +19,12 @@ Pro-tacts makes *within* it. When the two disagree, Gloss wins.
 What that inheritance actually means:
 
 - Three stylesheets, in order: `tokens.css`, `base.css`, `components.css`. No
-  build step. IBM Plex Mono is the one webfont. Pro-tacts vendors its own copy
-  under `public/vendor/gloss` (see `rake gloss:vendor`) rather than depending
-  on Gloss at runtime.
+  build step. Pro-tacts vendors its own copy under `public/vendor/gloss` (see
+  `rake gloss:vendor`) rather than depending on Gloss at runtime.
+- No webfont. `--gl-font-mono` names IBM Plex Mono first and falls back
+  through `ui-monospace` to the platform's own, so the face is a preference
+  the browser honors when a reader has it rather than a download every page
+  waits on.
 - **Every value is a `var(--gl-*)`.** No hex, no duration, no px for type or
   rhythm anywhere in Pro-tacts' own CSS. Type is `--gl-step-*`, space is
   `--gl-space-*`, corners are `--gl-radius-sm|md|lg` (4/6/10px — nothing

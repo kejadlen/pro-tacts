@@ -44,8 +44,14 @@ module ProTacts
             meta(charset: "utf-8")
             meta(name: "viewport", content: "width=device-width, initial-scale=1")
             title { "pro-tacts — #{@title}" }
-            link(rel: "preconnect", href: "https://fonts.googleapis.com")
-            link(rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap")
+            # No webfont. --gl-font-mono names IBM Plex Mono first and
+            # falls back through ui-monospace to the platform's own
+            # (tokens.css), so a face this app does not ship is a
+            # preference the browser honors when the reader happens to
+            # have it, not a download. What was here before was a
+            # remote Google Fonts stylesheet, and the self-hosted
+            # woff2s meant to replace it were never added — the
+            # @font-face rules pointed at three files that 404ed.
             link(rel: "stylesheet", href: "/vendor/gloss/tokens.css")
             link(rel: "stylesheet", href: "/vendor/gloss/base.css")
             link(rel: "stylesheet", href: "/vendor/gloss/components.css")

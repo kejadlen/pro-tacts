@@ -152,6 +152,27 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # Every asset the layout asks for is this app's own. The webfont
+  # that used to be linked here came from Google, and the self-hosted
+  # faces meant to replace it were never added — the @font-face rules
+  # pointed at three files that 404ed. Both are gone, and
+  # --gl-font-mono falls through to the platform's own monospace.
+  # Alpine is vendored beside the Gloss CSS for the same reason (see
+  # tasks/alpine.rake): this app is reachable only over Tailscale.
+  def test_the_layout_asks_for_nothing_off_this_host
+    with_contacts({}) do
+      get "/"
+
+      head = last_response.body.split("</head>").first
+      refute_includes head, "fonts.googleapis.com"
+      refute_includes head, "fonts.gstatic.com"
+      refute_includes head, "ibm-plex-mono"
+      assert_includes head, '<script defer src="/vendor/alpine/alpine.min.js"></script>'
+      assert_empty head.scan(%r{(?:href|src)="(https?:)?//[^"]*"}),
+        "the layout links something off this host"
+    end
+  end
+
   # The search lives in the page header (docs/DESIGN.md), rendered by
   # the layout on every screen now — not just the dashboard's — so
   # the header's height never changes between pages and finding a
