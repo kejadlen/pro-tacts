@@ -104,10 +104,14 @@
    different lines. The class rather than the element: a row is a
    label when it holds one control and a div when it holds a stack
    of them (an address — see the nested-stack rule below), and both
-   are the record's rows. */
+   are the record's rows. The value track is minmax(0, 1fr) rather
+   than a bare 1fr: a bare fr floors the track at its content's
+   intrinsic minimum, and a form control's minimum — a select's
+   widest option, an input's default size — is wider than a phone's
+   value column, which pushed rows past the card's edge. */
 .card-body form.field-stack > .field {
   display: grid;
-  grid-template-columns: var(--type-column) 1fr;
+  grid-template-columns: var(--type-column) minmax(0, 1fr);
   column-gap: var(--gl-space-s);
   align-items: baseline;
 }
@@ -179,14 +183,17 @@
    of value column plus the type column and its gap is 27rem. The
    selectors inside repeat the desktop rules' own specificity — a
    container query adds none, and the width it undoes would
-   otherwise win. */
+   otherwise win. The tracks are minmax(0, 1fr), not bare 1fr — the
+   same floor the value column's own rule sheds, without which the
+   month select's "September" and the year box's spinners held the
+   line wider than a phone's card. */
 .card-body form.field-stack > .field:has(> .date-row) {
   container-type: inline-size;
 }
 @container (width < 27rem) {
   .card-body form.field-stack .field > .date-row {
     display: grid;
-    grid-template-columns: 1fr 1fr auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   }
   .card-body form.field-stack .field > .date-row > select {
     grid-area: 1 / 1 / 2 / 3;
