@@ -75,8 +75,15 @@
    the child combinator rather than by descent: these rules are the
    record's, and both dialogs' fields keep Gloss's own — a 26rem
    popover is not a record, and the two should not diverge just
-   because one of them opens over this screen. */
-.card-body form.field-stack { gap: var(--gl-space-2xs); }
+   because one of them opens over this screen. The cap lifts for the
+   same reason: Gloss bounds a bare form at 28rem for the
+   settings-form pattern, and the record's form is the card's whole
+   content — the reading column is its bound (invisible until the
+   column passed 28rem, then half a card of dead space). */
+.card-body form.field-stack {
+  gap: var(--gl-space-2xs);
+  max-width: none;
+}
 .card-body form.field-stack > .field > input,
 .card-body form.field-stack > .field > textarea,
 .card-body form.field-stack > .field > .field-stack > input {
