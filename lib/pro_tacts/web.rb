@@ -34,6 +34,21 @@ module ProTacts
       __dir__ #: String
     ).parent.parent / "public" #: Pathname
 
+    # ADR's editable components: field name to position in the value
+    # (RFC 2426 section 3.2.1, minus the leading po box at position 0
+    # — no screen shows one, and the save preserves its bytes rather
+    # than letting a form field near them). In the value's own order,
+    # which is the order a rebuilt line's components join in.
+    ADDRESS_COMPONENTS = {
+      "extended" => 1,
+      "street" => 2,
+      "locality" => 3,
+      "region" => 4,
+      "postal_code" => 5,
+      "country" => 6,
+    }.freeze #: Hash[String, Integer]
+    private_constant :ADDRESS_COMPONENTS
+
     # The store this app serves from. config.ru builds it and hands it in;
     # nothing here reaches for a global to find one, which is what lets a
     # test point the app at a throwaway database. Kept in Roda's own opts
@@ -706,7 +721,9 @@ module ProTacts
       card = card.replace("FN", ["FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n"])
       card = card.replace("NICKNAME", text_lines("NICKNAME", nickname))
       card = card.replace("NOTE", text_lines("NOTE", note))
-      edited_phones(contact, card, params)
+      card = edited_phones(contact, card, params)
+      card = edited_emails(contact, card, params)
+      edited_addresses(contact, card, params)
     end
 
     # The phones' half of the surgical save: each row names its line
@@ -753,6 +770,118 @@ module ProTacts
         "TEL:#{VCard.escape(value)}\r\n" unless value.empty?
       end #: Array[String]
       card.insert(added)
+    end
+
+    # The emails' half of the surgical save: the phones' own walk over
+    # EMAIL — each row names its line by digest, an unchanged row is
+    # skipped, a changed one swaps the value under the line's own
+    # header, a blank removes the line, and the add dialog's rows land
+    # as bare EMAIL lines before END:VCARD.
+    #: (Contact contact, VCard card, Hash[String, untyped] params) -> VCard
+    def edited_emails(contact, card, params)
+      rows = params["email"]
+      if rows.is_a?(Hash)
+        contact.emails.each do |email|
+          property = email.line.property
+          next if property.nil?
+
+          submitted = rows[email.line.digest]
+          next if submitted.nil? || submitted.to_s.strip == email.value
+
+          value = submitted.to_s.strip
+          card = card.substitute(
+            email.line.digest,
+            value.empty? ? [] : ["#{VCard.header_of(property)}#{VCard.escape(value)}"],
+          )
+        end
+      end
+
+      submitted = Array(params["new_email"]) #: Array[untyped]
+      added = submitted.filter_map do
+        value = it.to_s.strip
+        "EMAIL:#{VCard.escape(value)}\r\n" unless value.empty?
+      end #: Array[String]
+      card.insert(added)
+    end
+
+    # The addresses' half of the surgical save: the same
+    # digest-addressed walk, over a row that is six fields rather
+    # than one (Admin::ContactsEdit). A row unchanged throughout is
+    # skipped whole — the phones' rule, keeping an untouched line's
+    # bytes its own — and a changed one is rebuilt by the splice
+    # below. Removal is the reader's own rule (Contact#address_of): a
+    # row blank throughout, po box included, removes the line, where
+    # a partially blanked one keeps it — partial blanks are legal
+    # empty components.
+    #: (Contact contact, VCard card, Hash[String, untyped] params) -> VCard
+    def edited_addresses(contact, card, params)
+      rows = params["address"]
+      if rows.is_a?(Hash)
+        contact.addresses.each do |address|
+          # The property is nil only for a line that would not read —
+          # the phones' own guard.
+          property = address.line.property
+          next if property.nil?
+
+          submitted = rows[address.line.digest]
+          next if !submitted.is_a?(Hash) || address_unchanged?(address, submitted)
+
+          line = address_line(address, submitted)
+          card = card.substitute(address.line.digest, line ? [line] : [])
+        end
+      end
+
+      # The add dialog names an added address by its add index
+      # (`new_address[i][street]`) rather than the bare [] every
+      # single-valued kind appends to, because Rack refuses a key
+      # after an empty one — so the rows arrive as a hash of hashes
+      # and read out by their values, several adds in one pass
+      # included.
+      submitted = params["new_address"]
+      added = submitted.is_a?(Hash) ? submitted.values : Array(submitted) #: Array[untyped]
+      card.insert(added.filter_map { address_line(nil, it) })
+    end
+
+    # A row is unchanged when every field submits its current
+    # reading — the phones' skip at the component grain.
+    #: (Contact::Address address, untyped submitted) -> bool
+    def address_unchanged?(address, submitted)
+      ADDRESS_COMPONENTS.keys.all? do |name|
+        submitted[name].to_s.strip == address.public_send(name).to_s
+      end
+    end
+
+    # One address row's replacement line: the raw components spliced
+    # and re-joined under the line's own header, or nil when the result
+    # is blank throughout (blank is absent, the reader's own rule for
+    # an ADR — the caller removes the line). A component that submits
+    # its current reading keeps its own bytes — the po box always,
+    # having no field, and any other the form left alone — where a
+    # moved one re-escapes from the form; the splice over
+    # still-escaped components is n_line's own rule,
+    # unescape-then-re-escape not being byte-stable. A nil address is
+    # an added row: seven fresh positions, po box empty, a bare ADR
+    # header.
+    #: (Contact::Address? address, untyped submitted) -> String?
+    def address_line(address, submitted)
+      return unless submitted.is_a?(Hash)
+
+      property = address && address.line.property
+      if property.nil?
+        components = [""]
+      else
+        components = VCard.split_raw_components(property.value)
+      end
+      components << "" while components.length < 7
+      ADDRESS_COMPONENTS.each do |name, position|
+        value = submitted[name].to_s.strip
+        current = address && address.public_send(name).to_s
+        components[position] = value == current ? components.fetch(position) : VCard.escape(value)
+      end
+      return if components.all?(&:empty?)
+
+      header = property ? VCard.header_of(property) : "ADR:"
+      "#{header}#{components.join(";")}\r\n"
     end
 
     # A text property's replacement lines: the escaped value (RFC 2426

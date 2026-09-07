@@ -9,9 +9,9 @@ module ProTacts
     # rather than an always-editable page, one form over the
     # properties the save knows how to address. The cardinality-1 set
     # — name, nickname, note — saves through VCard#replace under each
-    # field; the phone rows save through VCard#substitute, each named
-    # by its line's digest. Emails and addresses arrive with their
-    # own stage, birthday last.
+    # field; the phone, email, and address rows save through
+    # VCard#substitute, each named by its line's digest. Birthday
+    # arrives last, with its own doc.
     #
     # The fields prefill from the accessors' unescaped readings, and
     # blank equals absent on the way back (Web#edited_card), so write
@@ -21,15 +21,33 @@ module ProTacts
     # entry point is the name, not the header search.
     class ContactsEdit < Phlex::HTML
       # The property types the add dialog offers, in the order it
-      # lists them. One for now: phones are the only rows the save can
-      # insert (docs/plans/2026-09-05-web-card-editor.md, stage 2),
-      # and a type listed here that the save cannot write would be a
-      # row that silently does nothing. Each name is both the radio's
-      # value and half the field name the row posts under
-      # (`new_<type>[]`), so adding a type here and a reader in
-      # Web#edited_card is the whole of adding one.
-      ADDABLE_TYPES = %w[phone].freeze #: Array[String]
+      # lists them — exactly the rows the save can insert
+      # (docs/plans/2026-09-05-web-card-editor.md), because a type
+      # listed here that the save cannot write would be a row that
+      # silently does nothing. Each name is both the radio's value
+      # and the row's field name: `new_<type>[]` for the single-value
+      # kinds, `new_address[<i>][<component>]` for the structured
+      # one, the bare [] unable to carry a component set (Rack
+      # refuses a key after an empty one).
+      ADDABLE_TYPES = %w[phone email address].freeze #: Array[String]
       private_constant :ADDABLE_TYPES
+
+      # The address row's component fields, stacked in the value
+      # column in the order an address form reads — RFC 2426 section
+      # 3.2.1's own order minus the po box, which no screen shows and
+      # the save splices around. Field name to placeholder: a
+      # component is not an attribute and earns no type column of its
+      # own, so the placeholder is the label and the conventional
+      # order carries it.
+      ADDRESS_FIELDS = [
+        ["street", "street"],
+        ["extended", "street 2"],
+        ["locality", "city"],
+        ["region", "region"],
+        ["postal_code", "postal code"],
+        ["country", "country"],
+      ].freeze #: Array[[String, String]]
+      private_constant :ADDRESS_FIELDS
 
       # @rbs @contact: Contact
       # @rbs @notice: String?
@@ -111,6 +129,14 @@ module ProTacts
                       input(type: "tel", name: "phone[#{phone.line.digest}]", value: phone.value)
                     end
                   end
+                  # An email row, the phone row's own shape over EMAIL.
+                  @contact.emails.each do |email|
+                    label(class: "field") do
+                      span { email.type || "email" }
+                      input(type: "email", name: "email[#{email.line.digest}]", value: email.value)
+                    end
+                  end
+                  @contact.addresses.each { address_row(it) }
                   added_rows
                   label(class: "field") do
                     span { "Note" }
@@ -143,12 +169,11 @@ module ProTacts
       # That verb — make a row, now, without a round trip — is what
       # CSS could not do and what Alpine is here for (see Layout).
       #
-      # The caption is the untyped fallback ContactsShow uses for a
-      # property with no TYPE, which is what these lines are until a
-      # client gives them one. The name is the type's own list
-      # parameter, so the save reads `new_phone[]` today and
-      # `new_email[]` the day the dialog offers it, with no new
-      # wiring between here and Web#edited_phones.
+      # The row is a div rather than the standing rows' label because
+      # one template serves every kind and the address kind holds six
+      # controls a label cannot name — so the single-value input
+      # carries its own aria-label, and the address inputs their
+      # placeholders.
       #
       # `x-init` on the input rather than autofocus: it runs when the
       # element is created, which is exactly when the row is added,
@@ -156,10 +181,51 @@ module ProTacts
       # starts empty.
       def added_rows
         template(x_for: "(kind, i) in added", ":key": "i") do
-          label(class: "field") do
+          div(class: "field") do
             span("x-text": "kind")
-            input(type: "tel", ":name": "`new_${kind}[]`",
-                  "x-init": "$el.focus()")
+            # The single-value kinds: one input, its type and name
+            # bound to the kind — the keyboard a phone number or an
+            # email address wants, on the one client that has one.
+            template("x-if": "kind !== 'address'") do
+              input(":type": "kind === 'phone' ? 'tel' : kind", ":name": "`new_${kind}[]`",
+                    ":aria-label": "kind", "x-init": "$el.focus()")
+            end
+            # The address kind: the same six component fields a
+            # standing row gets, named by the add index rather than a
+            # digest — there is no line yet to digest, and the
+            # []-appended name the other kinds use cannot carry a
+            # component set (Rack refuses a key after a bare []).
+            template("x-if": "kind === 'address'") do
+              div(class: "field-stack") do
+                ADDRESS_FIELDS.each_with_index do |(component, label), index|
+                  input(type: "text", ":name": "`new_address[${i}][#{component}]`",
+                        placeholder: label, aria_label: label,
+                        "x-init": index.zero? ? "$el.focus()" : nil)
+                end
+              end
+            end
+          end
+        end
+      end
+
+      # An address row: the type's caption and a stack of component
+      # fields in the value column — the multi-line value's own lines
+      # (docs/DESIGN.md: a multi-line value breaks inside the value
+      # column and stays in it). A div rather than the single-value
+      # rows' label, because the row holds six controls and a label
+      # names one — each input carries its placeholder as its
+      # aria-label instead, and the caption is the type's. The digest
+      # in each field's name is the row's address; the po box has no
+      # field, and the save preserves its bytes.
+      #: (Contact::Address address) -> void
+      def address_row(address)
+        div(class: "field") do
+          span { address.type || "address" }
+          div(class: "field-stack") do
+            ADDRESS_FIELDS.each do |component, label|
+              input(type: "text", name: "address[#{address.line.digest}][#{component}]",
+                    value: address.public_send(component), placeholder: label, aria_label: label)
+            end
           end
         end
       end
@@ -180,11 +246,8 @@ module ProTacts
       # the form, and what it changes is visible in the card the
       # moment the popover closes.
       #
-      # A radio group with one option reads oddly today and is the
-      # point: ADDABLE_TYPES is the list, emails and addresses join it
-      # when the save can insert them (docs/plans/2026-09-05-web-card-editor.md,
-      # stage 3), and neither this method nor the row template changes
-      # when they do.
+      # The three options are the three kinds of row the save can
+      # insert; a fourth, birthday, arrives with its own doc.
       #
       # The radios share a `name` so they are one native group —
       # arrow-key navigation and "1 of n" come from that, not from

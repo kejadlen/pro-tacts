@@ -77,8 +77,11 @@
    popover is not a record, and the two should not diverge just
    because one of them opens over this screen. */
 .card-body form.field-stack { gap: var(--gl-space-2xs); }
-.card-body form.field-stack > label.field > input,
-.card-body form.field-stack > label.field > textarea { padding-block: var(--gl-space-2xs); }
+.card-body form.field-stack > .field > input,
+.card-body form.field-stack > .field > textarea,
+.card-body form.field-stack > .field > .field-stack > input {
+  padding-block: var(--gl-space-2xs);
+}
 
 /* An editor row is a detail row that happens to be editable: caption
    in the type column, control in the value column, on .detail-grid's
@@ -90,12 +93,26 @@
    eight rows deep before a contact has an email. Baseline for the
    reason .detail-grid gives — caption and control carry different
    type sizes, so lining their boxes up leaves their text on
-   different lines. */
-.card-body form.field-stack > label.field {
+   different lines. The class rather than the element: a row is a
+   label when it holds one control and a div when it holds a stack
+   of them (an address — see the nested-stack rule below), and both
+   are the record's rows. */
+.card-body form.field-stack > .field {
   display: grid;
   grid-template-columns: var(--type-column) 1fr;
   column-gap: var(--gl-space-s);
   align-items: baseline;
+}
+/* A row whose control is a stack of inputs — an address's component
+   fields — holds the multi-line value's own lines in the value
+   column (docs/DESIGN.md), so the stack closes to the record's own
+   row gap and each input sheds the same block padding every other
+   row's control sheds (the selector above it). Reached by descent
+   from the record's row, which the nested stack is part of; the
+   dialogs' fields are no form.field-stack's children and keep
+   Gloss's own. */
+.card-body form.field-stack .field > .field-stack {
+  gap: var(--gl-space-2xs);
 }
 /* A multiline control has no single line to align a caption to, and
    what a browser calls its baseline is not settled — a scroll
@@ -105,10 +122,10 @@
    holds the textarea's first line off its own edge: the block
    padding above plus the border. Derived, not eyeballed, so the two
    move together if either changes. */
-.card-body form.field-stack > label.field:has(textarea) {
+.card-body form.field-stack > .field:has(textarea) {
   align-items: start;
 }
-.card-body form.field-stack > label.field:has(textarea) > span {
+.card-body form.field-stack > .field:has(textarea) > span {
   padding-block-start: calc(var(--gl-space-2xs) + 1px);
 }
 

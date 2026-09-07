@@ -781,6 +781,284 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  ## Editing emails
+
+  # The email rows: the phone row's own shape over EMAIL — one value
+  # field per line, named by the line's digest, beside the type's own
+  # caption.
+  def test_the_edit_screen_renders_a_digest_named_field_per_email
+    with_contacts({"ada" => ADA}) do |store|
+      get "/contacts/ada/edit"
+
+      digest = store.contact("ada").emails.first.line.digest
+      assert_includes last_response.body,
+        '<label class="field"><span>home</span><input type="email" name="email[' + digest + ']" value="ada@example.com"></label>'
+    end
+  end
+
+  # The addressed edit at work over EMAIL: the submitted row swaps its
+  # line's value under the line's own header, and every other byte of
+  # the stored card — the other EMAIL-able lines included — stands
+  # untouched.
+  def test_saving_a_changed_email_replaces_only_its_line
+    two = ADA.sub("EMAIL;TYPE=home:ada@example.com\r\n",
+                  "EMAIL;TYPE=home:ada@example.com\r\nEMAIL;TYPE=work:countess@example.com\r\n")
+
+    with_contacts({"ada" => two}) do |store|
+      digest = store.contact("ada").emails.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               email: {digest => "lovelace@example.com"}
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "EMAIL;TYPE=home:lovelace@example.com\r\n"
+      assert_includes card, "EMAIL;TYPE=work:countess@example.com\r\n"
+      refute_includes card, "ada@example.com"
+    end
+  end
+
+  # The header is the line's own, kept byte for byte — the phones'
+  # own rule, over the parameters an EMAIL line can carry.
+  def test_a_saved_email_keeps_its_lines_own_parameters
+    apple = ADA.sub("EMAIL;TYPE=home:ada@example.com", "EMAIL;type=INTERNET;type=HOME;type=pref:ada@example.com")
+
+    with_contacts({"ada" => apple}) do |store|
+      digest = store.contact("ada").emails.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               email: {digest => "lovelace@example.com"}
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s,
+        "EMAIL;type=INTERNET;type=HOME;type=pref:lovelace@example.com\r\n"
+    end
+  end
+
+  # Blank equals absent for a row with a digest: the blank removes
+  # the line, the phones' own rule.
+  def test_a_blank_email_row_removes_the_line
+    with_contacts({"ada" => ADA}) do |store|
+      digest = store.contact("ada").emails.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               email: {digest => " "}
+
+      assert_equal 303, last_response.status
+      refute_includes store.contact("ada").vcard.to_s, "EMAIL"
+    end
+  end
+
+  # An unchanged row never rewrites its line, and the whole save
+  # leaves the stored card byte for byte as it lay.
+  def test_an_unchanged_email_and_address_leave_the_stored_card_byte_identical
+    with_contacts({"ada" => ADA}) do |store|
+      before = store.contact("ada").stored.to_s
+      email_digest = store.contact("ada").emails.first.line.digest
+      address_digest = store.contact("ada").addresses.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
+                               etag: store.contact("ada").etag, new_email: "",
+                               email: {email_digest => "ada@example.com"},
+                               address: {address_digest => {
+                                 "street" => "12 Analytical Way", "locality" => "London",
+                                 "region" => "England", "postal_code" => "NW1 1AA",
+                                 "country" => "United Kingdom",
+                               }}
+
+      assert_equal 303, last_response.status
+      assert_equal before, store.contact("ada").stored.to_s
+    end
+  end
+
+  # The revealed row: a value lands as a bare EMAIL before END:VCARD,
+  # and a blank one inserts nothing — the phones' own rules.
+  def test_an_added_email_lands_as_a_bare_email_before_the_end
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               new_email: ["lovelace@example.com", "", "countess@example.com"]
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_equal ["ada@example.com", "lovelace@example.com", "countess@example.com"],
+        store.contact("ada").emails.map(&:value)
+      assert_includes card, "EMAIL:countess@example.com\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n"
+    end
+  end
+
+  ## Editing addresses
+
+  # An address row: the type's caption and a stack of component
+  # fields in the value column, each named by the row's digest and
+  # its component — and no po box field, which the save preserves
+  # raw rather than letting a form near it.
+  def test_the_edit_screen_renders_component_fields_per_address
+    with_contacts({"ada" => ADA}) do |store|
+      get "/contacts/ada/edit"
+
+      digest = store.contact("ada").addresses.first.line.digest
+      body = last_response.body
+      assert_includes body,
+        '<div class="field"><span>home</span><div class="field-stack">' \
+        '<input type="text" name="address[' + digest + '][street]" value="12 Analytical Way" placeholder="street" aria-label="street">' \
+        '<input type="text" name="address[' + digest + '][extended]" placeholder="street 2" aria-label="street 2">' \
+        '<input type="text" name="address[' + digest + '][locality]" value="London" placeholder="city" aria-label="city">'
+      assert_includes body,
+        'name="address[' + digest + '][postal_code]" value="NW1 1AA" placeholder="postal code"'
+      assert_includes body,
+        'name="address[' + digest + '][country]" value="United Kingdom" placeholder="country"'
+      refute_includes body, "po_box"
+    end
+  end
+
+  # The addressed edit at work over ADR: the submitted components
+  # swap under the line's own header, and every other byte of the
+  # stored card stands untouched.
+  def test_saving_a_changed_address_replaces_only_its_line
+    with_contacts({"ada" => ADA}) do |store|
+      digest = store.contact("ada").addresses.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               address: {digest => {
+                                 "street" => "5 Analytical Way", "locality" => "London",
+                                 "region" => "England", "postal_code" => "NW1 1AA",
+                                 "country" => "United Kingdom",
+                               }}
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "ADR;TYPE=home:;;5 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
+      assert_includes card, "TEL;TYPE=mobile:+1-555-0100\r\n"
+      assert_includes card, "EMAIL;TYPE=home:ada@example.com\r\n"
+
+      follow_redirect!
+      assert_includes last_response.body, "5 Analytical Way"
+    end
+  end
+
+  # The header is the line's own, kept byte for byte — the phones'
+  # own rule, over the parameters an ADR line can carry.
+  def test_a_saved_address_keeps_its_lines_own_parameters
+    apple = ADA.sub(
+      "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
+      "ADR;type=HOME;type=pref:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
+    )
+
+    with_contacts({"ada" => apple}) do |store|
+      digest = store.contact("ada").addresses.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               address: {digest => {
+                                   "street" => "5 Analytical Way", "locality" => "London",
+                                   "region" => "England", "postal_code" => "NW1 1AA",
+                                   "country" => "United Kingdom",
+                                 }}
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s,
+        "ADR;type=HOME;type=pref:;;5 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
+    end
+  end
+
+  # Removal is the reader's own rule: a row blank throughout, po box
+  # included, removes the line.
+  def test_an_address_row_blank_throughout_removes_the_line
+    with_contacts({"ada" => ADA}) do |store|
+      digest = store.contact("ada").addresses.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               address: {digest => {
+                                   "street" => " ", "extended" => "", "locality" => "",
+                                   "region" => "", "postal_code" => "", "country" => "",
+                                 }}
+
+      assert_equal 303, last_response.status
+      refute_includes store.contact("ada").vcard.to_s, "ADR"
+    end
+  end
+
+  # A partially blanked row keeps its line — partial blanks are legal
+  # empty components, the reader's own rule in the other direction.
+  def test_a_partially_blanked_address_keeps_the_line
+    with_contacts({"ada" => ADA}) do |store|
+      digest = store.contact("ada").addresses.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               address: {digest => {
+                                   "street" => "12 Analytical Way", "locality" => "London",
+                                   "region" => "", "postal_code" => "", "country" => "",
+                                 }}
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s,
+        "ADR;TYPE=home:;;12 Analytical Way;London;;;\r\n"
+    end
+  end
+
+  # The po box and any component the form left alone keep their own
+  # bytes — n_line's splice rule at the component grain, where a
+  # rebuild through unescape and re-escape is not byte-stable (the
+  # unrecognized `\\q` escape would come back doubled).
+  def test_the_addresss_untouched_components_are_preserved_byte_for_byte
+    po_box = ADA.sub(
+      "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
+      "ADR;TYPE=home:P.O. Box 5;Apt \\q;12 Way\\, West;London;England;NW1 1AA;United Kingdom",
+    )
+
+    with_contacts({"ada" => po_box}) do |store|
+      digest = store.contact("ada").addresses.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               address: {digest => {
+                                   "street" => "12 Way, West", "extended" => "Apt \\q",
+                                   "locality" => "Manchester", "region" => "England",
+                                   "postal_code" => "NW1 1AA", "country" => "United Kingdom",
+                                 }}
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s,
+        "ADR;TYPE=home:P.O. Box 5;Apt \\q;12 Way\\, West;Manchester;England;NW1 1AA;United Kingdom\r\n"
+    end
+  end
+
+  # A component is text and the value is structure: punctuation
+  # escapes in the written line (RFC 2426 section 2.4.2).
+  def test_address_punctuation_escapes_in_the_written_line
+    with_contacts({"ada" => ADA}) do |store|
+      digest = store.contact("ada").addresses.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               address: {digest => {
+                                   "street" => "12 Way, East; Annexe", "locality" => "London",
+                                   "region" => "England", "postal_code" => "NW1 1AA",
+                                   "country" => "United Kingdom",
+                                 }}
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s,
+        "ADR;TYPE=home:;;12 Way\\, East\\; Annexe;London;England;NW1 1AA;United Kingdom\r\n"
+    end
+  end
+
+  # The revealed address row: the components land in the value's own
+  # order — po box empty, extended before street (RFC 2426 section
+  # 3.2.1) — whatever order the form stacks them in, and a row blank
+  # throughout inserts nothing, the new-row rule.
+  def test_an_added_address_lands_in_component_order_before_the_end
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               new_address: {"1" => {
+                                   "street" => "5 Analytical Way", "extended" => "Apt 9",
+                                   "locality" => "London", "country" => "United Kingdom",
+                                 }}
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "ADR:;Apt 9;5 Analytical Way;London;;;United Kingdom\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n"
+      assert_includes card, "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
+    end
+  end
+
+  def test_a_blank_address_add_row_inserts_nothing
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               new_address: {"0" => {"street" => " ", "country" => ""}}
+
+      assert_equal 303, last_response.status
+      assert_equal 1, store.contact("ada").addresses.length
+    end
+  end
+
   ## Adding a property
 
   # The add affordance: a trigger on the back link's line — the place
@@ -795,13 +1073,14 @@ class AdminContactsPagesTest < Minitest::Test
         '<a href="/contacts/ada" class="type-label">‹ Ada Lovelace</a>' \
         '<button type="button" data-size="sm" popovertarget="add-property">add property</button></div>'
       assert_includes body, '<dialog id="add-property" popover="auto">'
-      # A radio group of one today: ADDABLE_TYPES is what grows, and
-      # neither the dialog nor the row template changes when it does.
-      # The shared `name` is what makes them a native group; it is
-      # never submitted, the dialog having no form owner.
+      # A radio group of every kind the save can insert: ADDABLE_TYPES
+      # is the list. The shared `name` is what makes them a native
+      # group; it is never submitted, the dialog having no form owner.
       assert_includes body,
         '<div class="field-stack" role="radiogroup" aria-label="Type">' \
-        '<label><input type="radio" name="add-type" value="phone" x-model="type">phone</label></div>'
+        '<label><input type="radio" name="add-type" value="phone" x-model="type">phone</label>' \
+        '<label><input type="radio" name="add-type" value="email" x-model="type">email</label>' \
+        '<label><input type="radio" name="add-type" value="address" x-model="type">address</label></div>'
       assert_includes body,
         '<button type="button" popovertarget="add-property" popovertargetaction="hide">Cancel</button>'
       # Add makes the row and then hides the popover, in that order —
@@ -819,10 +1098,25 @@ class AdminContactsPagesTest < Minitest::Test
       body = (get("/contacts/ada/edit") && last_response.body)
 
       assert_includes body, %(<div x-data="{ added: [], type: 'phone' }">)
+      # One template serves every kind: the single-value kinds get an
+      # input whose type and name bind to the kind, the address kind
+      # the same six component fields a standing row gets — named by
+      # the add index, there being no line yet to digest.
       assert_includes body,
-        '<template x-for="(kind, i) in added" :key="i"><label class="field">' \
+        '<template x-for="(kind, i) in added" :key="i"><div class="field">' \
         '<span x-text="kind"></span>' \
-        '<input type="tel" :name="`new_${kind}[]`" x-init="$el.focus()"></label></template>'
+        '<template x-if="kind !== \'address\'">' \
+        '<input :type="kind === \'phone\' ? \'tel\' : kind" :name="`new_${kind}[]`" :aria-label="kind" x-init="$el.focus()">' \
+        '</template>' \
+        '<template x-if="kind === \'address\'">' \
+        '<div class="field-stack">' \
+        '<input type="text" :name="`new_address[${i}][street]`" placeholder="street" aria-label="street" x-init="$el.focus()">' \
+        '<input type="text" :name="`new_address[${i}][extended]`" placeholder="street 2" aria-label="street 2">' \
+        '<input type="text" :name="`new_address[${i}][locality]`" placeholder="city" aria-label="city">' \
+        '<input type="text" :name="`new_address[${i}][region]`" placeholder="region" aria-label="region">' \
+        '<input type="text" :name="`new_address[${i}][postal_code]`" placeholder="postal code" aria-label="postal code">' \
+        '<input type="text" :name="`new_address[${i}][country]`" placeholder="country" aria-label="country">' \
+        '</div></template></div></template>'
       # The template is inside the edit form, so one Save writes every
       # row it made along with everything else. Indexed from the
       # form's start, the header's search form closing before both.
@@ -945,16 +1239,21 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The addresses come from the contact, never the request: a
-  # doctored digest names no row and touches nothing, where a
-  # doctored index into a list would have rewritten some other line.
+  # The addresses and emails come from the contact, never the
+  # request: a doctored digest names no row and touches nothing, where
+  # a doctored index into a list would have rewritten some other line.
   def test_a_digest_the_card_never_had_is_ignored
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
-                               phone: {"0" * 64 => "+1-555-9999"}
+                               phone: {"0" * 64 => "+1-555-9999"},
+                               email: {"1" * 64 => "x@example.com"},
+                               address: {"2" * 64 => {"street" => "nowhere"}}
 
       assert_equal 303, last_response.status
-      assert_includes store.contact("ada").vcard.to_s, "TEL;TYPE=mobile:+1-555-0100\r\n"
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "TEL;TYPE=mobile:+1-555-0100\r\n"
+      assert_includes card, "EMAIL;TYPE=home:ada@example.com\r\n"
+      assert_includes card, "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
     end
   end
 
