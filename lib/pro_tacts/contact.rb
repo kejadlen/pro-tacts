@@ -276,10 +276,7 @@ module ProTacts
 
     #: () -> Array[Phone]
     def phones
-      of_line("TEL").filter_map { |line|
-        property = line.property
-        next if property.nil?
-
+      rows("TEL") { |property, line|
         value = text_of(property)
         Phone.new(value:, type: type_of(property), line:) if value
       }
@@ -287,10 +284,7 @@ module ProTacts
 
     #: () -> Array[Email]
     def emails
-      of_line("EMAIL").filter_map { |line|
-        property = line.property
-        next if property.nil?
-
+      rows("EMAIL") { |property, line|
         value = text_of(property)
         Email.new(value:, type: type_of(property), line:) if value
       }
@@ -298,12 +292,7 @@ module ProTacts
 
     #: () -> Array[Address]
     def addresses
-      of_line("ADR").filter_map { |line|
-        property = line.property
-        next if property.nil?
-
-        address_of(property, line:)
-      }
+      rows("ADR") { |property, line| address_of(property, line:) }
     end
 
     # The card's NOTEs (RFC 2426 section 3.6.2), in text form. Every
@@ -315,10 +304,7 @@ module ProTacts
     # which is always the group's (see #vcard).
     #: () -> Array[Note]
     def notes
-      of_line("NOTE").filter_map { |line|
-        property = line.property
-        next if property.nil?
-
+      rows("NOTE") { |property, line|
         value = text_of(property)
         Note.new(value:, line:) if value
       }
@@ -355,11 +341,31 @@ module ProTacts
       }
     end
 
-    # The lines naming `name`, parsed beside their bytes — the walk the
-    # provenance-carrying accessors read from, so a row can carry the
-    # line it was read from as its address. A line that would not
-    # read is a row no form can address and no accessor reads; it
-    # stays enumerable in VCard#lines, served from its bytes.
+    # The rows a repeatable property reads as: the lines naming it,
+    # in the card's own order, each folded by the block into a typed
+    # value, with the nils dropped. Two absences arrive as one that
+    # way, which is what every one of these accessors wants — a line
+    # that would not read is a row no form can address, and a line
+    # the block finds nothing in (a blank value, an ADR blank
+    # throughout) is a row with nothing to show; neither is an error,
+    # and a card is served from its bytes either way. The unreadable
+    # line stays enumerable in VCard#lines regardless.
+    #
+    # The block takes the parsed property and the line it came from,
+    # because a row carries both: the property for what it says, the
+    # line for the address a save names the row by
+    # (docs/plans/2026-09-05-web-card-editor.md).
+    #: [T] (String name) { (VCard::Parser::Property, VCard::Parser::Line) -> T? } -> Array[T]
+    def rows(name)
+      of_line(name).filter_map { |line|
+        property = line.property
+        yield(property, line) unless property.nil?
+      }
+    end
+
+    # The lines naming `name`, parsed beside their bytes — the walk
+    # #rows reads over, and the one accessor-facing read that hands
+    # back the lines that would not parse along with the rest.
     #: (String name) -> Array[VCard::Parser::Line]
     def of_line(name)
       vcard.lines.select { it.names?(name) }
