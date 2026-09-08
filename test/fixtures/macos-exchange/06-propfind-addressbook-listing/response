@@ -26,7 +26,7 @@ Content-Type: text/xml
   <d:href>/dav/addressbook/bday-basic-noyear.vcf</d:href>
   <d:propstat>
     <d:prop>
-      <d:getetag>"78822ddd3e94790ad8132d452c65b9a9214b695f5db650b1882081696f04b080"</d:getetag>
+      <d:getetag>"bbc86afedab3b3dfa349da2ff6ed736922389a68074fc7a7905b40b1825bc425"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
@@ -35,7 +35,7 @@ Content-Type: text/xml
   <d:href>/dav/addressbook/bday-complete.vcf</d:href>
   <d:propstat>
     <d:prop>
-      <d:getetag>"ea55ff3f6cf660799cbc5b25f86d9e219e7c5b57aecb2a86f4c0af8687805861"</d:getetag>
+      <d:getetag>"4f18a47439816f1488e1bea6ddd31b26dd098de0e5245e57e70e32944be12804"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
@@ -108,6 +108,33 @@ Content-Type: text/xml
   <d:propstat>
     <d:prop>
       <d:getetag>"f2de8c9cbbc34e304510ff6f076ed3275e620802bc15731550b5d43b0d0ae994"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/household-alicia.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"6c01a910f23f1cad35baec49312f787d0cb4c324f3b4cdd9b826536b87c8445a"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/household-george.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"2dcd92c33d147687f4a669a2b3f4dba19bb9f6a093ebc990a054926294864091"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/household-mary.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"d6c544cb829cbf1be3fbbd8e2b47b752c4e4659c45c4d233613b543b9db6517f"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>

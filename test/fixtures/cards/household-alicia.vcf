@@ -1,0 +1,9 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Boole;Alicia;;;
+FN:Alicia Boole
+EMAIL:alicia@example.com
+TEL;TYPE=cell:+44 7700 900103
+BDAY:1860-06-08
+UID:household-alicia
+END:VCARD

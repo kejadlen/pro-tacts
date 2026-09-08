@@ -16,8 +16,8 @@ Content-Type: text/xml
           <d:report><d:sync-collection/></d:report>
         </d:supported-report>
       </d:supported-report-set>
-      <cs:getctag>16</cs:getctag>
-      <d:sync-token>http://pro-tacts/sync/16</d:sync-token>
+      <cs:getctag>19</cs:getctag>
+      <d:sync-token>http://pro-tacts/sync/19</d:sync-token>
       <d:current-user-privilege-set>
         <d:privilege><d:read/></d:privilege>
         <d:privilege><d:write/></d:privilege>

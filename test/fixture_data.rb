@@ -19,7 +19,7 @@ module FixtureData
 
   # The first card is stamped now and each one after it is #SPREAD times
   # older than the last, so the seed book runs from this minute out to
-  # about five months at sixteen cards. Computed rather than tabulated
+  # about five years at nineteen cards. Computed rather than tabulated
   # because a table runs out: adding cards past the end of one either
   # wraps — two cards sharing a stamp, and a recently-updated list that
   # opens on a tie — or leaves the tail unstamped. Spread rather than
@@ -47,23 +47,30 @@ module FixtureData
     "TEL;TYPE=home:+44 20 5555 0100",
   ].freeze #: Array[String]
 
-  # The groups the fixture book carries: one household, two members.
+  # The groups the fixture book carries: one household, the three
+  # household-* cards in it. Those cards are a family — one surname, a
+  # mobile and an email each, and no address or home number of their
+  # own — so the only home address the admin UI shows on them is the
+  # one this group composes in, and removing a member visibly takes it
+  # away. They sit outside the recorded macOS exchange's hrefs, so the
+  # replay keeps serving that session the bytes it saw.
+  #
   # Seeded in Ruby rather than a fixture file because the cards are the
   # only evidence-shaped fixtures — a group is rows across three
-  # tables with no file format of its own — and the members are chosen
-  # to sit outside the recorded macOS exchange's hrefs, so the replay
-  # keeps serving that session the bytes it saw. Authoring groups is
-  # the admin UI's task; until it arrives nothing public writes these
+  # tables with no file format of its own. Authoring groups is the
+  # admin UI's task; until it arrives nothing public writes these
   # tables, so the rows land the way backdate's do, through the
   # store's own database.
+  MEMBERS = %w[household-george household-mary household-alicia].freeze #: Array[String]
+
   #: (ProTacts::Store store) -> void
   def self.seed_groups(store)
     database = store.instance_variable_get(:@database)
-    database[:groups].insert(id: "household", name: "Household")
+    database[:groups].insert(id: "household", name: "Boole household")
     HOUSEHOLD.each.with_index do |line, position|
       database[:group_properties].insert(group_id: "household", position:, line:)
     end
-    ["bday-complete", "bday-basic-noyear"].each do |id|
+    MEMBERS.each do |id|
       database[:group_members].insert(group_id: "household", card_id: id)
     end
   end

@@ -1,0 +1,10 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Boole;Mary;Everest;;
+FN:Mary Everest Boole
+NICKNAME:Mrs B
+EMAIL:mary@example.com
+TEL;TYPE=cell:+44 7700 900102
+BDAY:1832-03-11
+UID:household-mary
+END:VCARD

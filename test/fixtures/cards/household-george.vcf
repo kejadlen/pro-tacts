@@ -1,0 +1,9 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Boole;George;;;
+FN:George Boole
+EMAIL:george@example.com
+TEL;TYPE=cell:+44 7700 900101
+BDAY:1815-11-02
+UID:household-george
+END:VCARD
