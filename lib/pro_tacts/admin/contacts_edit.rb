@@ -78,6 +78,7 @@ module ProTacts
       private_constant :ADDRESS_FIELDS
 
       # @rbs @contact: Contact
+      # @rbs @own: Contact
       # @rbs @notice: String?
       # @rbs @first: String?
       # @rbs @last: String?
@@ -85,6 +86,13 @@ module ProTacts
       #: (contact: Contact, ?notice: String?) -> void
       def initialize(contact:, notice: nil)
         @contact = contact
+        # The rows are the contact's own, never what a group lends it
+        # (Contact#own): a row here is a row the save may rewrite or
+        # remove, and neither is this screen's to do to a value the
+        # household owns — the details page is where an inherited row
+        # is read (Admin::ContactsShow). The etag below is still the
+        # composed contact's, the one a save is guarded against.
+        @own = contact.own
         @notice = notice
         # N's first two components (RFC 2426 section 3.1.2: family;
         # given) — the two fields the create dialog also asks for. The
@@ -157,7 +165,7 @@ module ProTacts
                   # the last value of a duplicated name — editing one
                   # of a pair of byte-identical rows means blanking
                   # one, saving, then editing the other.
-                  @contact.phones.each do |phone|
+                  @own.phones.each do |phone|
                     label(class: "field", data: {blank_removes: true}) do
                       span { phone.type || "phone" }
                       input(type: "tel", name: "phone[#{phone.line.digest}]",
@@ -165,19 +173,19 @@ module ProTacts
                     end
                   end
                   # An email row, the phone row's own shape over EMAIL.
-                  @contact.emails.each do |email|
+                  @own.emails.each do |email|
                     label(class: "field", data: {blank_removes: true}) do
                       span { email.type || "email" }
                       input(type: "email", name: "email[#{email.line.digest}]",
                             value: email.value, placeholder: "removed on save")
                     end
                   end
-                  @contact.addresses.each { address_row(it) }
+                  @own.addresses.each { address_row(it) }
                   birthday_row
                   added_rows
                   # The first NOTE the card carries: this row edits one,
                   # and a save writes one (Web#edited_card's replace).
-                  note = @contact.notes.first&.value
+                  note = @own.notes.first&.value
                   label(class: "field", data: {blank_removes: !!note}) do
                     span { "Note" }
                     textarea(name: "note", rows: 4,

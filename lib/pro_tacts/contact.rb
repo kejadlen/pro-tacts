@@ -168,6 +168,23 @@ module ProTacts
       @vcard = line ? card.insert([line]) : card
     end
 
+    # The same contact with nothing its groups lend it: the stored
+    # card and the birthday, no inheritance. The editor's subject —
+    # a form rendered from the composed contact offers rows the member
+    # does not own, and saving one writes the group's value into the
+    # member's own card (Web#edited_card), which is the
+    # materialization the composition exists to avoid
+    # (docs/plans/2026-08-24-vcard-storage-and-groups.md). The etag is
+    # not this contact's: a screen guarding a save still carries the
+    # composed one, which is what a client downloads and what the
+    # store's change log records.
+    #: () -> Contact
+    def own
+      return @own if defined?(@own)
+
+      @own = self.class.for(id: @id, stored: @stored, birthday: @birthday, inherited: [])
+    end
+
     # The etag over #vcard's bytes, derived here on first ask and
     # memoized with the card it hashes.
     #: () -> String

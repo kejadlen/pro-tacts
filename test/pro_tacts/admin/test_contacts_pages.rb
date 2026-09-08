@@ -686,6 +686,59 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # The editor renders the contact's own rows and none a group lends:
+  # a row here is a row the save may rewrite or remove, and neither is
+  # this screen's to do to a value the household owns. The details
+  # page is where an inherited row is read.
+  def test_the_edit_screen_omits_the_rows_a_group_lends
+    with_contacts({"ada" => ADA}) do |store|
+      add_group(store, name: "Boole household", members: ["ada"], lines: HOUSEHOLD)
+
+      get "/contacts/ada/edit"
+
+      assert_includes last_response.body, "12 Analytical Way"
+      refute_includes last_response.body, "7 Calculus Close"
+    end
+  end
+
+  # The note row is the collision's own case: a member with no note of
+  # its own inherits the household's, and a textarea prefilled from it
+  # would write the group's words onto the member the first time
+  # anyone saved.
+  def test_the_note_row_is_blank_over_a_note_only_the_group_lends
+    noteless = ADA.sub("NOTE:Countess of Lovelace.\r\n", "")
+
+    with_contacts({"ada" => noteless}) do |store|
+      add_group(store, name: "Boole household", members: ["ada"], lines: HOUSEHOLD)
+
+      get "/contacts/ada/edit"
+
+      assert_includes last_response.body, '<textarea name="note" rows="4"></textarea>'
+      refute_includes last_response.body, "Gate code 1854."
+    end
+  end
+
+  # A save reaches the contact's own lines and no others, so a request
+  # naming a lent line — the screen renders no such row, but a request
+  # is not the screen — matches nothing and writes nothing.
+  def test_a_save_naming_a_lent_line_touches_nothing
+    with_contacts({"ada" => ADA}) do |store|
+      add_group(store, name: "Boole household", members: ["ada"], lines: HOUSEHOLD)
+      contact = store.contact("ada")
+      lent = contact.addresses.find { contact.group_of(it.line) }
+
+      post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
+                               etag: contact.etag,
+                               address: {lent.line.digest => {"street" => "9 Elsewhere Lane"}}
+
+      assert_equal 303, last_response.status
+      after = store.contact("ada")
+      refute_includes after.stored.to_s, "9 Elsewhere Lane"
+      refute_includes after.stored.to_s, "7 Calculus Close"
+      assert_includes after.vcard.to_s, "7 Calculus Close"
+    end
+  end
+
   def test_the_edit_screen_of_an_unknown_contact_is_404
     with_contacts({}) { get "/contacts/nope/edit" }
 

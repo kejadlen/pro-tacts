@@ -752,14 +752,21 @@ module ProTacts
       nickname = params["nickname"].to_s.strip
       note = params["note"].to_s.strip
 
+      # The rows are read off the contact's own card, the one the form
+      # rendered (Admin::ContactsEdit) and the one this save splices:
+      # a line a group lends is on neither, so no digest here can name
+      # one and no save can copy a group's value onto its member
+      # (Contact#own).
+      own = contact.own
+
       card = contact.stored
       card = card.replace("N", [n_line(card, first, last)])
       card = edited_fn(contact, card, first, last)
       card = card.replace("NICKNAME", text_lines("NICKNAME", nickname))
       card = card.replace("NOTE", text_lines("NOTE", note))
-      card = edited_phones(contact, card, params)
-      card = edited_emails(contact, card, params)
-      edited_addresses(contact, card, params)
+      card = edited_phones(own, card, params)
+      card = edited_emails(own, card, params)
+      edited_addresses(own, card, params)
     end
 
     # The phones' half of the surgical save: each row names its line
