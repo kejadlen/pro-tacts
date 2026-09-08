@@ -754,7 +754,7 @@ module ProTacts
 
       card = contact.stored
       card = card.replace("N", [n_line(card, first, last)])
-      card = card.replace("FN", ["FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n"])
+      card = edited_fn(contact, card, first, last)
       card = card.replace("NICKNAME", text_lines("NICKNAME", nickname))
       card = card.replace("NOTE", text_lines("NOTE", note))
       card = edited_phones(contact, card, params)
@@ -960,6 +960,25 @@ module ProTacts
       return [] if value.empty?
 
       ["#{name}:#{VCard.escape(value)}\r\n"]
+    end
+
+    # FN's replacement, or the card untouched: the display name is the
+    # card's own text (RFC 2426 section 3.1.1), not a rendering of N,
+    # and "Dr. Ada B. Lovelace, Jr." holds parts no field on this form
+    # does — the same parts n_line rejoins byte for byte rather than
+    # dropping. Rebuilding it under a save that only moved a phone
+    # number would lose them, so FN is rewritten only when a name
+    # field moved under it, which is the one time the old display
+    # name is stale. A card carrying no FN is the other case: the
+    # property is mandatory (section 4), so a save fills it in rather
+    # than leaving the absence it found.
+    #: (Contact contact, VCard card, String first, String last) -> VCard
+    def edited_fn(contact, card, first, last)
+      family, given = contact.name_components || []
+      named = card.properties.any? { it.name.casecmp?("FN") }
+      return card if named && first == given.to_s && last == family.to_s
+
+      card.replace("FN", ["FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n"])
     end
 
     # N's replacement line: a splice over the still-escaped value

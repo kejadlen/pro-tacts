@@ -731,6 +731,59 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # FN is the card's own display name, not a rendering of N: a save
+  # that left both name fields alone must not rebuild it from them,
+  # or a card spelling the name in full loses every part the form has
+  # no field for — the parts N itself keeps.
+  def test_a_save_that_moves_no_name_field_keeps_the_cards_own_display_name
+    formal = ADA.sub("FN:Ada Lovelace", "FN:Dr. Ada B. Lovelace, Jr.")
+                .sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;B.;Dr.;Jr.")
+
+    with_contacts({"ada" => formal}) do |store|
+      digest = store.contact("ada").phones.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
+                               etag: store.contact("ada").etag, phone: {digest => "+1-555-0199"}
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "FN:Dr. Ada B. Lovelace, Jr.\r\n"
+      assert_includes card, "N:Lovelace;Ada;B.;Dr.;Jr.\r\n"
+      assert_includes card, "TEL;TYPE=mobile:+1-555-0199\r\n"
+    end
+  end
+
+  # A moved name field is the one time the old display name is stale,
+  # and then FN is the form's reading — N's other three components
+  # staying where they were, this being an edit of the name and not of
+  # the card's spelling of it.
+  def test_a_moved_name_field_rewrites_the_display_name
+    formal = ADA.sub("FN:Ada Lovelace", "FN:Dr. Ada B. Lovelace, Jr.")
+                .sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;B.;Dr.;Jr.")
+
+    with_contacts({"ada" => formal}) do |store|
+      post "/contacts/ada", first: "Ada", last: "King", etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "FN:Ada King\r\n"
+      assert_includes card, "N:King;Ada;B.;Dr.;Jr.\r\n"
+    end
+  end
+
+  # The mandatory property is filled in rather than left absent (RFC
+  # 2426 section 4): a card with no FN has no display name to keep, so
+  # the untouched-name rule does not apply to it.
+  def test_a_save_writes_the_display_name_a_card_lacks
+    nameless = "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Lovelace;Ada;;;\r\nUID:ada\r\nEND:VCARD\r\n"
+
+    with_contacts({"ada" => nameless}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s, "FN:Ada Lovelace\r\n"
+    end
+  end
+
   # Blank equals absent on the way back: a blank nickname or note
   # removes the property, as a blank value is absent to the reader
   # (Contact#text_of) — and filling one in adds it where the card
