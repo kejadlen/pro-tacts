@@ -290,7 +290,7 @@ module ProTacts
       # member's submission is the write half's task
       # (docs/plans/2026-08-24-vcard-storage-and-groups.md), so until it
       # lands a member's rewrite carries the inherited lines within it.
-      contact = Contact.for(id:, stored:, birthday:, inherited: inherited_of(id))
+      contact = Contact.new(id:, stored:, birthday:, inherited: inherited_of(id))
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
@@ -318,7 +318,7 @@ module ProTacts
     #: (String id, String vcard, birthday: Birthday?) -> Contact
     def rewrite(id, vcard, birthday:)
       card = VCard.new(vcard)
-      contact = Contact.for(id:, stored: card, birthday:, inherited: inherited_of(id))
+      contact = Contact.new(id:, stored: card, birthday:, inherited: inherited_of(id))
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
@@ -525,7 +525,7 @@ module ProTacts
     # describe what a client downloads rather than the bytes on disk.
     #: (Hash[Symbol, untyped] row, Birthday? birthday, Array[Contact::Inherited] inherited) -> Contact
     def contact_from(row, birthday, inherited)
-      Contact.for(
+      Contact.new(
         id: row.fetch(:id).to_s,
         stored: VCard.new(row.fetch(:vcard).to_s),
         birthday:,

@@ -31,7 +31,7 @@ class ContactTest < Minitest::Test
 
   def contact(vcard = CARD, id: "aiden", birthday: nil, inherited: [], group: GROUP)
     lent = inherited.map { ProTacts::Contact::Inherited.new(group:, line: it) }
-    ProTacts::Contact.for(id:, stored: ProTacts::VCard.new(vcard), birthday:, inherited: lent)
+    ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(vcard), birthday:, inherited: lent)
   end
 
   # The decode's refusal reports (see #photo); the transport this pins

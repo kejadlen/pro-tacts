@@ -448,8 +448,9 @@ class StoreTest < Minitest::Test
   # row in: if the transaction were dropped, the card would survive and a
   # client's sync token would point at a history that never happened.
   #
-  # Refusing a bad id does not test this, however it is named: Contact.for
-  # raises before the transaction opens, so nothing was ever attempted.
+  # Refusing a bad id does not test this, however it is named:
+  # Contact's constructor raises before the transaction opens, so
+  # nothing was ever attempted.
   def test_a_write_that_fails_at_the_log_leaves_no_card
     Dir.mktmpdir do |dir|
       path = Pathname.new(dir) / "contacts.db"

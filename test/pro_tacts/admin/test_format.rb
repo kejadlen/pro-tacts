@@ -13,7 +13,7 @@ class FormatTest < Minitest::Test
   # unmodeled BDAY beside nil, and inheritance defaults to none (see
   # Contact).
   def contact(vcard = CARD, id: "aiden", birthday: nil, inherited: [])
-    ProTacts::Contact.for(id:, stored: ProTacts::VCard.new(vcard), birthday:, inherited:)
+    ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(vcard), birthday:, inherited:)
   end
 
   # Initials come from the structured N property (given + family),

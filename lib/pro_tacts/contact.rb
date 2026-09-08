@@ -102,31 +102,30 @@ module ProTacts
       :line,
     )
 
-    # A contact from its id, its stored card, its birthday, and the
-    # content lines it inherits from its groups. The only way to make
-    # one: an etag that came from anywhere but the card in hand is an
-    # etag that can be wrong, and a birthday or an inheritance from
-    # anywhere but the store is wrong the same way — which is why
-    # `birthday:` and `inherited:` are required and carry no defaults,
-    # since an optional nil would let a caller quietly get no birthday
-    # off a card that has one, and an omitted inheritance would serve a
-    # member its group's lines no longer reach. Named `stored:` rather
-    # than `vcard:` because what #vcard returns is composed, and an
-    # argument that is not what the reader hands back is a trap.
-    #: (id: String, stored: VCard, birthday: Birthday?, inherited: Array[Inherited]) -> Contact
-    def self.for(id:, stored:, birthday:, inherited:)
-      raise ArgumentError, "invalid contact id: #{id}" unless id.match?(ID_FORMAT)
-
-      new(id, stored, birthday, inherited)
-    end
-
     #: (VCard vcard) -> String
     def self.etag_for(vcard)
       %("#{Digest::SHA256.hexdigest(vcard.to_s)}")
     end
 
-    #: (String id, VCard stored, Birthday? birthday, Array[Inherited] inherited) -> void
-    def initialize(id, stored, birthday, inherited)
+    # A contact from its id, its stored card, its birthday, and the
+    # content lines it inherits from its groups. An etag that came from
+    # anywhere but the card in hand is an etag that can be wrong, and a
+    # birthday or an inheritance from anywhere but the store is wrong
+    # the same way — which is why `birthday:` and `inherited:` are
+    # required and carry no defaults, since an optional nil would let a
+    # caller quietly get no birthday off a card that has one, and an
+    # omitted inheritance would serve a member its group's lines no
+    # longer reach. Named `stored:` rather than `vcard:` because what
+    # #vcard returns is composed, and an argument that is not what the
+    # reader hands back is a trap.
+    #
+    # The id check is here rather than behind a factory: an id outside
+    # ID_FORMAT cannot be served, and a guard a caller can walk around
+    # by reaching for `new` is not a guard.
+    #: (id: String, stored: VCard, birthday: Birthday?, inherited: Array[Inherited]) -> void
+    def initialize(id:, stored:, birthday:, inherited:)
+      raise ArgumentError, "invalid contact id: #{id}" unless id.match?(ID_FORMAT)
+
       @id = id
       @stored = stored
       @birthday = birthday
@@ -182,7 +181,7 @@ module ProTacts
     def own
       return @own if defined?(@own)
 
-      @own = self.class.for(id: @id, stored: @stored, birthday: @birthday, inherited: [])
+      @own = self.class.new(id: @id, stored: @stored, birthday: @birthday, inherited: [])
     end
 
     # The etag over #vcard's bytes, derived here on first ask and
