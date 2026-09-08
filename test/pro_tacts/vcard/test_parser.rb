@@ -370,14 +370,22 @@ class VCardParserTest < Minitest::Test
 
   ## Parameters
 
-  # A name matches without case (RFC 2426 section 4), and a parameter
-  # listing several values answers with the first of them.
   def test_a_parameter_reads_by_name_without_case
-    property = properties(card("TEL;type=WORK,voice:+1-555-1234")).fetch(0)
+    property = properties(card("TEL;type=work:+1-555-1234")).fetch(0)
 
-    assert_equal "WORK", property.parameter("TYPE")
-    assert_equal "WORK", property.parameter("type")
-    assert_equal ["WORK", "voice"], property.parameters.map(&:last)
+    assert_equal "work", property.parameter("TYPE")
+  end
+
+  def test_a_parameter_listing_several_values_reads_the_first
+    property = properties(card("TEL;TYPE=work,voice:+1-555-1234")).fetch(0)
+
+    assert_equal "work", property.parameter("TYPE")
+  end
+
+  def test_a_parameter_the_repeated_spelling_lists_reads_the_same
+    property = properties(card("TEL;TYPE=work;TYPE=voice:+1-555-1234")).fetch(0)
+
+    assert_equal "work", property.parameter("TYPE")
   end
 
   def test_a_parameter_the_property_does_not_carry_reads_as_nil

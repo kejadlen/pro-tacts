@@ -342,8 +342,8 @@ module ProTacts
     end
 
     # The rows a repeatable property reads as: each line naming it
-    # folded by the block, which takes the property and the line it
-    # came from and answers nil for a row with nothing to show.
+    # folded by the block, which answers nil for a row with nothing
+    # to show.
     #: [T] (String name) { (VCard::Parser::Property, VCard::Parser::Line) -> T? } -> Array[T]
     def rows(name)
       of_line(name).filter_map { |line|
@@ -393,8 +393,8 @@ module ProTacts
       Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, type: type_of(property), line:)
     end
 
-    # The first of a row's TYPE parameters (RFC 2426 section 3.3.1),
-    # downcased: the spelling is the card's, and a screen shows one.
+    # RFC 2426 section 3.3.1. Downcased: the spelling is the card's,
+    # and a screen shows one.
     #: (VCard::Parser::Property property) -> String?
     def type_of(property)
       property.parameter("TYPE")&.downcase

@@ -90,10 +90,9 @@ module ProTacts
         #: () -> Array[String]
         def components = VCard.split_components(value)
 
-        # The named parameter's first value, or nil for a property
-        # carrying none. Names match without case (RFC 2426 section
-        # 4); the first value, because a repeat arrives as two pairs
-        # (see above) and a caller wanting both reads `parameters`.
+        # Names match without case (RFC 2426 section 4), and a
+        # repeat arrives as two pairs (see above) — so this is the
+        # first of them, and a caller wanting both reads `parameters`.
         #: (String name) -> String?
         def parameter(name)
           parameters.find { |parameter, _| parameter.casecmp?(name) }&.last
