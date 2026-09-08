@@ -396,12 +396,15 @@ module ProTacts
       Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, type: type_of(property), line:)
     end
 
-    # RFC 2426 section 3.3.1: TYPE can repeat (TYPE=work;TYPE=voice) or
-    # comma-list (TYPE=work,voice) — either arrives here as one
-    # parameter per value, so the first is the one this carries.
+    # A row's type parameter (RFC 2426 section 3.3.1), the first of
+    # them where a card lists several — which one that is, and that a
+    # name matches without case, is the grammar's and so
+    # Property#parameter's. What is this layer's is the downcase: the
+    # spelling is the card's, `WORK` and `work` label the same row,
+    # and a screen shows one of them.
     #: (VCard::Parser::Property property) -> String?
     def type_of(property)
-      property.parameters.find { |name, _| name.casecmp?("TYPE") }&.last&.downcase
+      property.parameter("TYPE")&.downcase
     end
   end
 end

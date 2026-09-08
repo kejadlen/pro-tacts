@@ -89,6 +89,25 @@ module ProTacts
         # component instead of ending it.
         #: () -> Array[String]
         def components = VCard.split_components(value)
+
+        # The named parameter's first value, or nil when the property
+        # carries none. Names compare without case, RFC 2426 section 4
+        # making them case-insensitive, and the first value is the
+        # answer because a parameter can repeat: section 3.3.1's
+        # `TYPE=work;TYPE=voice` and `TYPE=work,voice` are the same
+        # thing and both arrive as two pairs, so a caller wanting all
+        # of them reads `parameters` itself.
+        #
+        # Lookup, not meaning: that a parameter name is
+        # case-insensitive and that a repeat is a second value are
+        # the grammar's rules, which is what keeps this on the shallow
+        # side of the line the class comment draws. Which parameters a
+        # property may carry, and what any of them says, stays the
+        # caller's.
+        #: (String name) -> String?
+        def parameter(name)
+          parameters.find { |parameter, _| parameter.casecmp?(name) }&.last
+        end
       end
 
       # One logical line of a card, parsed beside the exact bytes that
