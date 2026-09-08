@@ -18,6 +18,10 @@ module ProTacts
       def self.call: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, ?notice: String?) -> String
     end
 
+    class DeviceSetup
+      def self.call: (hostname: String, name: String) -> String
+    end
+
     # Rendered by ContactsIndex, not called from checked code; only
     # its LIMIT is read in web.rb.
     class UpcomingBirthdays

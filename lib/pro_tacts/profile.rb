@@ -3,18 +3,35 @@ require "nokogiri"
 
 module ProTacts
   # Renders the configuration profile that provisions the pro-tacts CardDAV
-  # account on macOS, so the resync loop is one rake command instead of the
-  # Internet Accounts dance. Payload keys per Apple's Device Management
-  # reference for com.apple.carddav.account.
+  # account, so the resync loop is one rake command instead of the Internet
+  # Accounts dance, and so a device that can reach the app can provision
+  # itself from it (Web's /setup). Payload keys per Apple's Device
+  # Management reference for com.apple.carddav.account.
   #
   # Every render carries a fresh identifier and fresh UUIDs: the account
   # identity follows the profile, so each install provisions a cold account
   # with no cached sync state — exactly what the experiment loop needs. The
   # cost is that reinstalling without removing first orphans the old account;
   # rake profile:remove sweeps every profile carrying our prefix.
+  #
+  # The served route keeps that rule rather than deriving a stable identifier
+  # from the account, which would make a reinstall a no-op: an identifier is
+  # what a device replaces a profile by (Apple's Configuration Profile
+  # Reference, on PayloadIdentifier — "This string is used to determine
+  # whether a new profile should replace an existing one or should be
+  # added"), so a stable one turns the second install into an update of
+  # something already installed. Reinstalling is what someone does when sync
+  # has gone wrong, and a cold account is the thing that fixes it; the
+  # duplicate account that costs is visible and removable where the install
+  # happened.
   class Profile
     IDENTIFIER_PREFIX = "dev.kejadlen.pro-tacts.carddav"
     HEX = "0123456789abcdef"
+
+    # The account name when no caller overrides it. A constant because
+    # the install screen states the name the download is about to carry
+    # and must not restate it as a second literal.
+    DEFAULT_NAME = "pro-tacts"
 
     # The username and password are a throwaway fictional pair and the server
     # ignores them: identity comes from the Tailscale headers that serve
@@ -22,7 +39,7 @@ module ProTacts
     # because the account form expects the fields; dropping them is
     # untested.
     #: (hostname: String, ?name: String) -> String
-    def self.render(hostname:, name: "pro-tacts")
+    def self.render(hostname:, name: DEFAULT_NAME)
       identifier = "#{IDENTIFIER_PREFIX}-#{unique_hex}"
 
       template % {

@@ -41,6 +41,11 @@ class Roda
     # RodaRequest does not.
     def media_type: () -> String?
 
+    # The host the request named, without any port, inherited from
+    # Rack::Request for the same reason as #media_type. The setup route
+    # provisions an account for it (see web.rb).
+    def host: () -> String
+
     # The request's query and form parameters, inherited from
     # Rack::Request in the gem and restated here for the same reason as
     # #media_type. Values stay untyped: repeated keys arrive as arrays.
