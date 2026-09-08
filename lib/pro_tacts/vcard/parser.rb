@@ -133,13 +133,11 @@ module ProTacts
         #: () -> bool
         def unreadable? = !error.nil? && !broke_assumption?
 
-        # The line's address for a save that names it: the SHA-256 of
-        # the verbatim bytes, folds and terminator included — constant
-        # size, pure ASCII, and no card content hidden in the page
-        # (docs/plans/2026-09-05-web-card-editor.md). Stable across
-        # the render-to-save cycle the snapshot guard certifies, and
-        # blind otherwise: identical bytes digest alike, which is the
-        # one pair of lines no address can tell apart.
+        # The line's address for a save that names it, over the
+        # verbatim bytes, folds and terminator included — why a digest
+        # and not the bytes is docs/plans/2026-09-05-web-card-editor.md.
+        # Blind to one thing: identical bytes digest alike, which is
+        # the one pair of lines no address can tell apart.
         #: () -> String
         def digest = Digest::SHA256.hexdigest(verbatim)
       end
@@ -209,9 +207,7 @@ module ProTacts
         line.gsub(FOLD, "")
       end
 
-      # One logical line into a Line: the content line it read, or the
-      # error the failure raised. A blank line is neither: no property,
-      # no error.
+      # A blank line is neither a property nor an error.
       #: (String logical_line) -> Line
       def self.line_of(logical_line)
         Line.new(property: new(logical_line).parse, verbatim: logical_line, error: nil)
@@ -318,7 +314,6 @@ module ProTacts
         @scanner.scan(PTEXT).to_s
       end
 
-      # Where the scan gave up, for the message that says so.
       #: () -> String
       def here
         "at offset #{@scanner.pos}"

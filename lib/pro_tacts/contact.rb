@@ -167,11 +167,9 @@ module ProTacts
       @vcard = line ? card.insert([line]) : card
     end
 
-    # The same contact with nothing its groups lend it: the stored
-    # card and the birthday, no inheritance. The editor's subject —
-    # a form rendered from the composed contact offers rows the member
-    # does not own, and saving one writes the group's value into the
-    # member's own card (Web#edited_card), which is the
+    # The same contact with nothing its groups lend it: the editor's
+    # subject, because a form rendered from the composed contact would
+    # save a group's value into the member's own card — the
     # materialization the composition exists to avoid
     # (docs/plans/2026-08-24-vcard-storage-and-groups.md). The etag is
     # not this contact's: a screen guarding a save still carries the
@@ -184,8 +182,6 @@ module ProTacts
       @own = self.class.new(id: @id, stored: @stored, birthday: @birthday, inherited: [])
     end
 
-    # The etag over #vcard's bytes, derived here on first ask and
-    # memoized with the card it hashes.
     #: () -> String
     def etag
       return @etag if defined?(@etag)
@@ -249,12 +245,8 @@ module ProTacts
       Photo.new(mime_type: signature.fetch(1), bytes:)
     end
 
-    # The card's properties — the substrate the typed accessors sit on,
-    # and the read for what none of them models. Every line that read,
-    # and no complaint about one that did not: a contact is served from
-    # its bytes, so a line this parser cannot read costs an accessor its
-    # answer and costs the contact nothing. There is no repair to make
-    # and nobody to make it, which is why nothing here looks for one.
+    # The substrate the typed accessors sit on, and the read for what
+    # none of them models.
     #: () -> Array[VCard::Parser::Property]
     def properties = vcard.properties
 

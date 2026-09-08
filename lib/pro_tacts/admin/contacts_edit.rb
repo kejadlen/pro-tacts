@@ -87,10 +87,8 @@ module ProTacts
       def initialize(contact:, notice: nil)
         @contact = contact
         # The rows are the contact's own, never what a group lends it
-        # (Contact#own): a row here is a row the save may rewrite or
-        # remove, and neither is this screen's to do to a value the
-        # household owns — the details page is where an inherited row
-        # is read (Admin::ContactsShow). The etag below is still the
+        # (Contact#own); the details page is where an inherited row is
+        # read (Admin::ContactsShow). The etag below is still the
         # composed contact's, the one a save is guarded against.
         @own = contact.own
         @notice = notice
@@ -276,21 +274,15 @@ module ProTacts
         end
       end
 
-      # The birthday row: the one row that saves to the model rather
-      # than the card's bytes (docs/plans/2026-09-07-web-birthday-editor.md)
-      # — a partial date has no vCard 3.0 spelling, so there is no
-      # line to address and the prefill is the model
-      # (Contact#birthday), not a reading off the card. It renders
-      # only over a held birthday: an empty row was an attribute
-      # rendering nothing (docs/DESIGN.md), and the way a birthday
-      # arrives is the add dialog's, like every other property. A
-      # blank component is an absence and three blanks remove the
-      # birthday, the form's blank-equals-absent; a day without its
-      # month is refused at the save, the grammar's own rule. Every
-      # shape the grammar admits is editable, including the ones no
-      # client renders — they live here and go nowhere, their
-      # documented fate. Every standing row holds a birthday, so
-      # the removal state rides on it unconditionally.
+      # The one row that saves to the model rather than the card's
+      # bytes, so the prefill is Contact#birthday and not a reading
+      # off the card — why, and why every shape the grammar admits is
+      # editable here, is docs/plans/2026-09-07-web-birthday-editor.md.
+      # It renders only over a held birthday: an empty row was an
+      # attribute rendering nothing (docs/DESIGN.md), and a birthday
+      # arrives through the add dialog like every other property. Every
+      # standing row holds one, so the removal state rides on it
+      # unconditionally.
       #: () -> void
       def birthday_row
         birthday = @contact.birthday
@@ -318,15 +310,12 @@ module ProTacts
         end
       end
 
-      # The birthday row's three controls, shared by the standing
-      # row and the add dialog's — month-day-year to match the prose
-      # Birthday#to_s renders; a select for the month because a name
-      # is the friendlier read and constrains the value by
-      # construction, number inputs with native ranges for the day
-      # and year. The same names for both callers is the point: a
-      # birthday needs no digest, there being at most one, and the
-      # save reads either caller's row identically. A nil birthday
-      # is the added row — nothing selected, nothing prefilled.
+      # The birthday row's three controls, shared by the standing row
+      # and the add dialog's — the control choices and their order are
+      # docs/plans/2026-09-07-web-birthday-editor.md, "The row". The
+      # same names for both callers is the point: a birthday needs no
+      # digest, there being at most one, and the save reads either
+      # caller's row identically. A nil birthday is the added row.
       #: (Birthday? birthday, ?focus: bool) -> void
       def birthday_controls(birthday, focus: false)
         select(name: "birthday[month]", aria_label: "month",
@@ -439,11 +428,9 @@ module ProTacts
         end
       end
 
-      # The dialog's list: everything the save can insert, minus a
-      # birthday the contact already holds — one being the most a
-      # card carries, and the dialog naming only what can still be
-      # added. The row is the same guard from the other side,
-      # rendering only over a held birthday.
+      # A birthday leaves the list once the contact holds one, that
+      # being the most a card carries. #birthday_row is the same guard
+      # from the other side.
       #: () -> Array[String]
       def addable_types
         @contact.birthday ? ADDABLE_TYPES - ["birthday"] : ADDABLE_TYPES

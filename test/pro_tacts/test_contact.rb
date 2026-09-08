@@ -131,8 +131,8 @@ class ContactTest < Minitest::Test
       phones.first.line.digest
   end
 
-  # A line that would not read is a row no form can address: it reads
-  # as no phone, and stays in the card's lines, served from its bytes.
+  # A line that would not read is a row no form can address. It stays
+  # in the card's lines, served from its bytes.
   def test_a_phone_line_that_would_not_read_is_no_phone
     broken = STRUCTURED.sub("TEL;TYPE=mobile:+1-555-0100\r\n", "TEL;=;:+1-555-0100\r\n")
 
@@ -147,9 +147,6 @@ class ContactTest < Minitest::Test
     assert_equal "home", emails.fetch(0).type
   end
 
-  # Each email carries the line it was read from, the phones' own
-  # address for a save: the digest names the served card's line, which
-  # is the stored one's too — composition only inserts the BDAY.
   def test_every_email_carries_the_line_it_was_read_from
     email = contact(STRUCTURED).emails.fetch(0)
 
@@ -158,8 +155,6 @@ class ContactTest < Minitest::Test
       email.line.digest
   end
 
-  # A line that would not read is a row no form can address: it reads
-  # as no email, and stays in the card's lines, served from its bytes.
   def test_an_email_line_that_would_not_read_is_no_email
     broken = STRUCTURED.sub("EMAIL;TYPE=home:ada@example.com\r\n", "EMAIL;=;:ada@example.com\r\n")
 
@@ -179,8 +174,6 @@ class ContactTest < Minitest::Test
     assert_equal "home", address.type
   end
 
-  # The address carries its line like the single-valued shapes do —
-  # the digest is the row's address in a save.
   def test_every_address_carries_the_line_it_was_read_from
     address = contact(STRUCTURED).addresses.fetch(0)
 
@@ -191,8 +184,6 @@ class ContactTest < Minitest::Test
     ), address.line.digest
   end
 
-  # A line that would not read is a row no form can address — no
-  # address reads, and the line stays enumerable, served from its bytes.
   def test_an_adr_line_that_would_not_read_is_no_address
     broken = STRUCTURED.sub(
       "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",
@@ -245,8 +236,7 @@ class ContactTest < Minitest::Test
     assert_equal birthday, contact(STRUCTURED, birthday:).birthday
   end
 
-  # The served card is the stored one with the birthday's line composed
-  # in immediately before END:VCARD — the bytes a client downloads.
+  # Immediately before END:VCARD.
   def test_the_served_card_composes_the_birthday_in
     birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
     composed = STRUCTURED.sub("END:VCARD\r\n", "BDAY:1985-12-10\r\nEND:VCARD\r\n")
@@ -308,8 +298,8 @@ class ContactTest < Minitest::Test
     assert_equal ProTacts::Contact.etag_for(ProTacts::VCard.new(card)), contact(card).etag
   end
 
-  # Inherited lines are card contents like any other, so the accessors
-  # read them: a group's number is a phone on the member's card.
+  # Inherited lines are card contents like any other: a group's number
+  # is a phone on the member's card.
   def test_the_accessors_read_inherited_lines
     card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
 

@@ -105,7 +105,7 @@ class StoreTest < Minitest::Test
   ## UIDs
 
   # The read behind the no-uid-conflict precondition (RFC 6352 section
-  # 6.3.2.1): which card, if any, owns this UID.
+  # 6.3.2.1).
   def test_the_card_holding_a_uid_is_found_by_it
     with_store({"aiden" => AIDEN}) do |store|
       assert_equal "aiden", store.card_id_with_uid("aiden")
@@ -118,8 +118,7 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The lookup runs through the index, whose name column ignores case,
-  # so a card that spelled the property lowercase is still found.
+  # The lookup runs through the index, whose name column ignores case.
   def test_a_lowercase_uid_property_is_found
     lowercase = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nuid:aiden\r\nEND:VCARD\r\n"
 
@@ -577,9 +576,8 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # One line the parser cannot read does not cost the card the lines
-  # that read: the index is what this server understood, not an
-  # all-or-nothing verdict on the card.
+  # The index is what this server understood, not an all-or-nothing
+  # verdict on the card.
   def test_a_card_is_indexed_by_the_lines_that_read
     unreadable = AIDEN.sub("FN:Aiden\r\n", "FN:Aiden\r\nTEL;HOME:+1-555-1234\r\n")
     with_store({"aiden" => unreadable}) do |store|
@@ -658,13 +656,8 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # A BDAY the model cannot recompose stays in the card verbatim and
-  # empties the model: the card's own line speaks for itself, and
-  # compose must never add a second one beside it.
-  # A BDAY the model cannot recompose stays in the card verbatim and
-  # empties the model: the card's own line speaks for itself, and
-  # nothing composes a second one beside it. A fold travels with its
-  # line, byte for byte.
+  # The card's own line speaks for itself, and nothing composes a
+  # second one beside it. A fold travels with its line, byte for byte.
   def test_an_unmodeled_bday_stays_in_the_card_and_empties_the_model
     ["BDAY:--0412", "BDAY:1985-\r\n 04\r\n", "BDAY:1985-04-12\r\nBDAY:1986-04-12\r\n"].each do |bday|
       unmodeled = AIDEN.sub("END:VCARD\r\n", "#{bday}END:VCARD\r\n")
@@ -678,20 +671,12 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The card's half of the same rule. A BDAY in a shape no client
-  # renders lives in the card — the model has no spelling for it — and
-  # macOS Contacts drops those lines from every card it writes, so a
-  # rewrite that omits the BDAY carries them across or loses them
-  # (docs/macos-contacts.md, "A birthday the client cannot render is
-  # dropped from the card").
-  # A BDAY sharing its line's bytes with another content line — a bare
-  # CR packs two into one physical line — is a shape the parser is
-  # built to assume macOS never sends, so it is never read: the line
-  # stays verbatim and the model empties. The store says nothing about
-  # it. A value it never read is not a value it failed to recognize,
-  # and reporting it as an odd BDAY would send anyone reading the
-  # message looking in the wrong place. WebTest holds the report that
-  # is worth making, at the arrival.
+  # A bare CR packs two content lines into one physical line, a shape
+  # the parser is built to assume macOS never sends, so the line is
+  # never read. The store says nothing about it: a value it never read
+  # is not a value it failed to recognize, and reporting it as an odd
+  # BDAY would send anyone reading the message looking in the wrong
+  # place. WebTest holds the report worth making, at the arrival.
   def test_a_bday_sharing_its_line_arrives_whole_and_unreported
     shared = AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\rNOTE:b\r\nEND:VCARD\r\n")
 
@@ -705,6 +690,10 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # macOS Contacts drops the lines it cannot render from every card it
+  # writes, so a rewrite that omits the BDAY carries them across rather
+  # than reading the absence as a deletion (docs/macos-contacts.md, "A
+  # birthday the client cannot render is dropped from the card").
   def test_a_birthday_no_client_renders_survives_a_rewrite_that_drops_it
     ["BDAY:1985-04", "BDAY:1985", "BDAY:--04", "BDAY:---12"].each do |line|
       with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")}) do |store|
@@ -867,7 +856,6 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The limit keeps the list the length a screen wants, off the front.
   def test_upcoming_birthdays_take_the_first_n
     september = Date.new(2026, 9, 3)
     cards = (1..3).to_h do |n|
@@ -879,8 +867,7 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # A birthday without a year is on the day and in the list — the age
-  # is the view's question, not the query's.
+  # The age is the view's question, not the query's.
   def test_a_birthday_without_a_year_is_upcoming
     september = Date.new(2026, 9, 3)
 
@@ -893,8 +880,7 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The shapes on no calendar day are nobody's to place. Planted
-  # directly, because no writer produces one yet.
+  # Planted directly, because no writer produces one yet.
   def test_birthdays_on_no_calendar_day_are_left_out
     september = Date.new(2026, 9, 3)
 

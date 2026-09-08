@@ -15,14 +15,11 @@ module ProTacts
   # alone follows from its allowance of ISO 8601 truncated representation
   # f), which it references but does not spell out.
   #
-  # vCard 3.0 cannot carry any of this: RFC 2425 section 5.8.4 defines
-  # the date value as `date-fullyear ["-"] date-month ["-"] date-mday`
-  # with all three components required, and RFC 2426 section 3.1.5 builds
-  # BDAY on it. So a birthday is database state that no stored card
-  # carries, composed into the served card on read and subtracted out of
-  # a submitted one on write — Store owns that surgery, over the card
-  # VCard reads and the property-level reading below; the full reasoning
-  # is docs/plans/2026-08-31-partial-birthdays.md and
+  # vCard 3.0 cannot carry any of this, so a birthday is database state
+  # that no stored card carries, composed into the served card on read
+  # and subtracted out of a submitted one on write — Store owns that
+  # surgery. Why it cannot live in the card, and what each shape puts
+  # on the wire, are docs/plans/2026-08-31-partial-birthdays.md and
   # docs/plans/2026-09-01-birthdays-across-a-rewrite.md.
   #
   # The signature lives in sig/pro_tacts/birthday.rbs: a Data class has

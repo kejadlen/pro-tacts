@@ -259,9 +259,7 @@ class WebTest < Minitest::Test
     end
   end
 
-  # If-Match on a resource that does not exist fails rather than creating
-  # — the client named a representation it never saw (RFC 7232 section
-  # 3.1).
+  # The client named a representation it never saw (RFC 7232 section 3.1).
   def test_put_with_if_match_against_nothing_is_refused
     with_contacts({}) do
       put_request "new", card("new", "New"),
@@ -271,8 +269,7 @@ class WebTest < Minitest::Test
     end
   end
 
-  # RFC 7232 section 3.1 allows If-Match a list of tags, and `*` for any
-  # current representation.
+  # RFC 7232 section 3.1.
   def test_if_match_accepts_a_list_and_a_star
     with_contacts({"aiden" => "Aiden"}) do
       get "/dav/addressbook/aiden.vcf"
@@ -458,7 +455,6 @@ class WebTest < Minitest::Test
     end
   end
 
-  # Nothing else reports: an ordinary card arrives in silence.
   def test_put_of_an_ordinary_card_is_quiet
     with_contacts({}) do
       put_request "new", card("new", "New"), "CONTENT_TYPE" => VCARD
@@ -757,8 +753,7 @@ class WebTest < Minitest::Test
     end
   end
 
-  # An empty token is the initial sync (RFC 6578 section 3.4): every
-  # member reported as changed.
+  # The initial sync, RFC 6578 section 3.4.
   def test_sync_collection_with_no_token_lists_every_member
     with_contacts({"aiden" => "Aiden", "znorth" => "Znorth"}) do
       request "/dav/addressbook/", method: "REPORT", input: sync_collection("")
@@ -770,8 +765,7 @@ class WebTest < Minitest::Test
     end
   end
 
-  # A removal answers as RFC 6578 section 3.2 spells it: href and 404,
-  # no propstat — and nothing else moves.
+  # RFC 6578 section 3.2 spells a removal href and 404, no propstat.
   def test_sync_collection_reports_a_removal_as_404
     with_contacts({"aiden" => "Aiden", "znorth" => "Znorth"}) do |store|
       request "/dav/addressbook/", method: "REPORT", input: sync_collection("http://pro-tacts/sync/2")

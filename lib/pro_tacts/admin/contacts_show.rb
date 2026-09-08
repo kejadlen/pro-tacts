@@ -154,10 +154,9 @@ module ProTacts
         end
       end
 
-      # The stored card for display: byte for byte, except a value — a
-      # property's or a parameter's — long enough to be a wall, which
-      # renders as its octet count. The count says exactly what is
-      # there; what it stands in for is not readable text.
+      # The stored card for display: byte for byte, except a value long
+      # enough to be a wall. The count says exactly what is there; what
+      # it stands in for is not readable text.
       #: () -> String
       def raw_card
         @contact.vcard.lines.map { elide(it) }.join
@@ -184,8 +183,6 @@ module ProTacts
         "#{[header, *params].join(';')}:#{count_octets(property.value)}#{terminator}"
       end
 
-      # A value over the threshold stands in as its octet count;
-      # anything shorter renders as it is.
       #: (String value) -> String
       def count_octets(value)
         value.bytesize > ELIDE_ABOVE ? "[#{value.bytesize} octets elided]" : value

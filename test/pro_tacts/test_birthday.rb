@@ -155,8 +155,8 @@ class BirthdayTest < Minitest::Test
     assert_equal ProTacts::Birthday.new(day: 12), ProTacts::Birthday.from_value("---12")
   end
 
-  # A bare 1604 date is a full date — the sentinel is the parameter's
-  # to claim, exactly as from_property reads it.
+  # The sentinel is the parameter's to claim, exactly as from_property
+  # reads it.
   def test_from_value_reads_a_bare_1604_date_as_a_full_date
     assert_equal ProTacts::Birthday.new(year: 1604, month: 4, day: 12), ProTacts::Birthday.from_value("1604-04-12")
   end

@@ -157,9 +157,8 @@ module ProTacts
         properties.any? { it.name.casecmp?("VERSION") }
     end
 
-    # The value of the card's UID property, if it carries one. Names
-    # compare without case, as the index's NOCASE collation already
-    # assumes for them.
+    # Names compare without case, as the index's NOCASE collation
+    # already assumes for them.
     #: () -> String?
     def uid
       properties.find { it.name.casecmp?("UID") }&.value
@@ -176,7 +175,6 @@ module ProTacts
       [taken, VCard.new(rest.map(&:verbatim).join)]
     end
 
-    # The card's bytes, exactly as it was given them.
     #: () -> String
     def to_s = @bytes
 

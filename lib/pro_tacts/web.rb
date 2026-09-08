@@ -154,7 +154,6 @@ module ProTacts
             end
           end
 
-          # The edit's apply, under the same fall-through-to-404 rule.
           r.post do
             apply_edit(r, id)
           end
@@ -168,9 +167,8 @@ module ProTacts
           r.get "photo" do
             contact = store.contact(id)
 
-            # A contact with no picture a browser can show is no
-            # match here, same fall-through-to-404 as the page below —
-            # the views never point at a photo the card lacks.
+            # The views never point at a photo the card lacks, so a
+            # contact with none is the 404 case above.
             if contact && (photo = contact.photo)
               response["Content-Type"] = photo.mime_type
               response["ETag"] = contact.etag
@@ -181,8 +179,6 @@ module ProTacts
           r.get do
             contact = store.contact(id)
 
-            # No match falls through to the empty-body 404 the
-            # not_found handler fills in, same as the CardDAV GET.
             if contact
               response["Content-Type"] = "text/html; charset=utf-8"
               Admin::ContactsShow.call(contact:)
@@ -308,9 +304,8 @@ module ProTacts
 
             etag_only = body.include?("getetag") && !body.include?("displayname") && !body.include?("resourcetype")
 
-            # Etag-only asks want the members; the collection self-entry
-            # is omitted until a client is found to need it. Full property
-            # requests (Depth:0 collection info) get the collection entry.
+            # The collection self-entry is omitted from an etag-only ask
+            # until a client is found to need it.
             collection_response = ""
             unless etag_only
               # Every property in this body and where it comes from:
@@ -363,7 +358,6 @@ module ProTacts
               XML
             end
 
-            # Depth: 0 returns only collection, Depth: 1 includes members
             members = depth == "0" ? "" : contacts.map { etag_response(it) }.join
 
             <<~XML
@@ -409,7 +403,8 @@ module ProTacts
               # at its current etag, the multiple-changes case section 3.5
               # allows one response for. A member whose net is a removal
               # answers as section 3.2 spells it: href and 404, no
-              # propstat.              #
+              # propstat.
+              #
               # Depth stays unread though the section defines the report
               # only at 0: macOS sends Depth: 1 (fixture 08), and 400-ing
               # the one real client over a header it ignores serves the
@@ -490,8 +485,6 @@ module ProTacts
           r.get String do |filename|
             contact = store.contact(filename.delete_suffix(".vcf"))
 
-            # No match falls through to the empty-body 404 that the
-            # not_found handler fills in.
             if contact
               response["Content-Type"] = "text/vcard; charset=utf-8"
               # RFC 7232 section 2.3; must match the getetag reported for
@@ -651,8 +644,6 @@ module ProTacts
     # validity first, the conditionals on stored state after.
     #: (untyped r, String id) -> String?
     def apply_edit(r, id)
-      # No match is nil, which falls through to the empty-body 404 the
-      # not_found handler fills in — the GET handler's rule.
       contact = store.contact(id)
       return if contact.nil?
 
@@ -663,19 +654,12 @@ module ProTacts
       last = r.params["last"].to_s.strip
       return edit_screen(contact, notice: "A contact needs a name.") if first.empty? && last.empty?
 
-      # The birthday row's parse — request validity, standing with the
-      # name check rather than the stored-state conditionals below
-      # (write_card's ordering rule). A POST that carries no birthday
-      # group keeps the model, the phones' is-a-Hash posture — this
-      # form's own save does when it rendered no birthday row, no
-      # birthday held and none added from the dialog
-      # (Admin::ContactsEdit), and anything else never carried one; a
-      # group of three blanks is the row's blank-equals-absent, a
-      # removal. The browser's number
-      # inputs make garbage a hand-crafted POST's own, so the refusal
-      # is the name toast's backstop sibling: the constructor's
-      # ArgumentError is the grammar's own refusal, caught at the one
-      # boundary with a re-render to fall back to.
+      # Request validity, standing with the name check rather than the
+      # stored-state conditionals below (write_card's ordering rule). A
+      # POST that carries no birthday group keeps the model, the phones'
+      # is-a-Hash posture — this form's own save does when it rendered
+      # no birthday row, and anything else never carried one; a group of
+      # three blanks is the row's blank-equals-absent, a removal.
       birthday =
         if (fields = r.params["birthday"]).is_a?(Hash)
           begin
@@ -697,14 +681,10 @@ module ProTacts
       # race window between check and write, noted there.
       return edit_screen(contact, notice: "This contact changed since the page loaded; nothing was saved.") if r.params["etag"].to_s != contact.etag
 
-      # A stored card carrying its own BDAY lines is the one state the
-      # birthday row cannot write: the model is empty and the spelling
-      # stayed in the card because no served form recomposes it
-      # (Store#put's case analysis), so a birthday submitted here would
-      # compose a second BDAY beside the card's own. Refused whole —
-      # one submit, one etag check, one write
-      # (docs/plans/2026-09-07-web-birthday-editor.md, which also
-      # records the migration not taken).
+      # The one state the birthday row cannot write, refused whole:
+      # docs/plans/2026-09-07-web-birthday-editor.md, "The one hazard:
+      # a card that carries its own BDAY", which also records the
+      # migration not taken.
       if birthday && contact.stored.lines.any? { it.names?("BDAY") }
         return edit_screen(contact, notice: "This contact's card carries its own birthday spelling; nothing was saved.")
       end
@@ -713,8 +693,6 @@ module ProTacts
       r.redirect "/contacts/#{id}", 303
     end
 
-    # The re-render a refused save answers with: the edit screen again,
-    # from the current card, with the refusal as its toast.
     #: (Contact contact, ?notice: String) -> String
     def edit_screen(contact, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
@@ -738,15 +716,9 @@ module ProTacts
         "END:VCARD\r\n"
     end
 
-    # The surgical save (docs/plans/2026-09-05-web-card-editor.md):
-    # each field names the property it replaces on the stored card's
-    # own bytes, and a property the form has no field for is never
-    # mentioned — what is never mentioned cannot be lost. Blank equals
-    # absent throughout, the reader's own rule (Contact#text_of) in the
-    # other direction: a blank nickname or note removes the property,
-    # and a blank name was already refused above. REV is not touched —
-    # the change log is the record of when, and macOS re-stamps REV on
-    # its own next rewrite.
+    # The surgical save — the hazard it exists to remove, the
+    # blank-equals-absent rule, and why REV is left alone are
+    # docs/plans/2026-09-05-web-card-editor.md.
     #: (Contact contact, String first, String last, Hash[String, untyped] params) -> VCard
     def edited_card(contact, first, last, params)
       nickname = params["nickname"].to_s.strip
@@ -815,11 +787,7 @@ module ProTacts
       card.insert(added)
     end
 
-    # The emails' half of the surgical save: the phones' own walk over
-    # EMAIL — each row names its line by digest, an unchanged row is
-    # skipped, a changed one swaps the value under the line's own
-    # header, a blank removes the line, and the add dialog's rows land
-    # as bare EMAIL lines before END:VCARD.
+    # #edited_phones' walk, over EMAIL.
     #: (Contact contact, VCard card, Hash[String, untyped] params) -> VCard
     def edited_emails(contact, card, params)
       rows = params["email"]
@@ -847,22 +815,16 @@ module ProTacts
       card.insert(added)
     end
 
-    # The addresses' half of the surgical save: the same
-    # digest-addressed walk, over a row that is six fields rather
-    # than one (Admin::ContactsEdit). A row unchanged throughout is
-    # skipped whole — the phones' rule, keeping an untouched line's
-    # bytes its own — and a changed one is rebuilt by the splice
-    # below. Removal is the reader's own rule (Contact#address_of): a
-    # row blank throughout, po box included, removes the line, where
-    # a partially blanked one keeps it — partial blanks are legal
-    # empty components.
+    # #edited_phones' walk, over a row that is six fields rather than
+    # one (Admin::ContactsEdit). Removal is the reader's own rule
+    # (Contact#address_of): a row blank throughout, po box included,
+    # removes the line, where a partially blanked one keeps it —
+    # partial blanks are legal empty components.
     #: (Contact contact, VCard card, Hash[String, untyped] params) -> VCard
     def edited_addresses(contact, card, params)
       rows = params["address"]
       if rows.is_a?(Hash)
         contact.addresses.each do |address|
-          # The property is nil only for a line that would not read —
-          # the phones' own guard.
           property = address.line.property
           next if property.nil?
 
@@ -885,8 +847,6 @@ module ProTacts
       card.insert(added.filter_map { address_line(nil, it) })
     end
 
-    # A row is unchanged when every field submits its current
-    # reading — the phones' skip at the component grain.
     #: (Contact::Address address, untyped submitted) -> bool
     def address_unchanged?(address, submitted)
       ADDRESS_COMPONENTS.keys.all? do |name|
@@ -988,14 +948,14 @@ module ProTacts
       card.replace("FN", ["FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n"])
     end
 
-    # N's replacement line: a splice over the still-escaped value
-    # (VCard.split_raw_components), not an unescape-then-re-escape round
-    # trip, which is not byte-stable. The first two components are the
-    # form's; the remaining three — additional, prefixes, suffixes (RFC
-    # 2426 section 3.1.2) — rejoin byte for byte. A card with no N a
-    # form can read (none, or a line that would not) splices into a
-    # bare five-component value; one short of five is padded, the same
-    # empties a whole-N writer would leave.
+    # N's replacement line. The first two components are the form's;
+    # the remaining three — additional, prefixes, suffixes (RFC 2426
+    # section 3.1.2) — rejoin byte for byte, which is what the splice
+    # over the still-escaped value buys
+    # (docs/plans/2026-09-05-web-card-editor.md). A card with no N a
+    # form can read splices into a bare five-component value; one
+    # short of five is padded, the same empties a whole-N writer
+    # would leave.
     #: (VCard card, String first, String last) -> String
     def n_line(card, first, last)
       property = card.properties.find { it.name.casecmp?("N") }
@@ -1151,12 +1111,10 @@ module ProTacts
       XML
     end
 
-    # An href with no match is reported as a 404 inside the 207 rather than
-    # failing the request (RFC 6352 section 8.7).
-    #: (String requested) -> String
     # A member the collection does not answer for: the multiget miss,
-    # and the removal shape a sync-collection delta reports (RFC 6578
-    # section 3.2 — href and 404, no propstat).
+    # reported as a 404 inside the 207 rather than failing the request
+    # (RFC 6352 section 8.7), and the removal shape a sync-collection
+    # delta reports (RFC 6578 section 3.2 — href and 404, no propstat).
     #: (String requested) -> String
     def missing_response(requested)
       <<~XML
