@@ -178,7 +178,7 @@ class StoreTest < Minitest::Test
   # sqlite3 gem encodes every bound value to UTF-8, so a binary-flagged
   # string with a byte above 7 bits raises at the bind — loudly, at the
   # contract violation, rather than being quietly relabelled here. The
-  # route is where Rack's binary becomes text (Web#utf8).
+  # route is where Rack's binary becomes text (Web#write_card).
   def test_binary_bytes_above_ascii_raise_at_the_bind
     accented = AIDEN.sub("Aiden", "Aiden Åberg")
 

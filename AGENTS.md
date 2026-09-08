@@ -162,10 +162,10 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   what `Store#contact` does for the 404 path. The store loads the
   extension on every open.
 - An etag is derived from the card, never stored beside it: `Contact`
-  hashes what it serves, and `Contact.for` is the only way to make one.
-  The etag in `changes` is the exception and is not the same fact — it
-  is what the card hashed to at that write, which nothing can recompute
-  once the card moves on.
+  hashes what it serves, and its constructor is the only way to make
+  one — no second path takes an etag on trust. The etag in `changes` is
+  the exception and is not the same fact — it is what the card hashed
+  to at that write, which nothing can recompute once the card moves on.
 - Nothing above `vcard/parser.rb` handles a parse error, and nothing
   should start. `Parser.lines` is the only read: a line that will not
   read comes back as a Line with no property. The card is served from
@@ -189,6 +189,14 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   editor, and tested directly rather than through anything that serves.
 - `docs/plans/` entries are dated records of what was decided then. Write
   a new one rather than editing an old one to match current behavior.
+- Comments carry the reasoning; the code carries the rest. One that
+  restates the line below it has nothing to say, and neither does a
+  test comment that restates its test name — the names in `test/` are
+  sentences already. Where the reasoning is already written down, cite
+  it rather than re-derive it: a `docs/plans/` entry and the section
+  within it, an RFC section, or the method that owns the rule. Two
+  copies of an argument drift apart, and the plan holds the whole of
+  it.
 - Types live in the code, as RBS comments: `#:` above a method for its
   type, `# @rbs` for instance variables and skips, `#:` at the end of a
   line for a constant or an assertion. `rake steep` checks them, and
