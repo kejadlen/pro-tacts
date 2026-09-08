@@ -27,7 +27,7 @@ class ContactTest < Minitest::Test
   # Inherited lines are given as bare strings and lent by GROUP, the
   # name a composed row is marked with; a test that needs a second
   # lender passes its own.
-  GROUP = "Boole household" #: String
+  GROUP = "Booles" #: String
 
   def contact(vcard = CARD, id: "aiden", birthday: nil, inherited: [], group: GROUP)
     lent = inherited.map { ProTacts::Contact::Inherited.new(group:, line: it) }

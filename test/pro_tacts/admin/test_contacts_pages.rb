@@ -318,15 +318,43 @@ class AdminContactsPagesTest < Minitest::Test
   # marked.
   def test_show_marks_the_rows_a_group_lends
     with_contacts({"ada" => ADA}) do |store|
-      add_group(store, name: "Boole household", members: ["ada"], lines: HOUSEHOLD)
+      add_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
 
       get "/contacts/ada"
-      marks = last_response.body.scan('<span class="badge">Boole household</span>')
+      marks = last_response.body.scan('<span class="badge">Booles</span>')
 
       assert_equal 2, marks.size
       assert_includes last_response.body, "7 Calculus Close"
       assert_includes last_response.body, "Gate code 1854."
       assert_includes last_response.body, "Countess of Lovelace."
+    end
+  end
+
+  # The card says what the contact belongs to, as tags: the group
+  # lending it two rows and the group lending it nothing both appear,
+  # because the row is membership rather than what came of it.
+  def test_show_tags_the_groups_a_contact_belongs_to
+    with_contacts({"ada" => ADA}) do |store|
+      named = add_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
+      nameless = add_group(store, members: ["ada"], lines: [])
+
+      get "/contacts/ada"
+      tags = last_response.body.scan(%r{<span class="tag">([^<]*)</span>}).flatten
+
+      assert_equal({named => "Booles", nameless => nameless}.sort.map { it.last }, tags)
+      # The grid leads with what the contact belongs to, so the values
+      # under it are read already knowing whose they might be.
+      assert_equal "groups", last_response.body[%r{<dt class="type-label">([^<]*)<}, 1]
+    end
+  end
+
+  # No membership, no row: an empty tag set would say a contact
+  # belongs to nothing in the space where belonging is shown.
+  def test_show_omits_the_groups_row_for_a_contact_in_none
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada"
+
+      refute_includes last_response.body, "groups</dt>"
     end
   end
 
@@ -714,7 +742,7 @@ class AdminContactsPagesTest < Minitest::Test
   # page is where an inherited row is read.
   def test_the_edit_screen_omits_the_rows_a_group_lends
     with_contacts({"ada" => ADA}) do |store|
-      add_group(store, name: "Boole household", members: ["ada"], lines: HOUSEHOLD)
+      add_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
 
       get "/contacts/ada/edit"
 
@@ -731,7 +759,7 @@ class AdminContactsPagesTest < Minitest::Test
     noteless = ADA.sub("NOTE:Countess of Lovelace.\r\n", "")
 
     with_contacts({"ada" => noteless}) do |store|
-      add_group(store, name: "Boole household", members: ["ada"], lines: HOUSEHOLD)
+      add_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
 
       get "/contacts/ada/edit"
 
@@ -745,7 +773,7 @@ class AdminContactsPagesTest < Minitest::Test
   # is not the screen — matches nothing and writes nothing.
   def test_a_save_naming_a_lent_line_touches_nothing
     with_contacts({"ada" => ADA}) do |store|
-      add_group(store, name: "Boole household", members: ["ada"], lines: HOUSEHOLD)
+      add_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
       contact = store.contact("ada")
       lent = contact.addresses.find { contact.group_of(it.line) }
 

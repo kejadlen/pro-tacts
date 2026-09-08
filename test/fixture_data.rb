@@ -86,7 +86,7 @@ module FixtureData
   def self.seed_groups(store)
     database = store.instance_variable_get(:@database)
 
-    household = store.create_group(name: "Boole household")
+    household = store.create_group(name: "Booles")
     HOUSEHOLD.each.with_index do |line, position|
       database[:group_properties].insert(group_id: household, position:, line:)
     end

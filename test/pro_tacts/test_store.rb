@@ -1078,6 +1078,23 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # Membership is a read of its own: every group a contact is in,
+  # under the label a screen shows it by — the name, or the id where
+  # there is no name — ordered by id so a rename never moves a tag. A
+  # group that lends nothing is a membership like any other; it is the
+  # inherited reads, not this one, that have nothing of it to carry.
+  def test_the_groups_a_contact_is_in_are_read_with_their_labels
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      named = add_group(store, name: "Booles", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      nameless = add_group(store, members: ["aiden"], lines: [])
+      add_group(store, name: "Neighbours", members: [], lines: [HOUSEHOLD_NOTE])
+
+      expected = {named => "Booles", nameless => nameless}.sort.map { it.last }
+      assert_equal expected, store.groups_of("aiden")
+      assert_empty store.groups_of("znorth")
+    end
+  end
+
   # The schema is the only gate on what a group may hold until
   # authoring exists, so what it admits is worth pinning: an address
   # or a note, bare or parameterized, in whatever case the author
@@ -1194,7 +1211,7 @@ class StoreTest < Minitest::Test
       Sequel.connect("sqlite://#{path}") do |db|
         Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 4)
         db[:cards].insert(id: "aiden", vcard: AIDEN)
-        db[:groups].insert(id: "nous", name: "Boole household")
+        db[:groups].insert(id: "nous", name: "Booles")
         db[:group_properties].insert(group_id: "nous", position: 0, line: HOUSEHOLD_ADDRESS)
         db[:group_members].insert(group_id: "nous", card_id: "aiden")
       end
@@ -1202,7 +1219,7 @@ class StoreTest < Minitest::Test
       ProTacts::Store.connect(path) do |store|
         contact = store.contact("aiden")
         assert_includes contact.vcard.to_s, HOUSEHOLD_ADDRESS
-        assert_equal "Boole household", contact.group_of(contact.addresses.fetch(0).line)
+        assert_equal "Booles", contact.group_of(contact.addresses.fetch(0).line)
 
         database(store)[:cards].where(id: "aiden").delete
         assert_empty database(store)[:group_members].all

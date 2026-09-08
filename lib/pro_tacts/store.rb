@@ -222,6 +222,24 @@ module ProTacts
       nil
     end
 
+    # The groups a contact belongs to, by the label each is shown
+    # under, ordered by group id — a rename must not move a tag, the
+    # same reason #inherited_rows orders by it. Membership is the whole
+    # answer here, so a group that lends nothing appears too, where the
+    # inherited reads have nothing of it to carry. Off the contact
+    # rather than on it: what a group lends is in the card and belongs
+    # to the model of one, and which groups a contact is in is a
+    # relationship the card never carries.
+    #: (String id) -> Array[String]
+    def groups_of(id)
+      group_members
+        .join(:groups, id: Sequel[:group_members][:group_id])
+        .where(card_id: id)
+        .order(Sequel[:groups][:id])
+        .select(group_label.as(:label))
+        .map { it.fetch(:label).to_s }
+    end
+
     # The id of the card whose UID property holds this value, if one
     # does — the read behind the no-uid-conflict precondition (RFC 6352
     # section 6.3.2.1). It reads the index, so a card whose UID line
@@ -640,6 +658,15 @@ module ProTacts
         .transform_values { |rows| rows.map { inherited_from(it) } }
     end
 
+    # What to call a group on a screen: its name, or its id where it
+    # has none (db/migrations/005_group_identity.rb). In SQL rather
+    # than in Ruby so that both reads of it — a tag and an inherited
+    # row's mark — are the one answer.
+    #: () -> untyped
+    def group_label
+      Sequel.function(:coalesce, Sequel[:groups][:name], Sequel[:groups][:id])
+    end
+
     # The join both inherited reads walk: a membership to the property
     # it inherits and to the group's own row for its name, qualified
     # and ordered so the composition neither depends on what SQLite
@@ -660,7 +687,7 @@ module ProTacts
         .join(:groups, id: Sequel[:group_members][:group_id])
         .select(
           Sequel[:group_members][:card_id],
-          Sequel.function(:coalesce, Sequel[:groups][:name], Sequel[:groups][:id]).as(:group_name),
+          group_label.as(:group_name),
           Sequel[:group_properties][:line],
         )
         .order(

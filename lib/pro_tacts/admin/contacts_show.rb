@@ -24,9 +24,15 @@ module ProTacts
       ELIDE_ABOVE = 120 #: Integer
       private_constant :ELIDE_ABOVE
 
-      #: (Contact contact) -> void
-      def initialize(contact:)
+      # The groups come from the store beside the contact rather than
+      # off it: a contact's card carries what its groups lend it, never
+      # which groups those are (Store#groups_of). Required, and not
+      # defaulted to none, so a caller cannot render a contact as
+      # belonging to nothing by forgetting to ask.
+      #: (Contact contact, Array[String] groups) -> void
+      def initialize(contact:, groups:)
         @contact = contact
+        @groups = groups
         @birthday = Format.birthday(contact)
       end
 
@@ -93,7 +99,7 @@ module ProTacts
       #: () -> bool
       def has_data?
         @contact.phones.any? || @contact.emails.any? || @contact.addresses.any? ||
-          !@birthday.nil? || @contact.notes.any?
+          !@birthday.nil? || @contact.notes.any? || @groups.any?
       end
 
       # A missing TYPE parameter still gets a key: the fallback names
@@ -104,6 +110,7 @@ module ProTacts
       # and a group holds only addresses and notes anyway (see
       # db/migrations/004_groups.rb).
       def rows
+        groups_row if @groups.any?
         @contact.phones.each do |phone|
           row(phone.type || "phone", phone.value, phone.line)
         end
@@ -116,6 +123,27 @@ module ProTacts
         row("birthday", @birthday) if @birthday
         @contact.notes.each do |note|
           row("notes", note.value, note.line)
+        end
+      end
+
+      # Membership as its own row, above the card's own: what a contact
+      # belongs to frames the values under it, and several of those
+      # values are the group's rather than the contact's. Gloss' Tag
+      # rather than the Badge the inherited rows carry — a badge marks
+      # the row it sits on, and these are the row's whole value
+      # (docs/DESIGN.md, "Relationships are navigable").
+      #
+      # Tags, not links, for now: the design has every tag opening the
+      # record it names, and a group has no screen to open yet. They
+      # become links with the group card, which is also what gives a
+      # nameless group somewhere for its id to lead.
+      #: () -> void
+      def groups_row
+        dt(class: "type-label") { "groups" }
+        dd(class: "type-body-sm") do
+          div(class: "tag-set") do
+            @groups.each { |group| span(class: "tag") { group } }
+          end
         end
       end
 
