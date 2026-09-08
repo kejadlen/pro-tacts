@@ -419,10 +419,10 @@ module ProTacts
               elsif (sequence = token[%r{\Ahttp://pro-tacts/sync/(\d+)\z}, 1]) &&
                   sequence.to_i <= store.latest_sequence
                 net = store.changes(after: sequence.to_i).map { it.card_id }.uniq
-                responses = net.map do |id|
+                responses = net.map { |id|
                   contact = contacts.find { it.id == id }
                   contact ? etag_response(contact) : missing_response(contact_href(id))
-                end
+                }
                 multistatus(responses, sync_token:)
               else
                 # A token this server never issued, or one naming a state
@@ -780,10 +780,10 @@ module ProTacts
       # because the field is a list and a request carrying one value
       # is still a list of one.
       submitted = Array(params["new_phone"]) #: Array[untyped]
-      added = submitted.filter_map do
+      added = submitted.filter_map {
         value = it.to_s.strip
         "TEL:#{VCard.escape(value)}\r\n" unless value.empty?
-      end #: Array[String]
+      } #: Array[String]
       card.insert(added)
     end
 
@@ -808,10 +808,10 @@ module ProTacts
       end
 
       submitted = Array(params["new_email"]) #: Array[untyped]
-      added = submitted.filter_map do
+      added = submitted.filter_map {
         value = it.to_s.strip
         "EMAIL:#{VCard.escape(value)}\r\n" unless value.empty?
-      end #: Array[String]
+      } #: Array[String]
       card.insert(added)
     end
 
@@ -849,9 +849,9 @@ module ProTacts
 
     #: (Contact::Address address, untyped submitted) -> bool
     def address_unchanged?(address, submitted)
-      ADDRESS_COMPONENTS.keys.all? do |name|
+      ADDRESS_COMPONENTS.keys.all? { |name|
         submitted[name].to_s.strip == address.public_send(name).to_s
-      end
+      }
     end
 
     # One address row's replacement line: the raw components spliced

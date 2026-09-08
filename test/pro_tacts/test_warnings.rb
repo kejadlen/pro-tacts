@@ -7,14 +7,20 @@ require_relative "../test_helper"
 class ProTactsWarningsTest < Minitest::Test
   def test_silences_warnings_for_the_block_and_restores_them_after
     verbose = $VERBOSE
-    ProTacts.silence_warnings { assert_nil $VERBOSE }
+    ProTacts.silence_warnings do
+      assert_nil $VERBOSE
+    end
     assert_equal verbose, $VERBOSE
   end
 
   def test_restores_warnings_when_the_block_raises
     verbose = $VERBOSE
 
-    assert_raises(RuntimeError) { ProTacts.silence_warnings { raise "boom" } }
+    assert_raises(RuntimeError) do
+      ProTacts.silence_warnings do
+        raise "boom"
+      end
+    end
 
     assert_equal verbose, $VERBOSE
   end

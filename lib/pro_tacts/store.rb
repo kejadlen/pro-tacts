@@ -354,7 +354,9 @@ module ProTacts
     def rebuild_index
       @database.transaction do
         card_properties.delete
-        cards.order(:id).all.each { reindex(it.fetch(:id).to_s, VCard.new(it.fetch(:vcard).to_s)) }
+        cards.order(:id).all.each do
+          reindex(it.fetch(:id).to_s, VCard.new(it.fetch(:vcard).to_s))
+        end
       end
     end
 

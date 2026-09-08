@@ -48,7 +48,11 @@ module ProTacts
               if @rows.empty?
                 p(class: "type-body-sm") { @query.empty? ? "No contacts yet." : "No contacts match." }
               else
-                ul(class: "card") { @rows.each { render_row(it) } }
+                ul(class: "card") do
+                  @rows.each do
+                    render_row(it)
+                  end
+                end
               end
             end
             render UpcomingBirthdays.new(upcoming: @upcoming)

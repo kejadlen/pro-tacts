@@ -851,7 +851,9 @@ class WebTest < Minitest::Test
       store.put("aiden", card("aiden", "Aiden Smith"))
       after = read_tags.call
 
-      before.zip(after).each { refute_equal it.first, it.last }
+      before.zip(after).each do
+        refute_equal it.first, it.last
+      end
     end
   end
 end

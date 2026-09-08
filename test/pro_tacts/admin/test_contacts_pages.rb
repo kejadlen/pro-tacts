@@ -36,7 +36,9 @@ class AdminContactsPagesTest < Minitest::Test
 
       ProTacts::Store.connect(Pathname.new(dir) / "contacts.db") do |store|
         ProTacts::Web.store = store
-        cards.each { |id, card| store.put(id, card) }
+        cards.each do |id, card|
+          store.put(id, card)
+        end
         yield store
       ensure
         ProTacts::Web.store = original
@@ -55,8 +57,12 @@ class AdminContactsPagesTest < Minitest::Test
   def add_group(store, name:, members:, lines:)
     database = store.instance_variable_get(:@database)
     database[:groups].insert(id: "household", name:)
-    lines.each.with_index { |line, position| database[:group_properties].insert(group_id: "household", position:, line:) }
-    members.each { |card_id| database[:group_members].insert(group_id: "household", card_id:) }
+    lines.each.with_index do |line, position|
+      database[:group_properties].insert(group_id: "household", position:, line:)
+    end
+    members.each do |card_id|
+      database[:group_members].insert(group_id: "household", card_id:)
+    end
   end
 
   def test_index_lists_recently_updated_contacts

@@ -35,7 +35,9 @@ module ProTacts
         svg(viewBox: "0 0 24 24", width: @size, height: @size, fill: :none,
             stroke: "currentColor", stroke_width: 2, stroke_linecap: "round",
             stroke_linejoin: "round", aria_hidden: true) do
-          PATHS.fetch(@name).each { path(d: it) }
+          PATHS.fetch(@name).each do
+            path(d: it)
+          end
         end
       end
     end

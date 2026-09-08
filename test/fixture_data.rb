@@ -84,10 +84,11 @@ module FixtureData
     FileUtils.mkdir_p(directory)
 
     store = ProTacts::Store.at(directory / "contacts.db")
-    ids = cards.each do |id, card|
+    seed = cards
+    seed.each do |id, card|
       store.put(id, card)
-    end.keys
-    backdate(store, ids)
+    end
+    backdate(store, seed.keys)
     seed_groups(store)
     store
   end

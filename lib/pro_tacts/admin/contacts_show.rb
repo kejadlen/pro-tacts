@@ -104,11 +104,19 @@ module ProTacts
       # and a group holds only addresses and notes anyway (see
       # db/migrations/004_groups.rb).
       def rows
-        @contact.phones.each { |phone| row(phone.type || "phone", phone.value, phone.line) }
-        @contact.emails.each { |email| row(email.type || "email", email.value, email.line) }
-        @contact.addresses.each { |address| row(address.type || "address", address_lines(address), address.line) }
+        @contact.phones.each do |phone|
+          row(phone.type || "phone", phone.value, phone.line)
+        end
+        @contact.emails.each do |email|
+          row(email.type || "email", email.value, email.line)
+        end
+        @contact.addresses.each do |address|
+          row(address.type || "address", address_lines(address), address.line)
+        end
         row("birthday", @birthday) if @birthday
-        @contact.notes.each { |note| row("notes", note.value, note.line) }
+        @contact.notes.each do |note|
+          row("notes", note.value, note.line)
+        end
       end
 
       # The type in one column and the value in the other, with the
@@ -148,7 +156,9 @@ module ProTacts
       #: (String | Array[String] value) -> void
       def render_value(value)
         if value.is_a?(Array)
-          value.each { |line| div { line } }
+          value.each do |line|
+            div { line }
+          end
         else
           div(style: "white-space: pre-wrap;") { value }
         end

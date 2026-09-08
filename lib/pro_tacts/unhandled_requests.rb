@@ -41,7 +41,9 @@ module ProTacts
       return [status, headers, body] unless self.class.capture?(status)
 
       parts = [] #: Array[String]
-      body.each { parts << it }
+      body.each do
+        parts << it
+      end
       # See DebugLogger#log_response: respond_to? cannot narrow an
       # interface, so the cast stands for the check beside it.
       (_ = body).close if body.respond_to?(:close)

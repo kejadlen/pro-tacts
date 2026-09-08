@@ -118,7 +118,9 @@ class UnhandledRequestsTest < Minitest::Test
   def test_a_repeated_request_is_captured_once
     @stub.status = 404
 
-    3.times { get "/dav/unknown/" }
+    3.times do
+      get "/dav/unknown/"
+    end
 
     assert_equal 1, captures.size
   end

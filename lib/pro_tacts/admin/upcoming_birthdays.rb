@@ -25,7 +25,11 @@ module ProTacts
           if @upcoming.empty?
             p(class: "type-body-sm") { "No birthdays to show." }
           else
-            ul(class: "card") { @upcoming.each { render_row(it) } }
+            ul(class: "card") do
+              @upcoming.each do
+                render_row(it)
+              end
+            end
           end
         end
       end

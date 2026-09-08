@@ -178,7 +178,9 @@ module ProTacts
                             value: email.value, placeholder: "removed on save")
                     end
                   end
-                  @own.addresses.each { address_row(it) }
+                  @own.addresses.each do
+                    address_row(it)
+                  end
                   birthday_row
                   added_rows
                   # The first NOTE the card carries: this row edits one,

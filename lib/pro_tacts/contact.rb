@@ -276,34 +276,34 @@ module ProTacts
 
     #: () -> Array[Phone]
     def phones
-      of_line("TEL").filter_map do |line|
+      of_line("TEL").filter_map { |line|
         property = line.property
         next if property.nil?
 
         value = text_of(property)
         Phone.new(value:, type: type_of(property), line:) if value
-      end
+      }
     end
 
     #: () -> Array[Email]
     def emails
-      of_line("EMAIL").filter_map do |line|
+      of_line("EMAIL").filter_map { |line|
         property = line.property
         next if property.nil?
 
         value = text_of(property)
         Email.new(value:, type: type_of(property), line:) if value
-      end
+      }
     end
 
     #: () -> Array[Address]
     def addresses
-      of_line("ADR").filter_map do |line|
+      of_line("ADR").filter_map { |line|
         property = line.property
         next if property.nil?
 
         address_of(property, line:)
-      end
+      }
     end
 
     # The card's NOTEs (RFC 2426 section 3.6.2), in text form. Every
@@ -315,13 +315,13 @@ module ProTacts
     # which is always the group's (see #vcard).
     #: () -> Array[Note]
     def notes
-      of_line("NOTE").filter_map do |line|
+      of_line("NOTE").filter_map { |line|
         property = line.property
         next if property.nil?
 
         value = text_of(property)
         Note.new(value:, line:) if value
-      end
+      }
     end
 
     # The name of the group a composed line came from, or nil for a

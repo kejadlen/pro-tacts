@@ -82,10 +82,10 @@ module ProTacts
     #: (Parser::Property property) -> String
     def self.header_of(property)
       prefix = property.group ? "#{property.group}." : ""
-      parameters = property.parameters.map do |name, value|
+      parameters = property.parameters.map { |name, value|
         bare = /\A#{Parser::PTEXT}\z/.match?(value)
         ";#{name}=#{bare ? value : "\"#{value}\""}"
-      end
+      }
       "#{prefix}#{property.name}#{parameters.join}:"
     end
 

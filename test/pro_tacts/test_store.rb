@@ -58,11 +58,15 @@ class StoreTest < Minitest::Test
   end
 
   def test_an_empty_store_lists_no_contacts
-    with_store { assert_empty it.contacts }
+    with_store do
+      assert_empty it.contacts
+    end
   end
 
   def test_a_missing_contact_is_nil
-    with_store { assert_nil it.contact("nobody") }
+    with_store do
+      assert_nil it.contact("nobody")
+    end
   end
 
   ## Pictures
@@ -166,7 +170,9 @@ class StoreTest < Minitest::Test
   def test_a_card_survives_reopening_the_database
     Dir.mktmpdir do |dir|
       path = Pathname.new(dir) / "contacts.db"
-      ProTacts::Store.connect(path) { it.put("aiden", AIDEN) }
+      ProTacts::Store.connect(path) do
+        it.put("aiden", AIDEN)
+      end
 
       ProTacts::Store.connect(path) do |store|
         assert_equal AIDEN, store.contact("aiden").vcard.to_s
@@ -858,9 +864,9 @@ class StoreTest < Minitest::Test
 
   def test_upcoming_birthdays_take_the_first_n
     september = Date.new(2026, 9, 3)
-    cards = (1..3).to_h do |n|
+    cards = (1..3).to_h { |n|
       ["c#{n}", "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Contact #{n}\r\nBDAY:1990-09-0#{n + 4}\r\nUID:c#{n}\r\nEND:VCARD\r\n"]
-    end
+    }
 
     with_store(cards) do |store|
       assert_equal %w[c1 c2], store.upcoming_birthdays(2, today: september).map { it.contact.id }
@@ -934,8 +940,12 @@ class StoreTest < Minitest::Test
   def add_group(store, id:, members:, lines:)
     db = database(store)
     db[:groups].insert(id:, name: id.capitalize)
-    lines.each.with_index { |line, position| db[:group_properties].insert(group_id: id, position:, line:) }
-    members.each { |card_id| db[:group_members].insert(group_id: id, card_id:) }
+    lines.each.with_index do |line, position|
+      db[:group_properties].insert(group_id: id, position:, line:)
+    end
+    members.each do |card_id|
+      db[:group_members].insert(group_id: id, card_id:)
+    end
   end
 
   # A member's served card is the stored one with the group's lines
