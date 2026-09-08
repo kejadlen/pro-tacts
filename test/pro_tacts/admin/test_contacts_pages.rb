@@ -46,23 +46,25 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # A household's lines, and the seeding a group takes: authoring is
-  # still the admin UI's task, so the rows land through the store's
-  # own database the way FixtureData's do (test/fixture_data.rb).
+  # A household's lines, and the seeding a group takes: a created
+  # group for the row that mints an id, and its properties and members
+  # through the store's own database the way FixtureData's do
+  # (test/fixture_data.rb), authoring being still the admin UI's task.
   HOUSEHOLD = [
     "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
     "NOTE:Gate code 1854.",
   ].freeze #: Array[String]
 
-  def add_group(store, name:, members:, lines:)
+  def add_group(store, members:, lines:, name: nil)
     database = store.instance_variable_get(:@database)
-    database[:groups].insert(id: "household", name:)
+    group_id = store.create_group(name:)
     lines.each.with_index do |line, position|
-      database[:group_properties].insert(group_id: "household", position:, line:)
+      database[:group_properties].insert(group_id:, position:, line:)
     end
     members.each do |card_id|
-      database[:group_members].insert(group_id: "household", card_id:)
+      database[:group_members].insert(group_id:, card_id:)
     end
+    group_id
   end
 
   def test_index_lists_recently_updated_contacts
@@ -325,6 +327,20 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes last_response.body, "7 Calculus Close"
       assert_includes last_response.body, "Gate code 1854."
       assert_includes last_response.body, "Countess of Lovelace."
+    end
+  end
+
+  # A group with no name marks its rows with its id, which is what the
+  # mark is for: an empty badge would say a row came from somewhere and
+  # then not say where.
+  def test_show_marks_a_nameless_groups_rows_with_its_id
+    with_contacts({"ada" => ADA}) do |store|
+      id = add_group(store, members: ["ada"], lines: HOUSEHOLD)
+
+      get "/contacts/ada"
+      marks = last_response.body.scan(%r{<span class="badge">([^<]*)</span>})
+
+      assert_equal [[id], [id]], marks
     end
   end
 

@@ -1,5 +1,6 @@
 require "date"
 require "pathname"
+require "securerandom"
 require "sequel"
 require "sentry-ruby"
 
@@ -76,6 +77,19 @@ module ProTacts
     # better off waiting than raising: two requests saving at once is
     # ordinary, and SQLITE_BUSY straight back to the client is not.
     BUSY_TIMEOUT = 5_000 #: Integer
+
+    # Hex in the letters jj renders a change id with: 0 is z, f is k,
+    # and every digit lands in k-z, so an id is never a hash and never
+    # a word its author meant. `tr` maps the alphabets in one pass, in
+    # the order this pair is written.
+    REVERSE_HEX = "zyxwvutsrqponmlk" #: String
+
+    # How many ids a create draws before giving up. Four letters is one
+    # of 65,536 and an address book holds groups by the dozen, so a
+    # first collision is already unlucky and a run of eight is a broken
+    # generator rather than a run of bad draws — better to say so than
+    # to spin.
+    GROUP_ID_ATTEMPTS = 8 #: Integer
 
     # Sequel's migrations, run on open. They ship with the code rather
     # than with a deployment, so the path is relative to this file.
@@ -335,6 +349,31 @@ module ProTacts
       end
     end
 
+    # Creates a group and hands back the id it was given. The name is
+    # the author's label and optional; a group without one is displayed
+    # by its id (see #inherited_rows), and the empty string is refused
+    # by the schema rather than kept as a second spelling of nameless.
+    #
+    # The id is minted here rather than taken from the caller, for the
+    # shape db/migrations/005_group_identity.rb pins. The insert is
+    # what settles a collision, not a read before it: two creates
+    # drawing at once would both find the same id free, so a duplicate
+    # comes back as the primary key's own violation and the next
+    # attempt draws again.
+    #: (?name: String?) -> String
+    def create_group(name: nil)
+      GROUP_ID_ATTEMPTS.times do
+        id = next_group_id
+        begin
+          groups.insert(id:, name:)
+          return id
+        rescue Sequel::UniqueConstraintViolation
+          next
+        end
+      end
+      raise "no free group id in #{GROUP_ID_ATTEMPTS} draws: #{groups.count} groups already"
+    end
+
     # The change log from a sequence number on, oldest first: the window
     # a sync-collection report answers from (RFC 6578 section 3.2) — the
     # entries after the client's token are the changes it has not seen.
@@ -388,8 +427,22 @@ module ProTacts
     end
 
     #: () -> Sequel::Dataset
+    def groups
+      @database[:groups]
+    end
+
+    #: () -> Sequel::Dataset
     def group_members
       @database[:group_members]
+    end
+
+    # Four hex digits spelled in REVERSE_HEX. SecureRandom rather than
+    # rand: the draws have to be independent of anything a caller can
+    # observe or seed, and two bytes of it is exactly the four digits
+    # the id is wide.
+    #: () -> String
+    def next_group_id
+      SecureRandom.hex(2).tr("0-9a-f", REVERSE_HEX)
     end
 
     #: (String card_id, String action, String? etag) -> void
@@ -594,6 +647,12 @@ module ProTacts
     # share. Ordered by the group's id rather than its name, because a
     # rename must not move a member's lines and change every etag in
     # the group.
+    #
+    # A group with no name is lent under its id instead, coalesced here
+    # rather than at the surfaces: a mark on an inherited row names the
+    # group it came from, and a group with no name still has to be
+    # named as some one group among several
+    # (db/migrations/005_group_identity.rb).
     #: () -> Sequel::Dataset
     def inherited_rows
       group_members
@@ -601,7 +660,7 @@ module ProTacts
         .join(:groups, id: Sequel[:group_members][:group_id])
         .select(
           Sequel[:group_members][:card_id],
-          Sequel[:groups][:name].as(:group_name),
+          Sequel.function(:coalesce, Sequel[:groups][:name], Sequel[:groups][:id]).as(:group_name),
           Sequel[:group_properties][:line],
         )
         .order(

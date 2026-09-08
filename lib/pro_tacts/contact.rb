@@ -82,11 +82,12 @@ module ProTacts
     # @rbs skip
     Photo = Data.define(:mime_type, :bytes)
 
-    # One line a group lends this contact, and the name of the group
-    # that lends it. The name rather than the group itself, because
-    # the name is the whole of what a card shows about it today and
-    # nothing here can navigate to a record that has no screen yet
-    # (docs/DESIGN.md, "Relationships are navigable").
+    # One line a group lends this contact, and what to call the group
+    # that lends it: its name, or its id where it has no name
+    # (Store#inherited_rows). A label rather than the group itself,
+    # because the label is the whole of what a card shows about it
+    # today and nothing here can navigate to a record that has no
+    # screen yet (docs/DESIGN.md, "Relationships are navigable").
     # @rbs skip
     Inherited = Data.define(:group, :line)
     # @rbs skip

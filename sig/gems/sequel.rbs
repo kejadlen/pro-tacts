@@ -32,6 +32,10 @@ module Sequel
   # "recently updated" reads sort by.
   def self.desc: (Symbol name) -> untyped
 
+  # A SQL function call: `coalesce` over a group's name and its id, in
+  # the read that lends an unnamed group's lines under something.
+  def self.function: (Symbol name, *untyped arguments) -> untyped
+
   class Database
     def []: (Symbol table) -> Dataset
 
@@ -154,5 +158,10 @@ module Sequel
   end
 
   class CheckConstraintViolation < ConstraintViolation
+  end
+
+  # What an insert onto a taken primary key raises: the answer a group
+  # id's draw waits for rather than asking first.
+  class UniqueConstraintViolation < ConstraintViolation
   end
 end

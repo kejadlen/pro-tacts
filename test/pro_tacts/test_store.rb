@@ -934,18 +934,21 @@ class StoreTest < Minitest::Test
   HOUSEHOLD_ADDRESS = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom" #: String
   HOUSEHOLD_NOTE = "NOTE:Gate code 1854." #: String
 
-  # There is no write path for the group tables yet — authoring is the
-  # admin UI's task — so the tests arrange them the way the fixture
-  # seeder does, straight through the store's own database.
-  def add_group(store, id:, members:, lines:)
+  # A group's own row is Store#create_group's, which is what mints the
+  # id; its properties and its members have no write path yet —
+  # authoring is the admin UI's task — so those land the way the
+  # fixture seeder's do, straight through the store's own database.
+  # Hands back the id, which is the only way a caller learns it.
+  def add_group(store, members:, lines:, name: nil)
     db = database(store)
-    db[:groups].insert(id:, name: id.capitalize)
+    id = store.create_group(name:)
     lines.each.with_index do |line, position|
       db[:group_properties].insert(group_id: id, position:, line:)
     end
     members.each do |card_id|
       db[:group_members].insert(group_id: id, card_id:)
     end
+    id
   end
 
   # A member's served card is the stored one with the group's lines
@@ -959,7 +962,7 @@ class StoreTest < Minitest::Test
     )
 
     with_store({"aiden" => born, "znorth" => ZED}) do |store|
-      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
 
       assert_equal composed, store.contact("aiden").vcard.to_s
       assert_equal composed, store.contacts.find { it.id == "aiden" }.vcard.to_s
@@ -972,7 +975,7 @@ class StoreTest < Minitest::Test
   def test_a_contact_in_no_group_serves_unchanged_bytes_and_etag
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       before = store.contact("aiden")
-      add_group(store, id: "household", members: ["znorth"], lines: [HOUSEHOLD_ADDRESS])
+      add_group(store, members: ["znorth"], lines: [HOUSEHOLD_ADDRESS])
 
       after = store.contact("aiden")
       assert_equal AIDEN, after.vcard.to_s
@@ -986,7 +989,7 @@ class StoreTest < Minitest::Test
   def test_leaving_a_group_restores_the_stored_bytes
     with_store({"aiden" => AIDEN}) do |store|
       before = store.contact("aiden").etag
-      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       refute_equal before, store.contact("aiden").etag
 
       database(store)[:group_members].where(card_id: "aiden").delete
@@ -997,16 +1000,19 @@ class StoreTest < Minitest::Test
 
   # Two groups' lines compose in group-id order, then position — the
   # order is a fact of the schema, not of whichever join SQLite
-  # returns first, so the composed bytes never move between reads.
+  # returns first, so the composed bytes never move between reads. The
+  # ids are minted rather than chosen, so the expectation is sorted by
+  # them: which group leads is the ids' business, that the id decides
+  # it rather than the creation order is this test's.
   def test_two_groups_compose_in_a_fixed_order
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, id: "zedly", members: ["aiden"], lines: [HOUSEHOLD_NOTE])
-      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      lent = {
+        add_group(store, members: ["aiden"], lines: [HOUSEHOLD_NOTE]) => HOUSEHOLD_NOTE,
+        add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS]) => HOUSEHOLD_ADDRESS,
+      }
 
-      composed = AIDEN.sub(
-        "END:VCARD\r\n",
-        "#{HOUSEHOLD_ADDRESS}\r\n#{HOUSEHOLD_NOTE}\r\nEND:VCARD\r\n",
-      )
+      first, second = lent.sort.map { it.last }
+      composed = AIDEN.sub("END:VCARD\r\n", "#{first}\r\n#{second}\r\nEND:VCARD\r\n")
       assert_equal composed, store.contact("aiden").vcard.to_s
     end
   end
@@ -1016,7 +1022,7 @@ class StoreTest < Minitest::Test
   # no index row, and rebuilding the index leaves it that way.
   def test_the_index_holds_nothing_the_group_composes_in
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
       assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
       assert_includes indexed_names(store, "aiden"), "FN"
@@ -1033,7 +1039,7 @@ class StoreTest < Minitest::Test
   # entry is with_store's own seed put, logged before the group existed.
   def test_writes_log_the_composed_etag_for_a_member
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
       put = store.put("aiden", AIDEN)
       edit = store.rewrite("aiden", AIDEN, birthday: nil)
@@ -1049,11 +1055,25 @@ class StoreTest < Minitest::Test
   # collection — a screen marks a row as the household's from either.
   def test_an_inherited_line_carries_its_groups_name
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      add_group(store, name: "Household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
       listed = store.contacts.find { it.id == "aiden" }
       [store.contact("aiden"), listed].each do |contact|
         assert_equal "Household", contact.group_of(contact.addresses.fetch(0).line)
+      end
+    end
+  end
+
+  # A group with no name lends its lines under its id, on both reads —
+  # a mark that says which group a row came from, where the name would
+  # otherwise leave the row marked with nothing at all.
+  def test_a_nameless_groups_lines_are_marked_with_its_id
+    with_store({"aiden" => AIDEN}) do |store|
+      id = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+
+      listed = store.contacts.find { it.id == "aiden" }
+      [store.contact("aiden"), listed].each do |contact|
+        assert_equal id, contact.group_of(contact.addresses.fetch(0).line)
       end
     end
   end
@@ -1067,19 +1087,56 @@ class StoreTest < Minitest::Test
   def test_a_group_holds_only_addresses_and_notes
     with_store({"aiden" => AIDEN}) do |store|
       properties = database(store)[:group_properties]
-      database(store)[:groups].insert(id: "household", name: "Household")
+      group_id = store.create_group(name: "Household")
 
       admitted = [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE, "ADR:;;1 Long Road;;;;", "note:lowercase is the same name"]
       admitted.each.with_index do |line, position|
-        properties.insert(group_id: "household", position:, line:)
+        properties.insert(group_id:, position:, line:)
       end
       assert_equal admitted, properties.order(:position).map { it.fetch(:line) }
 
       ["TEL;TYPE=home:+44 20 5555 0100", "EMAIL:boole@example.com", "item1.ADR:;;1 Long Road;;;;"].each do |line|
         assert_raises(Sequel::ConstraintViolation) do
-          properties.insert(group_id: "household", position: admitted.size, line:)
+          properties.insert(group_id:, position: admitted.size, line:)
         end
       end
+    end
+  end
+
+  # An id is minted, never chosen, in the shape jj spells a change id:
+  # four letters from k to z, drawn independently, so that two creates
+  # in a row are two groups.
+  def test_a_created_group_takes_a_change_id
+    with_store do |store|
+      ids = Array.new(8) { store.create_group }
+
+      ids.each { assert_match(/\A[k-z]{4}\z/, it) }
+      assert_equal ids.size, ids.uniq.size
+    end
+  end
+
+  # The schema is the gate on the id's shape, the way it is the gate on
+  # what a group may hold: nothing else stops a hand-written row from
+  # taking a word, a hash, or a change id's letters in the wrong case.
+  def test_the_schema_refuses_an_id_that_is_not_a_change_id
+    with_store do |store|
+      ["household", "abcd", "kxs", "kxsvv", "KXSV", "kx s"].each do |id|
+        assert_raises(Sequel::ConstraintViolation) do
+          database(store)[:groups].insert(id:, name: "Household")
+        end
+      end
+    end
+  end
+
+  # A group may have no name — NULL, the one spelling of it. The empty
+  # string is the other spelling the column would otherwise admit, and
+  # it renders as a mark with nothing in it, so the schema refuses it.
+  def test_a_group_may_be_nameless_but_not_named_nothing
+    with_store do |store|
+      id = store.create_group
+
+      assert_nil database(store)[:groups].where(id:).sole.fetch(:name)
+      assert_raises(Sequel::ConstraintViolation) { store.create_group(name: "") }
     end
   end
 
@@ -1120,6 +1177,38 @@ class StoreTest < Minitest::Test
         change = store.changes.last
         assert_equal %w[aiden edit], [change.card_id, change.action]
         assert_equal 4, change.sequence
+      end
+    end
+  end
+
+  # The group rebuild carries all three tables, and the hazard it is
+  # written around is this one: dropping the old groups table with
+  # foreign keys on runs an implicit DELETE FROM, and the members and
+  # the properties would cascade away behind it. So the members and
+  # the properties are asserted across the upgrade, and both cascades
+  # asserted still to fire on the far side — a rebuild that forgot to
+  # redeclare them would pass the first half of this alone.
+  def test_the_migration_carries_a_group_with_its_members_and_properties
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 4)
+        db[:cards].insert(id: "aiden", vcard: AIDEN)
+        db[:groups].insert(id: "nous", name: "Boole household")
+        db[:group_properties].insert(group_id: "nous", position: 0, line: HOUSEHOLD_ADDRESS)
+        db[:group_members].insert(group_id: "nous", card_id: "aiden")
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        contact = store.contact("aiden")
+        assert_includes contact.vcard.to_s, HOUSEHOLD_ADDRESS
+        assert_equal "Boole household", contact.group_of(contact.addresses.fetch(0).line)
+
+        database(store)[:cards].where(id: "aiden").delete
+        assert_empty database(store)[:group_members].all
+
+        database(store)[:groups].where(id: "nous").delete
+        assert_empty database(store)[:group_properties].all
       end
     end
   end
