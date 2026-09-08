@@ -371,8 +371,7 @@ class VCardParserTest < Minitest::Test
   ## Parameters
 
   # A name matches without case (RFC 2426 section 4), and a parameter
-  # a card lists several values for answers with the first of them —
-  # both spellings of the repeat reaching here as the same two pairs.
+  # listing several values answers with the first of them.
   def test_a_parameter_reads_by_name_without_case
     property = properties(card("TEL;type=WORK,voice:+1-555-1234")).fetch(0)
 

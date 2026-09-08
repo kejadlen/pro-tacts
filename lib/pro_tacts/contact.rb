@@ -341,20 +341,9 @@ module ProTacts
       }
     end
 
-    # The rows a repeatable property reads as: the lines naming it,
-    # in the card's own order, each folded by the block into a typed
-    # value, with the nils dropped. Two absences arrive as one that
-    # way, which is what every one of these accessors wants — a line
-    # that would not read is a row no form can address, and a line
-    # the block finds nothing in (a blank value, an ADR blank
-    # throughout) is a row with nothing to show; neither is an error,
-    # and a card is served from its bytes either way. The unreadable
-    # line stays enumerable in VCard#lines regardless.
-    #
-    # The block takes the parsed property and the line it came from,
-    # because a row carries both: the property for what it says, the
-    # line for the address a save names the row by
-    # (docs/plans/2026-09-05-web-card-editor.md).
+    # The rows a repeatable property reads as: each line naming it
+    # folded by the block, which takes the property and the line it
+    # came from and answers nil for a row with nothing to show.
     #: [T] (String name) { (VCard::Parser::Property, VCard::Parser::Line) -> T? } -> Array[T]
     def rows(name)
       of_line(name).filter_map { |line|
@@ -363,9 +352,11 @@ module ProTacts
       }
     end
 
-    # The lines naming `name`, parsed beside their bytes — the walk
-    # #rows reads over, and the one accessor-facing read that hands
-    # back the lines that would not parse along with the rest.
+    # The lines naming `name`, parsed beside their bytes — the walk the
+    # provenance-carrying accessors read from, so a row can carry the
+    # line it was read from as its address. A line that would not
+    # read is a row no form can address and no accessor reads; it
+    # stays enumerable in VCard#lines, served from its bytes.
     #: (String name) -> Array[VCard::Parser::Line]
     def of_line(name)
       vcard.lines.select { it.names?(name) }
@@ -402,12 +393,8 @@ module ProTacts
       Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, type: type_of(property), line:)
     end
 
-    # A row's type parameter (RFC 2426 section 3.3.1), the first of
-    # them where a card lists several — which one that is, and that a
-    # name matches without case, is the grammar's and so
-    # Property#parameter's. What is this layer's is the downcase: the
-    # spelling is the card's, `WORK` and `work` label the same row,
-    # and a screen shows one of them.
+    # The first of a row's TYPE parameters (RFC 2426 section 3.3.1),
+    # downcased: the spelling is the card's, and a screen shows one.
     #: (VCard::Parser::Property property) -> String?
     def type_of(property)
       property.parameter("TYPE")&.downcase
