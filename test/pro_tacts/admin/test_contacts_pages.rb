@@ -44,6 +44,21 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # A household's lines, and the seeding a group takes: authoring is
+  # still the admin UI's task, so the rows land through the store's
+  # own database the way FixtureData's do (test/fixture_data.rb).
+  HOUSEHOLD = [
+    "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
+    "NOTE:Gate code 1854.",
+  ].freeze #: Array[String]
+
+  def add_group(store, name:, members:, lines:)
+    database = store.instance_variable_get(:@database)
+    database[:groups].insert(id: "household", name:)
+    lines.each.with_index { |line, position| database[:group_properties].insert(group_id: "household", position:, line:) }
+    members.each { |card_id| database[:group_members].insert(group_id: "household", card_id:) }
+  end
+
   def test_index_lists_recently_updated_contacts
     with_contacts({"ada" => ADA}) do
       get "/"
@@ -286,6 +301,34 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes last_response.body, "London"
       assert_includes last_response.body, "December 10, 1985"
       assert_includes last_response.body, "Countess of Lovelace."
+    end
+  end
+
+  # A row a group lends is marked with the group's name, and the
+  # contact's own rows are not: Ada carries an address and a note of
+  # her own beside the household's two, and only the household's are
+  # marked.
+  def test_show_marks_the_rows_a_group_lends
+    with_contacts({"ada" => ADA}) do |store|
+      add_group(store, name: "Boole household", members: ["ada"], lines: HOUSEHOLD)
+
+      get "/contacts/ada"
+      marks = last_response.body.scan('<span class="badge">Boole household</span>')
+
+      assert_equal 2, marks.size
+      assert_includes last_response.body, "7 Calculus Close"
+      assert_includes last_response.body, "Gate code 1854."
+      assert_includes last_response.body, "Countess of Lovelace."
+    end
+  end
+
+  # A contact in no group is marked nowhere: the badge is provenance,
+  # not decoration, so a card with nothing lent renders none.
+  def test_show_marks_nothing_on_a_contact_in_no_group
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada"
+
+      refute_includes last_response.body, "badge"
     end
   end
 

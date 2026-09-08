@@ -98,18 +98,39 @@ module ProTacts
 
       # A missing TYPE parameter still gets a key: the fallback names
       # the kind of value, so no row renders unlabeled in the grid.
+      # Every row that reads from a line hands it over, because which
+      # group lends a row is a question about the line it came from.
+      # The birthday hands over none: it is the model beside the card,
+      # and a group holds only addresses and notes anyway (see
+      # db/migrations/004_groups.rb).
       def rows
-        @contact.phones.each { |phone| row(phone.type || "phone", phone.value) }
-        @contact.emails.each { |email| row(email.type || "email", email.value) }
-        @contact.addresses.each { |address| row(address.type || "address", address_lines(address)) }
+        @contact.phones.each { |phone| row(phone.type || "phone", phone.value, phone.line) }
+        @contact.emails.each { |email| row(email.type || "email", email.value, email.line) }
+        @contact.addresses.each { |address| row(address.type || "address", address_lines(address), address.line) }
         row("birthday", @birthday) if @birthday
-        @contact.notes.each { row("notes", it.value) }
+        @contact.notes.each { |note| row("notes", note.value, note.line) }
       end
 
-      #: (String type, String | Array[String] value) -> void
-      def row(type, value)
+      # The type in one column and the value in the other, with the
+      # group that lends the line named under the value when one does.
+      # In the value cell rather than beside the type label: the type
+      # column holds one thing for every row in the card
+      # (docs/DESIGN.md, "Alignment is the layout"), and a mark on the
+      # value is what says this address is the household's rather than
+      # this contact's.
+      #: (String type, String | Array[String] value, ?VCard::Parser::Line? line) -> void
+      def row(type, value, line = nil)
+        group = line && @contact.group_of(line)
         dt(class: "type-label") { type }
-        dd(class: "type-body-sm") { render_value(value) }
+        dd(class: "type-body-sm") do
+          render_value(value)
+          # Gloss' Badge: a catalog mark annotating the row it sits on,
+          # pinned to that row's first line at the right edge of the
+          # value column (admin.css) — under the value it could be
+          # read as marking the row below. No tone: the accent is held
+          # constant across a view, and inherited is not a status.
+          span(class: "badge") { group } if group
+        end
       end
 
       # ADR's components as two display lines — street, then everything

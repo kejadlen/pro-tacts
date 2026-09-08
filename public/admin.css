@@ -486,6 +486,45 @@ img.avatar {
   margin: 0;
 }
 
+/* The group a row is lent by, marked at the right edge of the value
+   column on the row's own first line (ContactsShow#row). Under the
+   value it read as a mark between two rows — the grid's row gap is
+   wider than a line, but not by enough to say which row a line below
+   a value belongs to. Pinned to row 1 of the value cell, it can only
+   be read as this row's.
+
+   A nested grid rather than a float or a flex row, because the value
+   is several block lines for an address and one for everything else:
+   the lines stack down column 1 as they always did, and the mark
+   takes column 2 of the first row alone. No wrapper element to make
+   them one flex item, and no source-order inversion — the value is
+   still read before the group that lends it. */
+.detail-grid dd:has(> .badge) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--gl-space-s);
+}
+/* Not baseline-aligned, though a mark beside a value is exactly what
+   baseline is for: a grid item blockifies, so Badge's inline-flex
+   becomes a flex container, and a flex container takes its baseline
+   from its first item — which is Badge's leading square, a box with
+   no text in it. The synthesized baseline lands a few pixels off the
+   value's.
+
+   So both boxes are made one value-line tall and top-aligned instead:
+   the value's line box is --gl-step--1/1.5 (Gloss' .type-body-sm) and
+   the badge centers its own content (align-items: center, its own
+   rule), so equal heights put the two texts on the same center. */
+.detail-grid dd > .badge {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: calc(var(--gl-step--1) * 1.5);
+}
+.detail-grid dd:has(> .badge) > div {
+  grid-column: 1;
+}
+
 /* The stored card in its own collapsed card under the record — the
    column's gap spaces the two, so no margin here. <details> is native,
    keeping the admin UI script-free; the summary rides the label
