@@ -95,7 +95,9 @@ module ProTacts
         # first of them, and a caller wanting both reads `parameters`.
         #: (String name) -> String?
         def parameter(name)
-          parameters.find { |parameter, _| parameter.casecmp?(name) }&.last
+          parameters
+            .filter_map { |parameter, value| value if parameter.casecmp?(name) }
+            .first
         end
       end
 
