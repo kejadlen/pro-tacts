@@ -93,7 +93,7 @@ module ProTacts
       #: () -> bool
       def has_data?
         @contact.phones.any? || @contact.emails.any? || @contact.addresses.any? ||
-          !@birthday.nil? || !@contact.notes.nil?
+          !@birthday.nil? || @contact.notes.any?
       end
 
       # A missing TYPE parameter still gets a key: the fallback names
@@ -103,7 +103,7 @@ module ProTacts
         @contact.emails.each { |email| row(email.type || "email", email.value) }
         @contact.addresses.each { |address| row(address.type || "address", address_lines(address)) }
         row("birthday", @birthday) if @birthday
-        row("notes", @contact.notes) if @contact.notes
+        @contact.notes.each { row("notes", it.value) }
       end
 
       #: (String type, String | Array[String] value) -> void

@@ -175,10 +175,13 @@ module ProTacts
                   @contact.addresses.each { address_row(it) }
                   birthday_row
                   added_rows
-                  label(class: "field", data: {blank_removes: !!@contact.notes}) do
+                  # The first NOTE the card carries: this row edits one,
+                  # and a save writes one (Web#edited_card's replace).
+                  note = @contact.notes.first&.value
+                  label(class: "field", data: {blank_removes: !!note}) do
                     span { "Note" }
                     textarea(name: "note", rows: 4,
-                             placeholder: @contact.notes ? "removed on save" : nil) { @contact.notes.to_s }
+                             placeholder: note ? "removed on save" : nil) { note.to_s }
                   end
                   # Save is the form's submit; Cancel is navigation — a
                   # link in Gloss's `.btn` contract, which is what an

@@ -24,8 +24,14 @@ class ContactTest < Minitest::Test
   # passes a card carrying an unmodeled BDAY beside nil — no stored
   # card ever carries a BDAY the model recomposes — and inheritance
   # defaults to none, the shape of every contact in no group.
-  def contact(vcard = CARD, id: "aiden", birthday: nil, inherited: [])
-    ProTacts::Contact.for(id:, stored: ProTacts::VCard.new(vcard), birthday:, inherited:)
+  # Inherited lines are given as bare strings and lent by GROUP, the
+  # name a composed row is marked with; a test that needs a second
+  # lender passes its own.
+  GROUP = "Boole household" #: String
+
+  def contact(vcard = CARD, id: "aiden", birthday: nil, inherited: [], group: GROUP)
+    lent = inherited.map { ProTacts::Contact::Inherited.new(group:, line: it) }
+    ProTacts::Contact.for(id:, stored: ProTacts::VCard.new(vcard), birthday:, inherited: lent)
   end
 
   # The decode's refusal reports (see #photo); the transport this pins
@@ -228,7 +234,7 @@ class ContactTest < Minitest::Test
     assert_empty contact.phones
     assert_empty contact.emails
     assert_empty contact.addresses
-    assert_nil contact.notes
+    assert_empty contact.notes
   end
 
   # The birthday is the model held beside the card, not a parse of
@@ -310,8 +316,34 @@ class ContactTest < Minitest::Test
     assert_equal "+44 20 5555 0100", contact(card, inherited: ["TEL;TYPE=home:+44 20 5555 0100"]).phones.first&.value
   end
 
+  # Which lines a group lends is the composed card's own question:
+  # a row a screen marks as shared asks it per line, and a line the
+  # stored card carries answers nil however much it looks inherited.
+  def test_a_line_names_the_group_that_lends_it
+    lent = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
+    contact = contact(STRUCTURED, inherited: [lent])
+    addresses = contact.addresses
+
+    assert_equal 2, addresses.size
+    assert_nil contact.group_of(addresses.fetch(0).line)
+    assert_equal GROUP, contact.group_of(addresses.fetch(1).line)
+  end
+
+  # A member with a note of its own and a group that lends it another
+  # carries both: NOTE's cardinality is `*` (RFC 6350 section 6.7.2),
+  # so the accessor reads every one — the member's first, the group's
+  # after it, the order #vcard composes.
+  def test_notes_read_the_members_own_and_the_groups
+    contact = contact(STRUCTURED, inherited: ["NOTE:Gate code 1854."])
+    notes = contact.notes
+
+    assert_equal ["Countess, mathematician.", "Gate code 1854."], notes.map { it.value }
+    assert_nil contact.group_of(notes.fetch(0).line)
+    assert_equal GROUP, contact.group_of(notes.fetch(1).line)
+  end
+
   def test_unescapes_notes
-    assert_equal "Countess, mathematician.", contact(STRUCTURED).notes
+    assert_equal ["Countess, mathematician."], contact(STRUCTURED).notes.map { it.value }
   end
 
   def test_properties_are_the_parsed_card
@@ -331,7 +363,7 @@ class ContactTest < Minitest::Test
     assert_empty bare.emails
     assert_empty bare.addresses
     assert_nil bare.birthday
-    assert_nil bare.notes
+    assert_empty bare.notes
   end
 
   # A card that will not read is still a contact: the bytes are what

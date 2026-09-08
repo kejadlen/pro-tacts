@@ -1047,6 +1047,20 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # Every inherited line carries the name of the group lending it, on
+  # the single read and on the listing read that composes a whole
+  # collection — a screen marks a row as the household's from either.
+  def test_an_inherited_line_carries_its_groups_name
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+
+      listed = store.contacts.find { it.id == "aiden" }
+      [store.contact("aiden"), listed].each do |contact|
+        assert_equal "Household", contact.group_of(contact.addresses.fetch(0).line)
+      end
+    end
+  end
+
   # The schema is the only gate on what a group may hold until
   # authoring exists, so what it admits is worth pinning: an address
   # or a note, bare or parameterized, in whatever case the author

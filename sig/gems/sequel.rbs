@@ -78,6 +78,10 @@ module Sequel
 
     def where: (*untyped conditions) -> Dataset
     def order: (*untyped columns) -> Dataset
+    # The columns a joined dataset comes back with, named rather than
+    # merged by whichever table's column won. Signed here so it reads
+    # as the query builder's rather than Enumerable's own #select.
+    def select: (*untyped columns) -> Dataset
     def limit: (Integer count) -> Dataset
     # Hash conditions pair the joined table's column with the source's
     # (`id: :card_id` is cards.id = birthdays.card_id); the array form

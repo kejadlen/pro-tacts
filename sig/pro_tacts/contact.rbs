@@ -1,4 +1,5 @@
-# Contact::Phone, ::Email, ::Photo, and ::Address are Data classes, whose
+# Contact::Phone, ::Email, ::Note, ::Inherited, ::Photo, and ::Address are
+# Data classes, whose
 # members the inline parser cannot read (see sig/pro_tacts/birthday.rbs
 # for the same limit). Each is marked `@rbs skip` in contact.rb and
 # signed here; Contact itself is a plain class and carries its
@@ -19,6 +20,20 @@ module ProTacts
       attr_reader line: VCard::Parser::Line
 
       def self.new: (value: String, type: String?, line: VCard::Parser::Line) -> instance
+    end
+
+    class Note
+      attr_reader value: String
+      attr_reader line: VCard::Parser::Line
+
+      def self.new: (value: String, line: VCard::Parser::Line) -> instance
+    end
+
+    class Inherited
+      attr_reader group: String
+      attr_reader line: String
+
+      def self.new: (group: String, line: String) -> instance
     end
 
     class Photo

@@ -52,9 +52,10 @@ module ProTacts
     # @rbs @id: String
     # @rbs @stored: VCard
     # @rbs @birthday: Birthday?
-    # @rbs @inherited: Array[String]
+    # @rbs @inherited: Array[Inherited]
     # @rbs @vcard: VCard
     # @rbs @etag: String
+    # @rbs @groups_by_line: Hash[String, String]
 
     # Ids end up in paths and arrive from client-supplied hrefs, so an id
     # outside this charset cannot be served.
@@ -77,7 +78,17 @@ module ProTacts
     # @rbs skip
     Email = Data.define(:value, :type, :line)
     # @rbs skip
+    Note = Data.define(:value, :line)
+    # @rbs skip
     Photo = Data.define(:mime_type, :bytes)
+
+    # One line a group lends this contact, and the name of the group
+    # that lends it. The name rather than the group itself, because
+    # the name is the whole of what a card shows about it today and
+    # nothing here can navigate to a record that has no screen yet
+    # (docs/DESIGN.md, "Relationships are navigable").
+    # @rbs skip
+    Inherited = Data.define(:group, :line)
     # @rbs skip
     Address = Data.define(
       :po_box,
@@ -102,7 +113,7 @@ module ProTacts
     # member its group's lines no longer reach. Named `stored:` rather
     # than `vcard:` because what #vcard returns is composed, and an
     # argument that is not what the reader hands back is a trap.
-    #: (id: String, stored: VCard, birthday: Birthday?, inherited: Array[String]) -> Contact
+    #: (id: String, stored: VCard, birthday: Birthday?, inherited: Array[Inherited]) -> Contact
     def self.for(id:, stored:, birthday:, inherited:)
       raise ArgumentError, "invalid contact id: #{id}" unless id.match?(ID_FORMAT)
 
@@ -114,7 +125,7 @@ module ProTacts
       %("#{Digest::SHA256.hexdigest(vcard.to_s)}")
     end
 
-    #: (String id, VCard stored, Birthday? birthday, Array[String] inherited) -> void
+    #: (String id, VCard stored, Birthday? birthday, Array[Inherited] inherited) -> void
     def initialize(id, stored, birthday, inherited)
       @id = id
       @stored = stored
@@ -152,7 +163,7 @@ module ProTacts
     def vcard
       return @vcard if defined?(@vcard)
 
-      card = @stored.insert(@inherited)
+      card = @stored.insert(@inherited.map { it.line })
       line = @birthday && @birthday.to_line
       @vcard = line ? card.insert([line]) : card
     end
@@ -287,13 +298,54 @@ module ProTacts
       end
     end
 
-    # The card's NOTE (RFC 2426 section 3.6.2), in text form.
-    #: () -> String?
+    # The card's NOTEs (RFC 2426 section 3.6.2), in text form. Every
+    # one, not the first: a member with a note of its own and a group
+    # that lends it another carries two, and RFC 6350 section 6.7.2
+    # settles that this is a card and not a broken one — NOTE's
+    # cardinality is `*`, and 2426 restricts it nowhere. Showing one
+    # would hide whichever the composition happened to put second,
+    # which is always the group's (see #vcard).
+    #: () -> Array[Note]
     def notes
-      text_of(properties.find { it.name.casecmp?("NOTE") })
+      of_line("NOTE").filter_map do |line|
+        property = line.property
+        next if property.nil?
+
+        value = text_of(property)
+        Note.new(value:, line:) if value
+      end
+    end
+
+    # The name of the group a composed line came from, or nil for a
+    # line the contact's own card carries — the provenance a screen
+    # marks an inherited row with.
+    #
+    # Matched by the line's bytes, which is the same blindness the
+    # editor's digests have (VCard::Parser::Line#digest): a stored
+    # line whose bytes are a group's line reads as the group's here.
+    # That state is a member's rewrite carrying an inherited line back
+    # into its own card, which the write half subtracts
+    # (docs/plans/2026-08-24-vcard-storage-and-groups.md); until it
+    # lands, naming the group over both copies says something true
+    # about the value even where it is wrong about the byte.
+    #: (VCard::Parser::Line line) -> String?
+    def group_of(line)
+      groups_by_line[line.verbatim.chomp]
     end
 
     private
+
+    # Every inherited line's group, keyed by the line's own bytes with
+    # the terminator off — a group's line is stored without one and
+    # composes with the card's, so neither side is compared as it lies.
+    #: () -> Hash[String, String]
+    def groups_by_line
+      return @groups_by_line if defined?(@groups_by_line)
+
+      @groups_by_line = @inherited.to_h {
+        [it.line.chomp, it.group] #: [String, String]
+      }
+    end
 
     # The lines naming `name`, parsed beside their bytes — the walk the
     # provenance-carrying accessors read from, so a row can carry the

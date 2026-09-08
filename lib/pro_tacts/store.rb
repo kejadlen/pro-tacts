@@ -523,7 +523,7 @@ module ProTacts
     # Contact composes the served one — its vcard, its etag, everything
     # a caller reads — with the inherited lines beside it, so all
     # describe what a client downloads rather than the bytes on disk.
-    #: (Hash[Symbol, untyped] row, Birthday? birthday, Array[String] inherited) -> Contact
+    #: (Hash[Symbol, untyped] row, Birthday? birthday, Array[Contact::Inherited] inherited) -> Contact
     def contact_from(row, birthday, inherited)
       Contact.for(
         id: row.fetch(:id).to_s,
@@ -569,13 +569,14 @@ module ProTacts
       row && birthday_from(row)
     end
 
-    # The content lines a contact inherits — every property of every
-    # group it belongs to, nothing of a group that holds nothing, and
-    # [] for a contact in no group at all. Ordered by group id and then
-    # position, so the composed card is the same bytes every read.
-    #: (String id) -> Array[String]
+    # The content lines a contact inherits, each beside the name of the
+    # group lending it — every property of every group it belongs to,
+    # nothing of a group that holds nothing, and [] for a contact in no
+    # group at all. Ordered by group id and then position, so the
+    # composed card is the same bytes every read.
+    #: (String id) -> Array[Contact::Inherited]
     def inherited_of(id)
-      inherited_rows.where(card_id: id).map { it.fetch(:line).to_s }
+      inherited_rows.where(card_id: id).map { inherited_from(it) }
     end
 
     # Every contact's inheritance in one pass, keyed by card, for the
@@ -583,26 +584,40 @@ module ProTacts
     # birthdays_by_id, for the same reason. Only a contact with
     # something to inherit appears; the absent key reads as [] at the
     # caller, which is what it means.
-    #: () -> Hash[String, Array[String]]
+    #: () -> Hash[String, Array[Contact::Inherited]]
     def inherited_by_id
       inherited_rows.all
         .group_by { it.fetch(:card_id).to_s }
-        .transform_values { |rows| rows.map { it.fetch(:line).to_s } }
+        .transform_values { |rows| rows.map { inherited_from(it) } }
     end
 
     # The join both inherited reads walk: a membership to the property
-    # it inherits, qualified and ordered so the composition neither
-    # depends on what SQLite feels like returning nor trips over the
-    # group_id the two tables share.
+    # it inherits and to the group's own row for its name, qualified
+    # and ordered so the composition neither depends on what SQLite
+    # feels like returning nor trips over the group_id the tables
+    # share. Ordered by the group's id rather than its name, because a
+    # rename must not move a member's lines and change every etag in
+    # the group.
     #: () -> Sequel::Dataset
     def inherited_rows
       group_members
         .join(:group_properties, group_id: :group_id)
+        .join(:groups, id: Sequel[:group_members][:group_id])
+        .select(
+          Sequel[:group_members][:card_id],
+          Sequel[:groups][:name].as(:group_name),
+          Sequel[:group_properties][:line],
+        )
         .order(
           Sequel[:group_members][:card_id],
           Sequel[:group_properties][:group_id],
           Sequel[:group_properties][:position],
         )
+    end
+
+    #: (Hash[Symbol, untyped] row) -> Contact::Inherited
+    def inherited_from(row)
+      Contact::Inherited.new(group: row.fetch(:group_name).to_s, line: row.fetch(:line).to_s)
     end
 
     # A birthday row read as the model. The shape was validated on the
@@ -616,7 +631,7 @@ module ProTacts
     # One joined birthday-and-card row as an UpcomingBirthday, or nil
     # for a shape that lands on no calendar day (see
     # #upcoming_birthdays).
-    #: (Hash[Symbol, untyped] row, Date today, Array[String] inherited) -> UpcomingBirthday?
+    #: (Hash[Symbol, untyped] row, Date today, Array[Contact::Inherited] inherited) -> UpcomingBirthday?
     def upcoming_from(row, today, inherited)
       birthday = birthday_from(row)
       month, day = birthday.month, birthday.day
