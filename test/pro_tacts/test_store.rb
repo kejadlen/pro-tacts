@@ -939,6 +939,7 @@ class StoreTest < Minitest::Test
   ## Groups
 
   HOUSEHOLD_ADDRESS = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom" #: String
+  HOUSEHOLD_NOTE = "NOTE:Gate code 1854." #: String
 
   # There is no write path for the group tables yet — authoring is the
   # admin UI's task — so the tests arrange them the way the fixture
@@ -957,11 +958,11 @@ class StoreTest < Minitest::Test
     born = AIDEN.sub("FN:Aiden\r\n", "FN:Aiden\r\nBDAY:1985-12-10\r\n")
     composed = AIDEN.sub(
       "END:VCARD\r\n",
-      "#{HOUSEHOLD_ADDRESS}\r\nTEL;TYPE=home:+44 20 5555 0100\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n",
+      "#{HOUSEHOLD_ADDRESS}\r\n#{HOUSEHOLD_NOTE}\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n",
     )
 
     with_store({"aiden" => born, "znorth" => ZED}) do |store|
-      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, "TEL;TYPE=home:+44 20 5555 0100"])
+      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
 
       assert_equal composed, store.contact("aiden").vcard.to_s
       assert_equal composed, store.contacts.find { it.id == "aiden" }.vcard.to_s
@@ -1002,12 +1003,12 @@ class StoreTest < Minitest::Test
   # returns first, so the composed bytes never move between reads.
   def test_two_groups_compose_in_a_fixed_order
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, id: "zedly", members: ["aiden"], lines: ["TEL;TYPE=home:+44 20 5555 0100"])
+      add_group(store, id: "zedly", members: ["aiden"], lines: [HOUSEHOLD_NOTE])
       add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
       composed = AIDEN.sub(
         "END:VCARD\r\n",
-        "#{HOUSEHOLD_ADDRESS}\r\nTEL;TYPE=home:+44 20 5555 0100\r\nEND:VCARD\r\n",
+        "#{HOUSEHOLD_ADDRESS}\r\n#{HOUSEHOLD_NOTE}\r\nEND:VCARD\r\n",
       )
       assert_equal composed, store.contact("aiden").vcard.to_s
     end
@@ -1043,6 +1044,31 @@ class StoreTest < Minitest::Test
 
       assert_equal [put.etag, edit.etag], logged.last(2).map { it[:etag] }
       assert_includes put.vcard.to_s, HOUSEHOLD_ADDRESS
+    end
+  end
+
+  # The schema is the only gate on what a group may hold until
+  # authoring exists, so what it admits is worth pinning: an address
+  # or a note, bare or parameterized, in whatever case the author
+  # spelled the name. Everything else is refused — a phone or an email
+  # reaches a person rather than a household, and a grouped ADR is half
+  # of a labeled property whose other half no group may hold.
+  def test_a_group_holds_only_addresses_and_notes
+    with_store({"aiden" => AIDEN}) do |store|
+      properties = database(store)[:group_properties]
+      database(store)[:groups].insert(id: "household", name: "Household")
+
+      admitted = [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE, "ADR:;;1 Long Road;;;;", "note:lowercase is the same name"]
+      admitted.each.with_index do |line, position|
+        properties.insert(group_id: "household", position:, line:)
+      end
+      assert_equal admitted, properties.order(:position).map { it.fetch(:line) }
+
+      ["TEL;TYPE=home:+44 20 5555 0100", "EMAIL:boole@example.com", "item1.ADR:;;1 Long Road;;;;"].each do |line|
+        assert_raises(Sequel::ConstraintViolation) do
+          properties.insert(group_id: "household", position: admitted.size, line:)
+        end
+      end
     end
   end
 

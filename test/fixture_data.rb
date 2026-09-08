@@ -37,23 +37,24 @@ module FixtureData
     CARDS.glob("*.vcf").sort.to_h { [it.basename(".vcf").to_s, it.read] }
   end
 
-  # What the household shares: an address and a home number, the
+  # What the household shares: an address and a note, which is both
+  # what a group may hold (see db/migrations/004_groups.rb) and the
   # shape the groups work tests against
   # (docs/plans/2026-08-24-vcard-storage-and-groups.md). Deliberately
   # not the address any seed card already carries, so a test can tell
   # a composed line from a stored one by its bytes.
   HOUSEHOLD = [
     "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
-    "TEL;TYPE=home:+44 20 5555 0100",
+    "NOTE:Gate code 1854. The dog is friendly\\, the goose is not.",
   ].freeze #: Array[String]
 
   # The groups the fixture book carries: one household, the three
   # household-* cards in it. Those cards are a family — one surname, a
-  # mobile and an email each, and no address or home number of their
-  # own — so the only home address the admin UI shows on them is the
-  # one this group composes in, and removing a member visibly takes it
-  # away. They sit outside the recorded macOS exchange's hrefs, so the
-  # replay keeps serving that session the bytes it saw.
+  # mobile and an email each, and no address or note of their own — so
+  # everything the admin UI shows on them in those two rows is the
+  # group's, and removing a member visibly takes it away. They sit
+  # outside the recorded macOS exchange's hrefs, so the replay keeps
+  # serving that session the bytes it saw.
   #
   # Seeded in Ruby rather than a fixture file because the cards are the
   # only evidence-shaped fixtures — a group is rows across three

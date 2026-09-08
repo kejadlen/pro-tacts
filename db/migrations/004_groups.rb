@@ -3,9 +3,17 @@
 # server-side state — membership is never exposed to the client — and
 # the properties it holds are verbatim content lines rather than parsed
 # structure, for the same reason the cards are stored as bytes: what
-# the group's author wrote is what a member's card carries, and a
-# property this server does not model rides through composition
-# untouched (RFC 6352 section 6.3.2.2).
+# the group's author wrote is what a member's card carries, down to the
+# spelling this server would not have chosen.
+#
+# Which properties a group may hold is a narrower question than what a
+# line may say, and the answer for now is an address and a note: the
+# attributes a household actually shares. A shared TEL or EMAIL reaches
+# a person rather than the household, and the composition has no answer
+# yet for the properties macOS builds out of two lines — a labeled
+# `item1.ADR` needs its `item1.X-ABLabel` beside it, and a constraint
+# over one line at a time cannot hold a pair together. The names widen
+# when something needs them to; the CHECK below is where.
 #
 # No timestamps on these tables, the birthdays' own reason: the rows
 # are current state, replaced wholesale by whatever authoring last
@@ -13,9 +21,26 @@
 # 'group' action below — is the history of a group's edits.
 #
 # `text: true` on every string column because these are STRICT tables,
-# which refuse Sequel's plain String. A local rather than a constant,
+# which refuse Sequel's plain String. Locals rather than constants,
 # for the reason 001 records.
 now = "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+
+# A shareable line, as the two forms one can take: `ADR:` bare and
+# `ADR;TYPE=home:` parameterized. A grouped spelling — `item1.ADR:` —
+# starts with neither and is refused, which is the intent above.
+#
+# The name is folded rather than matched as written, because `FN` and
+# `fn` are one name (RFC 6350 section 3.3, which RFC 2426 leaves
+# unsaid) and because LIKE's own case-sensitivity is not this
+# constraint's to assume: SQLite matches case-insensitively over ASCII
+# by default, Sequel's adapter turns that off with a
+# `case_sensitive_like` pragma, and a pragma is per-connection — so a
+# CHECK resting on LIKE alone would admit a lowercase line through one
+# connection and refuse it through the next.
+folded = Sequel.function(:upper, :line)
+shareable = %w[ADR NOTE].flat_map { |name|
+  [Sequel.like(folded, "#{name}:%"), Sequel.like(folded, "#{name};%")]
+}
 
 Sequel.migration do
   change do
@@ -28,12 +53,16 @@ Sequel.migration do
 
     # What a group contributes, as the content lines to compose into a
     # member's card. `position` is the line's place in the group, which
-    # fixes the order the composition serves them in.
+    # fixes the order the composition serves them in. The CHECK is the
+    # only gate on what a group may hold — nothing public writes this
+    # table yet, so a name outside the shareable set has to be refused
+    # by the schema or not at all.
     create_table(:group_properties, strict: true) do
       foreign_key :group_id, :groups, type: String, text: true, null: false, on_delete: :cascade
       Integer :position, null: false
       String :line, text: true, null: false
       primary_key [:group_id, :position]
+      constraint(:line_is_shareable, Sequel.|(*shareable))
     end
 
     # Membership. Deleting a card drops the membership — the group
