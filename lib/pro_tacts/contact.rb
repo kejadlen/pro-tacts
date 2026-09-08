@@ -25,7 +25,10 @@ module ProTacts
   # card, never both, so the two facts are independent and #vcard
   # composes the served card from them. An unmodeled BDAY spelling is
   # the card's own — #properties shows it, and #birthday reads nil over
-  # it.
+  # it. The lines a contact inherits from its groups sit beside the
+  # birthday the same way: no stored card carries them, so they are
+  # store facts composed in at read
+  # (docs/plans/2026-08-24-vcard-storage-and-groups.md).
   #
   # The etag hashes the card that goes out, so it changes exactly when
   # what the client downloads changes. It is derived here and stored
@@ -49,6 +52,7 @@ module ProTacts
     # @rbs @id: String
     # @rbs @stored: VCard
     # @rbs @birthday: Birthday?
+    # @rbs @inherited: Array[String]
     # @rbs @vcard: VCard
     # @rbs @etag: String
 
@@ -87,20 +91,22 @@ module ProTacts
       :line,
     )
 
-    # A contact from its id, its stored card, and its birthday. The
-    # only way to make one: an etag that came from anywhere but the
-    # card in hand is an etag that can be wrong, and a birthday from
+    # A contact from its id, its stored card, its birthday, and the
+    # content lines it inherits from its groups. The only way to make
+    # one: an etag that came from anywhere but the card in hand is an
+    # etag that can be wrong, and a birthday or an inheritance from
     # anywhere but the store is wrong the same way — which is why
-    # `birthday:` is required and carries no default, since an
-    # optional nil would let a caller quietly get no birthday off a
-    # card that has one. Named `stored:` rather than `vcard:` because
-    # what #vcard returns is composed, and an argument that is not
-    # what the reader hands back is a trap.
-    #: (id: String, stored: VCard, birthday: Birthday?) -> Contact
-    def self.for(id:, stored:, birthday:)
+    # `birthday:` and `inherited:` are required and carry no defaults,
+    # since an optional nil would let a caller quietly get no birthday
+    # off a card that has one, and an omitted inheritance would serve a
+    # member its group's lines no longer reach. Named `stored:` rather
+    # than `vcard:` because what #vcard returns is composed, and an
+    # argument that is not what the reader hands back is a trap.
+    #: (id: String, stored: VCard, birthday: Birthday?, inherited: Array[String]) -> Contact
+    def self.for(id:, stored:, birthday:, inherited:)
       raise ArgumentError, "invalid contact id: #{id}" unless id.match?(ID_FORMAT)
 
-      new(id, stored, birthday)
+      new(id, stored, birthday, inherited)
     end
 
     #: (VCard vcard) -> String
@@ -108,11 +114,12 @@ module ProTacts
       %("#{Digest::SHA256.hexdigest(vcard.to_s)}")
     end
 
-    #: (String id, VCard stored, Birthday? birthday) -> void
-    def initialize(id, stored, birthday)
+    #: (String id, VCard stored, Birthday? birthday, Array[String] inherited) -> void
+    def initialize(id, stored, birthday, inherited)
       @id = id
       @stored = stored
       @birthday = birthday
+      @inherited = inherited
     end
 
     attr_reader :id
@@ -130,20 +137,24 @@ module ProTacts
     # #properties' job.
     attr_reader :birthday
 
-    # The card to serve: the stored one with the birthday composed back
-    # in, immediately before END:VCARD — the same insert over the same
-    # two inputs Store composed at each read path before, so the bytes
-    # a client downloads do not move. A birthday with no wire form, or
-    # none at all, serves the stored card exactly as it is. Composed on
-    # first ask and memoized, and the etag's derivation deferred with
-    # it: a caller that reads neither — and the listing paths read
-    # neither — pays for no composition of its own.
+    # The card to serve: the stored one with the inherited lines and
+    # the birthday composed back in, in that order, each immediately
+    # before END:VCARD — stored + inherited + birthday, the card a
+    # client downloads. A birthday with no wire form, or none at all,
+    # and an empty inheritance leave their halves as they lie, and an
+    # empty inheritance is #insert's own no-op — the same card object —
+    # so a contact in no group serves exactly the bytes it did before
+    # groups existed, etag included. Composed on first ask and
+    # memoized, and the etag's derivation deferred with it: a caller
+    # that reads neither — and the listing paths read neither — pays
+    # for no composition of its own.
     #: () -> VCard
     def vcard
       return @vcard if defined?(@vcard)
 
+      card = @stored.insert(@inherited)
       line = @birthday && @birthday.to_line
-      @vcard = line ? @stored.insert([line]) : @stored
+      @vcard = line ? card.insert([line]) : card
     end
 
     # The etag over #vcard's bytes, derived here on first ask and

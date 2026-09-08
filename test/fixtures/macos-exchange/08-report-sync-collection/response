@@ -16,7 +16,7 @@ Content-Type: text/xml
   <d:href>/dav/addressbook/bday-basic-noyear.vcf</d:href>
   <d:propstat>
     <d:prop>
-      <d:getetag>"bbc86afedab3b3dfa349da2ff6ed736922389a68074fc7a7905b40b1825bc425"</d:getetag>
+      <d:getetag>"78822ddd3e94790ad8132d452c65b9a9214b695f5db650b1882081696f04b080"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
@@ -25,7 +25,7 @@ Content-Type: text/xml
   <d:href>/dav/addressbook/bday-complete.vcf</d:href>
   <d:propstat>
     <d:prop>
-      <d:getetag>"4f18a47439816f1488e1bea6ddd31b26dd098de0e5245e57e70e32944be12804"</d:getetag>
+      <d:getetag>"ea55ff3f6cf660799cbc5b25f86d9e219e7c5b57aecb2a86f4c0af8687805861"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>

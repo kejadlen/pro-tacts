@@ -24,15 +24,18 @@ module ProTacts
   # change-log entry have to land or fail together. The birthdays are
   # the third thing that cannot be rebuilt — a partial date has no
   # vCard 3.0 spelling, so it lives beside its card rather than in it
-  # (docs/plans/2026-08-31-partial-birthdays.md). Everything else is
-  # an index derived from the cards, and #rebuild_index will make it
-  # again from nothing.
+  # (docs/plans/2026-08-31-partial-birthdays.md). The groups are the
+  # fourth — membership and the lines a group contributes to its
+  # members' served cards, facts no stored card carries and so nothing
+  # can re-derive. Everything else is an index derived from the cards,
+  # and #rebuild_index will make it again from nothing.
   #
   # Every Contact this store hands out is composed, never the stored
   # card alone: a birthday is subtracted out of a card on the way in,
-  # and Contact composes it back in on read, so the vcard and the etag
-  # a caller sees — and the etag the change log records — describe the
-  # card a client downloads, not the bytes on disk.
+  # and Contact composes it back in on read, with the lines a contact
+  # inherits from its groups composed in beside it — so the vcard and
+  # the etag a caller sees, and the etag the change log records,
+  # describe the card a client downloads, not the bytes on disk.
   #
   # Sequel's transactions join one already open rather than failing on
   # SQLite's lack of nesting, which is what lets the group fan-out this
@@ -125,7 +128,11 @@ module ProTacts
     #: () -> Array[Contact]
     def contacts
       birthdays = birthdays_by_id
-      cards.order(:id).map { contact_from(it, birthdays[it.fetch(:id).to_s]) }
+      inherited = inherited_by_id
+      cards.order(:id).map {
+        id = it.fetch(:id).to_s
+        contact_from(it, birthdays[id], inherited.fetch(id, []))
+      }
     end
 
     # Every contact paired with its card's updated_at, newest first — the
@@ -135,9 +142,11 @@ module ProTacts
     #: () -> Array[RecentContact]
     def contacts_by_recency
       birthdays = birthdays_by_id
+      inherited = inherited_by_id
       cards.order(Sequel.desc(:updated_at)).map {
+        id = it.fetch(:id).to_s
         RecentContact.new(
-          contact: contact_from(it, birthdays[it.fetch(:id).to_s]),
+          contact: contact_from(it, birthdays[id], inherited.fetch(id, [])),
           updated_at: it.fetch(:updated_at).to_s,
         )
       }
@@ -178,9 +187,10 @@ module ProTacts
     # this reads the table rather than scanning cards for BDAY.
     #: (Integer limit, ?today: Date) -> Array[UpcomingBirthday]
     def upcoming_birthdays(limit, today: Date.today)
+      inherited = inherited_by_id
       birthdays
         .join(:cards, id: :card_id)
-        .map { upcoming_from(it, today) }
+        .map { upcoming_from(it, today, inherited.fetch(it.fetch(:card_id).to_s, [])) }
         .compact
         .sort_by { [it.occurs_on, it.contact.id] }
         .first(limit)
@@ -193,7 +203,7 @@ module ProTacts
     # nil.
     #: (String id) -> Contact?
     def contact(id)
-      contact_from(cards.where(id:).sole, birthday_of(id))
+      contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
     rescue Sequel::NoMatchingRow
       nil
     end
@@ -272,10 +282,15 @@ module ProTacts
           [nil, card]
         end
 
-      # The Contact this returns is the composed one, and the logged
-      # etag is its hash, so a client's token describes the card it
-      # downloads.
-      contact = Contact.for(id:, stored:, birthday:)
+      # The Contact this returns is the composed one — what the contact
+      # inherits included, read off membership as it stands at this
+      # write — and the logged etag is its hash, so a client's token
+      # describes the card it downloads. The submitted card is stored
+      # as it arrived: subtracting a group's lines back out of a
+      # member's submission is the write half's task
+      # (docs/plans/2026-08-24-vcard-storage-and-groups.md), so until it
+      # lands a member's rewrite carries the inherited lines within it.
+      contact = Contact.for(id:, stored:, birthday:, inherited: inherited_of(id))
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
@@ -303,7 +318,7 @@ module ProTacts
     #: (String id, String vcard, birthday: Birthday?) -> Contact
     def rewrite(id, vcard, birthday:)
       card = VCard.new(vcard)
-      contact = Contact.for(id:, stored: card, birthday:)
+      contact = Contact.for(id:, stored: card, birthday:, inherited: inherited_of(id))
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
@@ -374,6 +389,11 @@ module ProTacts
     #: () -> Sequel::Dataset
     def birthdays
       @database[:birthdays]
+    end
+
+    #: () -> Sequel::Dataset
+    def group_members
+      @database[:group_members]
     end
 
     #: (String card_id, String action, String? etag) -> void
@@ -501,14 +521,15 @@ module ProTacts
 
     # The birthday travels beside the card rather than inside it, and
     # Contact composes the served one — its vcard, its etag, everything
-    # a caller reads — so both describe what a client downloads rather
-    # than the bytes on disk.
-    #: (Hash[Symbol, untyped] row, Birthday? birthday) -> Contact
-    def contact_from(row, birthday)
+    # a caller reads — with the inherited lines beside it, so all
+    # describe what a client downloads rather than the bytes on disk.
+    #: (Hash[Symbol, untyped] row, Birthday? birthday, Array[String] inherited) -> Contact
+    def contact_from(row, birthday, inherited)
       Contact.for(
         id: row.fetch(:id).to_s,
         stored: VCard.new(row.fetch(:vcard).to_s),
         birthday:,
+        inherited:,
       )
     end
 
@@ -548,6 +569,42 @@ module ProTacts
       row && birthday_from(row)
     end
 
+    # The content lines a contact inherits — every property of every
+    # group it belongs to, nothing of a group that holds nothing, and
+    # [] for a contact in no group at all. Ordered by group id and then
+    # position, so the composed card is the same bytes every read.
+    #: (String id) -> Array[String]
+    def inherited_of(id)
+      inherited_rows.where(card_id: id).map { it.fetch(:line).to_s }
+    end
+
+    # Every contact's inheritance in one pass, keyed by card, for the
+    # listing reads that compose a whole collection — the same shape as
+    # birthdays_by_id, for the same reason. Only a contact with
+    # something to inherit appears; the absent key reads as [] at the
+    # caller, which is what it means.
+    #: () -> Hash[String, Array[String]]
+    def inherited_by_id
+      inherited_rows.all
+        .group_by { it.fetch(:card_id).to_s }
+        .transform_values { |rows| rows.map { it.fetch(:line).to_s } }
+    end
+
+    # The join both inherited reads walk: a membership to the property
+    # it inherits, qualified and ordered so the composition neither
+    # depends on what SQLite feels like returning nor trips over the
+    # group_id the two tables share.
+    #: () -> Sequel::Dataset
+    def inherited_rows
+      group_members
+        .join(:group_properties, group_id: :group_id)
+        .order(
+          Sequel[:group_members][:card_id],
+          Sequel[:group_properties][:group_id],
+          Sequel[:group_properties][:position],
+        )
+    end
+
     # A birthday row read as the model. The shape was validated on the
     # way in, so a row that no longer parses is corruption to raise on
     # rather than quietly drop.
@@ -559,15 +616,15 @@ module ProTacts
     # One joined birthday-and-card row as an UpcomingBirthday, or nil
     # for a shape that lands on no calendar day (see
     # #upcoming_birthdays).
-    #: (Hash[Symbol, untyped] row, Date today) -> UpcomingBirthday?
-    def upcoming_from(row, today)
+    #: (Hash[Symbol, untyped] row, Date today, Array[String] inherited) -> UpcomingBirthday?
+    def upcoming_from(row, today, inherited)
       birthday = birthday_from(row)
       month, day = birthday.month, birthday.day
       return if month.nil? || day.nil?
 
       candidate = date_in(today.year, month, day)
       UpcomingBirthday.new(
-        contact: contact_from(row, birthday),
+        contact: contact_from(row, birthday, inherited),
         occurs_on: candidate < today ? date_in(today.year + 1, month, day) : candidate,
       )
     end

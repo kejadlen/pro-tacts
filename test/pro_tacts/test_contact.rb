@@ -20,11 +20,12 @@ class ContactTest < Minitest::Test
     "NOTE:Countess\\, mathematician.\r\nUID:ada\r\nEND:VCARD\r\n"
 
   # The production shapes (see the class comment): a modeled birthday
-  # passes a BDAY-free card beside a Birthday, and a fallback case
+  # passes a BDAY-free card beside a Birthday, a fallback case
   # passes a card carrying an unmodeled BDAY beside nil — no stored
-  # card ever carries a BDAY the model recomposes.
-  def contact(vcard = CARD, id: "aiden", birthday: nil)
-    ProTacts::Contact.for(id:, stored: ProTacts::VCard.new(vcard), birthday:)
+  # card ever carries a BDAY the model recomposes — and inheritance
+  # defaults to none, the shape of every contact in no group.
+  def contact(vcard = CARD, id: "aiden", birthday: nil, inherited: [])
+    ProTacts::Contact.for(id:, stored: ProTacts::VCard.new(vcard), birthday:, inherited:)
   end
 
   # The decode's refusal reports (see #photo); the transport this pins
@@ -262,6 +263,51 @@ class ContactTest < Minitest::Test
     unmodeled = STRUCTURED.sub("END:VCARD\r\n", "BDAY:not-a-date\r\nEND:VCARD\r\n")
 
     assert_nil contact(unmodeled).birthday
+  end
+
+  ## Inherited lines
+
+  # The group's lines land between the stored card and the composed
+  # birthday — stored + inherited + birthday — so the card a client
+  # downloads carries everything in one fixed order.
+  def test_the_served_card_composes_inherited_lines_before_the_birthday
+    birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
+    composed = STRUCTURED.sub(
+      "END:VCARD\r\n",
+      "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom\r\n" \
+      "TEL;TYPE=home:+44 20 5555 0100\r\n" \
+      "BDAY:1985-12-10\r\nEND:VCARD\r\n",
+    )
+
+    assert_equal(
+      composed,
+      contact(
+        STRUCTURED,
+        birthday:,
+        inherited: [
+          "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
+          "TEL;TYPE=home:+44 20 5555 0100",
+        ],
+      ).vcard.to_s,
+    )
+  end
+
+  # No inheritance composes the same bytes and the same etag as before
+  # groups existed: an empty inheritance is insert's own no-op, so a
+  # contact in no group serves its stored card untouched.
+  def test_a_contact_in_no_group_serves_its_stored_bytes_and_etag
+    card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
+
+    assert_equal card, contact(card, inherited: []).vcard.to_s
+    assert_equal ProTacts::Contact.etag_for(ProTacts::VCard.new(card)), contact(card).etag
+  end
+
+  # Inherited lines are card contents like any other, so the accessors
+  # read them: a group's number is a phone on the member's card.
+  def test_the_accessors_read_inherited_lines
+    card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
+
+    assert_equal "+44 20 5555 0100", contact(card, inherited: ["TEL;TYPE=home:+44 20 5555 0100"]).phones.first&.value
   end
 
   def test_unescapes_notes

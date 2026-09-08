@@ -936,6 +936,127 @@ class StoreTest < Minitest::Test
     end
   end
 
+  ## Groups
+
+  HOUSEHOLD_ADDRESS = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom" #: String
+
+  # There is no write path for the group tables yet — authoring is the
+  # admin UI's task — so the tests arrange them the way the fixture
+  # seeder does, straight through the store's own database.
+  def add_group(store, id:, members:, lines:)
+    db = database(store)
+    db[:groups].insert(id:, name: id.capitalize)
+    lines.each.with_index { |line, position| db[:group_properties].insert(group_id: id, position:, line:) }
+    members.each { |card_id| db[:group_members].insert(group_id: id, card_id:) }
+  end
+
+  # A member's served card is the stored one with the group's lines
+  # composed in, and the birthday composed after them — every read,
+  # single or listed, hands out the same composed card.
+  def test_a_member_serves_the_group_lines_composed_in
+    born = AIDEN.sub("FN:Aiden\r\n", "FN:Aiden\r\nBDAY:1985-12-10\r\n")
+    composed = AIDEN.sub(
+      "END:VCARD\r\n",
+      "#{HOUSEHOLD_ADDRESS}\r\nTEL;TYPE=home:+44 20 5555 0100\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n",
+    )
+
+    with_store({"aiden" => born, "znorth" => ZED}) do |store|
+      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, "TEL;TYPE=home:+44 20 5555 0100"])
+
+      assert_equal composed, store.contact("aiden").vcard.to_s
+      assert_equal composed, store.contacts.find { it.id == "aiden" }.vcard.to_s
+      assert_equal composed, store.contacts_by_recency.find { it.contact.id == "aiden" }.contact.vcard.to_s
+    end
+  end
+
+  # A contact in no group serves the stored bytes with the etag it
+  # always had — the byte-identity the whole fixture replay stands on.
+  def test_a_contact_in_no_group_serves_unchanged_bytes_and_etag
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      before = store.contact("aiden")
+      add_group(store, id: "household", members: ["znorth"], lines: [HOUSEHOLD_ADDRESS])
+
+      after = store.contact("aiden")
+      assert_equal AIDEN, after.vcard.to_s
+      assert_equal before.etag, after.etag
+    end
+  end
+
+  # Membership is the only lever: a contact that leaves the group
+  # serves its own bytes again, at the etag it had before any of the
+  # group's lines reached it.
+  def test_leaving_a_group_restores_the_stored_bytes
+    with_store({"aiden" => AIDEN}) do |store|
+      before = store.contact("aiden").etag
+      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      refute_equal before, store.contact("aiden").etag
+
+      database(store)[:group_members].where(card_id: "aiden").delete
+      assert_equal AIDEN, store.contact("aiden").vcard.to_s
+      assert_equal before, store.contact("aiden").etag
+    end
+  end
+
+  # Two groups' lines compose in group-id order, then position — the
+  # order is a fact of the schema, not of whichever join SQLite
+  # returns first, so the composed bytes never move between reads.
+  def test_two_groups_compose_in_a_fixed_order
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, id: "zedly", members: ["aiden"], lines: ["TEL;TYPE=home:+44 20 5555 0100"])
+      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+
+      composed = AIDEN.sub(
+        "END:VCARD\r\n",
+        "#{HOUSEHOLD_ADDRESS}\r\nTEL;TYPE=home:+44 20 5555 0100\r\nEND:VCARD\r\n",
+      )
+      assert_equal composed, store.contact("aiden").vcard.to_s
+    end
+  end
+
+  # The index projects the stored cards, and no stored card carries an
+  # inherited line: the group's address is in the served card and in
+  # no index row, and rebuilding the index leaves it that way.
+  def test_the_index_holds_nothing_the_group_composes_in
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+
+      assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
+      assert_includes indexed_names(store, "aiden"), "FN"
+      refute_includes indexed_names(store, "aiden"), "ADR"
+
+      store.rebuild_index
+      refute_includes indexed_names(store, "aiden"), "ADR"
+    end
+  end
+
+  # A PUT and an editor's save both hand back the composed contact —
+  # the etag each records in the change log is the composed card's, so
+  # a client's token describes what there is to download. The first
+  # entry is with_store's own seed put, logged before the group existed.
+  def test_writes_log_the_composed_etag_for_a_member
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, id: "household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+
+      put = store.put("aiden", AIDEN)
+      edit = store.rewrite("aiden", AIDEN, birthday: nil)
+      logged = database(store)[:changes].where(card_id: "aiden").order(:sequence).all
+
+      assert_equal [put.etag, edit.etag], logged.last(2).map { it[:etag] }
+      assert_includes put.vcard.to_s, HOUSEHOLD_ADDRESS
+    end
+  end
+
+  # The fourth action value exists for the fan-out a group edit will
+  # write; nothing writes it yet, and this pins that the log can hold
+  # one when it does.
+  def test_the_change_log_admits_the_group_action
+    with_store({"aiden" => AIDEN}) do |store|
+      database(store)[:changes].insert(card_id: "aiden", action: "group", etag: "\"x\"")
+
+      assert_equal "group", store.changes.last.action
+    end
+  end
+
   ## The migration
 
   # A database at the old action vocabulary — put and delete only — is

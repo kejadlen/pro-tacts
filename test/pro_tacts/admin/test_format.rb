@@ -9,10 +9,11 @@ class FormatTest < Minitest::Test
     "UID:ada\r\nEND:VCARD\r\n"
 
   # The production shapes: a modeled birthday passes a BDAY-free card
-  # beside a Birthday, and a fallback case passes a card carrying an
-  # unmodeled BDAY beside nil (see Contact).
-  def contact(vcard = CARD, id: "aiden", birthday: nil)
-    ProTacts::Contact.for(id:, stored: ProTacts::VCard.new(vcard), birthday:)
+  # beside a Birthday, a fallback case passes a card carrying an
+  # unmodeled BDAY beside nil, and inheritance defaults to none (see
+  # Contact).
+  def contact(vcard = CARD, id: "aiden", birthday: nil, inherited: [])
+    ProTacts::Contact.for(id:, stored: ProTacts::VCard.new(vcard), birthday:, inherited:)
   end
 
   # Initials come from the structured N property (given + family),

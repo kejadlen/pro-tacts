@@ -37,6 +37,37 @@ module FixtureData
     CARDS.glob("*.vcf").sort.to_h { [it.basename(".vcf").to_s, it.read] }
   end
 
+  # What the household shares: an address and a home number, the
+  # shape the groups work tests against
+  # (docs/plans/2026-08-24-vcard-storage-and-groups.md). Deliberately
+  # not the address any seed card already carries, so a test can tell
+  # a composed line from a stored one by its bytes.
+  HOUSEHOLD = [
+    "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
+    "TEL;TYPE=home:+44 20 5555 0100",
+  ].freeze #: Array[String]
+
+  # The groups the fixture book carries: one household, two members.
+  # Seeded in Ruby rather than a fixture file because the cards are the
+  # only evidence-shaped fixtures — a group is rows across three
+  # tables with no file format of its own — and the members are chosen
+  # to sit outside the recorded macOS exchange's hrefs, so the replay
+  # keeps serving that session the bytes it saw. Authoring groups is
+  # the admin UI's task; until it arrives nothing public writes these
+  # tables, so the rows land the way backdate's do, through the
+  # store's own database.
+  #: (ProTacts::Store store) -> void
+  def self.seed_groups(store)
+    database = store.instance_variable_get(:@database)
+    database[:groups].insert(id: "household", name: "Household")
+    HOUSEHOLD.each.with_index do |line, position|
+      database[:group_properties].insert(group_id: "household", position:, line:)
+    end
+    ["bday-complete", "bday-basic-noyear"].each do |id|
+      database[:group_members].insert(group_id: "household", card_id: id)
+    end
+  end
+
   # Builds the database and returns a store still open on it, for the
   # caller to hand to the app the way config.ru does.
   def self.install(directory)
@@ -49,6 +80,7 @@ module FixtureData
       store.put(id, card)
     end.keys
     backdate(store, ids)
+    seed_groups(store)
     store
   end
 
