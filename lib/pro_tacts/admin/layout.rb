@@ -1,5 +1,7 @@
 require "pro_tacts/admin/phlex"
 
+require "pro_tacts"
+
 module ProTacts
   module Admin
     # The one page shell every admin screen renders inside: head, the
@@ -78,6 +80,40 @@ module ProTacts
               end
             end
             main(class: "admin-main", **(@wide ? {data: {wide: true}} : {})) { yield }
+            # The shell's other edge: which build is answering, whether
+            # it is logging what it answers, and the one screen search
+            # cannot reach. All of it read off the environment (see
+            # Config) rather than passed down through every screen's
+            # call — these are the shell's own facts, the same on all
+            # of them.
+            #
+            # The version is the image's tag and the release's name at
+            # once, so it stands alone: the commit and the build time
+            # are spelled inside it, and a second label repeating either
+            # would be the same fact twice. Nothing built by the release
+            # job carries one, and that absence is its own fact worth
+            # stating — a screen that looks like the deployment but
+            # answers out of a working copy is exactly the confusion the
+            # footer exists to end.
+            #
+            # Debug logging says so while it is on because it dumps
+            # whole requests, contact data included (see DebugLogger),
+            # and a log left recording is the kind of thing found months
+            # later. Off, the label is absent: the footer states what is
+            # true, and the quiet case is the normal one. It reads as a
+            # flag on the version rather than a sentence beside it —
+            # "+debug" is a build with something switched on, which is
+            # what it is, and the plus is its own separator.
+            #
+            # Device setup belongs here because the dashboard is a
+            # search over contacts and /setup is not a contact — a
+            # header link would put it beside the search on every
+            # screen, at the weight the app's own name has.
+            footer(class: "admin-footer") do
+              span(class: "type-label") { ProTacts.config.version || "dev server" }
+              span(class: "type-label") { "+debug" } if ProTacts.config.debug?
+              a(href: "/setup", class: "type-label") { "device setup" }
+            end
             # A server-rendered toast, Gloss's [role=status] contract:
             # the one line a refused write leaves behind, fixed to the
             # corner until the next navigation carries it off — no

@@ -88,6 +88,14 @@ columns are equal and fluid, collapsing to one — birthdays under contacts —
 when the viewport cannot hold two side by side. Every other screen keeps a
 single reading column.
 
+Under every screen sits the footer, the header's counterpart, holding what no
+search can turn up because none of it is a record: the version answering,
+whether debug logging is recording, and a link to device setup. A run with no
+release behind it says "dev server" in the version's place, since a working
+copy dressed as the deployment is the confusion the line exists to end. Debug
+logging appears only while it is on, written `+debug` — a flag on the build,
+not a sentence beside it — and a quiet log has nothing to say.
+
 ## Records are cards, not forms
 
 A contact or group opens as a full card, not a row in a split pane and not a

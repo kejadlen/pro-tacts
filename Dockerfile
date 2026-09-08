@@ -14,9 +14,13 @@ FROM ruby:4.0-slim
 ARG COMMIT_SHA
 ARG CHANGE_ID
 ARG BUILD_DATE
+# The image's own tag, and the release's name (see ci.yml) — the one
+# build fact the app reads back out, in the admin footer.
+ARG VERSION
 ENV COMMIT_SHA=${COMMIT_SHA}
 ENV CHANGE_ID=${CHANGE_ID}
 ENV BUILD_DATE=${BUILD_DATE}
+ENV VERSION=${VERSION}
 # Set TZ at runtime — Date.today drives the birthday list's rollover.
 
 WORKDIR /app

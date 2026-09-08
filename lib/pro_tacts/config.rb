@@ -64,5 +64,21 @@ module ProTacts
     def debug_log_path
       @env.fetch("PRO_TACTS_DEBUG_LOG", "log/debug.log")
     end
+
+    # The running image's version, baked in as a build arg (see
+    # Dockerfile and the release job in ci.yml): the image tag, which is
+    # the GitHub release's name too — `YYYYMMDD-HHmm-<short sha>`. One
+    # string carrying when it was built and what from, and the one to
+    # go look up.
+    #
+    # Blank is absent here: `ENV VERSION=${VERSION}` with no build arg
+    # behind it sets an empty string, so an image built by hand says ""
+    # where a process outside one says nothing at all, and neither names
+    # a version.
+    #: () -> String?
+    def version
+      value = @env.fetch("VERSION", nil)
+      value unless value.nil? || value.strip.empty?
+    end
   end
 end

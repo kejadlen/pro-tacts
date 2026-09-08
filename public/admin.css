@@ -334,11 +334,53 @@ textarea:focus {
   text-decoration: none;
 }
 
+/* The page's other chrome bar, built off the header's rule: the same
+   block and inline padding, and the hairline on the opposite edge, so
+   the two rules read as one frame around the column between them.
+   `margin-top: auto` is what pins it to the bottom of a short page —
+   the body below is a column tall enough to have a bottom — and on a
+   page taller than the viewport it simply follows the content. */
+.admin-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gl-space-s);
+  margin-top: auto;
+  padding: var(--gl-space-2xs) var(--gl-space-m);
+  border-top: 1px solid var(--gl-color-border-hairline);
+}
+
+/* The header's own split, upside down: what is true on the left, the
+   one thing to click on the right. At an even gap the link sat a word
+   away from the state beside it, two labels of one weight reading as
+   one phrase; the edge is what tells them apart. */
+.admin-footer a {
+  margin-left: auto;
+}
+
+/* The viewport-tall column the footer's `margin-top: auto` measures
+   against. Gloss's own body rule sets type and surface and leaves
+   layout to the page, which until there was a footer meant nothing at
+   all. */
+body {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
 /* The reading column's width: wide enough that the editor's widest
    row — the birthday's three controls, ~343px at minimum — fits the
    value column with room for the month select to grow (the value
-   column at 40rem is ~412px), which 34rem missed by ~30px. */
+   column at 40rem is ~412px), which 34rem missed by ~30px.
+
+   The declared width is what the body's column costs: auto inline
+   margins on a flex item override the cross-axis stretch that used to
+   size this box, leaving it shrink-to-fit — which took the dashboard's
+   two columns down to one, its grid tracks being fractions of a width
+   that had stopped existing. The auto margins go on centering it under
+   the cap. */
 .admin-main {
+  width: 100%;
   max-width: 40rem;
   margin: 0 auto;
   padding: var(--gl-space-l) var(--gl-space-m);

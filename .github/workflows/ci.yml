@@ -80,6 +80,7 @@ jobs:
             COMMIT_SHA=${{ steps.short-sha.outputs.sha }}
             CHANGE_ID=${{ steps.change-id.outputs.id }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - env:
