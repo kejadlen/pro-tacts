@@ -163,9 +163,9 @@ module ProTacts
     def vcard
       return @vcard if defined?(@vcard)
 
-      card = @stored.insert(@inherited.map { it.line })
+      with_inherited = @stored.insert(@inherited.map { it.line })
       line = @birthday && @birthday.to_line
-      @vcard = line ? card.insert([line]) : card
+      @vcard = line ? with_inherited.insert([line]) : with_inherited
     end
 
     # The same contact with nothing its groups lend it: the editor's

@@ -631,8 +631,8 @@ module ProTacts
       # past the point where the client could be told what was wrong.
       # Paths need no counterpart: Puma hands PATH_INFO over still
       # percent-encoded, so an id off the wire is ASCII.
-      vcard = request.body.read.force_encoding(Encoding::UTF_8)
-      return precondition("valid-address-data") unless vcard.valid_encoding?
+      bytes = request.body.read.force_encoding(Encoding::UTF_8)
+      return precondition("valid-address-data") unless bytes.valid_encoding?
 
       # CARDDAV:valid-address-data again, on the card this time: the
       # envelope RFC 2426 section 4 requires. That is the whole test. A
@@ -640,8 +640,8 @@ module ProTacts
       # refusing the card: RFC 6352 section 6.3.2.2 has the server keep
       # what it does not understand, and it is kept — the stored bytes
       # are what goes back out.
-      card = VCard.new(vcard)
-      return precondition("valid-address-data") unless card.card?
+      vcard = VCard.new(bytes)
+      return precondition("valid-address-data") unless vcard.card?
 
       # CARDDAV:no-uid-conflict: the submitted UID must not belong to a
       # different resource, and a mapped URI must not be overwritten by
@@ -650,7 +650,7 @@ module ProTacts
       # UID naming the resource being written, and no other card claims
       # it. The href in the body is the SHOULD that section attaches to
       # the first clause — report where the UID already lives.
-      uid = card.uid
+      uid = vcard.uid
       owner = uid && store.card_id_with_uid(uid)
       return precondition("no-uid-conflict", owner) if uid != id || owner && owner != id
 
@@ -665,10 +665,10 @@ module ProTacts
       if_none_match = request.env["HTTP_IF_NONE_MATCH"]
       return plain_412 if if_none_match && if_none_match_failed?(if_none_match, existing)
 
-      report_unreadable_lines(card)
-      report_broken_assumptions(card)
+      report_unreadable_lines(vcard)
+      report_broken_assumptions(vcard)
 
-      stored = store.put(id, card)
+      stored = store.put(id, vcard)
       response.status = existing ? 204 : 201
       # A strong ETag belongs on the answer only when what the resource
       # now serves is the submitted bytes, octet for octet — the one
@@ -681,7 +681,7 @@ module ProTacts
       # tag, while a PUT that carried a birthday somewhere other than
       # where compose puts it back serves bytes that are not the ones
       # it sent, and the client refetches.
-      response["ETag"] = stored.etag if stored.vcard.to_s == card.to_s
+      response["ETag"] = stored.etag if stored.vcard.to_s == vcard.to_s
 
       # A returned "" would land in the body and pin text/html and
       # content-length onto the 204, which a bodyless status must not
@@ -817,14 +817,14 @@ module ProTacts
       # (Contact#own).
       own = contact.own
 
-      card = contact.stored
-      card = card.replace("N", [n_line(card, first, last)])
-      card = edited_fn(contact, card, first, last)
-      card = card.replace("NICKNAME", text_lines("NICKNAME", nickname))
-      card = card.replace("NOTE", text_lines("NOTE", note))
-      card = edited_phones(own, card, params)
-      card = edited_emails(own, card, params)
-      edited_addresses(own, card, params)
+      vcard = contact.stored
+      vcard = vcard.replace("N", [n_line(vcard, first, last)])
+      vcard = edited_fn(contact, vcard, first, last)
+      vcard = vcard.replace("NICKNAME", text_lines("NICKNAME", nickname))
+      vcard = vcard.replace("NOTE", text_lines("NOTE", note))
+      vcard = edited_phones(own, vcard, params)
+      vcard = edited_emails(own, vcard, params)
+      edited_addresses(own, vcard, params)
     end
 
     # The phones' half of the surgical save: each row names its line
@@ -836,8 +836,8 @@ module ProTacts
     # parameters no field models ride. The addresses come from the
     # contact, never the request, so a doctored digest names nothing
     # and a missing one touches nothing.
-    #: (Contact contact, VCard card, Hash[String, untyped] params) -> VCard
-    def edited_phones(contact, card, params)
+    #: (Contact contact, VCard vcard, Hash[String, untyped] params) -> VCard
+    def edited_phones(contact, vcard, params)
       rows = params["phone"]
       if rows.is_a?(Hash)
         contact.phones.each do |phone|
@@ -851,7 +851,7 @@ module ProTacts
           next if submitted.nil? || submitted.to_s.strip == phone.value
 
           value = submitted.to_s.strip
-          card = card.substitute(
+          vcard = vcard.substitute(
             phone.line.digest,
             value.empty? ? [] : ["#{VCard.header_of(property)}#{VCard.escape(value)}"]
           )
@@ -870,12 +870,12 @@ module ProTacts
         value = it.to_s.strip
         "TEL:#{VCard.escape(value)}\r\n" unless value.empty?
       } #: Array[String]
-      card.insert(added)
+      vcard.insert(added)
     end
 
     # #edited_phones' walk, over EMAIL.
-    #: (Contact contact, VCard card, Hash[String, untyped] params) -> VCard
-    def edited_emails(contact, card, params)
+    #: (Contact contact, VCard vcard, Hash[String, untyped] params) -> VCard
+    def edited_emails(contact, vcard, params)
       rows = params["email"]
       if rows.is_a?(Hash)
         contact.emails.each do |email|
@@ -886,7 +886,7 @@ module ProTacts
           next if submitted.nil? || submitted.to_s.strip == email.value
 
           value = submitted.to_s.strip
-          card = card.substitute(
+          vcard = vcard.substitute(
             email.line.digest,
             value.empty? ? [] : ["#{VCard.header_of(property)}#{VCard.escape(value)}"],
           )
@@ -898,7 +898,7 @@ module ProTacts
         value = it.to_s.strip
         "EMAIL:#{VCard.escape(value)}\r\n" unless value.empty?
       } #: Array[String]
-      card.insert(added)
+      vcard.insert(added)
     end
 
     # #edited_phones' walk, over a row that is six fields rather than
@@ -906,8 +906,8 @@ module ProTacts
     # (Contact#address_of): a row blank throughout, po box included,
     # removes the line, where a partially blanked one keeps it —
     # partial blanks are legal empty components.
-    #: (Contact contact, VCard card, Hash[String, untyped] params) -> VCard
-    def edited_addresses(contact, card, params)
+    #: (Contact contact, VCard vcard, Hash[String, untyped] params) -> VCard
+    def edited_addresses(contact, vcard, params)
       rows = params["address"]
       if rows.is_a?(Hash)
         contact.addresses.each do |address|
@@ -918,7 +918,7 @@ module ProTacts
           next if !submitted.is_a?(Hash) || address_unchanged?(address, submitted)
 
           line = address_line(address, submitted)
-          card = card.substitute(address.line.digest, line ? [line] : [])
+          vcard = vcard.substitute(address.line.digest, line ? [line] : [])
         end
       end
 
@@ -930,7 +930,7 @@ module ProTacts
       # included.
       submitted = params["new_address"]
       added = submitted.is_a?(Hash) ? submitted.values : Array(submitted) #: Array[untyped]
-      card.insert(added.filter_map { address_line(nil, it) })
+      vcard.insert(added.filter_map { address_line(nil, it) })
     end
 
     #: (Contact::Address address, untyped submitted) -> bool
@@ -1025,13 +1025,13 @@ module ProTacts
     # name is stale. A card carrying no FN is the other case: the
     # property is mandatory (section 4), so a save fills it in rather
     # than leaving the absence it found.
-    #: (Contact contact, VCard card, String first, String last) -> VCard
-    def edited_fn(contact, card, first, last)
+    #: (Contact contact, VCard vcard, String first, String last) -> VCard
+    def edited_fn(contact, vcard, first, last)
       family, given = contact.name_components || []
-      named = card.properties.any? { it.name.casecmp?("FN") }
-      return card if named && first == given.to_s && last == family.to_s
+      named = vcard.properties.any? { it.name.casecmp?("FN") }
+      return vcard if named && first == given.to_s && last == family.to_s
 
-      card.replace("FN", ["FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n"])
+      vcard.replace("FN", ["FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n"])
     end
 
     # N's replacement line. The first two components are the form's;
@@ -1042,9 +1042,9 @@ module ProTacts
     # form can read splices into a bare five-component value; one
     # short of five is padded, the same empties a whole-N writer
     # would leave.
-    #: (VCard card, String first, String last) -> String
-    def n_line(card, first, last)
-      property = card.properties.find { it.name.casecmp?("N") }
+    #: (VCard vcard, String first, String last) -> String
+    def n_line(vcard, first, last)
+      property = vcard.properties.find { it.name.casecmp?("N") }
       components = [] #: Array[String]
       components.replace(VCard.split_raw_components(property.value)) if property
       components << "" while components.length < 5
@@ -1068,9 +1068,9 @@ module ProTacts
     # message, and a PUT is the only arrival there is. The message
     # carries no card content (ProTacts::SentryScrubber's line); the
     # admin view shows the card raw.
-    #: (VCard card) -> void
-    def report_broken_assumptions(card)
-      broken = card.lines.count { it.broke_assumption? }
+    #: (VCard vcard) -> void
+    def report_broken_assumptions(vcard)
+      broken = vcard.lines.count { it.broke_assumption? }
       return if broken.zero?
 
       Sentry.capture_message(
@@ -1084,9 +1084,9 @@ module ProTacts
     # the no-card-content line the store's BDAY reports already use.
     # BrokenAssumption lines are excluded, so a line reports once; why
     # this lives at the PUT is the comment above, and holds for both.
-    #: (VCard card) -> void
-    def report_unreadable_lines(card)
-      unreadable = card.lines.count { it.unreadable? }
+    #: (VCard vcard) -> void
+    def report_unreadable_lines(vcard)
+      unreadable = vcard.lines.count { it.unreadable? }
       return if unreadable.zero?
 
       Sentry.capture_message(

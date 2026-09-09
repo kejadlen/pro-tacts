@@ -190,6 +190,15 @@ not a fixture; edit a `.vcf` to change what the replay serves.
 - `escape` and `fold` in `vcard.rb` have no caller yet. They are the
   writer's half of the module, kept deliberately for PUT and the web
   editor, and tested directly rather than through anything that serves.
+- `vcard` names a `VCard` and nothing else, and a card with no
+  qualifier to give it is named `vcard`. A `vcard` holding a card's
+  bytes is the confusion the rule exists to stop: the two sit one
+  `VCard.new` apart, and at a PUT that gap is the whole question —
+  the body arrives as octets and everything below the route wants
+  the card — so the octets are `bytes` (`Web#write_card`). A card
+  that needs saying which one keeps its own word (`stored`, `own`,
+  `rest`). The `cards` column and the `text/vcard` media type spell
+  it the same way and are neither of them variables.
 - `docs/plans/` entries are dated records of what was decided then. Write
   a new one rather than editing an old one to match current behavior.
 - Comments carry the reasoning; the code carries the rest. One that

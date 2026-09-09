@@ -12,8 +12,8 @@ class FormatTest < Minitest::Test
   # beside a Birthday, a fallback case passes a card carrying an
   # unmodeled BDAY beside nil, and inheritance defaults to none (see
   # Contact).
-  def contact(vcard = CARD, id: "aiden", birthday: nil, inherited: [])
-    ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(vcard), birthday:, inherited:)
+  def contact(bytes = CARD, id: "aiden", birthday: nil, inherited: [])
+    ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(bytes), birthday:, inherited:)
   end
 
   # Initials come from the structured N property (given + family),

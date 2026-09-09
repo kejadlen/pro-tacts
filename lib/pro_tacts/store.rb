@@ -279,8 +279,8 @@ module ProTacts
     # nothing that is not text gets this far; VCard's own raise, at the
     # construction the caller makes, is the assertion under that, and
     # the bind is the third line.
-    #: (String id, VCard card) -> Contact
-    def put(id, card)
+    #: (String id, VCard vcard) -> Contact
+    def put(id, vcard)
       # The birthday half of the split a write makes, one arm per shape
       # a submitted card's BDAY lines can take. One line that reads as
       # a modeled birthday moves out of the card and into the model;
@@ -305,12 +305,12 @@ module ProTacts
       # attributing any to a group.
       own = stored_card(id)
       birthday, stored =
-        case card.extract("BDAY")
+        case vcard.extract("BDAY")
         in [[line], rest]
           report_unrecognized_bday_lines([line])
           property = bday_of(line)
           birthday = property && Birthday.from_property(property)
-          [birthday, birthday ? rest : card]
+          [birthday, birthday ? rest : vcard]
         in [[], _]
           # The rewrite arm: carry the unrendered lines out of the
           # stored card, report the unrecognized ones' loss, and keep
@@ -318,12 +318,12 @@ module ProTacts
           carried, lost = carried_and_lost_bday_lines(own)
           kept = existing && !existing.served? ? existing : nil
           report_lost_bday_lines(lost)
-          [kept, card.insert(carried)]
+          [kept, vcard.insert(carried)]
         in [lines, _]
           # More than one BDAY: cardinality-broken data, kept verbatim
           # and reported like any other unrecognized line.
           report_unrecognized_bday_lines(lines)
-          [nil, card]
+          [nil, vcard]
         end
 
       # The other half of the split, the same shape as the birthday's:
@@ -359,16 +359,16 @@ module ProTacts
     # than its bytes, for #put's reason: the editor spliced one to
     # make this save, and re-reading its bytes here would walk them
     # again to reach what the caller already had.
-    #: (String id, VCard card, birthday: Birthday?) -> Contact
-    def rewrite(id, card, birthday:)
-      contact = Contact.new(id:, stored: card, birthday:, inherited: inherited_of(id))
+    #: (String id, VCard vcard, birthday: Birthday?) -> Contact
+    def rewrite(id, vcard, birthday:)
+      contact = Contact.new(id:, stored: vcard, birthday:, inherited: inherited_of(id))
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
-          .insert(id: contact.id, vcard: card.to_s)
+          .insert(id: contact.id, vcard: vcard.to_s)
         write_birthday(contact.id, birthday)
         record(contact.id, "edit", contact.etag)
-        reindex(contact.id, card)
+        reindex(contact.id, vcard)
       end
       contact
     end
@@ -493,13 +493,13 @@ module ProTacts
     # parser cannot read. Takes the stored card — with the birthday
     # already subtracted — so the index never sees a BDAY no stored
     # card carries.
-    #: (String id, VCard card) -> void
-    def reindex(id, card)
+    #: (String id, VCard vcard) -> void
+    def reindex(id, vcard)
       # Before the parse, so that a card which has stopped parsing does
       # not keep the rows from when it did.
       card_properties.where(card_id: id).delete
 
-      card.properties.each.with_index do |property, position|
+      vcard.properties.each.with_index do |property, position|
         card_properties.insert(
           card_id: id,
           position:,
@@ -549,11 +549,11 @@ module ProTacts
     # it drops unwitnessed, which no client renders and no whitelist
     # recognizes. Lines a client rendered are in neither pile: their
     # absence is a deletion the rewrite already honors.
-    #: (VCard? card) -> [Array[String], Array[VCard::Parser::Line]]
-    def carried_and_lost_bday_lines(card)
-      return [[], []] if card.nil?
+    #: (VCard? vcard) -> [Array[String], Array[VCard::Parser::Line]]
+    def carried_and_lost_bday_lines(vcard)
+      return [[], []] if vcard.nil?
 
-      bdays, = card.extract("BDAY")
+      bdays, = vcard.extract("BDAY")
       carried, rest = bdays.partition { |line|
         property = bday_of(line)
         property && Birthday.unrendered_value?(property.value)
@@ -614,11 +614,11 @@ module ProTacts
     # this leaves keep their positions, so a submission that was the
     # served card round-trips to the bytes it was composed from and the
     # PUT can answer with a strong etag (RFC 6352 section 6.3.2.3).
-    #: (VCard card, Array[Contact::Inherited] inherited, VCard? own) -> VCard
-    def subtract_inherited(card, inherited, own)
-      return card if inherited.empty?
+    #: (VCard vcard, Array[Contact::Inherited] inherited, VCard? own) -> VCard
+    def subtract_inherited(vcard, inherited, own)
+      return vcard if inherited.empty?
 
-      unaccounted = unaccounted_lines(card, own)
+      unaccounted = unaccounted_lines(vcard, own)
       untouched = [] #: Array[VCard::Parser::Line]
       ambiguous = 0
 
@@ -640,7 +640,7 @@ module ProTacts
       end
 
       report_ambiguous_inherited_lines(ambiguous)
-      untouched.reduce(card) { |rest, line| rest.substitute(line.digest, []) }
+      untouched.reduce(vcard) { |rest, line| rest.substitute(line.digest, []) }
     end
 
     # The submission's lines that the member's own stored card does not
@@ -650,10 +650,10 @@ module ProTacts
     # client wrote beside it, which is the pool a lent line is
     # attributed from. Everything for a card being created, which has
     # no stored lines to explain anything.
-    #: (VCard card, VCard? own) -> Array[VCard::Parser::Line]
-    def unaccounted_lines(card, own)
+    #: (VCard vcard, VCard? own) -> Array[VCard::Parser::Line]
+    def unaccounted_lines(vcard, own)
       stored = own ? own.lines.map { it.verbatim.chomp } : [] #: Array[String]
-      card.lines.reject { |line|
+      vcard.lines.reject { |line|
         index = stored.index(line.verbatim.chomp)
         stored.delete_at(index) if index
         index
