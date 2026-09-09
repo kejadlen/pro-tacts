@@ -50,13 +50,16 @@ docs/rfcs/          # Vendored spec texts the code cites
 docs/plans/         # Dated design records
 test/fixtures/cards/            # Seed cards for the test database
 test/fixtures/macos-exchange/   # A real client session, replayed
+test/fixtures/ios-exchange/     # Where a second client differs from it
 ```
 
 ## Fixtures
 
-`test/fixtures/macos-exchange/` replays the one confirmed-working macOS
-Contacts session. Within each step directory the two files have opposite
-standing:
+`test/fixtures/macos-exchange/` replays the confirmed-working macOS
+Contacts session, and `test/fixtures/ios-exchange/` the steps where iOS
+sends something macOS does not — a namespace prefix spelled differently,
+a header it omits, a verb macOS never sends. Within each step directory
+the two files have opposite standing:
 
 - `request` files are evidence of what a real client sent. Edit them only
   when a new recorded session supersedes this one.

@@ -1,0 +1,18 @@
+PUT /dav/addressbook/oqmvpzooywwmtwwx.vcf HTTP/1.1
+Content-Type: text/vcard; charset=utf-8
+If-Match: "e63c84519663074659f6cd80ba7c4de31fe7c72c87736cbf630619bb0448d1cd"
+
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//iOS 26.6.1//EN
+N:Lovelace;Ada;;;
+FN:Ada Lovelace
+NICKNAME:Enchantress of Numbers
+item1.EMAIL;type=INTERNET;type=pref:ada@example.com
+item2.TEL;type=pref:+1-555-0100
+item2.X-ABLabel:mobile
+item3.ADR;type=HOME;type=pref:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom
+NOTE:Test\n\nHi from iOS!
+REV:2026-09-08T22:47:52Z
+UID:oqmvpzooywwmtwwx
+END:VCARD

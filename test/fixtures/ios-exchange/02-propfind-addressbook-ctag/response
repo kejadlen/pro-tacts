@@ -1,0 +1,33 @@
+207
+Content-Type: text/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav" xmlns:cs="http://calendarserver.org/ns/">
+  <d:response>
+  <d:href>/dav/addressbook/</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:resourcetype>
+        <d:collection/>
+        <card:addressbook/>
+      </d:resourcetype>
+      <d:supported-report-set>
+        <d:supported-report>
+          <d:report><d:sync-collection/></d:report>
+        </d:supported-report>
+      </d:supported-report-set>
+      <cs:getctag>18</cs:getctag>
+      <d:sync-token>http://pro-tacts/sync/18</d:sync-token>
+      <d:current-user-privilege-set>
+        <d:privilege><d:read/></d:privilege>
+        <d:privilege><d:write/></d:privilege>
+        <d:privilege><d:bind/></d:privilege>
+        <d:privilege><d:unbind/></d:privilege>
+      </d:current-user-privilege-set>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+
+  
+</d:multistatus>

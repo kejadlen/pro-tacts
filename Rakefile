@@ -39,7 +39,7 @@ task :dev do
   end
 end
 
-desc "Regenerate macOS exchange response fixtures from current responses"
+desc "Regenerate the recorded exchange response fixtures from current responses"
 task :fixtures do
   # Mirrors test/test_helper.rb, which cannot be required here without
   # minitest/autorun running its at_exit hook inside rake. Its own
@@ -54,8 +54,16 @@ task :fixtures do
     require "pro_tacts/web"
     require_relative "test/fixture_data"
     require_relative "test/pro_tacts/exchange_fixtures"
-    ProTacts::Web.store = FixtureData.install(data_dir)
-    ExchangeFixtures.record_responses(ProTacts::Web)
+
+    # A store per recording, seeded fresh: the iOS session ends by
+    # deleting a card, and the recording after it must not start from
+    # what that one left behind.
+    ExchangeFixtures.all.each do |recording|
+      store = FixtureData.install(data_dir / recording.directory.basename)
+      ProTacts::Web.store = store
+      recording.record_responses(ProTacts::Web)
+      store.close
+    end
   end
 end
 

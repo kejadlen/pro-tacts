@@ -1,0 +1,11 @@
+REPORT /dav/addressbook/ HTTP/1.1
+Content-Type: text/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<D:addressbook-multiget xmlns:D="urn:ietf:params:xml:ns:carddav">
+  <A:prop xmlns:A="DAV:">
+    <A:getetag/>
+    <D:address-data/>
+  </A:prop>
+  <A:href xmlns:A="DAV:">/dav/addressbook/AB12C345-6789-0DEF-1234-567890ABCDEF.vcf</A:href>
+</D:addressbook-multiget>

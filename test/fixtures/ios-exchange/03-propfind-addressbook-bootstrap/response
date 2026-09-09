@@ -1,0 +1,195 @@
+207
+Content-Type: text/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav" xmlns:cs="http://calendarserver.org/ns/">
+  <d:response>
+  <d:href>/dav/addressbook/</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:resourcetype>
+        <d:collection/>
+        <card:addressbook/>
+      </d:resourcetype>
+      <d:supported-report-set>
+        <d:supported-report>
+          <d:report><d:sync-collection/></d:report>
+        </d:supported-report>
+      </d:supported-report-set>
+      <cs:getctag>18</cs:getctag>
+      <d:sync-token>http://pro-tacts/sync/18</d:sync-token>
+      <d:current-user-privilege-set>
+        <d:privilege><d:read/></d:privilege>
+        <d:privilege><d:write/></d:privilege>
+        <d:privilege><d:bind/></d:privilege>
+        <d:privilege><d:unbind/></d:privilege>
+      </d:current-user-privilege-set>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+
+  <d:response>
+  <d:href>/dav/addressbook/AB12C345-6789-0DEF-1234-567890ABCDEF.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"ce8bef6ad9abb83e81da4d5aceb7999b43781726f148e2607ed853532f9b8db6"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/D0504597-CF12-4AF6-9894-43724366D39D.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"6ce139775700c82011936b1958b6e081d62f27c711931804ecac2a1e5bb6e8f9"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-basic-noyear.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"bbc86afedab3b3dfa349da2ff6ed736922389a68074fc7a7905b40b1825bc425"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-complete.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"4f18a47439816f1488e1bea6ddd31b26dd098de0e5245e57e70e32944be12804"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-datetime.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"e05100ccdcc77884ab0cd415544df3be9caaed41b37cf6f15b1675462e92bc14"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-day-only.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"25ef184d775a0c7551be4cf5397292a36982d89565aa33e314d65bc0aae0299c"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-extended-noyear.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"303991514fc3eb60721a39f014cf533a407039f558b4dfc5556bfc31c35173e9"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-month-only.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"6aafe94f0d0857d91ee3a8bba7a49f9ceb758270cb5a2b4d35e7f48026494881"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-omit-year.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"fe423fff45d51c9c49cc25d667a9fd2ee3f9f53dbb2be12acad15f1088b5c2a0"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-year-month.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"aa31020a69a1123e0c3bfefa0cf34a8ecf8c58e2f4af6f293c62920a06a26357"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/bday-year-only.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"05e62746a7c24908a89e3ea9f4333a4033ed18d7398b1ff1c1ad192850924313"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/emoji.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"f2de8c9cbbc34e304510ff6f076ed3275e620802bc15731550b5d43b0d0ae994"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/household-alicia.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"ca751ac9f3b3be48e95809594bfcfcce2774fac924698e4e6fdf342645df2af8"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/household-george.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"89143354379038718238e5f146f71535724c00cc28d9f21add2f864e62b3953e"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/household-mary.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"a94d2aeb791106372057f2759864f46ea78e1fe410cacbe15026b303e1bb174f"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/memoji.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"bb0734ee418c5bb60047503ea7675ccb46151d8e0084af665ba628bfc4acd804"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/oqmvpzooywwmtwwx.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"e63c84519663074659f6cd80ba7c4de31fe7c72c87736cbf630619bb0448d1cd"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+<d:response>
+  <d:href>/dav/addressbook/photo.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"9bd93308c95dc178599a5102bdc6f194f8cb02f838262f421fbe7e2d7c1ab281"</d:getetag>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+
+</d:multistatus>

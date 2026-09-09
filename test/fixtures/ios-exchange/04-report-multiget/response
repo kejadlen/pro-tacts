@@ -1,0 +1,22 @@
+207
+Content-Type: text/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
+  <d:response>
+  <d:href>/dav/addressbook/AB12C345-6789-0DEF-1234-567890ABCDEF.vcf</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"ce8bef6ad9abb83e81da4d5aceb7999b43781726f148e2607ed853532f9b8db6"</d:getetag>
+      <card:address-data>BEGIN:VCARD
+VERSION:3.0
+N:Contact;Test;;;
+FN:Test Contact
+UID:AB12C345-6789-0DEF-1234-567890ABCDEF
+END:VCARD</card:address-data>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>
+
+</d:multistatus>

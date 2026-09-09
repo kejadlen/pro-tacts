@@ -1,0 +1,17 @@
+207
+Content-Type: text/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
+  <d:response>
+    <d:href>/dav/principal/</d:href>
+    <d:propstat>
+      <d:prop>
+        <card:addressbook-home-set>
+          <d:href>/dav/addressbook/</d:href>
+        </card:addressbook-home-set>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>
