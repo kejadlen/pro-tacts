@@ -336,6 +336,31 @@ class WebTest < Minitest::Test
     end
   end
 
+  # The same rule where a group lends the member a line: what comes
+  # back is subtracted before storage and composed again on read, so
+  # the resource serves the submitted bytes exactly and the tag is
+  # honest — even though what was stored is fewer bytes than arrived
+  # (Store#subtract_inherited).
+  def test_a_members_put_of_its_served_card_keeps_the_strong_etag
+    address = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
+
+    with_contacts({"aiden" => "Aiden"}) do |store|
+      lend(store, "aiden", address)
+
+      get "/dav/addressbook/aiden.vcf"
+      served = last_response.body
+      assert_includes served, address
+
+      put_request "aiden", served, "CONTENT_TYPE" => VCARD
+
+      assert_equal 204, last_response.status
+      assert_equal %("#{Digest::SHA256.hexdigest(served)}"), last_response["ETag"]
+
+      get "/dav/addressbook/aiden.vcf"
+      assert_equal served, last_response.body
+    end
+  end
+
   # The same omission for the rewrite that carries a birthday across:
   # the stored card is the submission plus the BDAY line macOS dropped,
   # so the answer cannot claim the tag — the client refetches, and the
@@ -708,6 +733,17 @@ class WebTest < Minitest::Test
         ProTacts::Web.store = original
       end
     end
+  end
+
+  # Puts a card in a group of its own that lends it one line. A group's
+  # properties and members have no write path yet — authoring is the
+  # admin UI's task — so they land through the store's own database,
+  # the way the fixture seeder's do (test/fixture_data.rb).
+  def lend(store, id, line)
+    database = store.instance_variable_get(:@database)
+    group = store.create_group(name: "Booles")
+    database[:group_properties].insert(group_id: group, position: 0, line:)
+    database[:group_members].insert(group_id: group, card_id: id)
   end
 
   def etag_only_propfind

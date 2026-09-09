@@ -1168,6 +1168,137 @@ class StoreTest < Minitest::Test
     end
   end
 
+  ## Subtracting what a group lends
+
+  # The member's own address, deliberately unlike the group's so a
+  # stored line and a lent one are told apart by their bytes.
+  OWN_ADDRESS = "ADR:;;1 Long Road;;;;" #: String
+  # The group's address as a client sends it back changed — one digit,
+  # so nothing but the value moved.
+  EDITED_ADDRESS = HOUSEHOLD_ADDRESS.sub("7 Calculus", "8 Calculus") #: String
+
+  # The round trip the whole composition rests on: a member PUTs back
+  # what it downloaded, and what is stored is the card it was composed
+  # from — the group's lines in the served card, in the index nowhere
+  # (docs/plans/2026-08-24-vcard-storage-and-groups.md).
+  def test_a_members_put_of_its_served_card_stores_what_it_started_with
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      served = store.contact("aiden").vcard.to_s
+
+      contact = store.put("aiden", served)
+
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_equal served, contact.vcard.to_s
+      refute_includes indexed_names(store, "aiden"), "ADR"
+    end
+  end
+
+  # Both subtractions in one write, and the composition puts them back
+  # in the order it always does: the group's lines, then the birthday.
+  def test_a_put_subtracts_the_birthday_and_the_lent_lines_together
+    born = AIDEN.sub("FN:Aiden\r\n", "FN:Aiden\r\nBDAY:1985-12-10\r\n")
+
+    with_store({"aiden" => born}) do |store|
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", served)
+
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_equal served, store.contact("aiden").vcard.to_s
+    end
+  end
+
+  # A member's own line of the name its group lends keeps its place in
+  # the card: the subtraction takes the lent copy and moves nothing
+  # else, which is what lets the round trip hold for a member that
+  # carries an address of its own.
+  def test_a_members_own_line_survives_the_subtraction_in_place
+    own = AIDEN.sub("FN:Aiden\r\n", "#{OWN_ADDRESS}\r\nFN:Aiden\r\n")
+
+    with_store({"aiden" => own}) do |store|
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", served)
+
+      assert_equal own, card_row(store, "aiden").fetch(:vcard)
+      assert_equal served, store.contact("aiden").vcard.to_s
+    end
+  end
+
+  # An edit to a shared value is detected and left where it landed:
+  # the member's card keeps it, the group keeps its own, and the
+  # member serves both until the propagation task takes the edit to
+  # the group (the plan's "Edits propagate to the group").
+  def test_an_edited_lent_line_stays_in_the_members_own_card
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS))
+
+      assert_includes card_row(store, "aiden").fetch(:vcard), EDITED_ADDRESS
+      composed = store.contact("aiden").vcard.to_s
+      assert_includes composed, EDITED_ADDRESS
+      assert_includes composed, HOUSEHOLD_ADDRESS
+      assert_empty sentry_messages
+    end
+  end
+
+  # A deletion is detected and takes nothing with it: the group still
+  # lends the line, so the next read composes it back in. Whether a
+  # delete should reach the group at all is the plan's open question,
+  # and nothing here decides it.
+  def test_a_deleted_lent_line_comes_straight_back
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", served.sub("#{HOUSEHOLD_ADDRESS}\r\n", ""))
+
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_equal served, store.contact("aiden").vcard.to_s
+      assert_empty sentry_messages
+    end
+  end
+
+  # Two lines of the lent name, neither of them its bytes: the edit
+  # cannot be told from the addition, so the card is stored as it
+  # arrived and the ambiguity is reported rather than guessed at.
+  def test_two_candidates_for_one_lent_line_are_stored_and_reported
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+      submitted = served.sub(HOUSEHOLD_ADDRESS, "#{EDITED_ADDRESS}\r\n#{OWN_ADDRESS}")
+
+      store.put("aiden", submitted)
+
+      assert_equal submitted, card_row(store, "aiden").fetch(:vcard)
+      assert_equal 1, sentry_messages.length
+    end
+  end
+
+  # A member whose own card spells a line exactly as its group does
+  # keeps one copy of it: the stored lines are struck against the
+  # submission before anything is attributed to a group, so what is
+  # left over is the lent copy and only that one goes.
+  def test_a_line_the_member_and_its_group_both_spell_keeps_one_copy
+    own = AIDEN.sub("END:VCARD\r\n", "#{HOUSEHOLD_ADDRESS}\r\nEND:VCARD\r\n")
+
+    with_store({"aiden" => own}) do |store|
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+      assert_equal 2, served.scan(HOUSEHOLD_ADDRESS).length
+
+      store.put("aiden", served)
+
+      assert_equal own, card_row(store, "aiden").fetch(:vcard)
+      assert_equal served, store.contact("aiden").vcard.to_s
+    end
+  end
+
   ## The migration
 
   # A database at the old action vocabulary — put and delete only — is

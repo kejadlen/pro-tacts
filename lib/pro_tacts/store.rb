@@ -32,11 +32,11 @@ module ProTacts
   # and #rebuild_index will make it again from nothing.
   #
   # Every Contact this store hands out is composed, never the stored
-  # card alone: a birthday is subtracted out of a card on the way in,
-  # and Contact composes it back in on read, with the lines a contact
-  # inherits from its groups composed in beside it — so the vcard and
-  # the etag a caller sees, and the etag the change log records,
-  # describe the card a client downloads, not the bytes on disk.
+  # card alone: a birthday and the lines a contact inherits from its
+  # groups are both subtracted out of a card on the way in, and Contact
+  # composes them back in on read — so the vcard and the etag a caller
+  # sees, and the etag the change log records, describe the card a
+  # client downloads, not the bytes on disk.
   #
   # Sequel's transactions join one already open rather than failing on
   # SQLite's lack of nesting, which is what lets the group fan-out this
@@ -292,6 +292,12 @@ module ProTacts
       # reported rather than lost in silence.
       card = VCard.new(vcard)
       existing = birthday_of(id)
+      # The card as it stands before this write, read once for the two
+      # halves that need it: the rewrite arm below, which carries
+      # unrendered BDAY lines across, and the subtraction after the
+      # case, which accounts for the member's own lines before
+      # attributing any to a group.
+      own = stored_card(id)
       birthday, stored =
         case card.extract("BDAY")
         in [[line], rest]
@@ -303,7 +309,7 @@ module ProTacts
           # The rewrite arm: carry the unrendered lines out of the
           # stored card, report the unrecognized ones' loss, and keep
           # whatever an unseen model row holds.
-          carried, lost = carried_and_lost_bday_lines(stored_card(id))
+          carried, lost = carried_and_lost_bday_lines(own)
           kept = existing && !existing.served? ? existing : nil
           report_lost_bday_lines(lost)
           [kept, card.insert(carried)]
@@ -314,15 +320,18 @@ module ProTacts
           [nil, card]
         end
 
-      # The Contact this returns is the composed one — what the contact
-      # inherits included, read off membership as it stands at this
-      # write — and the logged etag is its hash, so a client's token
-      # describes the card it downloads. The submitted card is stored
-      # as it arrived: subtracting a group's lines back out of a
-      # member's submission is the write half's task
-      # (docs/plans/2026-08-24-vcard-storage-and-groups.md), so until it
-      # lands a member's rewrite carries the inherited lines within it.
-      contact = Contact.new(id:, stored:, birthday:, inherited: inherited_of(id))
+      # The other half of the split, the same shape as the birthday's:
+      # what the groups lend comes back out of the submission before it
+      # is stored, so a rewrite cannot materialize a group's lines into
+      # the member's own card.
+      #
+      # The Contact this returns is the composed one — those lines put
+      # back, read off membership as it stands at this write — and the
+      # logged etag is its hash, so a client's token describes the card
+      # it downloads.
+      inherited = inherited_of(id)
+      stored = subtract_inherited(stored, inherited, own)
+      contact = Contact.new(id:, stored:, birthday:, inherited:)
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
@@ -569,6 +578,103 @@ module ProTacts
 
       Sentry.capture_message(
         "a submitted card carried #{unrecognized} BDAY line(s) no client renders and no whitelist recognizes",
+        level: :warning,
+      )
+    end
+
+    # The submitted card with the lines its groups lend it taken back
+    # out: served is stored plus inherited, so stored is submitted
+    # minus inherited and a client that PUTs back what it downloaded
+    # stores what it started with
+    # (docs/plans/2026-08-24-vcard-storage-and-groups.md, "Groups
+    # compose into cards"). Without this a member's rewrite would
+    # materialize the group's lines into its own card, and a later edit
+    # to the group would reach nobody.
+    #
+    # Each lent line is classified against the submission, and only one
+    # of the four shapes moves a byte. The line coming back as the same
+    # bytes is the group's, untouched, and it goes. One line of that
+    # name left over is an edit to the shared value and none is a
+    # deletion of it: both stay in the card as they arrived, because
+    # propagating either is the next task's (the plan's "Edits
+    # propagate to the group"), and storing the edit is what keeps it
+    # from being lost meanwhile. More than one left over is a line this
+    # cannot attribute at all, and reports rather than guesses.
+    #
+    # #substitute rather than #extract and #insert, which would move a
+    # member's own lines of the same name to the card's end: the lines
+    # this leaves keep their positions, so a submission that was the
+    # served card round-trips to the bytes it was composed from and the
+    # PUT can answer with a strong etag (RFC 6352 section 6.3.2.3).
+    #: (VCard card, Array[Contact::Inherited] inherited, VCard? own) -> VCard
+    def subtract_inherited(card, inherited, own)
+      return card if inherited.empty?
+
+      unaccounted = unaccounted_lines(card, own)
+      untouched = [] #: Array[VCard::Parser::Line]
+      ambiguous = 0
+
+      inherited.each do |lent|
+        candidates = unaccounted.select { it.names?(property_name(lent.line)) }
+        # Blind to identical bytes the way the editor's digests are
+        # (VCard::Parser::Line#digest): where a member's own card
+        # spells a line exactly as its group does, which copy this
+        # takes is undecidable and the bytes make it not matter.
+        match = candidates.find { it.verbatim.chomp == lent.line.chomp }
+        if match
+          unaccounted.delete_at(
+            unaccounted.index(match) #: Integer
+          )
+          untouched << match
+        elsif candidates.length > 1
+          ambiguous += 1
+        end
+      end
+
+      report_ambiguous_inherited_lines(ambiguous)
+      untouched.reduce(card) { |rest, line| rest.substitute(line.digest, []) }
+    end
+
+    # The submission's lines that the member's own stored card does not
+    # already explain — one struck per stored line of the same bytes,
+    # so a card that stores one of something and submits two leaves one
+    # over. What is left is what the groups lent plus whatever the
+    # client wrote beside it, which is the pool a lent line is
+    # attributed from. Everything for a card being created, which has
+    # no stored lines to explain anything.
+    #: (VCard card, VCard? own) -> Array[VCard::Parser::Line]
+    def unaccounted_lines(card, own)
+      stored = own ? own.lines.map { it.verbatim.chomp } : [] #: Array[String]
+      card.lines.reject { |line|
+        index = stored.index(line.verbatim.chomp)
+        stored.delete_at(index) if index
+        index
+      }
+    end
+
+    # A content line's property name: what stands before its first
+    # parameter or its value (RFC 2426 section 2.1.1). Read off the
+    # bytes rather than parsed, because the only lines asked are a
+    # group's, which carry no `item1.` prefix to strip — the schema
+    # refuses one (db/migrations/004_groups.rb).
+    #: (String line) -> String
+    def property_name(line)
+      line[/\A[^;:]*/].to_s
+    end
+
+    # The ambiguity report: a lent line that came back as neither its
+    # own bytes nor a single candidate is one this server cannot
+    # attribute — two lines of that name arrived that the member's card
+    # does not explain, and calling either the edit would be a guess.
+    # The card is stored as it arrived and the line is news, the same
+    # bargain report_unrecognized_bday_lines makes, and carries no card
+    # content for the same reason (ProTacts::SentryScrubber).
+    #: (Integer count) -> void
+    def report_ambiguous_inherited_lines(count)
+      return if count.zero?
+
+      Sentry.capture_message(
+        "a submitted card left #{count} inherited line(s) with more than one line of that name to attribute them to",
         level: :warning,
       )
     end

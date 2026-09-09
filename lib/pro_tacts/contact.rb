@@ -318,11 +318,11 @@ module ProTacts
     # Matched by the line's bytes, which is the same blindness the
     # editor's digests have (VCard::Parser::Line#digest): a stored
     # line whose bytes are a group's line reads as the group's here.
-    # That state is a member's rewrite carrying an inherited line back
-    # into its own card, which the write half subtracts
-    # (docs/plans/2026-08-24-vcard-storage-and-groups.md); until it
-    # lands, naming the group over both copies says something true
-    # about the value even where it is wrong about the byte.
+    # No write makes that state — Store#subtract_inherited takes the
+    # group's copy back out of a submission — but a member whose own
+    # card spells the line exactly as its group does still has one, and
+    # naming the group over both copies says something true about the
+    # value even where it is wrong about the byte.
     #: (VCard::Parser::Line line) -> String?
     def group_of(line)
       groups_by_line[line.verbatim.chomp]
