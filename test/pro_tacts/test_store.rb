@@ -7,6 +7,7 @@ require "tmpdir"
 require "sequel"
 
 require "pro_tacts/store"
+require "pro_tacts/vcard"
 
 class StoreTest < Minitest::Test
   include Sentry::TestHelper
@@ -26,12 +27,17 @@ class StoreTest < Minitest::Test
     Dir.mktmpdir do |dir|
       ProTacts::Store.connect(Pathname.new(dir) / "contacts.db") do |store|
         cards.each do |id, card|
-          store.put(id, card)
+          store.put(id, vcard(card))
         end
         yield store
       end
     end
   end
+
+  # A write takes the card, not its bytes: the store is handed the
+  # reading its caller already made (Store#put), and the constants
+  # here are the bytes a client would submit.
+  def vcard(bytes) = ProTacts::VCard.new(bytes)
 
   # The store's reports land in the transport this pins for the test;
   # teardown clears it so nothing carries into the next one.
@@ -78,7 +84,7 @@ class StoreTest < Minitest::Test
   # octets.
   def test_a_photo_card_round_trips_byte_for_byte
     with_store({}) do |store|
-      store.put("ada", PhotoCard.photo("ada"))
+      store.put("ada", vcard(PhotoCard.photo("ada")))
 
       assert_equal PhotoCard.photo("ada"), store.contact("ada").vcard.to_s
     end
@@ -86,7 +92,7 @@ class StoreTest < Minitest::Test
 
   def test_a_memoji_card_round_trips_byte_for_byte
     with_store({}) do |store|
-      store.put("ada", PhotoCard.memoji("ada"))
+      store.put("ada", vcard(PhotoCard.memoji("ada")))
 
       assert_equal PhotoCard.memoji("ada"), store.contact("ada").vcard.to_s
     end
@@ -100,7 +106,7 @@ class StoreTest < Minitest::Test
     expected = PhotoCard.photo("ada").sub("END:VCARD\r\n", "#{APPLE_NO_YEAR}\r\nEND:VCARD\r\n")
 
     with_store({}) do |store|
-      store.put("ada", submitted)
+      store.put("ada", vcard(submitted))
 
       assert_equal expected, store.contact("ada").vcard.to_s
     end
@@ -134,7 +140,7 @@ class StoreTest < Minitest::Test
   def test_putting_the_same_id_replaces_the_card
     with_store({"aiden" => AIDEN}) do |store|
       updated = AIDEN.sub("Aiden", "Aiden Smith")
-      store.put("aiden", updated)
+      store.put("aiden", vcard(updated))
 
       assert_equal [updated], store.contacts.map { it.vcard.to_s }
     end
@@ -162,7 +168,7 @@ class StoreTest < Minitest::Test
 
   def test_an_id_that_could_not_be_served_is_refused
     with_store do |store|
-      assert_raises(ArgumentError) { store.put("John Smith", AIDEN) }
+      assert_raises(ArgumentError) { store.put("John Smith", vcard(AIDEN)) }
       assert_empty store.contacts
     end
   end
@@ -171,7 +177,7 @@ class StoreTest < Minitest::Test
     Dir.mktmpdir do |dir|
       path = Pathname.new(dir) / "contacts.db"
       ProTacts::Store.connect(path) do
-        it.put("aiden", AIDEN)
+        it.put("aiden", vcard(AIDEN))
       end
 
       ProTacts::Store.connect(path) do |store|
@@ -190,7 +196,7 @@ class StoreTest < Minitest::Test
 
     with_store({"aiden" => AIDEN}) do |store|
       assert_raises(Encoding::UndefinedConversionError) do
-        store.put("aiden".b, accented.b)
+        store.put("aiden".b, vcard(accented.b))
       end
 
       # Pure ASCII carries no such byte, so a binary-flagged id still
@@ -210,7 +216,7 @@ class StoreTest < Minitest::Test
   def test_the_ctag_moves_with_a_cards_content
     with_store({"aiden" => AIDEN}) do |store|
       before = store.ctag
-      store.put("aiden", AIDEN.sub("Aiden", "Aiden Smith"))
+      store.put("aiden", vcard(AIDEN.sub("Aiden", "Aiden Smith")))
 
       refute_equal before, store.ctag
     end
@@ -225,7 +231,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN}) do |store|
       alone = store.ctag
 
-      store.put("znorth", ZED)
+      store.put("znorth", vcard(ZED))
       refute_equal alone, store.ctag
 
       store.delete("znorth")
@@ -248,7 +254,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN}) do |store|
       first = card_row(store, "aiden")
       sleep 0.002 # the stamp has millisecond resolution
-      store.put("aiden", AIDEN.sub("Aiden", "Aiden Smith"))
+      store.put("aiden", vcard(AIDEN.sub("Aiden", "Aiden Smith")))
       second = card_row(store, "aiden")
 
       assert_equal first.fetch(:created_at), second.fetch(:created_at)
@@ -263,7 +269,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN}) do |store|
       before = card_row(store, "aiden").fetch(:updated_at)
       sleep 0.002
-      store.put("aiden", AIDEN)
+      store.put("aiden", vcard(AIDEN))
 
       assert_operator card_row(store, "aiden").fetch(:updated_at), :>, before
     end
@@ -272,7 +278,7 @@ class StoreTest < Minitest::Test
   def test_contacts_by_recency_orders_newest_first
     with_store({"aiden" => AIDEN}) do |store|
       sleep 0.002
-      store.put("znorth", ZED)
+      store.put("znorth", vcard(ZED))
 
       assert_equal %w[znorth aiden], store.contacts_by_recency.map { it.contact.id }
     end
@@ -293,25 +299,6 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # Relabelling bytes is not converting them, so a card whose bytes are
-  # not UTF-8 at all is refused rather than stored: better than serving
-  # it back as `text/vcard; charset=utf-8` while it is no such thing.
-  # Relabelled first, as the route would — a request this bad never
-  # reaches the store, and this pins the last line that catches it: the
-  # card itself, before any walk or bind could meet the bytes.
-  def test_a_card_that_is_not_utf_8_is_refused
-    with_store do |store|
-      invalid = "BEGIN:VCARD\r\nFN:\xFF\xFE\r\nEND:VCARD\r\n".dup.force_encoding(Encoding::UTF_8)
-
-      error = assert_raises(ArgumentError) do
-        store.put("bad", invalid)
-      end
-
-      assert_match "not valid UTF-8", error.message
-      assert_empty store.contacts
-    end
-  end
-
   ## The change log
 
   def test_a_put_records_the_card_and_its_etag
@@ -326,8 +313,8 @@ class StoreTest < Minitest::Test
 
   def test_every_write_is_logged_in_order
     with_store({"aiden" => AIDEN}) do |store|
-      store.put("aiden", AIDEN.sub("Aiden", "Aiden Smith"))
-      store.put("znorth", ZED)
+      store.put("aiden", vcard(AIDEN.sub("Aiden", "Aiden Smith")))
+      store.put("znorth", vcard(ZED))
       store.delete("aiden")
 
       assert_equal [%w[aiden put], %w[aiden put], %w[znorth put], %w[aiden delete]],
@@ -349,7 +336,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN_BORN}) do |store|
       edited = AIDEN.sub("FN:Aiden", "FN:Aiden Smith")
 
-      contact = store.rewrite("aiden", edited, birthday: ProTacts::Birthday.new(year: 1985, month: 4, day: 12))
+      contact = store.rewrite("aiden", vcard(edited), birthday: ProTacts::Birthday.new(year: 1985, month: 4, day: 12))
 
       assert_equal edited, card_row(store, "aiden").fetch(:vcard)
       composed = edited.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n")
@@ -369,7 +356,7 @@ class StoreTest < Minitest::Test
   # what a card-only save does — keeps the row.
   def test_a_rewrite_writing_the_current_birthday_keeps_it
     with_store({"aiden" => AIDEN_BORN}) do |store|
-      store.rewrite("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"),
+      store.rewrite("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")),
                     birthday: ProTacts::Birthday.new(year: 1985, month: 4, day: 12))
 
       assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), birthday_row(store, "aiden")
@@ -385,7 +372,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN_BORN}) do |store|
       stored = AIDEN_BORN.sub("BDAY:1985-04-12\r\n", "")
 
-      contact = store.rewrite("aiden", stored, birthday: ProTacts::Birthday.new(month: 4, day: 12))
+      contact = store.rewrite("aiden", vcard(stored), birthday: ProTacts::Birthday.new(month: 4, day: 12))
 
       assert_equal stored, card_row(store, "aiden").fetch(:vcard)
       assert_includes contact.vcard.to_s, "BDAY;X-APPLE-OMIT-YEAR=1604:1604-04-12\r\n"
@@ -400,7 +387,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN_BORN}) do |store|
       stored = AIDEN_BORN.sub("BDAY:1985-04-12\r\n", "")
 
-      contact = store.rewrite("aiden", stored, birthday: nil)
+      contact = store.rewrite("aiden", vcard(stored), birthday: nil)
 
       assert_nil birthday_row(store, "aiden")
       refute_includes contact.vcard.to_s, "BDAY"
@@ -430,7 +417,7 @@ class StoreTest < Minitest::Test
   def test_changes_can_be_read_from_a_sequence_on
     with_store({"aiden" => AIDEN}) do |store|
       token = store.changes.last.sequence
-      store.put("znorth", ZED)
+      store.put("znorth", vcard(ZED))
 
       assert_equal %w[znorth], store.changes(after: token).map { it.card_id }
     end
@@ -442,7 +429,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN}) do |store|
       highest = store.changes.last.sequence
       store.delete("aiden")
-      store.put("znorth", ZED)
+      store.put("znorth", vcard(ZED))
 
       assert_operator store.changes.last.sequence, :>, highest
     end
@@ -461,7 +448,7 @@ class StoreTest < Minitest::Test
       path = Pathname.new(dir) / "contacts.db"
 
       FailingLog.connect(path) do |store|
-        assert_raises(RuntimeError) { store.put("aiden", AIDEN) }
+        assert_raises(RuntimeError) { store.put("aiden", vcard(AIDEN)) }
       end
 
       # Reopened, so this is the file talking and not a cache.
@@ -479,7 +466,7 @@ class StoreTest < Minitest::Test
     with_store do |store|
       assert_raises(RuntimeError) do
         database(store).transaction do
-          store.put("aiden", AIDEN)
+          store.put("aiden", vcard(AIDEN))
           raise "the fan-out failed"
         end
       end
@@ -506,7 +493,7 @@ class StoreTest < Minitest::Test
 
   def test_replacing_a_card_replaces_its_index_rows
     with_store({"aiden" => AIDEN}) do |store|
-      store.put("aiden", AIDEN.sub("FN:Aiden\r\n", ""))
+      store.put("aiden", vcard(AIDEN.sub("FN:Aiden\r\n", "")))
 
       assert_equal %w[BEGIN VERSION UID END], indexed_names(store, "aiden")
     end
@@ -573,7 +560,7 @@ class StoreTest < Minitest::Test
   def test_every_other_contact_serves_beside_one_unparseable_card
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       good_cards = store.ctag
-      store.put("broken", "this is not a vCard\r\n")
+      store.put("broken", vcard("this is not a vCard\r\n"))
 
       assert_equal %w[aiden broken znorth], store.contacts.map { it.id }
       assert_equal AIDEN, store.contact("aiden").vcard.to_s
@@ -624,7 +611,7 @@ class StoreTest < Minitest::Test
   def test_the_ctag_moves_with_a_birthday_alone
     with_store({"aiden" => AIDEN}) do |store|
       before = store.ctag
-      store.put("aiden", AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n"))
+      store.put("aiden", vcard(AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n")))
 
       refute_equal before, store.ctag
     end
@@ -641,7 +628,7 @@ class StoreTest < Minitest::Test
   # read-modify-write client is the user removing it.
   def test_a_card_put_back_without_its_served_birthday_loses_it
     with_store({"aiden" => AIDEN_BORN}) do |store|
-      store.put("aiden", AIDEN)
+      store.put("aiden", vcard(AIDEN))
 
       assert_nil birthday_row(store, "aiden")
       assert_equal AIDEN, store.contact("aiden").vcard.to_s
@@ -655,7 +642,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN}) do |store|
       database(store)[:birthdays].insert(card_id: "aiden", year: 1985)
 
-      store.put("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
+      store.put("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")))
 
       assert_equal ProTacts::Birthday.new(year: 1985), birthday_row(store, "aiden")
       assert_equal AIDEN.sub("FN:Aiden", "FN:Aiden Smith"), store.contact("aiden").vcard.to_s
@@ -669,7 +656,7 @@ class StoreTest < Minitest::Test
       unmodeled = AIDEN.sub("END:VCARD\r\n", "#{bday}END:VCARD\r\n")
 
       with_store({"aiden" => AIDEN_BORN}) do |store|
-        store.put("aiden", unmodeled)
+        store.put("aiden", vcard(unmodeled))
 
         assert_equal unmodeled, store.contact("aiden").vcard.to_s, bday
         assert_nil birthday_row(store, "aiden"), bday
@@ -687,7 +674,7 @@ class StoreTest < Minitest::Test
     shared = AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\rNOTE:b\r\nEND:VCARD\r\n")
 
     with_store({"aiden" => AIDEN_BORN}) do |store|
-      store.put("aiden", shared)
+      store.put("aiden", vcard(shared))
       messages = sentry_messages
 
       assert_equal shared, store.contact("aiden").vcard.to_s
@@ -705,7 +692,7 @@ class StoreTest < Minitest::Test
       with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")}) do |store|
         edited = AIDEN.sub("FN:Aiden", "FN:Aiden Smith")
 
-        store.put("aiden", edited)
+        store.put("aiden", vcard(edited))
 
         assert_equal edited.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"), store.contact("aiden").vcard.to_s, line
         assert_nil birthday_row(store, "aiden"), line
@@ -719,7 +706,7 @@ class StoreTest < Minitest::Test
   # deletable at all.
   def test_a_birthday_a_client_renders_is_deleted_by_a_rewrite_without_it
     with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n")}) do |store|
-      store.put("aiden", AIDEN)
+      store.put("aiden", vcard(AIDEN))
 
       assert_equal AIDEN, store.contact("aiden").vcard.to_s
       assert_nil birthday_row(store, "aiden")
@@ -734,7 +721,7 @@ class StoreTest < Minitest::Test
     edited = AIDEN.sub("FN:Aiden", "FN:Aiden Smith")
 
     with_store({"aiden" => shared}) do |store|
-      store.put("aiden", edited)
+      store.put("aiden", vcard(edited))
       messages = sentry_messages
 
       assert_equal edited, store.contact("aiden").vcard.to_s
@@ -748,7 +735,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04\r\nEND:VCARD\r\n")}) do |store|
       born = AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n")
 
-      store.put("aiden", born)
+      store.put("aiden", vcard(born))
 
       assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), birthday_row(store, "aiden")
       assert_equal born, store.contact("aiden").vcard.to_s
@@ -762,7 +749,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY:1985-13\r\nEND:VCARD\r\n")}) do |store|
       # The seed's own arrival report is not this test's subject.
       clear_sentry_events
-      store.put("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
+      store.put("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")))
       messages = sentry_messages
 
       assert_equal 1, messages.length
@@ -776,7 +763,7 @@ class StoreTest < Minitest::Test
   def test_a_rewrite_over_known_bdays_stays_quiet
     ["BDAY:--0412", "BDAY:1985-04"].each do |line|
       with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")}) do |store|
-        store.put("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"))
+        store.put("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")))
 
         assert_empty sentry_messages, line
       end
@@ -792,7 +779,7 @@ class StoreTest < Minitest::Test
     ["BDAY:1985-13", "BDAY:--0432", "BDAY:19850412", "BDAY:1985-4"].each do |line|
       with_store({}) do |store|
         clear_sentry_events
-        store.put("aiden", AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"))
+        store.put("aiden", vcard(AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")))
 
         assert_equal 1, sentry_messages.length, line
       end
@@ -803,27 +790,14 @@ class StoreTest < Minitest::Test
     ["BDAY:1985-04-12", "BDAY:1985-04-12T23:10:00Z", "BDAY;X-APPLE-OMIT-YEAR=1604:1604-04-12",
       "BDAY:--0412", "BDAY:--04-12", "BDAY:1985-04", "BDAY:1985"].each do |line|
       with_store({}) do |store|
-        store.put("aiden", AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"))
+        store.put("aiden", vcard(AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")))
 
         assert_empty sentry_messages, line
       end
     end
   end
 
-  # The card is made of text and says so itself: bytes that are not
-  # UTF-8 raise at the card, before any walk — the web's PUT has
-  # already answered them with a 412 by the time one reaches a caller
-  # this direct.
-  def test_put_of_bytes_that_are_not_text_raises_at_the_card
-    invalid = "BEGIN:VCARD\r\nFN:\xFF\r\nEND:VCARD\r\n".dup.force_encoding(Encoding::UTF_8)
-
-    with_store({}) do |store|
-      error = assert_raises(ArgumentError) { store.put("aiden", invalid) }
-
-      assert_match "not valid UTF-8", error.message
-    end
-  end
-
+  ## The change log
   def test_a_stored_card_is_never_indexed_with_a_bday
     with_store({"aiden" => AIDEN_BORN}) do |store|
       assert_equal %w[BEGIN VERSION FN UID END], indexed_names(store, "aiden")
@@ -919,7 +893,7 @@ class StoreTest < Minitest::Test
       path = Pathname.new(dir) / "contacts.db"
 
       FailingLog.connect(path) do |store|
-        assert_raises(RuntimeError) { store.put("aiden", AIDEN_BORN) }
+        assert_raises(RuntimeError) { store.put("aiden", vcard(AIDEN_BORN)) }
       end
 
       ProTacts::Store.connect(path) do |store|
@@ -1041,8 +1015,8 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN}) do |store|
       add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
-      put = store.put("aiden", AIDEN)
-      edit = store.rewrite("aiden", AIDEN, birthday: nil)
+      put = store.put("aiden", vcard(AIDEN))
+      edit = store.rewrite("aiden", vcard(AIDEN), birthday: nil)
       logged = database(store)[:changes].where(card_id: "aiden").order(:sequence).all
 
       assert_equal [put.etag, edit.etag], logged.last(2).map { it[:etag] }
@@ -1186,7 +1160,7 @@ class StoreTest < Minitest::Test
       add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
       served = store.contact("aiden").vcard.to_s
 
-      contact = store.put("aiden", served)
+      contact = store.put("aiden", vcard(served))
 
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       assert_equal served, contact.vcard.to_s
@@ -1203,7 +1177,7 @@ class StoreTest < Minitest::Test
       add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", served)
+      store.put("aiden", vcard(served))
 
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       assert_equal served, store.contact("aiden").vcard.to_s
@@ -1221,7 +1195,7 @@ class StoreTest < Minitest::Test
       add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", served)
+      store.put("aiden", vcard(served))
 
       assert_equal own, card_row(store, "aiden").fetch(:vcard)
       assert_equal served, store.contact("aiden").vcard.to_s
@@ -1237,7 +1211,7 @@ class StoreTest < Minitest::Test
       add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS))
+      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS)))
 
       assert_includes card_row(store, "aiden").fetch(:vcard), EDITED_ADDRESS
       composed = store.contact("aiden").vcard.to_s
@@ -1256,7 +1230,7 @@ class StoreTest < Minitest::Test
       add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", served.sub("#{HOUSEHOLD_ADDRESS}\r\n", ""))
+      store.put("aiden", vcard(served.sub("#{HOUSEHOLD_ADDRESS}\r\n", "")))
 
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       assert_equal served, store.contact("aiden").vcard.to_s
@@ -1273,7 +1247,7 @@ class StoreTest < Minitest::Test
       served = store.contact("aiden").vcard.to_s
       submitted = served.sub(HOUSEHOLD_ADDRESS, "#{EDITED_ADDRESS}\r\n#{OWN_ADDRESS}")
 
-      store.put("aiden", submitted)
+      store.put("aiden", vcard(submitted))
 
       assert_equal submitted, card_row(store, "aiden").fetch(:vcard)
       assert_equal 1, sentry_messages.length
@@ -1292,7 +1266,7 @@ class StoreTest < Minitest::Test
       served = store.contact("aiden").vcard.to_s
       assert_equal 2, served.scan(HOUSEHOLD_ADDRESS).length
 
-      store.put("aiden", served)
+      store.put("aiden", vcard(served))
 
       assert_equal own, card_row(store, "aiden").fetch(:vcard)
       assert_equal served, store.contact("aiden").vcard.to_s
@@ -1320,8 +1294,8 @@ class StoreTest < Minitest::Test
 
         # The widened vocabulary admits the editor's action, and the
         # sequence continues past the copied high-water mark.
-        store.put("aiden", AIDEN)
-        store.rewrite("aiden", AIDEN.sub("FN:Aiden", "FN:Aiden Smith"), birthday: nil)
+        store.put("aiden", vcard(AIDEN))
+        store.rewrite("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")), birthday: nil)
         change = store.changes.last
         assert_equal %w[aiden edit], [change.card_id, change.action]
         assert_equal 4, change.sequence

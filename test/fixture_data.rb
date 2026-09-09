@@ -3,6 +3,7 @@ require "fileutils"
 require "pathname"
 
 require "pro_tacts/store"
+require "pro_tacts/vcard"
 
 # Builds the data directory the tests and `rake fixtures` run against: a
 # database seeded from the cards in test/fixtures/cards, rebuilt from
@@ -110,7 +111,7 @@ module FixtureData
     store = ProTacts::Store.at(directory / "contacts.db")
     seed = cards
     seed.each do |id, card|
-      store.put(id, card)
+      store.put(id, ProTacts::VCard.new(card))
     end
     backdate(store, seed.keys)
     seed_groups(store)

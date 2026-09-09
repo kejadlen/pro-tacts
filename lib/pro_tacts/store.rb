@@ -264,16 +264,23 @@ module ProTacts
     # no stored card carries the model's BDAY and every read composes
     # it back in (docs/plans/2026-08-31-partial-birthdays.md).
     #
+    # A card rather than its bytes, so the reading a caller already
+    # made is the one the split below decides from: a PUT has asked
+    # whether the bytes are a card at all and whose UID they carry
+    # before it gets here (Web#write_card), and taking the card it
+    # asked those of leaves the walk behind them made once.
+    #
     # The strings are UTF-8 by contract, and the adapter holds the store
     # to it: the sqlite3 gem encodes every bound value to UTF-8, so a
     # binary-flagged byte above 7 bits raises at the bind, and bytes
     # that are not UTF-8 at all stop at the insert, which SQLite refuses
     # to store as text. The body — the one binary input — is relabelled
     # and judged in the same breath where it is read, in write_card, so
-    # nothing that is not text gets this far; VCard's own raise is the
-    # assertion under that, and the bind is the third line.
-    #: (String id, String vcard) -> Contact
-    def put(id, vcard)
+    # nothing that is not text gets this far; VCard's own raise, at the
+    # construction the caller makes, is the assertion under that, and
+    # the bind is the third line.
+    #: (String id, VCard card) -> Contact
+    def put(id, card)
       # The birthday half of the split a write makes, one arm per shape
       # a submitted card's BDAY lines can take. One line that reads as
       # a modeled birthday moves out of the card and into the model;
@@ -290,7 +297,6 @@ module ProTacts
       # see was the user's deletion, an unseen model row survives as
       # nothing a client ever saw, and what nobody recognizes is
       # reported rather than lost in silence.
-      card = VCard.new(vcard)
       existing = birthday_of(id)
       # The card as it stands before this write, read once for the two
       # halves that need it: the rewrite arm below, which carries
@@ -349,10 +355,12 @@ module ProTacts
     # through the store". The card input is the stored one by
     # definition, and `birthday:` is the model's whole new state, an
     # upsert or a delete, never a splice
-    # (docs/plans/2026-09-07-web-birthday-editor.md).
-    #: (String id, String vcard, birthday: Birthday?) -> Contact
-    def rewrite(id, vcard, birthday:)
-      card = VCard.new(vcard)
+    # (docs/plans/2026-09-07-web-birthday-editor.md). A card rather
+    # than its bytes, for #put's reason: the editor spliced one to
+    # make this save, and re-reading its bytes here would walk them
+    # again to reach what the caller already had.
+    #: (String id, VCard card, birthday: Birthday?) -> Contact
+    def rewrite(id, card, birthday:)
       contact = Contact.new(id:, stored: card, birthday:, inherited: inherited_of(id))
       @database.transaction do
         cards

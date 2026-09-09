@@ -129,6 +129,23 @@ class VCardTest < Minitest::Test
     end
   end
 
+  ## The card's bytes
+
+  # Relabelling bytes is not converting them, so bytes that are not
+  # UTF-8 at all never become a card: better than a store serving them
+  # back as `text/vcard; charset=utf-8` while they are no such thing.
+  # Relabelled first, as the route would (Web#write_card), and this
+  # pins the line that catches it — the card, before any walk or any
+  # bind below it could meet the bytes, and now before a store is even
+  # handed one.
+  def test_bytes_that_are_not_utf_8_are_not_a_card
+    invalid = "BEGIN:VCARD\r\nFN:\xFF\xFE\r\nEND:VCARD\r\n".dup.force_encoding(Encoding::UTF_8)
+
+    error = assert_raises(ArgumentError) { ProTacts::VCard.new(invalid) }
+
+    assert_match "not valid UTF-8", error.message
+  end
+
   ## The envelope
 
   # The envelope tests proper live in vcard/test_lines.rb, over the

@@ -7,6 +7,7 @@ require "rack/test"
 require "tmpdir"
 
 require "pro_tacts/store"
+require "pro_tacts/vcard"
 require "pro_tacts/web"
 
 # The dashboard root (docs/DESIGN.md), exercised the same way WebTest
@@ -37,7 +38,7 @@ class AdminContactsPagesTest < Minitest::Test
       ProTacts::Store.connect(Pathname.new(dir) / "contacts.db") do |store|
         ProTacts::Web.store = store
         cards.each do |id, card|
-          store.put(id, card)
+          store.put(id, ProTacts::VCard.new(card))
         end
         yield store
       ensure

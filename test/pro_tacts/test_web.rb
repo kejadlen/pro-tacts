@@ -10,6 +10,7 @@ require "tmpdir"
 
 require "pro_tacts/config"
 require "pro_tacts/store"
+require "pro_tacts/vcard"
 require "pro_tacts/web"
 
 class WebTest < Minitest::Test
@@ -726,7 +727,7 @@ class WebTest < Minitest::Test
       ProTacts::Store.connect(Pathname.new(dir) / "contacts.db") do |store|
         ProTacts::Web.store = store
         names.each do |id, name|
-          store.put(id, card(id, name))
+          store.put(id, ProTacts::VCard.new(card(id, name)))
         end
         yield store
       ensure
@@ -858,7 +859,7 @@ class WebTest < Minitest::Test
       assert_includes last_response.body, "<d:sync-token>#{token}</d:sync-token>"
 
       # A change after the token is the whole of the next delta.
-      store.put("aiden", card("aiden", "Aiden Smith"))
+      store.put("aiden", ProTacts::VCard.new(card("aiden", "Aiden Smith")))
       request "/dav/addressbook/", method: "REPORT", input: sync_collection(token)
       assert_includes last_response.body, "/dav/addressbook/aiden.vcf"
       refute_equal token, last_response.body[%r{<d:sync-token>(.+)</d:sync-token>}, 1]
@@ -960,7 +961,7 @@ class WebTest < Minitest::Test
       before = read_tags.call
       assert_equal before, read_tags.call # stable across requests
 
-      store.put("aiden", card("aiden", "Aiden Smith"))
+      store.put("aiden", ProTacts::VCard.new(card("aiden", "Aiden Smith")))
       after = read_tags.call
 
       before.zip(after).each do

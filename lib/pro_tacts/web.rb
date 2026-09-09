@@ -668,7 +668,7 @@ module ProTacts
       report_unreadable_lines(card)
       report_broken_assumptions(card)
 
-      stored = store.put(id, vcard)
+      stored = store.put(id, card)
       response.status = existing ? 204 : 201
       # A strong ETag belongs on the answer only when what the resource
       # now serves is the submitted bytes, octet for octet — the one
@@ -681,7 +681,7 @@ module ProTacts
       # tag, while a PUT that carried a birthday somewhere other than
       # where compose puts it back serves bytes that are not the ones
       # it sent, and the client refetches.
-      response["ETag"] = stored.etag if stored.vcard.to_s == vcard
+      response["ETag"] = stored.etag if stored.vcard.to_s == card.to_s
 
       # A returned "" would land in the body and pin text/html and
       # content-length onto the 204, which a bodyless status must not
@@ -773,7 +773,7 @@ module ProTacts
         return edit_screen(contact, notice: "This contact's card carries its own birthday spelling; nothing was saved.")
       end
 
-      store.rewrite(id, edited_card(contact, first, last, r.params).to_s, birthday:)
+      store.rewrite(id, edited_card(contact, first, last, r.params), birthday:)
       r.redirect "/contacts/#{id}", 303
     end
 
@@ -791,13 +791,15 @@ module ProTacts
     # record later. The names escape, because a name is text — a
     # comma or semicolon in one must not read as structure (RFC 2426
     # section 2.4.2).
-    #: (String id, String first, String last) -> String
+    #: (String id, String first, String last) -> VCard
     def new_contact_card(id, first, last)
-      "BEGIN:VCARD\r\nVERSION:3.0\r\n" \
-        "N:#{VCard.escape(last)};#{VCard.escape(first)};;;\r\n" \
-        "FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n" \
-        "UID:#{id}\r\n" \
-        "END:VCARD\r\n"
+      VCard.new(
+        "BEGIN:VCARD\r\nVERSION:3.0\r\n" \
+          "N:#{VCard.escape(last)};#{VCard.escape(first)};;;\r\n" \
+          "FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n" \
+          "UID:#{id}\r\n" \
+          "END:VCARD\r\n",
+      )
     end
 
     # The surgical save — the hazard it exists to remove, the
