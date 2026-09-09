@@ -16,8 +16,8 @@ Content-Type: text/xml
           <d:report><d:sync-collection/></d:report>
         </d:supported-report>
       </d:supported-report-set>
-      <cs:getctag>19</cs:getctag>
-      <d:sync-token>http://pro-tacts/sync/19</d:sync-token>
+      <cs:getctag>18</cs:getctag>
+      <d:sync-token>http://pro-tacts/sync/18</d:sync-token>
       <d:current-user-privilege-set>
         <d:privilege><d:read/></d:privilege>
         <d:privilege><d:write/></d:privilege>
@@ -169,15 +169,6 @@ Content-Type: text/xml
   <d:propstat>
     <d:prop>
       <d:getetag>"bb0734ee418c5bb60047503ea7675ccb46151d8e0084af665ba628bfc4acd804"</d:getetag>
-    </d:prop>
-    <d:status>HTTP/1.1 200 OK</d:status>
-  </d:propstat>
-</d:response>
-<d:response>
-  <d:href>/dav/addressbook/monogram.vcf</d:href>
-  <d:propstat>
-    <d:prop>
-      <d:getetag>"845e1761ad2a8a8b28e2c8e4a0af274de5288302c0b66c79d0c9537f822b1185"</d:getetag>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>

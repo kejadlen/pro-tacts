@@ -192,18 +192,19 @@ reports every untouched property as modified. Verified 2026-08-24.
 A contact with a picture carries it in the card, inline — `PHOTO` with
 `ENCODING=b;TYPE=JPEG` and a base64 payload (RFC 2426 section 3.1.4's
 second form), never a URI. A real photo runs the card to 216–338 KB
-because the client does not downscale before sending; a memoji,
-monogram, or emoji sits around 31–43 KB; a bare card is ~500 bytes.
-Photos are the sizing case; the rendered kinds are not.
+because the client does not downscale before sending; a memoji or emoji
+sits around 31–43 KB; a bare card is ~500 bytes. Photos are the sizing
+case; the rendered kinds are not.
 
-Four kinds have been captured, and the properties do not name all of
+Three kinds have been captured, and the properties do not name all of
 them — `X-IMAGETYPE` carries `PHOTO` or `MONOGRAM`, and an emoji is
-labeled `MONOGRAM` too: the client renders it as a glyph on a
-background exactly as it renders initials, so the wire shape is
-identical and the distinction lives in the image bytes alone. A
-memoji is the one kind with its own property — `VND-63-MEMOJI-DETAILS`,
-a base64 binary plist, which runs the parameter section to 1,683
-octets on a single physical line.
+labeled `MONOGRAM` too. That label is Apple's own name for a contact's
+initials on a colored background, so an emoji and a monogram plausibly
+arrive in one shape, the distinction living in the image bytes alone;
+no monogram has been captured to confirm it. A memoji is the one kind
+with its own property — `VND-63-MEMOJI-DETAILS`, a base64 binary plist,
+which runs the parameter section to 1,683 octets on a single physical
+line.
 
 The picture trio as a photo arrives:
 
@@ -246,10 +247,10 @@ the client needs the picture.
 
 Captured 2026-08-25 and 2026-09-04, macOS 26.5.1
 (AddressBookCore/2732.600.11). One fixture card per kind — `photo`,
-`emoji`, `memoji`, `monogram` — is seeded in test/fixtures/cards/ from
-the 2026-09-04 session (pictures set deliberately on synthetic
-contacts, ids rewritten); the 2026-08-25 captures remain unpromoted,
-being unprompted and possibly real images, with their shapes built
+`emoji`, `memoji` — is seeded in test/fixtures/cards/ from the
+2026-09-04 session (pictures set deliberately on synthetic contacts,
+ids rewritten); the 2026-08-25 captures remain unpromoted, being
+unprompted and possibly real images, with their shapes built
 synthetically in test/photo_card.rb.
 
 ## Birthdays without a year

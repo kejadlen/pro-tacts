@@ -139,15 +139,6 @@ Content-Type: text/xml
   </d:propstat>
 </d:response>
 <d:response>
-  <d:href>/dav/addressbook/monogram.vcf</d:href>
-  <d:propstat>
-    <d:prop>
-      <d:getetag>"845e1761ad2a8a8b28e2c8e4a0af274de5288302c0b66c79d0c9537f822b1185"</d:getetag>
-    </d:prop>
-    <d:status>HTTP/1.1 200 OK</d:status>
-  </d:propstat>
-</d:response>
-<d:response>
   <d:href>/dav/addressbook/oqmvpzooywwmtwwx.vcf</d:href>
   <d:propstat>
     <d:prop>
@@ -165,6 +156,6 @@ Content-Type: text/xml
     <d:status>HTTP/1.1 200 OK</d:status>
   </d:propstat>
 </d:response>
-  <d:sync-token>http://pro-tacts/sync/19</d:sync-token>
+  <d:sync-token>http://pro-tacts/sync/18</d:sync-token>
 
 </d:multistatus>
