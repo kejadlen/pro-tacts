@@ -36,15 +36,17 @@ namespace :probe do
 
   # The shared half of every probe's instructions: a successful PUT is
   # not an unhandled request, so the debug log is the only place it
-  # lands.
-  def reading_the_result(id, name)
+  # lands. `edit` is what to change in the client: a probe that reads
+  # what the rewrite does to the rest of the card does not care, and
+  # one whose experiment is the edit itself says which to make.
+  def reading_the_result(id, name, edit: "any field, the edit itself does not matter")
     <<~STEPS
       1. The server needs PRO_TACTS_DEBUG=1 for the write to be logged —
          a successful PUT is not an unhandled request, so log/unhandled
          will not have it. Restart with `PRO_TACTS_DEBUG=1 rake dev` if
          it is not set.
-      2. Resync the client, edit "#{name}" — any field, the edit itself
-         does not matter — and let the write go through.
+      2. Resync the client and let a write through, editing "#{name}":
+         #{edit}.
       3. The PUT body lands in log/dev.log after a `>>` line, under
          #{id}.vcf.
     STEPS
@@ -122,6 +124,62 @@ namespace :probe do
     UID:#{RENUMBER_ID}
     END:VCARD
   CARD
+
+  # What a round trip does to an address's TYPE, which decides what a
+  # relabelled shared address means (Store#kept_types?). A group's line
+  # is subtracted from a member's submission when the value and the
+  # types both survive, so a type the client rewrites unasked reads as
+  # an edit — and once edits propagate, one member's sync would rewrite
+  # the shared address for everyone.
+  #
+  # Three addresses, told apart by their streets, since values survive
+  # exactly:
+  #
+  #   TYPE=home   a type the client models, and the control: known to
+  #               come back HOME with pref added
+  #   TYPE=dom    a type RFC 2426 section 3.2.1 lists and Contacts has
+  #               no field for — the one that decides it
+  #   (none)      the RFC's own default, TYPE=intl,postal,parcel,work,
+  #               against the annotation probe's bare ADR coming back
+  #               typed WORK
+  TYPES_ID = "probe-types"
+  TYPES_CARD = <<~CARD.gsub("\n", "\r\n")
+    BEGIN:VCARD
+    VERSION:3.0
+    N:Boole;Types;;;
+    FN:Probe Types
+    ADR;TYPE=home:;;1 Modeled Way;London;England;NW1 1AB;United Kingdom
+    ADR;TYPE=dom:;;2 Unmodeled Way;London;England;NW1 1AB;United Kingdom
+    ADR:;;3 Untyped Way;London;England;NW1 1AB;United Kingdom
+    UID:#{TYPES_ID}
+    END:VCARD
+  CARD
+
+  desc "Seed the address type probe: what survives a relabel, and what the client relabels unasked"
+  task :types do
+    code = seed(TYPES_ID, TYPES_CARD)
+
+    puts <<~NEXT
+      Seeded #{TYPES_ID} (#{code}).
+
+      #{reading_the_result(TYPES_ID, "Probe Types", edit: %(relabel "1 Modeled Way" from Home to Work, and leave the other two addresses alone)).chomp}
+      4. Read the three addresses that come back:
+         - 1 Modeled Way: did the relabel arrive as type=WORK, so a
+           member's relabel is a thing this server can see at all?
+         - 2 Unmodeled Way: did TYPE=dom survive on an address nobody
+           touched, or did the client replace it the way it corrects
+           TEL;TYPE=mobile to CELL? A replacement means an untouched
+           shared address reads as edited, which is what Store#kept_types?
+           cannot carry into a propagating write.
+         - 3 Untyped Way: which types did the client write where the
+           card carried none?
+      5. Record what happened in docs/macos-contacts.md, under "The
+         client rewrites every card it touches".
+      6. Then relabel one address to a custom label and read it again:
+         a custom label is an itemN.ADR with an X-ABLabel beside it,
+         two lines where the group lends one.
+    NEXT
+  end
 
   desc "Seed the annotation probe card into a running dev server (PROBE_URL to override)"
   task :annotations do

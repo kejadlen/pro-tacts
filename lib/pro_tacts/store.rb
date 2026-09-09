@@ -607,10 +607,10 @@ module ProTacts
     # to the group would reach nobody.
     #
     # Each lent line is classified against the submission, and only one
-    # of the four shapes moves a byte. The line coming back with the
-    # same value is the group's, untouched, and it goes. One line of
-    # that name left over is an edit to the shared value and none is a
-    # deletion of it: both stay in the card as they arrived, because
+    # of the four shapes moves a byte. The line coming back saying what
+    # the group lends is the group's, untouched, and it goes. One line
+    # of that name left over is an edit to the shared line and none is
+    # a deletion of it: both stay in the card as they arrived, because
     # propagating either is the next task's (the plan's "Edits
     # propagate to the group"), and storing the edit is what keeps it
     # from being lost meanwhile. More than one left over is a line this
@@ -632,12 +632,13 @@ module ProTacts
       inherited.each do |lent|
         lent_line = parsed_line(lent.line)
         candidates = unaccounted.select { it.names?(property_name(lent.line)) }
-        # Blind to equal values the way the editor's digests are blind
-        # to identical bytes (VCard::Parser::Line#digest): where a
-        # member's own card carries the value its group lends, which
-        # copy this takes is undecidable and the values make it not
+        # Blind to lines saying the same thing the way the editor's
+        # digests are blind to identical bytes
+        # (VCard::Parser::Line#digest): where a member's own card
+        # carries what its group lends, which copy this takes is
+        # undecidable and their saying the same thing makes it not
         # matter.
-        match = candidates.find { same_value?(it, lent_line) }
+        match = candidates.find { unedited?(it, lent_line) }
         if match
           unaccounted.delete_at(
             unaccounted.index(match) #: Integer
@@ -659,30 +660,52 @@ module ProTacts
       VCard.new(line).lines.fetch(0)
     end
 
-    # Whether a submitted line says what the group lends, which is a
-    # question about the values and not about the bytes: macOS
+    # Whether a submitted line still says what the group lends, which
+    # is a question about what it says and not about its bytes: macOS
     # re-serializes every card it touches, so `ADR;TYPE=home` comes
-    # back `ADR;type=HOME;type=pref` on an address nobody edited, and a
-    # parameter the client does not model is dropped from a NOTE
+    # back `ADR;type=HOME;type=pref` on an address nobody edited
     # (docs/macos-contacts.md, "The client rewrites every card it
     # touches"). Comparing bytes reads every such line as an edit.
     #
-    # So the parameters are not compared at all — the client rewrites
-    # them, and invents them where the server sent none (the same
-    # doc's annotation probe answered a bare `ADR` with
-    # `ADR;type=WORK`). The cost is that a submission changing only a
-    # lent line's TYPE reads as untouched and is dropped, which is the
-    # trade this evidence leaves: no parameter a client returns can be
-    # told from one it made up.
+    # What a line says is its value and its types: a member who
+    # relabels a lent address from home to work edited the shared line
+    # as surely as one who changed a digit of it, and an edit is the
+    # group's to take (the plan's "Edits propagate to the group"). So a
+    # type that moved is not subtracted, and stays in the member's card
+    # where the propagation will find it.
+    #
+    # Every other parameter goes uncompared, being the half the client
+    # rewrites without being asked: it drops the ones it does not model
+    # — a `NOTE;LANGUAGE=en` comes back bare — and fills in defaults on
+    # the ones it does.
     #
     # A line that will not read has no value to compare and falls back
     # to its bytes, which still recognize the line nobody touched.
     #: (VCard::Parser::Line line, VCard::Parser::Line lent) -> bool
-    def same_value?(line, lent)
+    def unedited?(line, lent)
       value = value_of(lent)
       return line.verbatim.chomp == lent.verbatim.chomp if value.nil?
 
-      value_of(line) == value
+      value_of(line) == value && kept_types?(line, lent)
+    end
+
+    # Whether a submitted line carries the types the group lent it,
+    # across the two rewrites they survive: the values come back
+    # uppercased and `pref` filled in, so neither side's case counts
+    # and neither counts `pref` (types_of drops it).
+    #
+    # A lent line with no TYPE at all compares none: an untyped ADR
+    # already means `TYPE=intl,postal,parcel,work` by RFC 2426 section
+    # 3.2.1's default, so the `ADR;type=WORK` the annotation probe got
+    # back from a bare `ADR` is the client spelling that default out
+    # rather than a member choosing anything. What a client does to a
+    # type it does not model is the open question, and the one that
+    # decides whether this comparison can carry a propagating write:
+    # `rake probe:types` asks it.
+    #: (VCard::Parser::Line line, VCard::Parser::Line lent) -> bool
+    def kept_types?(line, lent)
+      types = types_of(lent)
+      types.empty? || types_of(line) == types
     end
 
     # What a line says, as the reading its property's value type calls
@@ -695,6 +718,24 @@ module ProTacts
       return nil if property.nil?
 
       STRUCTURED_VALUES.include?(property.name.upcase) ? property.components : [property.text]
+    end
+
+    # A line's TYPE values, as the set the round trip preserves:
+    # casefolded, `pref` dropped as the client's own addition, and
+    # sorted because `TYPE=home;TYPE=pref` and `TYPE=pref,home` are one
+    # thing (RFC 2426 section 3.2.1, which the parser reads into pairs
+    # either way). Empty for a line that would not read, which has no
+    # parameters to compare.
+    #: (VCard::Parser::Line line) -> Array[String]
+    def types_of(line)
+      property = line.property
+      return [] if property.nil?
+
+      property.parameters
+        .filter_map { |name, value| value.downcase if name.casecmp?("TYPE") }
+        .reject { it == "pref" }
+        .uniq
+        .sort
     end
 
     # The submission's lines that the member's own stored card does not

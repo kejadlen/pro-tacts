@@ -1262,8 +1262,48 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # Relabelling a shared address is an edit to the shared line, so it
+  # is left in the member's card for the propagation to take to the
+  # group rather than subtracted as the group's own (the plan's "Edits
+  # propagate to the group").
+  def test_a_relabeled_lent_line_reads_as_an_edit
+    relabeled = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "ADR;type=WORK;type=pref:")
+
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, relabeled)))
+
+      assert_includes card_row(store, "aiden").fetch(:vcard), relabeled
+      assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
+      assert_empty sentry_messages
+    end
+  end
+
+  # A group that lends a line with no type of its own compares none:
+  # the client writes a type where the server sent one and where it
+  # sent none alike, and a type nobody chose is not an edit anyone
+  # made (docs/macos-contacts.md, "An annotation survives only on its
+  # own line", where a bare ADR came back typed WORK).
+  def test_a_type_the_client_invents_is_not_an_edit
+    bare = "ADR:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
+
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, members: ["aiden"], lines: [bare])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub(bare, bare.sub("ADR:", "ADR;type=WORK;type=pref:"))))
+
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_equal served, store.contact("aiden").vcard.to_s
+      assert_empty sentry_messages
+    end
+  end
+
   # An edit still reads as one through the re-serialization it arrives
-  # wrapped in: the value moved, and only the value is compared.
+  # wrapped in: the value moved, and the spelling around it is what the
+  # comparison sees past.
   def test_an_edit_survives_the_reserialization_it_arrives_in
     edited = RESERIALIZED_ADDRESS.sub("7 Calculus", "8 Calculus")
 
