@@ -187,6 +187,36 @@ The practical consequence is that any comparison between a card the server
 sent and the card that comes back has to be semantic. Comparing bytes
 reports every untouched property as modified. Verified 2026-08-24.
 
+## An address type the client cannot model becomes a custom label
+
+`rake probe:types` sends three addresses and asks for one relabel — 1
+Modeled Way from Home to Work — to answer what a round trip does to `TYPE`:
+
+| Sent | Came back |
+|---|---|
+| `ADR;TYPE=home` (relabelled to Work) | `ADR;type=WORK;type=pref` |
+| `ADR;TYPE=dom` (untouched) | `item1.ADR` + `item1.X-ABLabel:dom` |
+| `ADR:` (untouched, no type) | `ADR:` |
+
+A relabel is legible. The type the user picked comes back as the type
+value, so a server can tell Home from Work, and a comparison that ignored
+parameters could not.
+
+A type the client has no field for is not dropped — it is moved. `dom` is
+RFC 2426 section 3.2.1's own value and Contacts offers no Domestic label, so
+the client made one: the address moved into a property group and the type
+became the `X-ABLabel` beside it. That happened on an address nobody edited.
+Two lines came back where one was sent, and the `TYPE` parameter is gone
+from both.
+
+An address with no type comes back with none, so nothing is invented. That
+corrects a reading of the annotation probe below, whose bare-looking `ADR`
+was sent as `item9.ADR;TYPE=work` — the `type=WORK` it came back with was
+that type surviving the strip of its group prefix, not a type made up to
+fill a gap.
+
+Verified 2026-09-09 against macOS 26.5.1 (AddressBookCore/2732.600.11).
+
 ## An annotation survives only on its own line
 
 A server that wants to mark a line — to say which group lent an address,
@@ -199,7 +229,7 @@ answers all of them:
 | Standalone property | `X-PT-GROUP:kxsv` | `X-PT-GROUP:kxsv` |
 | Parameter on `ADR` | `ADR;TYPE=home;X-PT-GROUP=kxsv:` | `ADR;type=HOME;type=pref:` |
 | Parameter on `NOTE` | `NOTE;X-PT-GROUP=kxsv:` | `NOTE:` |
-| Companion in a bare group | `item9.ADR` + `item9.X-PT-GROUP` | `ADR;type=WORK:` + `item9.X-PT-GROUP` |
+| Companion in a bare group | `item9.ADR;TYPE=work` + `item9.X-PT-GROUP` | `ADR;type=WORK:` + `item9.X-PT-GROUP` |
 | Companion beside `X-ABLabel` | `item8.TEL` + `item8.X-ABLabel` + `item8.X-PT-GROUP` | `item1.TEL` + `item1.X-ABLabel` + `item8.X-PT-GROUP` |
 
 A property of its own survives untouched, lowercase value included. A

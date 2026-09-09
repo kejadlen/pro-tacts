@@ -692,20 +692,20 @@ module ProTacts
     # Whether a submitted line carries the types the group lent it,
     # across the two rewrites they survive: the values come back
     # uppercased and `pref` filled in, so neither side's case counts
-    # and neither counts `pref` (types_of drops it).
+    # and neither counts `pref` (types_of drops it). An untyped line
+    # comes back untyped, so no types compares to no types and a
+    # member who labels one has edited it (docs/macos-contacts.md, "An
+    # address type the client cannot model becomes a custom label").
     #
-    # A lent line with no TYPE at all compares none: an untyped ADR
-    # already means `TYPE=intl,postal,parcel,work` by RFC 2426 section
-    # 3.2.1's default, so the `ADR;type=WORK` the annotation probe got
-    # back from a bare `ADR` is the client spelling that default out
-    # rather than a member choosing anything. What a client does to a
-    # type it does not model is the open question, and the one that
-    # decides whether this comparison can carry a propagating write:
-    # `rake probe:types` asks it.
+    # One shape this reads as an edit that nobody made: a type
+    # Contacts has no field for comes back as an `X-ABLabel` on a
+    # property group, taking the `TYPE` parameter with it, on an
+    # address nobody touched. A group lending `ADR;TYPE=dom` therefore
+    # materializes into every member's card at their next sync — see
+    # the task "Read a custom label as the type it was made from".
     #: (VCard::Parser::Line line, VCard::Parser::Line lent) -> bool
     def kept_types?(line, lent)
-      types = types_of(lent)
-      types.empty? || types_of(line) == types
+      types_of(line) == types_of(lent)
     end
 
     # What a line says, as the reading its property's value type calls

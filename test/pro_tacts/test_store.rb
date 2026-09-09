@@ -1157,6 +1157,9 @@ class StoreTest < Minitest::Test
   # rewrites every card it touches" and "An annotation survives only on
   # its own line").
   RESERIALIZED_ADDRESS = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "ADR;type=HOME;type=pref:") #: String
+  # The same address lent with no type on it, which is a shape the
+  # round trip leaves alone.
+  UNTYPED_ADDRESS = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "ADR:") #: String
   TAGGED_NOTE = HOUSEHOLD_NOTE.sub("NOTE:", "NOTE;LANGUAGE=en:") #: String
 
   # The round trip the whole composition rests on: a member PUTs back
@@ -1281,22 +1284,36 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # A group that lends a line with no type of its own compares none:
-  # the client writes a type where the server sent one and where it
-  # sent none alike, and a type nobody chose is not an edit anyone
-  # made (docs/macos-contacts.md, "An annotation survives only on its
-  # own line", where a bare ADR came back typed WORK).
-  def test_a_type_the_client_invents_is_not_an_edit
-    bare = "ADR:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
-
+  # An untyped line comes back untyped: the client invents no type to
+  # fill the gap (docs/macos-contacts.md, "An address type the client
+  # cannot model becomes a custom label").
+  def test_an_untyped_lent_line_comes_back_untyped
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [bare])
+      add_group(store, members: ["aiden"], lines: [UNTYPED_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", vcard(served.sub(bare, bare.sub("ADR:", "ADR;type=WORK;type=pref:"))))
+      store.put("aiden", vcard(served))
 
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       assert_equal served, store.contact("aiden").vcard.to_s
+      assert_empty sentry_messages
+    end
+  end
+
+  # Which is what makes labelling one an edit like any other relabel:
+  # the type it arrives with is the member's, nobody else having put
+  # one there.
+  def test_a_label_on_an_untyped_lent_line_reads_as_an_edit
+    labeled = UNTYPED_ADDRESS.sub("ADR:", "ADR;type=HOME;type=pref:")
+
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, members: ["aiden"], lines: [UNTYPED_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub(UNTYPED_ADDRESS, labeled)))
+
+      assert_includes card_row(store, "aiden").fetch(:vcard), labeled
+      assert_includes store.contact("aiden").vcard.to_s, UNTYPED_ADDRESS
       assert_empty sentry_messages
     end
   end
