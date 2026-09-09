@@ -1,4 +1,6 @@
 
+require "securerandom"
+
 require "nokogiri"
 
 require "pro_tacts"
@@ -28,7 +30,6 @@ module ProTacts
   # happened.
   class Profile
     IDENTIFIER_PREFIX = "dev.kejadlen.pro-tacts.carddav"
-    HEX = "0123456789abcdef"
 
     # The account name when the environment names none. A constant
     # because the install screen states the name the download is about
@@ -58,8 +59,8 @@ module ProTacts
         name: escape(account_name),
         identifier:,
         account_identifier: "#{identifier}.account",
-        top_level_uuid: uuid,
-        payload_uuid: uuid
+        top_level_uuid: SecureRandom.uuid,
+        payload_uuid: SecureRandom.uuid
       }
     end
 
@@ -141,11 +142,6 @@ module ProTacts
     #: () -> String
     def self.unique_hex
       "#{Time.now.utc.strftime('%Y%m%d%H%M%S%L')}#{rand(1 << 16).to_s(16)}"
-    end
-
-    #: () -> String
-    def self.uuid
-      [8, 4, 4, 4, 12].map { |n| Array.new(n) { HEX[rand(16)] }.join }.join("-")
     end
   end
 end
