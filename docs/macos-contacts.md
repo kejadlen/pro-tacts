@@ -187,6 +187,39 @@ The practical consequence is that any comparison between a card the server
 sent and the card that comes back has to be semantic. Comparing bytes
 reports every untouched property as modified. Verified 2026-08-24.
 
+## An annotation survives only on its own line
+
+A server that wants to mark a line — to say which group lent an address,
+say — gets one form that works and four that do not. `rake
+probe:annotations` sends a card carrying five, and one client edit
+answers all of them:
+
+| Form | Sent | Came back |
+|---|---|---|
+| Standalone property | `X-PT-GROUP:kxsv` | `X-PT-GROUP:kxsv` |
+| Parameter on `ADR` | `ADR;TYPE=home;X-PT-GROUP=kxsv:` | `ADR;type=HOME;type=pref:` |
+| Parameter on `NOTE` | `NOTE;X-PT-GROUP=kxsv:` | `NOTE:` |
+| Companion in a bare group | `item9.ADR` + `item9.X-PT-GROUP` | `ADR;type=WORK:` + `item9.X-PT-GROUP` |
+| Companion beside `X-ABLabel` | `item8.TEL` + `item8.X-ABLabel` + `item8.X-PT-GROUP` | `item1.TEL` + `item1.X-ABLabel` + `item8.X-PT-GROUP` |
+
+A property of its own survives untouched, lowercase value included. A
+parameter the client does not model is dropped, on `NOTE` as well as on
+the properties whose parameters it rewrites.
+
+The two companion results are worse than losing the annotation. Both
+`X-PT-GROUP` lines came back, and both came back pointing at nothing: the
+client stripped `item9.` off the address it was grouped with, and
+renumbered `item8.TEL` and its `X-ABLabel` to `item1` while leaving the
+third line of that group behind. A marker that survives its own anchor
+reads as data and means nothing, so line-level provenance cannot rest on
+either shape.
+
+What a card-level property can carry is a fact about the card as a whole
+— which version of a group's lines it was composed from, for instance.
+What it cannot do is name a line, which is what attribution needs.
+Verified 2026-09-09 against macOS 26.5.1; iOS numbers property groups
+differently and has not been tested.
+
 ## Profile pictures
 
 A contact with a picture carries it in the card, inline — `PHOTO` with
