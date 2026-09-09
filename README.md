@@ -108,12 +108,17 @@ carry:
   answered when they were written, so the first synced device to edit
   is its test.
 
-Three properties are load-bearing in non-obvious ways, documented in
+Four properties are load-bearing in non-obvious ways, documented in
 `docs/macos-contacts.md`: the collection's `resourcetype` (without
 `card:addressbook` the client drops the account data), the
-`sync-collection` advertisement (without it the warm sync never runs), and
-`getctag` (without it no vCard is ever requested). Everything else the
-client asks for — displayname, privileges, owner, quotas, push transports,
+`sync-collection` advertisement (without it the warm sync never runs),
+`getctag` (without it no vCard is ever requested), and
+`current-user-privilege-set`, which decides whether the client writes at
+all. The collection advertises `DAV:read` alone as of 2026-09-09, so a
+client should send no `PUT` or `DELETE`; the routes still answer, because
+what a client does when told the collection is read-only has not been
+watched yet — docs/plans/2026-09-09-a-read-only-collection.md. Everything
+else the client asks for — displayname, owner, quotas, push transports,
 me-card, principal-URL, the multiget/query advertisements — is optional.
 
 sabre/dav's [notes on the macOS Address Book client][sabre-osx] are the best

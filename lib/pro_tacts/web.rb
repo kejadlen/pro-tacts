@@ -357,19 +357,24 @@ module ProTacts
               # is not standardized — an Apple CalendarServer extension in the
               # calendarserver.org namespace, kept because macOS polls it.
               #
-              # The privileges are advertised ahead of the methods
-              # granting some of them. macOS Contacts asks for this
-              # property on every poll and attempts no write without it,
-              # so claiming them is what makes the client send writes at
-              # all — the PUT they prompted was what log/unhandled
-              # captured them for. DAV:write covers PUT and PROPPATCH
-              # (RFC 3744 section 3.2), and PUT is the one of the pair
-              # answered; DAV:unbind is removing a member from the
-              # collection (section 3.10), which DELETE answers.
-              # DAV:bind is adding one (section 3.9), and the create it
-              # names — POST to the collection with DAV:add-member — has
-              # no route: PUT to the member URI is how both clients
-              # create, so nothing has asked for it.
+              # DAV:read alone (RFC 3744 section 3.1), which is the
+              # collection telling a client it may not write. macOS
+              # Contacts asks for this property on every poll and
+              # attempts no write while a privilege granting one is
+              # missing — see docs/macos-contacts.md, "Writes are gated
+              # on the advertised privilege set" — so what this list
+              # leaves out is the whole of what stops a client write.
+              # The three left out are DAV:write, covering PUT and
+              # PROPPATCH (section 3.2); DAV:unbind, removing a member
+              # (section 3.10), which DELETE answers; and DAV:bind,
+              # adding one (section 3.9).
+              #
+              # The PUT and DELETE routes still answer, and the Allow
+              # header still names them: this is the advertisement
+              # alone, so that what a client does when told the
+              # collection is read-only can be watched before anything
+              # is built on it —
+              # docs/plans/2026-09-09-a-read-only-collection.md.
               collection_response = <<~XML
                 <d:response>
                   <d:href>/dav/addressbook/</d:href>
@@ -388,9 +393,6 @@ module ProTacts
                       <d:sync-token>#{sync_token}</d:sync-token>
                       <d:current-user-privilege-set>
                         <d:privilege><d:read/></d:privilege>
-                        <d:privilege><d:write/></d:privilege>
-                        <d:privilege><d:bind/></d:privilege>
-                        <d:privilege><d:unbind/></d:privilege>
                       </d:current-user-privilege-set>
                     </d:prop>
                     <d:status>HTTP/1.1 200 OK</d:status>
