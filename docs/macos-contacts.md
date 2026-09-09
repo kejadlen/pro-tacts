@@ -142,6 +142,39 @@ The `Allow` header is not what decides this. Contacts sends `OPTIONS` to
 the principal, never to the address book collection, so it never learns
 which methods the collection accepts. Verified 2026-08-24.
 
+## A read-only privilege set forks the contact
+
+The privilege set is not a read-only switch. Three states have now been
+served, and each produces a different behavior — so the client reads what
+the list says, not merely whether the property is there:
+
+| Advertised | What an edit does |
+|---|---|
+| Property absent | Accepted locally, queued silently. One edit sat four hours and was never sent. |
+| `read` alone | The client creates a *second* contact carrying the edit, at a new href with a new `UID`, and leaves the original untouched. |
+| `read`, `write`, `bind`, `unbind` | Updates in place, the ordinary `PUT`. |
+
+None of the three greys editing out, which was the outcome the read-only
+experiment wanted. `read` alone is the worst of them: the fork is silent,
+the original keeps the value the user thought they had just changed, and
+a book synced to a device accumulates a duplicate per edit. Copy-on-write
+is a coherent reading of the privilege — the resource may not be
+modified, so the edit is saved as a new one — but `DAV:bind` was withheld
+too, and the client created anyway, so the create is not something the
+advertisement authorized.
+
+The client re-asks often rather than caching the answer from account
+setup: five `current-user-privilege-set` requests inside three minutes,
+each answered `read` alone, and the fork came after them. So this is the
+client acting on a current answer, not on stale state. No `410
+DAV:valid-sync-token` appeared in that session, so no resync-from-scratch
+is confounding it, and the fork is not the re-push a reseeded dev
+database provokes.
+
+Verified 2026-09-09 against macOS 26.5.1. iOS untested. The privilege
+list in `Web`'s collection PROPFIND therefore keeps all four; see
+docs/plans/2026-09-09-a-read-only-collection.md.
+
 ## Pending writes queue indefinitely and retry on their own
 
 An edit made while the server refuses writes is not lost. `REV` is stamped

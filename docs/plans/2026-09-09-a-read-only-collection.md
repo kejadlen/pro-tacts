@@ -1,110 +1,105 @@
-# A read-only collection: the advertisement first
+# A read-only collection, and why the privilege set cannot be one
 
 2026-09-09. Task xownmrus, "make the collection read-only to clients so
-the web editor is the only write path", stopped one step in. The
-collection now advertises `DAV:read` alone; PUT and DELETE still answer
-exactly as they did. That is deliberate, and this doc is why.
+the web editor is the only write path", tried and abandoned the same day.
+The code is back where it started. This is the record of what was tried,
+what the client did, and why the approach is not worth a second attempt.
 
-## The lever
+## The premise
 
 `docs/macos-contacts.md`, "Writes are gated on the advertised privilege
-set": macOS Contacts asks for `DAV:current-user-privilege-set` on the
-collection in every `Depth: 1` poll and attempts no write while the
-server omits it. Adding `write`, `bind`, and `unbind` on 2026-08-24
-produced a queued `PUT` within a second of the first response carrying
-them — an edit made four hours earlier, which the client had been
-holding all along.
+set": macOS Contacts attempts no write while the server omits
+`DAV:current-user-privilege-set`, and adding `write`, `bind`, and
+`unbind` on 2026-08-24 produced a queued `PUT` within a second of the
+first response carrying them — an edit made four hours earlier. `Allow`
+is not the gate; Contacts sends `OPTIONS` to the principal and never to
+the collection.
 
-So the advertisement is not a hint the client takes alongside other
-signals. It is the gate. `Allow` is not: Contacts sends `OPTIONS` to
-the principal and never to the collection, so it never learns which
-methods the collection accepts (same doc, verified 2026-08-24).
+So the task's reasoning was that dropping the three back out is the whole
+client-facing switch, and the enforcement half — trimming `Allow`, 403ing
+PUT and DELETE with `DAV:need-privileges` — is defense behind it.
 
-Dropping the three back out of `Web`'s PROPFIND answer is therefore the
-whole client-facing switch, and it is the only change here.
+One question was open: whether the clients grey editing out on a
+read-only privilege set, or let you type an edit that fails afterwards.
+Only the write direction had ever been watched.
 
-## The question that decides the rest
+## What was tried
 
-Withholding a privilege has only ever been observed in one direction:
-the server omitted the property entirely, the client wrote nothing, and
-nobody watched the UI while it did. What a client does when it is *told*
-the collection is read-only is unobserved. Two shapes, and they are not
-the same feature:
+The advertisement alone. `DAV:read` was served in place of the four, and
+nothing else moved: the PUT and DELETE routes still answered, `Allow`
+still named them, `config/puma.rb` still passed them. Deliberately, so
+that a client which ignored the advertisement and wrote anyway would
+still land its write rather than lose it — and so the interesting case
+stayed visible instead of being masked by a 403.
 
-- The client greys editing out. A contact opened from this account is
-  visibly not editable, and the web editor is the only place a change
-  can be typed. That is the outcome the task wants.
-- The client lets you type, accepts the edit locally, and discovers the
-  refusal afterwards. Then every edit made on a device is a change the
-  user believes they made, queued against a server that will never take
-  it — and the same doc's "Pending writes queue indefinitely and retry
-  on their own" says the client holds such an edit for hours, replaying
-  it every few minutes. Silent, permanent divergence between the phone
-  and the book.
+That staging is what saved the first edit made against it.
 
-The second is worse than the status quo, where a device edit at least
-lands. It cannot be reasoned out of the RFCs — RFC 3744 says what the
-property means, not what a client renders — so it has to be watched.
+## What the client did
 
-## Why the change lands before the answer
+It forked the contact. An edit produced a `PUT` creating a *second*
+contact at a new href with a new `UID`, carrying the change, and left the
+original untouched.
 
-Because the observation needs a server that serves it. A client cannot
-be watched reacting to a read-only privilege set until the collection
-advertises one, so this is the setup for the experiment rather than a
-result acted on. Run `rake dev`, point macOS and iOS Contacts at it, and
-open a contact.
+Not a stale cache: the client asked for the property five times inside
+three minutes and was answered `read` alone every time, the fork
+following those answers. Not the reseed re-push that a rebuilt dev
+database provokes either — no `410 DAV:valid-sync-token` appears in the
+session, so nothing resynced from scratch.
 
-Both clients, separately. iOS has been a second client on every question
-it was asked (`test/fixtures/ios-exchange/`), and it is the one that
-sends DELETE at all.
+Three states have now been served, and they give three behaviors:
 
-The enforcement half — trimming `Allow`, and 403-ing PUT and DELETE with
-a `DAV:need-privileges` body (RFC 3744 section 7.1.1), marshalled the way
-the unsupported-REPORT 403 is — is left undone on purpose. It is what
-you build once the answer says the outcome is the first shape, and
-building it now would hide the interesting case: with the routes still
-answering, a client that ignores the advertisement and writes anyway
-still writes, and that is itself the observation.
+| Advertised | What an edit does |
+|---|---|
+| Property absent | Accepted locally, queued silently — four hours, never sent |
+| `read` alone | Forks: a second contact carries the edit, the original is untouched |
+| `read`, `write`, `bind`, `unbind` | Updates in place |
 
-## What the enforcement half will have to settle
+The privilege set is therefore read for its content, not merely its
+presence — which was the other hypothesis, and it is dead too.
 
-Two things found while reading for this change, recorded so the next
-pass does not rediscover them.
+## Why the approach is abandoned
 
-**A refused write is not an unhandled request.** `UnhandledRequests`
-captures 403 (`unhandled_requests.rb:29`) because 403 is today the
-routed-but-unimplemented case, an unsupported REPORT type. A read-only
-collection makes 403 the ordinary answer to every client write, which is
-not news about missing functionality — it is the feature working. Worse,
-the capture would not settle: the directory name carries a digest of
-method, path, and body, and the retrying client refreshes `REV` on every
-replay, so each retry hashes differently and gets a directory of its
-own. `test/fixtures/macos-exchange/` steps 10 and 11 are exactly that
-pair, two captures of one edit, promoted from `log/unhandled`. Every few
-minutes, for hours, per pending edit. The record is not wanted on those
-terms; the capture rule needs to stop treating a deliberate refusal as an
-unanswered request before the 403s land.
+None of the three states greys editing out, and the open question turns
+out to have had a third answer nobody proposed. Ranked by what a user
+loses:
 
-**The write path has no other caller.** 403-ing the routes leaves
-`Web#write_card`, `Web#remove_card`, and `Store#delete` unreachable —
-the web editor's `apply_edit` shares nothing with them, and `Store#put`'s
-only other caller is the editor's create. About thirty-five tests in
-`test/pro_tacts/test_web.rb` reach that path over HTTP, along with macOS
-fixture steps 10 and 11 and iOS steps 05 and 06. Deleting the path or
-keeping it unreachable is a real choice, not a tidy-up, and it belongs to
-the pass that has the answer above.
+- `read` alone is the worst state available. The fork is silent, the
+  contact the user edited still shows the old value, and a synced book
+  gains a duplicate per edit. Strictly worse than writes landing.
+- Omitting the property is the only state that stops writes, and it stops
+  them by having the client hold the edit forever without saying so. The
+  device and the book diverge silently. Better than duplicates, still not
+  read-only in any sense a user would recognize.
+- Advertising all four — the status quo, restored — at least means an
+  edit made on a device is an edit that arrives.
 
-`PUT` and `DELETE` stay in `config/puma.rb` throughout. Puma's
-`supported_http_methods` replaces its default list rather than extending
-it, so a method missing from it is a 501 out of the HTTP parser, before
-Rack — the request never reaches the app, and nothing records that a
-client tried.
+Adding the enforcement half does not rescue any of this. 403ing the PUT
+would refuse the fork's create, but the duplicate is already on the
+device by then: the client would keep a contact it can never sync and
+retry it every few minutes for hours. The refusal arrives after the
+damage, which is the shape of the whole problem.
 
-## Non-goals
+"The web editor is the only write path" is not reachable by telling the
+client anything. It would need the client not to have the account, or the
+server not to be reachable by it — a different task, and not this one.
 
-- Removing the privileges from `DAV:supported-privilege-set`. The
-  property is not served at all; nothing has asked for it.
-- `DAV:read-current-user-privilege-set` (RFC 3744 section 3.7), for the
-  same reason.
-- Any change to the web editor. It was already the write path this task
-  wants to be the only one.
+## What was learned that outlives the attempt
+
+- The three-state table above, now in `docs/macos-contacts.md` under "A
+  read-only privilege set forks the contact", with the privilege list in
+  `web.rb` carrying a note so the trim is not attempted again.
+- The client re-asks for the privilege set continuously — five times in
+  three minutes — rather than caching it from account setup. The recorded
+  sessions in `test/fixtures/` each hold exactly one bootstrap PROPFIND
+  asking for it, which reads as "asked once at setup" and is wrong. A
+  fixture session is a slice, not a duty cycle.
+- Two things the enforcement half would have had to settle, if it is ever
+  revived for another reason. `UnhandledRequests` captures 403
+  (`unhandled_requests.rb:29`), and a deliberate refusal is not an
+  unanswered request; worse, the directory name digests the body, and the
+  retrying client refreshes `REV` on every replay, so each retry lands a
+  directory of its own — `test/fixtures/macos-exchange/` steps 10 and 11
+  are one edit captured twice. And 403ing the routes would orphan
+  `Web#write_card`, `Web#remove_card`, and `Store#delete`, along with the
+  thirty-five tests in `test/pro_tacts/test_web.rb` that reach them over
+  HTTP.

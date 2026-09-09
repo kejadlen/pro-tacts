@@ -105,22 +105,6 @@ class WebTest < Minitest::Test
     assert_includes last_response.body, "getctag"
   end
 
-  # The client's write gate, which the collection now closes: macOS
-  # Contacts attempts no write while the privilege granting one is
-  # missing (docs/macos-contacts.md, "Writes are gated on the advertised
-  # privilege set"), so the three absences below are the whole of what
-  # makes the collection read-only to a client —
-  # docs/plans/2026-09-09-a-read-only-collection.md.
-  def test_propfind_addressbook_advertises_read_and_nothing_that_grants_a_write
-    request "/dav/addressbook/", method: "PROPFIND"
-
-    assert_equal 207, last_response.status
-    assert_includes last_response.body, "<d:privilege><d:read/></d:privilege>"
-    refute_includes last_response.body, "<d:write/>"
-    refute_includes last_response.body, "<d:bind/>"
-    refute_includes last_response.body, "<d:unbind/>"
-  end
-
   def test_propfind_addressbook_depth_0_excludes_contacts
     request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "0"
 

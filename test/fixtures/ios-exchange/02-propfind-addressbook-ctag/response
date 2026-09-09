@@ -20,6 +20,9 @@ Content-Type: text/xml
       <d:sync-token>http://pro-tacts/sync/18</d:sync-token>
       <d:current-user-privilege-set>
         <d:privilege><d:read/></d:privilege>
+        <d:privilege><d:write/></d:privilege>
+        <d:privilege><d:bind/></d:privilege>
+        <d:privilege><d:unbind/></d:privilege>
       </d:current-user-privilege-set>
     </d:prop>
     <d:status>HTTP/1.1 200 OK</d:status>
