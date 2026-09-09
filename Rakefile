@@ -82,19 +82,18 @@ file "carddav.mobileconfig" => "lib/pro_tacts/profile.rb" do |task|
   require "pro_tacts/profile"
 
   File.write(task.name, ProTacts::Profile.render(
-    hostname: ENV.fetch("PRO_TACTS_HOSTNAME"),
-    name: ENV.fetch("PRO_TACTS_PROFILE_NAME", "pro-tacts")
+    hostname: ENV.fetch("PRO_TACTS_HOSTNAME")
   ))
 end
 
 namespace :profile do
   desc "Remove installed pro-tacts profiles, then stage a fresh one for approval"
   task install: :remove do
+    require "pro_tacts"
     require "pro_tacts/profile"
 
     File.write("carddav.mobileconfig", ProTacts::Profile.render(
-      hostname: ENV.fetch("PRO_TACTS_HOSTNAME"),
-      name: ENV.fetch("PRO_TACTS_PROFILE_NAME", "pro-tacts")
+      hostname: ENV.fetch("PRO_TACTS_HOSTNAME")
     ))
     sh "open", "carddav.mobileconfig"
     sh "open", "x-apple.systempreferences:com.apple.preferences.configurationprofiles"

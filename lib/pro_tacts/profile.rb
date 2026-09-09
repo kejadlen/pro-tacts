@@ -1,6 +1,8 @@
 
 require "nokogiri"
 
+require "pro_tacts"
+
 module ProTacts
   # Renders the configuration profile that provisions the pro-tacts CardDAV
   # account, so the resync loop is one rake command instead of the Internet
@@ -28,23 +30,32 @@ module ProTacts
     IDENTIFIER_PREFIX = "dev.kejadlen.pro-tacts.carddav"
     HEX = "0123456789abcdef"
 
-    # The account name when no caller overrides it. A constant because
-    # the install screen states the name the download is about to carry
-    # and must not restate it as a second literal.
+    # The account name when the environment names none. A constant
+    # because the install screen states the name the download is about
+    # to carry and must not restate it as a second literal.
     DEFAULT_NAME = "pro-tacts"
+
+    # The name every render and the install screen state. A method
+    # rather than a render parameter because there is only one source
+    # for it: a caller passing a name of its own would be labelling an
+    # account no device installs.
+    #: () -> String
+    def self.account_name
+      ProTacts.config.profile_name || DEFAULT_NAME
+    end
 
     # The username and password are a throwaway fictional pair and the server
     # ignores them: identity comes from the Tailscale headers that serve
     # injects (see ProTacts::TailscaleAuth). They stay in the template
     # because the account form expects the fields; dropping them is
     # untested.
-    #: (hostname: String, ?name: String) -> String
-    def self.render(hostname:, name: DEFAULT_NAME)
+    #: (hostname: String) -> String
+    def self.render(hostname:)
       identifier = "#{IDENTIFIER_PREFIX}-#{unique_hex}"
 
       template % {
         hostname: escape(hostname),
-        name: escape(name),
+        name: escape(account_name),
         identifier:,
         account_identifier: "#{identifier}.account",
         top_level_uuid: uuid,

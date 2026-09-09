@@ -208,7 +208,7 @@ module ProTacts
         r.is do
           r.get do
             response["Content-Type"] = "text/html; charset=utf-8"
-            Admin::DeviceSetup.call(hostname: r.host, name: Profile::DEFAULT_NAME)
+            Admin::DeviceSetup.call(hostname: r.host, name: Profile.account_name)
           end
         end
 

@@ -21,14 +21,41 @@ class AdminDeviceSetupTest < Minitest::Test
     header "Host", "box.example.ts.net"
   end
 
-  def test_screen_names_the_account_the_download_carries
-    get "/setup"
+  # The account name is read from the environment, so a name set in the
+  # shell running the suite would otherwise decide what these assert.
+  def with_config(env = {})
+    original = ProTacts.config
+    ProTacts.config = ProTacts::Config.new(env)
+    yield
+  ensure
+    ProTacts.config = original
+  end
 
-    assert_equal 200, last_response.status
-    assert_equal "text/html; charset=utf-8", last_response["Content-Type"]
-    assert_includes last_response.body, "box.example.ts.net"
-    assert_includes last_response.body, ProTacts::Profile::DEFAULT_NAME
-    assert_includes last_response.body, "/setup/carddav.mobileconfig"
+  def test_screen_names_the_account_the_download_carries
+    with_config do
+      get "/setup"
+
+      assert_equal 200, last_response.status
+      assert_equal "text/html; charset=utf-8", last_response["Content-Type"]
+      assert_includes last_response.body, "box.example.ts.net"
+      assert_includes last_response.body, ProTacts::Profile::DEFAULT_NAME
+      assert_includes last_response.body, "/setup/carddav.mobileconfig"
+    end
+  end
+
+  # The screen states what the document is about to carry, so a rename
+  # reaching only one of the two would put a name on the screen that the
+  # installed account does not have.
+  def test_the_configured_name_reaches_the_screen_and_the_document
+    with_config("PRO_TACTS_PROFILE_NAME" => "pro-tacts (dev)") do
+      get "/setup"
+
+      assert_includes last_response.body, %(<dd class="type-body-sm">pro-tacts (dev)</dd>)
+
+      get "/setup/carddav.mobileconfig"
+
+      assert_includes last_response.body, "<string>pro-tacts (dev)</string>"
+    end
   end
 
   # The media type is what makes a device offer to install rather than

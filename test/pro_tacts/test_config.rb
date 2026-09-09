@@ -57,4 +57,13 @@ class ConfigTest < Minitest::Test
     assert_equal "/tmp/dav.log", ProTacts::Config.new("PRO_TACTS_DEBUG_LOG" => "/tmp/dav.log").debug_log_path
     assert_equal "stderr", ProTacts::Config.new("PRO_TACTS_DEBUG_LOG" => "stderr").debug_log_path
   end
+
+  # nil rather than a default, so the fallback stays Profile's alone.
+  def test_profile_name_is_nil_when_unset
+    assert_nil ProTacts::Config.new({}).profile_name
+  end
+
+  def test_profile_name_is_passed_through
+    assert_equal "pro-tacts (dev)", ProTacts::Config.new("PRO_TACTS_PROFILE_NAME" => "pro-tacts (dev)").profile_name
+  end
 end

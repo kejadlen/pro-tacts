@@ -8,6 +8,17 @@ class ProfileTest < Minitest::Test
     ProTacts::Profile.render(hostname:)
   end
 
+  # The name comes from the environment now rather than an argument, so
+  # the tests that care about it swap the config the same way the
+  # install screen's do.
+  def with_config(env = {})
+    original = ProTacts.config
+    ProTacts.config = ProTacts::Config.new(env)
+    yield
+  ensure
+    ProTacts.config = original
+  end
+
   def test_is_well_formed_xml
     refute_nil Nokogiri::XML(render).root
   end
@@ -28,15 +39,19 @@ class ProfileTest < Minitest::Test
   # (dev)") keeps a dev install distinguishable from production, both in
   # Contacts' account list and in System Settings when both are installed.
   def test_name_defaults_to_pro_tacts
-    assert_includes render, "<string>pro-tacts</string>"
+    with_config do
+      assert_includes render, "<string>pro-tacts</string>"
+    end
   end
 
   def test_name_can_be_overridden
-    xml = ProTacts::Profile.render(hostname: "example.ts.net", name: "pro-tacts (dev)")
+    with_config("PRO_TACTS_PROFILE_NAME" => "pro-tacts (dev)") do
+      xml = render
 
-    assert_match(%r{<key>CardDAVAccountDescription</key>\s*<string>pro-tacts \(dev\)</string>}, xml)
-    assert_includes xml, "<string>pro-tacts (dev) CardDAV</string>"
-    assert_includes xml, "<string>example.ts.net</string>"
+      assert_match(%r{<key>CardDAVAccountDescription</key>\s*<string>pro-tacts \(dev\)</string>}, xml)
+      assert_includes xml, "<string>pro-tacts (dev) CardDAV</string>"
+      assert_includes xml, "<string>example.ts.net</string>"
+    end
   end
 
   def test_enables_ssl
