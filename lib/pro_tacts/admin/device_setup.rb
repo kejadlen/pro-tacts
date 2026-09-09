@@ -18,17 +18,6 @@ module ProTacts
     # the environment (see Web's route), so the two facts worth stating
     # — which server, under which name — are the ones the download is
     # about to carry, not a copy of them.
-    #
-    # The rest is what a download does not say for itself: the file
-    # stages an approval rather than installing, and a second install
-    # stands beside the first rather than replacing it — every render
-    # carries its own identifier, which is what makes a reinstall a cold
-    # account instead of a no-op (see Profile). Saying so is the whole
-    # reason that line is on the screen: the duplicate is the surprise,
-    # and removing the old account is the reader's move, not ours.
-    # Where the approval lives is deliberately vague — Settings, System
-    # Settings — because Apple has moved the pane between releases and a
-    # wrong path reads worse than no path.
     class DeviceSetup < Phlex::HTML
       # @rbs @hostname: String
       # @rbs @name: String
@@ -53,10 +42,6 @@ module ProTacts
                   dd(class: "type-body-sm") { @hostname }
                   dt(class: "type-label") { "account" }
                   dd(class: "type-body-sm") { @name }
-                end
-                p(class: "type-body-sm") do
-                  plain "Downloading stages the profile; the device asks for approval before it installs. " \
-                    "Each install provisions a new account, so remove the old one after reinstalling."
                 end
                 a(href: "/setup/carddav.mobileconfig", class: "btn", data_variant: "primary") {
                   "download profile"
