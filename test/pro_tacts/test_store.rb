@@ -1150,6 +1150,14 @@ class StoreTest < Minitest::Test
   # The group's address as a client sends it back changed — one digit,
   # so nothing but the value moved.
   EDITED_ADDRESS = HOUSEHOLD_ADDRESS.sub("7 Calculus", "8 Calculus") #: String
+  # The group's lines as macOS returns them on a card whose address and
+  # note nobody edited: the parameter name lowercased, its value
+  # uppercased, `pref` filled in, an unmodeled parameter dropped, and
+  # every value byte-identical (docs/macos-contacts.md, "The client
+  # rewrites every card it touches" and "An annotation survives only on
+  # its own line").
+  RESERIALIZED_ADDRESS = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "ADR;type=HOME;type=pref:") #: String
+  TAGGED_NOTE = HOUSEHOLD_NOTE.sub("NOTE:", "NOTE;LANGUAGE=en:") #: String
 
   # The round trip the whole composition rests on: a member PUTs back
   # what it downloaded, and what is stored is the card it was composed
@@ -1217,6 +1225,56 @@ class StoreTest < Minitest::Test
       composed = store.contact("aiden").vcard.to_s
       assert_includes composed, EDITED_ADDRESS
       assert_includes composed, HOUSEHOLD_ADDRESS
+      assert_empty sentry_messages
+    end
+  end
+
+  # The round trip as a real client makes it: macOS re-serializes every
+  # line of every card it touches, so the group's address comes back
+  # spelled its way on an address nobody edited. Matching bytes would
+  # call that an edit and materialize the group's line into the
+  # member's own card, which is what the composition exists to prevent.
+  def test_a_reserialized_lent_line_is_still_the_groups
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, RESERIALIZED_ADDRESS)))
+
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_equal served, store.contact("aiden").vcard.to_s
+      assert_empty sentry_messages
+    end
+  end
+
+  # The same for a note, whose re-serialization is a parameter the
+  # client does not model going missing.
+  def test_a_lent_note_stripped_of_its_parameter_is_still_the_groups
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, members: ["aiden"], lines: [TAGGED_NOTE])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub(TAGGED_NOTE, HOUSEHOLD_NOTE)))
+
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_equal served, store.contact("aiden").vcard.to_s
+      assert_empty sentry_messages
+    end
+  end
+
+  # An edit still reads as one through the re-serialization it arrives
+  # wrapped in: the value moved, and only the value is compared.
+  def test_an_edit_survives_the_reserialization_it_arrives_in
+    edited = RESERIALIZED_ADDRESS.sub("7 Calculus", "8 Calculus")
+
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, edited)))
+
+      assert_includes card_row(store, "aiden").fetch(:vcard), edited
+      assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
       assert_empty sentry_messages
     end
   end

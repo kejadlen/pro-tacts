@@ -91,6 +91,13 @@ module ProTacts
     # to spin.
     GROUP_ID_ATTEMPTS = 8 #: Integer
 
+    # The property names whose value is structured rather than free
+    # text (RFC 2426 section 3.2.1), among the two a group may lend:
+    # ADR is components, NOTE is text (db/migrations/004_groups.rb).
+    # Which reading applies is the caller's to know — the parser holds
+    # no value types — and this is the one caller that compares values.
+    STRUCTURED_VALUES = %w[ADR].freeze #: Array[String]
+
     # Sequel's migrations, run on open. They ship with the code rather
     # than with a deployment, so the path is relative to this file.
     # `__dir__` is nil only for code with no file behind it, which a
@@ -600,9 +607,9 @@ module ProTacts
     # to the group would reach nobody.
     #
     # Each lent line is classified against the submission, and only one
-    # of the four shapes moves a byte. The line coming back as the same
-    # bytes is the group's, untouched, and it goes. One line of that
-    # name left over is an edit to the shared value and none is a
+    # of the four shapes moves a byte. The line coming back with the
+    # same value is the group's, untouched, and it goes. One line of
+    # that name left over is an edit to the shared value and none is a
     # deletion of it: both stay in the card as they arrived, because
     # propagating either is the next task's (the plan's "Edits
     # propagate to the group"), and storing the edit is what keeps it
@@ -623,12 +630,14 @@ module ProTacts
       ambiguous = 0
 
       inherited.each do |lent|
+        lent_line = parsed_line(lent.line)
         candidates = unaccounted.select { it.names?(property_name(lent.line)) }
-        # Blind to identical bytes the way the editor's digests are
-        # (VCard::Parser::Line#digest): where a member's own card
-        # spells a line exactly as its group does, which copy this
-        # takes is undecidable and the bytes make it not matter.
-        match = candidates.find { it.verbatim.chomp == lent.line.chomp }
+        # Blind to equal values the way the editor's digests are blind
+        # to identical bytes (VCard::Parser::Line#digest): where a
+        # member's own card carries the value its group lends, which
+        # copy this takes is undecidable and the values make it not
+        # matter.
+        match = candidates.find { same_value?(it, lent_line) }
         if match
           unaccounted.delete_at(
             unaccounted.index(match) #: Integer
@@ -641,6 +650,51 @@ module ProTacts
 
       report_ambiguous_inherited_lines(ambiguous)
       untouched.reduce(vcard) { |rest, line| rest.substitute(line.digest, []) }
+    end
+
+    # A lent line as the parser reads it: one logical line, the group
+    # schema admitting no other shape (db/migrations/004_groups.rb).
+    #: (String line) -> VCard::Parser::Line
+    def parsed_line(line)
+      VCard.new(line).lines.fetch(0)
+    end
+
+    # Whether a submitted line says what the group lends, which is a
+    # question about the values and not about the bytes: macOS
+    # re-serializes every card it touches, so `ADR;TYPE=home` comes
+    # back `ADR;type=HOME;type=pref` on an address nobody edited, and a
+    # parameter the client does not model is dropped from a NOTE
+    # (docs/macos-contacts.md, "The client rewrites every card it
+    # touches"). Comparing bytes reads every such line as an edit.
+    #
+    # So the parameters are not compared at all — the client rewrites
+    # them, and invents them where the server sent none (the same
+    # doc's annotation probe answered a bare `ADR` with
+    # `ADR;type=WORK`). The cost is that a submission changing only a
+    # lent line's TYPE reads as untouched and is dropped, which is the
+    # trade this evidence leaves: no parameter a client returns can be
+    # told from one it made up.
+    #
+    # A line that will not read has no value to compare and falls back
+    # to its bytes, which still recognize the line nobody touched.
+    #: (VCard::Parser::Line line, VCard::Parser::Line lent) -> bool
+    def same_value?(line, lent)
+      value = value_of(lent)
+      return line.verbatim.chomp == lent.verbatim.chomp if value.nil?
+
+      value_of(line) == value
+    end
+
+    # What a line says, as the reading its property's value type calls
+    # for: an ADR compares component by component (RFC 2426 section
+    # 3.2.1) and a NOTE as its unescaped text (section 2.4.2). Nil for
+    # a line that would not read, which has no value at all.
+    #: (VCard::Parser::Line line) -> Array[String]?
+    def value_of(line)
+      property = line.property
+      return nil if property.nil?
+
+      STRUCTURED_VALUES.include?(property.name.upcase) ? property.components : [property.text]
     end
 
     # The submission's lines that the member's own stored card does not
