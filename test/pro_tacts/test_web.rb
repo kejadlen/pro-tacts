@@ -40,6 +40,7 @@ class WebTest < Minitest::Test
     assert_equal "addressbook", last_response["DAV"]
     assert_includes last_response["Allow"], "OPTIONS"
     assert_includes last_response["Allow"], "PROPFIND"
+    assert_includes last_response["Allow"], "DELETE"
   end
 
   def test_propfind_root
@@ -510,6 +511,81 @@ class WebTest < Minitest::Test
 
       get "/dav/addressbook/new.vcf"
       assert_equal card, last_response.body
+    end
+  end
+
+  ## Deletes
+
+  def test_delete_removes_the_card
+    with_contacts({"aiden" => "Aiden"}) do
+      delete "/dav/addressbook/aiden.vcf"
+
+      assert_equal 204, last_response.status
+      assert_nil last_response["Content-Type"]
+      assert_nil last_response["Content-Length"]
+
+      get "/dav/addressbook/aiden.vcf"
+      assert_equal 404, last_response.status
+    end
+  end
+
+  # RFC 6578 section 3.2: the removal a client syncs on is href plus
+  # 404, with no propstat, and the token has to move for it to arrive.
+  def test_delete_reaches_a_syncing_client_as_a_removal
+    with_contacts({"aiden" => "Aiden", "znorth" => "Zoe"}) do
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection("")
+      token = last_response.body[%r{<d:sync-token>([^<]+)</d:sync-token>}, 1]
+
+      delete "/dav/addressbook/aiden.vcf"
+
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(token)
+
+      assert_equal 207, last_response.status
+      assert_includes last_response.body, "<d:href>/dav/addressbook/aiden.vcf</d:href>"
+      assert_includes last_response.body, "<d:status>HTTP/1.1 404 Not Found</d:status>"
+      refute_includes last_response.body, "znorth"
+      refute_equal token, last_response.body[%r{<d:sync-token>([^<]+)</d:sync-token>}, 1]
+    end
+  end
+
+  def test_delete_of_a_card_that_is_not_there_is_a_404
+    with_contacts({}) do
+      delete "/dav/addressbook/nobody.vcf"
+
+      assert_equal 404, last_response.status
+    end
+  end
+
+  def test_delete_of_an_id_this_server_cannot_have_is_a_404
+    with_contacts({}) do
+      delete "/dav/addressbook/not.an.id.vcf"
+
+      assert_equal 404, last_response.status
+    end
+  end
+
+  # RFC 7232 section 3.1, the same conditional the PUT honors.
+  def test_delete_with_the_current_etag_removes_the_card
+    with_contacts({"aiden" => "Aiden"}) do
+      get "/dav/addressbook/aiden.vcf"
+
+      delete "/dav/addressbook/aiden.vcf", {}, "HTTP_IF_MATCH" => last_response["ETag"]
+
+      assert_equal 204, last_response.status
+    end
+  end
+
+  def test_delete_with_a_stale_etag_is_refused_and_changes_nothing
+    with_contacts({"aiden" => "Aiden"}) do
+      get "/dav/addressbook/aiden.vcf"
+      before = last_response.body
+
+      delete "/dav/addressbook/aiden.vcf", {}, "HTTP_IF_MATCH" => %("#{"0" * 64}")
+
+      assert_equal 412, last_response.status
+
+      get "/dav/addressbook/aiden.vcf"
+      assert_equal before, last_response.body
     end
   end
 

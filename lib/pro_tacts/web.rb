@@ -298,7 +298,7 @@ module ProTacts
         # support (RFC 6352 section 6.1); the header is RFC 4918 section 10.1.
         r.options do
           response["DAV"] = "addressbook"
-          response["Allow"] = "OPTIONS, PROPFIND, REPORT, PUT"
+          response["Allow"] = "OPTIONS, PROPFIND, REPORT, PUT, DELETE"
           ""
         end
 
@@ -364,9 +364,12 @@ module ProTacts
               # all — the PUT they prompted was what log/unhandled
               # captured them for. DAV:write covers PUT and PROPPATCH
               # (RFC 3744 section 3.2), and PUT is the one of the pair
-              # answered; DAV:bind is adding a member to the collection
-              # (section 3.9) and DAV:unbind removing one (section 3.10),
-              # neither of which has a route yet.
+              # answered; DAV:unbind is removing a member from the
+              # collection (section 3.10), which DELETE answers.
+              # DAV:bind is adding one (section 3.9), and the create it
+              # names — POST to the collection with DAV:add-member — has
+              # no route: PUT to the member URI is how both clients
+              # create, so nothing has asked for it.
               collection_response = <<~XML
                 <d:response>
                   <d:href>/dav/addressbook/</d:href>
@@ -545,6 +548,14 @@ module ProTacts
             # same fall-through-to-404 the GET handler gives it.
             write_card(id) if id.match?(Contact::ID_FORMAT)
           end
+
+          # DELETE removes the card at the member URI (RFC 4918 section
+          # 9.6) — the DAV:unbind privilege the collection advertises,
+          # and what iOS sends when a contact is deleted on the phone.
+          r.delete String do |filename|
+            id = filename.delete_suffix(".vcf")
+            remove_card(id) if id.match?(Contact::ID_FORMAT)
+          end
         end
       end
     end
@@ -672,6 +683,38 @@ module ProTacts
       # A returned "" would land in the body and pin text/html and
       # content-length onto the 204, which a bodyless status must not
       # carry (Rack 3's lint rejects both); nil leaves it bodyless.
+      nil
+    end
+
+    # The whole of the DELETE, a private method for write_card's reason:
+    # a Roda route block cannot return early.
+    #: (String id) -> String?
+    def remove_card(id)
+      # An unmapped URI is a 404, not a silent success: RFC 4918 section
+      # 9.6 gives DELETE no idempotent status, and a client deleting what
+      # it believes exists is owed the disagreement. Falls through to the
+      # not_found handler the way the GET and PUT of a bad id do.
+      existing = store.contact(id)
+      return unless existing
+
+      # The lost-update conditional, RFC 7232 section 3.1, on the same
+      # terms the PUT gets it: a client that names the representation it
+      # means to remove must not remove one that changed underneath it.
+      # No recorded session has sent one on a DELETE — the iOS delete
+      # carried none, which section 3.1 leaves unconditional and
+      # allowed, and macOS has sent no DELETE at all. Answered anyway,
+      # because ignoring the header is the lost update it exists to
+      # refuse, and the PUT's own check is right here to reuse.
+      if_match = request.env["HTTP_IF_MATCH"]
+      return plain_412 if if_match && !if_match_satisfied?(if_match, existing)
+
+      # The change-log entry Store#delete leaves in the same transaction
+      # is what a syncing client is told: sync-collection answers a
+      # removed member as href plus 404 (#missing_response).
+      store.delete(id)
+      response.status = 204
+
+      # Bodyless for the 204, write_card's reason.
       nil
     end
 

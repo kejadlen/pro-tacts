@@ -26,6 +26,7 @@ class Roda
 
     def is: (*untyped matchers) { (*untyped) -> untyped } -> void
     def on: (*untyped matchers) { (*untyped) -> untyped } -> void
+    def delete: (*untyped matchers) ?{ (*untyped) -> untyped } -> void
     def get: (*untyped matchers) ?{ (*untyped) -> untyped } -> void
     def options: (*untyped matchers) ?{ (*untyped) -> untyped } -> void
     def post: (*untyped matchers) ?{ (*untyped) -> untyped } -> void
