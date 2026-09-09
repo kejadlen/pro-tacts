@@ -210,15 +210,44 @@ The two companion results are worse than losing the annotation. Both
 `X-PT-GROUP` lines came back, and both came back pointing at nothing: the
 client stripped `item9.` off the address it was grouped with, and
 renumbered `item8.TEL` and its `X-ABLabel` to `item1` while leaving the
-third line of that group behind. A marker that survives its own anchor
-reads as data and means nothing, so line-level provenance cannot rest on
-either shape.
+third line of that group behind.
+
+That probe chose its own numbering — `item8` and `item9`, picked to dodge
+collisions — so it could not tell a broken binding from numbering the
+client disliked. `rake probe:renumber` settles it with two groups spelled
+the way a client spells its own, dense and in document order, each
+anchored by an `X-ABLabel`:
+
+| Sent | Came back |
+|---|---|
+| `item1.TEL` + `item1.X-ABLabel` | `item2.TEL` + `item2.X-ABLabel` |
+| `item3.EMAIL` + `item3.X-ABLabel` | `item1.EMAIL` + `item1.X-ABLabel` |
+| `item1.X-PT-GROUP:kxsv` | `item1.X-PT-GROUP:kxsv` |
+| `item3.X-PT-GROUP:mnop` | `item3.X-PT-GROUP:mnop` |
+
+The client reordered `EMAIL` above `TEL`, renumbered both groups densely
+in that new order, and left both markers on the numbers they arrived
+with. Neither followed the group it was sent with, and the damage is
+worse than orphaning: `item1.X-PT-GROUP` went out naming the phone and
+came back naming the email address. A companion does not detach, it
+re-attaches to whatever property the renumbering leaves on its number.
+
+Unknown properties keep their `itemN` prefix exactly as sent while
+modeled ones are renumbered, so the two numbering systems are
+independent. No card is safe from this: reordering alone moves a group
+out from under its marker even when the numbering was dense and in order
+to begin with. Line-level provenance cannot rest on a companion.
 
 What a card-level property can carry is a fact about the card as a whole
 — which version of a group's lines it was composed from, for instance.
 What it cannot do is name a line, which is what attribution needs.
 Verified 2026-09-09 against macOS 26.5.1; iOS numbers property groups
 differently and has not been tested.
+
+One thing the second probe caught in passing: the card went out with
+`N:Boole;Renumber;;;` and `FN:Probe Renumber`, and came back with
+`FN:Renumber Boole`. The client recomputes `FN` from `N` where the two
+disagree, so a composed `FN` is not stable across a round trip.
 
 ## Profile pictures
 
