@@ -69,7 +69,13 @@ module ProTacts
           end
           body do
             header(class: "admin-header") do
-              a(href: "/") { "pro-tacts" }
+              # The groups list rides beside the name because it is
+              # where a group is created, and creating one is a thing
+              # to reach from anywhere; search still finds one by name.
+              nav do
+                a(href: "/") { "pro-tacts" }
+                a(href: "/groups") { "groups" }
+              end
               # Every screen's chrome, not the dashboard's alone: the
               # input keeps the query it carries — a results page has
               # somewhere to be besides the input — and focuses only
@@ -108,13 +114,10 @@ module ProTacts
             # Device setup belongs here because the dashboard is a
             # search over contacts and /setup is not a contact — a
             # header link would put it beside the search on every
-            # screen, at the weight the app's own name has. The groups
-            # list is here for the same weight: search finds a group by
-            # name, and this is where one is created.
+            # screen, at the weight the app's own name has.
             footer(class: "admin-footer") do
               span(class: "type-label") { ProTacts.config.version || "dev server" }
               span(class: "type-label") { "+debug" } if ProTacts.config.debug?
-              a(href: "/groups", class: "type-label") { "groups" }
               a(href: "/setup", class: "type-label") { "device setup" }
             end
             # A server-rendered toast, Gloss's [role=status] contract:

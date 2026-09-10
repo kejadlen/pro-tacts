@@ -333,6 +333,17 @@ textarea:focus {
   color: var(--gl-color-text-primary);
   text-decoration: none;
 }
+/* The name and the groups link as one group on the left, so the
+   header's space-between still splits two things. The link after the
+   name steps down a shade: it is a destination, not the app's name. */
+.admin-header nav {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gl-space-s);
+}
+.admin-header nav a + a {
+  color: var(--gl-color-text-secondary);
+}
 
 /* The page's other chrome bar, built off the header's rule: the same
    block and inline padding, and the hairline on the opposite edge, so
