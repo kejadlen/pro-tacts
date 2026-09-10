@@ -583,16 +583,19 @@ img.avatar {
 /* The change log in the third card, on the record's own grid so the
    two read as one page (ContactsShow#change_rows). The margin is the
    pre's above, for the same reason: a summary and the block it
-   discloses are one line apart, not a card's gap. An etag is 64 hex
-   digits and a pair of quotes, which is wider than the value column
-   on a phone and the one thing here that must not be shortened — so
-   it breaks mid-hash rather than pushing the card sideways, the whole
-   value on the screen either way. */
+   discloses are one line apart, not a card's gap. */
 .change-log {
   margin-top: var(--gl-space-2xs);
 }
-.change-log dd > .type-mono {
-  overflow-wrap: anywhere;
+/* The etag, cut to a short hash (Format.short_etag) with the whole of
+   it in the title. Dotted rather than the solid underline a link
+   wears, and the help cursor over it: the mark has to say there is
+   more here without saying this navigates, since it does not. Both
+   are spelled out rather than left to the browser, whose defaults for
+   abbr[title] differ on each of them. */
+.change-log abbr {
+  cursor: help;
+  text-decoration: underline dotted;
 }
 
 /* The lines a write moved, under the etag they hashed to. Removed

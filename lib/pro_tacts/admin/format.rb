@@ -43,6 +43,35 @@ module ProTacts
         birthday&.to_s || property.value
       end
 
+      # How much of an etag's hash is shown before it is cut. Twelve
+      # hex digits is git's own longest short-hash, and this address
+      # book will never hold enough cards for two to collide in a
+      # reader's eye.
+      ETAG_DIGITS = 12 #: Integer
+
+      # An etag's hash, without the quotes an entity-tag is spelled
+      # with (Contact.etag_for): those are the wire's punctuation, and
+      # a screen showing a card's history is not the wire. Anything
+      # not shaped like an entity-tag comes back untouched — there is
+      # no second spelling to guess at.
+      #: (String etag) -> String
+      def self.etag_digest(etag)
+        etag[/\A"(.*)"\z/, 1] || etag
+      end
+
+      # The hash cut down for display. Whole, it is 64 digits, which
+      # wraps over two lines in a record's value column and reads as a
+      # wall either way; the view hands the whole of it to the title
+      # of the <abbr> this sits in, so the cut is a display and not a
+      # loss.
+      #: (String etag) -> String
+      def self.short_etag(etag)
+        digest = etag_digest(etag)
+        return digest if digest.length <= ETAG_DIGITS
+
+        "#{digest[0, ETAG_DIGITS]}…"
+      end
+
       # The other way to render one of those stamps: as itself, minus
       # the milliseconds. What the change log records happened at a
       # moment someone may need to line up against a client's own logs,

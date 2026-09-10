@@ -226,7 +226,17 @@ module ProTacts
           dt(class: "type-label") { change.action }
           dd(class: "type-body-sm") do
             div { Format.stamp(change.created_at) }
-            div(class: "type-mono") { change.etag } if change.etag
+            # <abbr>, because a cut hash is an abbreviation of one and
+            # the title is where the whole value stays reachable. A
+            # tooltip is hover's, so it is out of reach on a touch
+            # screen — the reason the shortened form has to be enough
+            # to tell two writes apart on its own, and the full etag a
+            # thing to reach for rather than to read.
+            if change.etag
+              abbr(class: "type-mono", title: Format.etag_digest(change.etag)) do
+                Format.short_etag(change.etag)
+              end
+            end
             diff_lines(change.diff)
           end
         end

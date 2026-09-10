@@ -137,6 +137,16 @@ class FormatTest < Minitest::Test
     assert_nil ProTacts::Admin::Format.birthday(contact(bare))
   end
 
+  def test_an_etag_shows_as_a_short_bare_hash
+    etag = %("#{"ab12cd34ef56" * 5}")
+
+    assert_equal "ab12cd34ef56…", ProTacts::Admin::Format.short_etag(etag)
+  end
+
+  def test_a_hash_no_longer_than_the_cut_keeps_every_digit
+    assert_equal "ab12cd34", ProTacts::Admin::Format.short_etag(%("ab12cd34"))
+  end
+
   def test_a_stamp_drops_the_milliseconds_and_nothing_else
     assert_equal "2026-09-04T20:35:22Z",
                  ProTacts::Admin::Format.stamp("2026-09-04T20:35:22.481Z")

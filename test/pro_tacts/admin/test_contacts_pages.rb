@@ -454,9 +454,6 @@ class AdminContactsPagesTest < Minitest::Test
       body = last_response.body
       assert_includes body, '<details><summary class="type-label">change log</summary>'
       assert_includes body, '<dt class="type-label">put</dt>'
-      # An entity-tag's quotes are part of it (Contact.etag_for), so
-      # they reach the page as the escape Phlex writes them with.
-      assert_includes body, store.contact("ada").etag.gsub('"', "&quot;")
       assert_includes body, store.changes.last.created_at.sub(/\.\d+Z\z/, "Z")
       refute_includes body, "<details open"
     end
@@ -475,6 +472,21 @@ class AdminContactsPagesTest < Minitest::Test
       body = last_response.body
       actions = body.scan(/<dt class="type-label">(put|edit|delete|group)<\/dt>/).flatten
       assert_equal %w[edit put], actions
+    end
+  end
+
+  # The hash is cut to a readable length and the whole of it rides the
+  # abbr's title, so the value stays reachable without a wall of hex
+  # in the value column. The quotes an entity-tag is spelled with are
+  # the wire's and do not come to the page.
+  def test_the_change_log_cuts_the_etag_down_and_keeps_it_whole
+    with_contacts({"ada" => ADA}) do |store|
+      get "/contacts/ada"
+
+      digest = store.contact("ada").etag.delete('"')
+      assert_includes last_response.body,
+                      %(<abbr class="type-mono" title="#{digest}">#{digest[0, 12]}…</abbr>)
+      refute_includes last_response.body, "&quot;#{digest}"
     end
   end
 
