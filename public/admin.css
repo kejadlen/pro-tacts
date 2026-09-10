@@ -584,6 +584,12 @@ img.avatar {
   color: var(--gl-color-text-secondary);
 }
 
+/* A tag that opens a record is still a chip, not running text, so it
+   sheds Gloss' link underline the way Gloss' own a.btn does. */
+a.tag {
+  text-decoration: none;
+}
+
 /* The stored card in its own collapsed card under the record — the
    column's gap spaces the two, so no margin here. <details> is native,
    keeping the admin UI script-free; the summary rides the label
