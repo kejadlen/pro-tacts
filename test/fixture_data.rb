@@ -88,20 +88,30 @@ module FixtureData
 
   #: (ProTacts::Store store) -> void
   def self.seed_groups(store)
-    database = store.instance_variable_get(:@database)
+    seed_group(store, name: "Booles", lines: HOUSEHOLD, members: MEMBERS)
+    seed_group(store, members: birthday_cards)
+  end
 
-    household = store.create_group(name: "Booles")
-    HOUSEHOLD.each.with_index do |line, position|
-      database[:group_properties].insert(group_id: household, position:, line:)
+  # A group, seeded without a change-log entry for any member it moves
+  # (see MEMBERS for why), and its id. Tests seed theirs here too, so
+  # the change log they assert on holds only what the test wrote.
+  #: (ProTacts::Store store, ?name: String?, ?lines: Array[String], ?members: Array[String]) -> String
+  def self.seed_group(store, name: nil, lines: [], members: [])
+    group_id = store.create_group(name:)
+    lines.each.with_index do |line, position|
+      database(store)[:group_properties].insert(group_id:, position:, line:)
     end
-    MEMBERS.each do |id|
-      database[:group_members].insert(group_id: household, card_id: id)
+    members.each do |card_id|
+      database(store)[:group_members].insert(group_id:, card_id:)
     end
+    group_id
+  end
 
-    birthdays = store.create_group
-    birthday_cards.each do |id|
-      database[:group_members].insert(group_id: birthdays, card_id: id)
-    end
+  # The store's own database, which nothing public exposes and nothing
+  # public should; seeding is the one reason to reach it.
+  #: (ProTacts::Store store) -> Sequel::Database
+  def self.database(store)
+    store.instance_variable_get(:@database)
   end
 
   # Builds the database and returns a store still open on it, for the
@@ -132,11 +142,10 @@ module FixtureData
   # StoreTest#database in test/pro_tacts/test_store.rb), because nothing
   # public exposes it and nothing public should.
   def self.backdate(store, ids)
-    database = store.instance_variable_get(:@database)
     now = Time.now.utc
     ids.each_with_index do |id, index|
       stamp = (now - ago_seconds(index)).strftime("%Y-%m-%dT%H:%M:%S.%3NZ")
-      database[:cards].where(id:).update(updated_at: stamp)
+      database(store)[:cards].where(id:).update(updated_at: stamp)
     end
   end
 end

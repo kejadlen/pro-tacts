@@ -6,10 +6,8 @@ require "digest"
 require "fileutils"
 require "pathname"
 require "rack/test"
-require "tmpdir"
 
 require "pro_tacts/config"
-require "pro_tacts/store"
 require "pro_tacts/vcard"
 require "pro_tacts/web"
 
@@ -17,6 +15,7 @@ class WebTest < Minitest::Test
   include Sentry::TestHelper
   include SentryMessages
   include Rack::Test::Methods
+  include ThrowawayContacts
 
   def app
     ProTacts::Web
@@ -346,7 +345,7 @@ class WebTest < Minitest::Test
     address = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
 
     with_contacts({"aiden" => "Aiden"}) do |store|
-      lend(store, "aiden", address)
+      FixtureData.seed_group(store, name: "Booles", lines: [address], members: ["aiden"])
 
       get "/dav/addressbook/aiden.vcf"
       served = last_response.body
@@ -370,7 +369,7 @@ class WebTest < Minitest::Test
     address = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
 
     with_contacts({"aiden" => "Aiden"}) do |store|
-      lend(store, "aiden", address)
+      FixtureData.seed_group(store, name: "Booles", lines: [address], members: ["aiden"])
 
       get "/dav/addressbook/aiden.vcf"
       edited = last_response.body.sub("7 Calculus", "8 Calculus")
@@ -727,48 +726,14 @@ class WebTest < Minitest::Test
     end
   end
 
-  # A card as Contacts would send one, so the routes are exercised
-  # against stored bytes rather than anything this test renders.
-  def card(id, name)
-    "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:#{name}\r\nUID:#{id}\r\nEND:VCARD\r\n"
-  end
-
   # The route's xml_escape, reversed, for reading a card back out of
   # a multiget body and comparing it with what was PUT.
   def xml_unescape(text)
     text.gsub("&lt;", "<").gsub("&gt;", ">").gsub("&amp;", "&")
   end
 
-  # Hands the app a throwaway store so the multi-contact routes can be
-  # exercised without touching the exchange fixture data, and yields it
-  # so a test can change a card mid-request-sequence. Only the store is
-  # swapped: nothing in a request reads configuration.
-  def with_contacts(names)
-    Dir.mktmpdir do |dir|
-      original = ProTacts::Web.store
-
-      ProTacts::Store.connect(Pathname.new(dir) / "contacts.db") do |store|
-        ProTacts::Web.store = store
-        names.each do |id, name|
-          store.put(id, ProTacts::VCard.new(card(id, name)))
-        end
-        yield store
-      ensure
-        ProTacts::Web.store = original
-      end
-    end
-  end
-
-  # Puts a card in a group of its own that lends it one line, through
-  # the store's own database the way the fixture seeder's do
-  # (test/fixture_data.rb), so the change log holds only what the test
-  # itself wrote.
-  def lend(store, id, line)
-    database = store.instance_variable_get(:@database)
-    group = store.create_group(name: "Booles")
-    database[:group_properties].insert(group_id: group, position: 0, line:)
-    database[:group_members].insert(group_id: group, card_id: id)
-  end
+  # Contacts by id and name, each a bare card.
+  def with_contacts(names, &) = super(names.to_h { |id, name| [id, card(id, name)] }, &)
 
   def etag_only_propfind
     <<~XML

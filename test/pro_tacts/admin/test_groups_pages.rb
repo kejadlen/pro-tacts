@@ -1,11 +1,7 @@
 require_relative "../../test_helper"
 
-require "pathname"
 require "rack/test"
-require "tmpdir"
 
-require "pro_tacts/store"
-require "pro_tacts/vcard"
 require "pro_tacts/web"
 
 # The group screens, exercised the way AdminContactsPagesTest exercises
@@ -13,6 +9,7 @@ require "pro_tacts/web"
 # store.
 class AdminGroupsPagesTest < Minitest::Test
   include Rack::Test::Methods
+  include ThrowawayContacts
 
   def app
     ProTacts::Web
@@ -22,26 +19,11 @@ class AdminGroupsPagesTest < Minitest::Test
     header "Tailscale-User-Login", "test@example.com"
   end
 
-  def card(id, name)
-    "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:#{name}\r\nUID:#{id}\r\nEND:VCARD\r\n"
-  end
-
   ADDRESS = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom" #: String
   NOTE = "NOTE:Gate code 1854." #: String
 
-  def with_contacts(names)
-    Dir.mktmpdir do |dir|
-      original = ProTacts::Web.store
-
-      ProTacts::Store.connect(Pathname.new(dir) / "contacts.db") do |store|
-        ProTacts::Web.store = store
-        names.each { |id, name| store.put(id, ProTacts::VCard.new(card(id, name))) }
-        yield store
-      ensure
-        ProTacts::Web.store = original
-      end
-    end
-  end
+  # Contacts by id and name, each a bare card.
+  def with_contacts(names, &) = super(names.to_h { |id, name| [id, card(id, name)] }, &)
 
   def household(store, members: %w[george mary])
     id = store.create_group(name: "Booles")

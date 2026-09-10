@@ -493,7 +493,7 @@ class StoreTest < Minitest::Test
   # member's write did, not what it inherited while doing it.
   def test_a_lent_line_is_no_part_of_a_members_diff
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub("FN:Aiden", "FN:Aiden Smith")))
@@ -995,23 +995,6 @@ class StoreTest < Minitest::Test
   HOUSEHOLD_ADDRESS = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom" #: String
   HOUSEHOLD_NOTE = "NOTE:Gate code 1854." #: String
 
-  # A group's own row is Store#create_group's, which is what mints the
-  # id; its properties and its members land the way the fixture
-  # seeder's do, straight through the store's own database, so the
-  # change log holds only what the test itself wrote.
-  # Hands back the id, which is the only way a caller learns it.
-  def add_group(store, members:, lines:, name: nil)
-    db = database(store)
-    id = store.create_group(name:)
-    lines.each.with_index do |line, position|
-      db[:group_properties].insert(group_id: id, position:, line:)
-    end
-    members.each do |card_id|
-      db[:group_members].insert(group_id: id, card_id:)
-    end
-    id
-  end
-
   # What a group lends now, in the order it lends it — the rows a
   # propagated edit rewrites.
   def lent_lines(store, group)
@@ -1029,7 +1012,7 @@ class StoreTest < Minitest::Test
     )
 
     with_store({"aiden" => born, "znorth" => ZED}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
 
       assert_equal composed, store.contact("aiden").vcard.to_s
       assert_equal composed, store.contacts.find { it.id == "aiden" }.vcard.to_s
@@ -1042,7 +1025,7 @@ class StoreTest < Minitest::Test
   def test_a_contact_in_no_group_serves_unchanged_bytes_and_etag
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       before = store.contact("aiden")
-      add_group(store, members: ["znorth"], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: ["znorth"], lines: [HOUSEHOLD_ADDRESS])
 
       after = store.contact("aiden")
       assert_equal AIDEN, after.vcard.to_s
@@ -1056,7 +1039,7 @@ class StoreTest < Minitest::Test
   def test_leaving_a_group_restores_the_stored_bytes
     with_store({"aiden" => AIDEN}) do |store|
       before = store.contact("aiden").etag
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       refute_equal before, store.contact("aiden").etag
 
       database(store)[:group_members].where(card_id: "aiden").delete
@@ -1074,8 +1057,8 @@ class StoreTest < Minitest::Test
   def test_two_groups_compose_in_a_fixed_order
     with_store({"aiden" => AIDEN}) do |store|
       lent = {
-        add_group(store, members: ["aiden"], lines: [HOUSEHOLD_NOTE]) => HOUSEHOLD_NOTE,
-        add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS]) => HOUSEHOLD_ADDRESS,
+        FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_NOTE]) => HOUSEHOLD_NOTE,
+        FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS]) => HOUSEHOLD_ADDRESS,
       }
 
       first, second = lent.sort.map { it.last }
@@ -1089,7 +1072,7 @@ class StoreTest < Minitest::Test
   # no index row, and rebuilding the index leaves it that way.
   def test_the_index_holds_nothing_the_group_composes_in
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
       assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
       assert_includes indexed_names(store, "aiden"), "FN"
@@ -1110,7 +1093,7 @@ class StoreTest < Minitest::Test
   # different test's subject.
   def test_writes_log_the_composed_etag_for_a_member
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
       put = store.put("aiden", vcard(store.contact("aiden").vcard.to_s))
       edit = store.rewrite("aiden", vcard(AIDEN), birthday: nil)
@@ -1126,7 +1109,7 @@ class StoreTest < Minitest::Test
   # collection — a screen marks a row as the household's from either.
   def test_an_inherited_line_carries_its_groups_name
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, name: "Household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, name: "Household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
       listed = store.contacts.find { it.id == "aiden" }
       [store.contact("aiden"), listed].each do |contact|
@@ -1140,7 +1123,7 @@ class StoreTest < Minitest::Test
   # otherwise leave the row marked with nothing at all.
   def test_a_nameless_groups_lines_are_marked_with_its_id
     with_store({"aiden" => AIDEN}) do |store|
-      id = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
       listed = store.contacts.find { it.id == "aiden" }
       [store.contact("aiden"), listed].each do |contact|
@@ -1156,9 +1139,9 @@ class StoreTest < Minitest::Test
   # inherited reads, not this one, that have nothing of it to carry.
   def test_the_groups_a_contact_is_in_are_read_with_their_labels
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
-      named = add_group(store, name: "Booles", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
-      nameless = add_group(store, members: ["aiden"], lines: [])
-      add_group(store, name: "Neighbours", members: [], lines: [HOUSEHOLD_NOTE])
+      named = FixtureData.seed_group(store, name: "Booles", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      nameless = FixtureData.seed_group(store, members: ["aiden"], lines: [])
+      FixtureData.seed_group(store, name: "Neighbours", members: [], lines: [HOUSEHOLD_NOTE])
 
       expected = {named => "Booles", nameless => nameless}.sort.map { it.last }
       assert_equal expected, store.groups_of("aiden").map(&:label)
@@ -1245,7 +1228,7 @@ class StoreTest < Minitest::Test
 
   def test_a_group_reads_whole
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
-      id = add_group(store, name: "Household", members: %w[znorth aiden], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      id = FixtureData.seed_group(store, name: "Household", members: %w[znorth aiden], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
 
       group = store.group(id)
       assert_equal "Household", group.label
@@ -1270,7 +1253,7 @@ class StoreTest < Minitest::Test
   # "The fan-out").
   def test_setting_a_groups_lines_reaches_every_member
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
-      id = add_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
+      id = FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
 
       store.set_group_lines(id, [EDITED_ADDRESS, HOUSEHOLD_NOTE])
 
@@ -1286,7 +1269,7 @@ class StoreTest < Minitest::Test
 
   def test_a_joining_member_serves_the_group_and_is_logged
     with_store({"aiden" => AIDEN}) do |store|
-      id = add_group(store, members: [], lines: [HOUSEHOLD_ADDRESS])
+      id = FixtureData.seed_group(store, members: [], lines: [HOUSEHOLD_ADDRESS])
 
       store.add_member(id, "aiden")
       store.add_member(id, "aiden")
@@ -1299,7 +1282,7 @@ class StoreTest < Minitest::Test
 
   def test_a_leaving_member_stops_serving_the_group_and_is_logged
     with_store({"aiden" => AIDEN}) do |store|
-      id = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
       store.remove_member(id, "aiden")
 
@@ -1313,7 +1296,7 @@ class StoreTest < Minitest::Test
   # is on no card.
   def test_writes_that_move_no_served_card_log_nothing
     with_store({"aiden" => AIDEN}) do |store|
-      id = add_group(store, members: [], lines: [])
+      id = FixtureData.seed_group(store, members: [], lines: [])
 
       store.add_member(id, "aiden")
       store.rename_group(id, name: "Household")
@@ -1350,7 +1333,7 @@ class StoreTest < Minitest::Test
   # (docs/plans/2026-08-24-vcard-storage-and-groups.md).
   def test_a_members_put_of_its_served_card_stores_what_it_started_with
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
       served = store.contact("aiden").vcard.to_s
 
       contact = store.put("aiden", vcard(served))
@@ -1367,7 +1350,7 @@ class StoreTest < Minitest::Test
     born = AIDEN.sub("FN:Aiden\r\n", "FN:Aiden\r\nBDAY:1985-12-10\r\n")
 
     with_store({"aiden" => born}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served))
@@ -1385,7 +1368,7 @@ class StoreTest < Minitest::Test
     own = AIDEN.sub("FN:Aiden\r\n", "#{OWN_ADDRESS}\r\nFN:Aiden\r\n")
 
     with_store({"aiden" => own}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served))
@@ -1401,7 +1384,7 @@ class StoreTest < Minitest::Test
   # (docs/plans/2026-09-09-group-edits-propagate.md).
   def test_an_edited_lent_line_becomes_the_groups_line
     with_store({"aiden" => AIDEN}) do |store|
-      group = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      group = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS)))
@@ -1422,7 +1405,7 @@ class StoreTest < Minitest::Test
   # member's own card, which is what the composition exists to prevent.
   def test_a_reserialized_lent_line_is_still_the_groups
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, RESERIALIZED_ADDRESS)))
@@ -1437,7 +1420,7 @@ class StoreTest < Minitest::Test
   # client does not model going missing.
   def test_a_lent_note_stripped_of_its_parameter_is_still_the_groups
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [TAGGED_NOTE])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [TAGGED_NOTE])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(TAGGED_NOTE, HOUSEHOLD_NOTE)))
@@ -1457,7 +1440,7 @@ class StoreTest < Minitest::Test
     relabeled = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "ADR;type=WORK;type=pref:")
 
     with_store({"aiden" => AIDEN}) do |store|
-      group = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      group = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, relabeled)))
@@ -1474,7 +1457,7 @@ class StoreTest < Minitest::Test
   # cannot model becomes a custom label").
   def test_an_untyped_lent_line_comes_back_untyped
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [UNTYPED_ADDRESS])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [UNTYPED_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served))
@@ -1492,7 +1475,7 @@ class StoreTest < Minitest::Test
     labeled = UNTYPED_ADDRESS.sub("ADR:", "ADR;type=HOME;type=pref:")
 
     with_store({"aiden" => AIDEN}) do |store|
-      group = add_group(store, members: ["aiden"], lines: [UNTYPED_ADDRESS])
+      group = FixtureData.seed_group(store, members: ["aiden"], lines: [UNTYPED_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(UNTYPED_ADDRESS, labeled)))
@@ -1511,7 +1494,7 @@ class StoreTest < Minitest::Test
     edited = RESERIALIZED_ADDRESS.sub("7 Calculus", "8 Calculus")
 
     with_store({"aiden" => AIDEN}) do |store|
-      group = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      group = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, edited)))
@@ -1531,7 +1514,7 @@ class StoreTest < Minitest::Test
   # question, decided").
   def test_a_deleted_lent_line_leaves_the_group
     with_store({"aiden" => AIDEN}) do |store|
-      group = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      group = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub("#{HOUSEHOLD_ADDRESS}\r\n", "")))
@@ -1552,7 +1535,7 @@ class StoreTest < Minitest::Test
   # fan-out").
   def test_an_edit_reaches_every_other_member
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
-      add_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS)))
@@ -1571,7 +1554,7 @@ class StoreTest < Minitest::Test
   # member just lost.
   def test_a_deletion_reaches_every_other_member
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
-      add_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub("#{HOUSEHOLD_ADDRESS}\r\n", "")))
@@ -1590,7 +1573,7 @@ class StoreTest < Minitest::Test
   # re-fetch a card that reads the same.
   def test_an_unchanged_round_trip_fans_out_nothing
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
-      add_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
 
       store.put("aiden", vcard(store.contact("aiden").vcard.to_s))
 
@@ -1608,7 +1591,7 @@ class StoreTest < Minitest::Test
       path = Pathname.new(dir) / "contacts.db"
       group = ProTacts::Store.connect(path) do |store|
         store.put("aiden", vcard(AIDEN))
-        add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+        FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       end
 
       ProTacts::Store.connect(path) do |store|
@@ -1636,7 +1619,7 @@ class StoreTest < Minitest::Test
     labeled = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "item1.ADR:") + "\r\nitem1.X-ABLabel:dom"
 
     with_store({"aiden" => AIDEN}) do |store|
-      group = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      group = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, labeled)))
@@ -1655,8 +1638,8 @@ class StoreTest < Minitest::Test
   # read a deletion.
   def test_a_lent_line_is_not_attributed_anothers_untouched_line
     with_store({"aiden" => AIDEN}) do |store|
-      household = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
-      other = add_group(store, members: ["aiden"], lines: [OWN_ADDRESS])
+      household = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      other = FixtureData.seed_group(store, members: ["aiden"], lines: [OWN_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS)))
@@ -1673,7 +1656,7 @@ class StoreTest < Minitest::Test
   # arrived and the ambiguity is reported rather than guessed at.
   def test_two_candidates_for_one_lent_line_are_stored_and_reported
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
       submitted = served.sub(HOUSEHOLD_ADDRESS, "#{EDITED_ADDRESS}\r\n#{OWN_ADDRESS}")
 
@@ -1692,7 +1675,7 @@ class StoreTest < Minitest::Test
     own = AIDEN.sub("END:VCARD\r\n", "#{HOUSEHOLD_ADDRESS}\r\nEND:VCARD\r\n")
 
     with_store({"aiden" => own}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
       assert_equal 2, served.scan(HOUSEHOLD_ADDRESS).length
 

@@ -2,11 +2,8 @@ require_relative "../../test_helper"
 require_relative "../../photo_card"
 
 require "date"
-require "pathname"
 require "rack/test"
-require "tmpdir"
 
-require "pro_tacts/store"
 require "pro_tacts/vcard"
 require "pro_tacts/web"
 
@@ -17,6 +14,7 @@ require "pro_tacts/web"
 # date.
 class AdminContactsPagesTest < Minitest::Test
   include Rack::Test::Methods
+  include ThrowawayContacts
 
   def app
     ProTacts::Web
@@ -31,43 +29,10 @@ class AdminContactsPagesTest < Minitest::Test
     "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
     "BDAY:1985-12-10\r\nNOTE:Countess of Lovelace.\r\nUID:ada\r\nEND:VCARD\r\n"
 
-  def with_contacts(cards)
-    Dir.mktmpdir do |dir|
-      original = ProTacts::Web.store
-
-      ProTacts::Store.connect(Pathname.new(dir) / "contacts.db") do |store|
-        ProTacts::Web.store = store
-        cards.each do |id, card|
-          store.put(id, ProTacts::VCard.new(card))
-        end
-        yield store
-      ensure
-        ProTacts::Web.store = original
-      end
-    end
-  end
-
-  # A household's lines, and the seeding a group takes: a created
-  # group for the row that mints an id, and its properties and members
-  # through the store's own database the way FixtureData's do
-  # (test/fixture_data.rb), so the change log holds only what the test
-  # itself wrote.
   HOUSEHOLD = [
     "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
     "NOTE:Gate code 1854.",
   ].freeze #: Array[String]
-
-  def add_group(store, members:, lines:, name: nil)
-    database = store.instance_variable_get(:@database)
-    group_id = store.create_group(name:)
-    lines.each.with_index do |line, position|
-      database[:group_properties].insert(group_id:, position:, line:)
-    end
-    members.each do |card_id|
-      database[:group_members].insert(group_id:, card_id:)
-    end
-    group_id
-  end
 
   def test_index_lists_recently_updated_contacts
     with_contacts({"ada" => ADA}) do
@@ -320,7 +285,7 @@ class AdminContactsPagesTest < Minitest::Test
   # marked.
   def test_show_marks_the_rows_a_group_lends
     with_contacts({"ada" => ADA}) do |store|
-      add_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
+      FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
 
       get "/contacts/ada"
       marks = last_response.body.scan('<span class="badge">Booles</span>')
@@ -339,8 +304,8 @@ class AdminContactsPagesTest < Minitest::Test
   # navigable").
   def test_show_tags_the_groups_a_contact_belongs_to
     with_contacts({"ada" => ADA}) do |store|
-      named = add_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
-      nameless = add_group(store, members: ["ada"], lines: [])
+      named = FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
+      nameless = FixtureData.seed_group(store, members: ["ada"], lines: [])
 
       get "/contacts/ada"
       tags = last_response.body.scan(%r{<a href="/groups/([^"]*)" class="tag">([^<]*)</a>})
@@ -367,7 +332,7 @@ class AdminContactsPagesTest < Minitest::Test
   # then not say where.
   def test_show_marks_a_nameless_groups_rows_with_its_id
     with_contacts({"ada" => ADA}) do |store|
-      id = add_group(store, members: ["ada"], lines: HOUSEHOLD)
+      id = FixtureData.seed_group(store, members: ["ada"], lines: HOUSEHOLD)
 
       get "/contacts/ada"
       marks = last_response.body.scan(%r{<span class="badge">([^<]*)</span>})
@@ -826,7 +791,7 @@ class AdminContactsPagesTest < Minitest::Test
   # page is where an inherited row is read.
   def test_the_edit_screen_omits_the_rows_a_group_lends
     with_contacts({"ada" => ADA}) do |store|
-      add_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
+      FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
 
       get "/contacts/ada/edit"
 
@@ -843,7 +808,7 @@ class AdminContactsPagesTest < Minitest::Test
     noteless = ADA.sub("NOTE:Countess of Lovelace.\r\n", "")
 
     with_contacts({"ada" => noteless}) do |store|
-      add_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
+      FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
 
       get "/contacts/ada/edit"
 
@@ -857,7 +822,7 @@ class AdminContactsPagesTest < Minitest::Test
   # is not the screen — matches nothing and writes nothing.
   def test_a_save_naming_a_lent_line_touches_nothing
     with_contacts({"ada" => ADA}) do |store|
-      add_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
+      FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
       contact = store.contact("ada")
       lent = contact.addresses.find { contact.group_of(it.line) }
 

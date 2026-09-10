@@ -83,3 +83,31 @@ module SentryMessages
     sentry_events.map { it.message }
   end
 end
+
+# Hands the app a throwaway store holding just the given cards (id to
+# bytes), so a route can be exercised without touching the fixture
+# book, and yields it so a test can change a card mid-sequence. Only
+# the store is swapped: nothing in a request reads configuration.
+module ThrowawayContacts
+  def with_contacts(cards)
+    Dir.mktmpdir do |dir|
+      original = ProTacts::Web.store
+
+      ProTacts::Store.connect(Pathname.new(dir) / "contacts.db") do |store|
+        ProTacts::Web.store = store
+        cards.each do |id, card|
+          store.put(id, ProTacts::VCard.new(card))
+        end
+        yield store
+      ensure
+        ProTacts::Web.store = original
+      end
+    end
+  end
+
+  # A card as Contacts would send one, so the routes are exercised
+  # against stored bytes rather than anything a test renders.
+  def card(id, name)
+    "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:#{name}\r\nUID:#{id}\r\nEND:VCARD\r\n"
+  end
+end
