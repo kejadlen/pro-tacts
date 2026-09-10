@@ -35,9 +35,9 @@ module ProTacts
                 div(class: "detail-header") do
                   h1(class: "type-h2", style: "margin: 0;") { @group.label }
                 end
-                # ContactsShow#has_data?'s reason: an empty grid would
-                # still take card-body's gap.
-                dl(class: "detail-grid") { rows } if has_data?
+                # Never empty, unlike ContactsShow's: the members row
+                # always renders (#members_row).
+                dl(class: "detail-grid") { rows }
               end
             end
           end
@@ -46,16 +46,11 @@ module ProTacts
 
       private
 
-      #: () -> bool
-      def has_data?
-        @members.any? || @reading.addresses.any? || @reading.notes.any?
-      end
-
       # Members first, the order a contact's card puts its groups in:
       # the relationship frames the rows under it.
       #: () -> void
       def rows
-        members_row if @members.any?
+        members_row
         @reading.addresses.each do |address|
           row(address.type || "address") do
             Format.address_lines(address).each { |line| div { line } }
@@ -66,14 +61,22 @@ module ProTacts
         end
       end
 
+      # Rendered even with no members, because its link is the way to
+      # add one. Membership is edited here rather than in the editor,
+      # which edits only the lines the group holds. The link sits at the
+      # row's right edge where a lent row's badge sits (admin.css), and
+      # has no href until the members screen exists.
       #: () -> void
       def members_row
         row("members") do
-          div(class: "tag-set") do
-            @members.each do |member|
-              a(href: "/contacts/#{member.id}", class: "tag") { member.name || member.id }
+          if @members.any?
+            div(class: "tag-set") do
+              @members.each do |member|
+                a(href: "/contacts/#{member.id}", class: "tag") { member.name || member.id }
+              end
             end
           end
+          a(class: "type-label") { "edit members" }
         end
       end
 

@@ -27,7 +27,7 @@ module ProTacts
     end
 
     class GroupsEdit
-      def self.call: (group: Store::Group, contacts: Array[Contact], ?notice: String?) -> String
+      def self.call: (group: Store::Group, ?notice: String?) -> String
     end
 
     class DeviceSetup

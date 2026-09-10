@@ -869,7 +869,7 @@ module ProTacts
     #: (Store::Group group, ?notice: String) -> String
     def group_edit_screen(group, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::GroupsEdit.call(group:, contacts: store.contacts, notice:)
+      Admin::GroupsEdit.call(group:, notice:)
     end
 
     # A group's members as contacts, in the listing's own order.

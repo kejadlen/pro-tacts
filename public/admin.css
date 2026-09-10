@@ -552,7 +552,8 @@ img.avatar {
    takes column 2 of the first row alone. No wrapper element to make
    them one flex item, and no source-order inversion — the value is
    still read before the group that lends it. */
-.detail-grid dd:has(> .badge) {
+.detail-grid dd:has(> .badge),
+.detail-grid dd:has(> a.type-label) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
@@ -574,8 +575,19 @@ img.avatar {
   grid-row: 1;
   min-height: calc(var(--gl-step--1) * 1.5);
 }
-.detail-grid dd:has(> .badge) > div {
+.detail-grid dd:has(> .badge) > div,
+.detail-grid dd:has(> a.type-label) > div {
   grid-column: 1;
+}
+/* A row's action — a group card's "edit members" — takes the badge's
+   place at the row's right edge. Unlike the badge it is plain text,
+   so it has a real baseline to share with the tags beside it. */
+.detail-grid dd:has(> a.type-label) {
+  align-items: baseline;
+}
+.detail-grid dd > a.type-label {
+  grid-column: 2;
+  grid-row: 1;
 }
 
 /* The stored card in its own collapsed card under the record — the

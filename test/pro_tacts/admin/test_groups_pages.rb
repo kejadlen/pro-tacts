@@ -105,7 +105,18 @@ class AdminGroupsPagesTest < Minitest::Test
       assert_includes body, "Gate code 1854."
       assert_includes body, %(<a href="/contacts/george" class="tag">George Boole</a>)
       assert_includes body, %(<a href="/contacts/mary" class="tag">Mary Boole</a>)
+      assert_includes body, "edit members"
       refute_includes body, "Ada Lovelace"
+    end
+  end
+
+  def test_a_memberless_card_still_offers_to_edit_members
+    with_contacts(BOOLES) do |store|
+      id = household(store, members: [])
+
+      get "/groups/#{id}"
+
+      assert_includes last_response.body, "edit members"
     end
   end
 
@@ -121,7 +132,7 @@ class AdminGroupsPagesTest < Minitest::Test
 
   ## The editor
 
-  def test_the_editor_checks_the_members_and_offers_everyone_else
+  def test_the_editor_leaves_membership_to_the_card
     with_contacts(BOOLES) do |store|
       id = household(store)
 
@@ -129,8 +140,9 @@ class AdminGroupsPagesTest < Minitest::Test
 
       body = last_response.body
       assert_includes body, %(<input type="hidden" name="version" value="#{store.group(id).version}">)
-      assert_includes body, %(<input type="checkbox" name="members[]" value="george" checked>)
-      assert_includes body, %(<input type="checkbox" name="members[]" value="ada" form="group-form">)
+      refute_includes body, "George Boole"
+      refute_includes body, "edit members"
+      refute_includes body, %(name="members[]")
       assert_includes body, %(name="address[)
     end
   end
