@@ -22,14 +22,23 @@ module ProTacts
 
       # @rbs @query: String
       # @rbs @upcoming: Array[Store::UpcomingBirthday]
+      # @rbs @labels: Hash[String, Array[String]]
+      # @rbs @groups: Array[Store::Group]
       # @rbs @rows: Array[Store::RecentContact]
       # @rbs @notice: String?
 
-      #: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, ?notice: String?) -> void
-      def initialize(recent:, upcoming:, query:, notice: nil)
+      # The groups arrive whole because a search answers from both
+      # sides of the relationship: a group is findable by its own name,
+      # and a contact by the names of the groups it is in.
+      #: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, groups: Array[Store::Group], ?notice: String?) -> void
+      def initialize(recent:, upcoming:, query:, groups:, notice: nil)
         @query = query.to_s.strip
         @upcoming = upcoming
         @notice = notice
+        @labels = {}
+        groups.each { |group| group.members.each { (@labels[it] ||= []) << group.label } }
+        q = @query.downcase
+        @groups = @query.empty? ? [] : groups.select { it.label.downcase.include?(q) }
         @rows = @query.empty? ? recent.first(RECENT_LIMIT) : recent.select { matches?(it, @query) }
       end
 
@@ -54,6 +63,7 @@ module ProTacts
                   end
                 end
               end
+              group_results if @groups.any?
             end
             render UpcomingBirthdays.new(upcoming: @upcoming)
           end
@@ -90,8 +100,28 @@ module ProTacts
         return true if row.contact.nickname&.downcase&.include?(q)
         return true if row.contact.phones.any? { it.value.downcase.include?(q) }
         return true if row.contact.emails.any? { it.value.downcase.include?(q) }
+        return true if @labels.fetch(row.contact.id, []).any? { it.downcase.include?(q) }
 
         false
+      end
+
+      # The groups whose names match, under the contacts: a group is a
+      # record the search reaches as surely as a contact is
+      # (docs/DESIGN.md, "When adding something new").
+      #: () -> void
+      def group_results
+        div(class: "section-head") do
+          h2(class: "type-label") { "groups" }
+        end
+        ul(class: "card") do
+          @groups.each do |group|
+            li do
+              a(href: "/groups/#{group.id}") do
+                div(style: "flex: 1; min-width: 0; font-weight: 550;") { group.label }
+              end
+            end
+          end
+        end
       end
 
       #: (Store::RecentContact row) -> void

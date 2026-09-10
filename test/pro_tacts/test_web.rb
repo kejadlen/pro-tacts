@@ -759,10 +759,10 @@ class WebTest < Minitest::Test
     end
   end
 
-  # Puts a card in a group of its own that lends it one line. A group's
-  # properties and members have no write path yet — authoring is the
-  # admin UI's task — so they land through the store's own database,
-  # the way the fixture seeder's do (test/fixture_data.rb).
+  # Puts a card in a group of its own that lends it one line, through
+  # the store's own database the way the fixture seeder's do
+  # (test/fixture_data.rb), so the change log holds only what the test
+  # itself wrote.
   def lend(store, id, line)
     database = store.instance_variable_get(:@database)
     group = store.create_group(name: "Booles")

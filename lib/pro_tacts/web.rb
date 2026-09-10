@@ -14,6 +14,9 @@ require "pro_tacts/admin/contacts_edit"
 require "pro_tacts/admin/contacts_index"
 require "pro_tacts/admin/contacts_show"
 require "pro_tacts/admin/device_setup"
+require "pro_tacts/admin/groups_edit"
+require "pro_tacts/admin/groups_index"
+require "pro_tacts/admin/groups_show"
 require "pro_tacts/debug_logger"
 require "pro_tacts/contact"
 require "pro_tacts/profile"
@@ -185,6 +188,47 @@ module ProTacts
               response["Content-Type"] = "text/html; charset=utf-8"
               Admin::ContactsShow.call(contact:, groups: store.groups_of(id),
                                        changes: store.changes_of(id))
+            end
+          end
+        end
+      end
+
+      # The group screens, the contacts' own shape: the collection's
+      # GET and create, then a record's GET, its editor, and the POST
+      # that applies it. What the writes rest on is
+      # docs/plans/2026-09-09-group-edits-propagate.md. A create lands
+      # on the editor, a new group being nothing until something is
+      # added to it.
+      r.on "groups" do
+        r.is do
+          r.get do
+            response["Content-Type"] = "text/html; charset=utf-8"
+            Admin::GroupsIndex.call(groups: store.all_groups)
+          end
+
+          r.post do
+            name = r.params["name"].to_s.strip
+            id = store.create_group(name: name.empty? ? nil : name)
+            r.redirect "/groups/#{id}/edit", 303
+          end
+        end
+
+        r.on String do |id|
+          r.get "edit" do
+            group = store.group(id)
+            group_edit_screen(group) if group
+          end
+
+          r.post do
+            apply_group_edit(r, id)
+          end
+
+          r.get do
+            group = store.group(id)
+
+            if group
+              response["Content-Type"] = "text/html; charset=utf-8"
+              Admin::GroupsShow.call(group:, members: members_of(group))
             end
           end
         end
@@ -586,6 +630,7 @@ module ProTacts
         recent: store.contacts_by_recency,
         upcoming: store.upcoming_birthdays(Admin::UpcomingBirthdays::LIMIT),
         query:,
+        groups: store.all_groups,
         notice:,
       )
     end
@@ -776,6 +821,61 @@ module ProTacts
 
       store.rewrite(id, edited_card(contact, first, last, r.params), birthday:)
       r.redirect "/contacts/#{id}", 303
+    end
+
+    # The group editor's POST, #apply_edit's shape over a group: the
+    # snapshot guard, then the contact editor's own address splice and
+    # note replace over the group's lines read as a card (Store::Group#reading),
+    # and one store write for the lot.
+    #: (untyped r, String id) -> String?
+    def apply_group_edit(r, id)
+      group = store.group(id)
+      return if group.nil?
+
+      if r.params["version"].to_s != group.version
+        return group_edit_screen(group, notice: "This group changed since the page loaded; nothing was saved.")
+      end
+
+      reading = group.reading
+      card = reading.stored.replace("NOTE", text_lines("NOTE", r.params["note"].to_s.strip))
+      card = edited_addresses(reading, card, r.params)
+      # Only ids that name a card: a membership row is a foreign key,
+      # and a doctored id is ordinary bad input rather than a 500. A
+      # POST carrying no list keeps the membership it found, the
+      # phones' is-a-Hash posture (Admin::GroupsEdit).
+      submitted = r.params["members"]
+      members =
+        if submitted.is_a?(Array)
+          submitted.map(&:to_s) & store.contacts.map(&:id)
+        else
+          group.members
+        end #: Array[String]
+
+      store.edit_group(id, name: r.params["name"].to_s, lines: group_lines(card), members:)
+      r.redirect "/groups/#{id}", 303
+    end
+
+    # The card a group save spliced, back into the lines a group holds:
+    # each unfolded and shorn of its terminator, the unit CardDiff
+    # records a write in and group_properties stores.
+    #: (VCard card) -> Array[String]
+    def group_lines(card)
+      card.lines.filter_map {
+        line = VCard::Parser.unfold(it.verbatim).sub(/(\r\n|[\r\n])\z/, "")
+        line unless line.empty?
+      }
+    end
+
+    #: (Store::Group group, ?notice: String) -> String
+    def group_edit_screen(group, notice: nil)
+      response["Content-Type"] = "text/html; charset=utf-8"
+      Admin::GroupsEdit.call(group:, contacts: store.contacts, notice:)
+    end
+
+    # A group's members as contacts, in the listing's own order.
+    #: (Store::Group group) -> Array[Contact]
+    def members_of(group)
+      store.contacts.select { group.members.include?(it.id) }
     end
 
     #: (Contact contact, ?notice: String) -> String

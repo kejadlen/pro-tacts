@@ -43,6 +43,19 @@ module ProTacts
         birthday&.to_s || property.value
       end
 
+      # ADR's components as display lines — street, then everything
+      # after it — the shape the design's own address rows settled on,
+      # and one shape for a contact's card and a group's alike.
+      # Presentation: the components themselves are Contact's.
+      #: (Contact::Address address) -> Array[String]
+      def self.address_lines(address)
+        [
+          [address.extended, address.street].compact.join(" "),
+          [address.locality, address.region, address.postal_code].compact.join(", "),
+          address.country,
+        ].compact.reject { it.empty? }
+      end
+
       # How much of an etag's hash is shown before it is cut. Twelve
       # hex digits is git's own longest short-hash, and this address
       # book will never hold enough cards for two to collide in a

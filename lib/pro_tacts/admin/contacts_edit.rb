@@ -66,7 +66,8 @@ module ProTacts
       # the save splices around. Field name to placeholder: a
       # component is not an attribute and earns no type column of its
       # own, so the placeholder is the label and the conventional
-      # order carries it.
+      # order carries it. Public because a group's address rows are
+      # these same rows (Admin::GroupsEdit).
       ADDRESS_FIELDS = [
         ["street", "street"],
         ["extended", "street 2"],
@@ -75,7 +76,6 @@ module ProTacts
         ["postal_code", "postal code"],
         ["country", "country"],
       ].freeze #: Array[[String, String]]
-      private_constant :ADDRESS_FIELDS
 
       # @rbs @contact: Contact
       # @rbs @own: Contact

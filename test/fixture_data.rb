@@ -70,9 +70,12 @@ module FixtureData
   # only evidence-shaped fixtures — a group is rows across three
   # tables with no file format of its own. The group itself is
   # Store#create_group's, which mints the id no caller gets to choose;
-  # its properties and members have no write path yet — authoring is
-  # the admin UI's task — so those rows land the way backdate's do,
-  # through the store's own database.
+  # its properties and members land the way backdate's rows do, through
+  # the store's own database rather than Store#set_group_lines and
+  # #add_member. Those log a `group` entry for every member they move,
+  # and the replay's sync tokens are read off that log — seeding
+  # through them would hand the recorded session a history it never
+  # saw.
   MEMBERS = %w[household-george household-mary household-alicia].freeze #: Array[String]
 
   # The seed's birthday shapes, read off the card ids rather than

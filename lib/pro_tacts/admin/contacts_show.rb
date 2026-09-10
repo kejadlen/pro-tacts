@@ -33,7 +33,7 @@ module ProTacts
       # one: a card with no entries is a card whose history was lost,
       # and an empty default would render that as an ordinary quiet
       # record.
-      #: (Contact contact, Array[String] groups, Array[Store::Change] changes) -> void
+      #: (Contact contact, Array[Store::Group] groups, Array[Store::Change] changes) -> void
       def initialize(contact:, groups:, changes:)
         @contact = contact
         @groups = groups
@@ -138,7 +138,7 @@ module ProTacts
           row(email.type || "email", email.value, email.line)
         end
         @contact.addresses.each do |address|
-          row(address.type || "address", address_lines(address), address.line)
+          row(address.type || "address", Format.address_lines(address), address.line)
         end
         row("birthday", @birthday) if @birthday
         @contact.notes.each do |note|
@@ -151,18 +151,15 @@ module ProTacts
       # values are the group's rather than the contact's. Gloss' Tag
       # rather than the Badge the inherited rows carry — a badge marks
       # the row it sits on, and these are the row's whole value
-      # (docs/DESIGN.md, "Relationships are navigable").
-      #
-      # Tags, not links, for now: the design has every tag opening the
-      # record it names, and a group has no screen to open yet. They
-      # become links with the group card, which is also what gives a
-      # nameless group somewhere for its id to lead.
+      # (docs/DESIGN.md, "Relationships are navigable"). Every tag opens
+      # the group it names, the other half of the member tags on a
+      # group's own card (Admin::GroupsShow).
       #: () -> void
       def groups_row
         dt(class: "type-label") { "groups" }
         dd(class: "type-body-sm") do
           div(class: "tag-set") do
-            @groups.each { |group| span(class: "tag") { group } }
+            @groups.each { |group| a(href: "/groups/#{group.id}", class: "tag") { group.label } }
           end
         end
       end
@@ -187,18 +184,6 @@ module ProTacts
           # constant across a view, and inherited is not a status.
           span(class: "badge") { group } if group
         end
-      end
-
-      # ADR's components as two display lines — street, then everything
-      # after it — the same shape the design's own address rows settled
-      # on. Presentation: the components themselves are Contact's.
-      #: (Contact::Address address) -> Array[String]
-      def address_lines(address)
-        [
-          [address.extended, address.street].compact.join(" "),
-          [address.locality, address.region, address.postal_code].compact.join(", "),
-          address.country,
-        ].compact.reject { it.empty? }
       end
 
       #: (String | Array[String] value) -> void

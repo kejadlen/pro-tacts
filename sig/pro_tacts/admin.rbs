@@ -7,7 +7,7 @@
 module ProTacts
   module Admin
     class ContactsShow
-      def self.call: (contact: Contact, groups: Array[String], changes: Array[Store::Change]) -> String
+      def self.call: (contact: Contact, groups: Array[Store::Group], changes: Array[Store::Change]) -> String
     end
 
     class ContactsEdit
@@ -15,7 +15,19 @@ module ProTacts
     end
 
     class ContactsIndex
-      def self.call: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, ?notice: String?) -> String
+      def self.call: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, groups: Array[Store::Group], ?notice: String?) -> String
+    end
+
+    class GroupsIndex
+      def self.call: (groups: Array[Store::Group], ?notice: String?) -> String
+    end
+
+    class GroupsShow
+      def self.call: (group: Store::Group, members: Array[Contact]) -> String
+    end
+
+    class GroupsEdit
+      def self.call: (group: Store::Group, contacts: Array[Contact], ?notice: String?) -> String
     end
 
     class DeviceSetup

@@ -37,6 +37,16 @@ module ProTacts
       def self.new: (group_id: String, position: Integer, label: String, line: String) -> instance
     end
 
+    class Group
+      attr_reader id: String
+      attr_reader name: String?
+      attr_reader label: String
+      attr_reader lines: Array[String]
+      attr_reader members: Array[String]
+
+      def self.new: (id: String, name: String?, label: String, lines: Array[String], members: Array[String]) -> instance
+    end
+
     class GroupEdit
       attr_reader group_id: String
       attr_reader position: Integer

@@ -996,9 +996,9 @@ class StoreTest < Minitest::Test
   HOUSEHOLD_NOTE = "NOTE:Gate code 1854." #: String
 
   # A group's own row is Store#create_group's, which is what mints the
-  # id; its properties and its members have no write path yet —
-  # authoring is the admin UI's task — so those land the way the
-  # fixture seeder's do, straight through the store's own database.
+  # id; its properties and its members land the way the fixture
+  # seeder's do, straight through the store's own database, so the
+  # change log holds only what the test itself wrote.
   # Hands back the id, which is the only way a caller learns it.
   def add_group(store, members:, lines:, name: nil)
     db = database(store)
@@ -1161,7 +1161,7 @@ class StoreTest < Minitest::Test
       add_group(store, name: "Neighbours", members: [], lines: [HOUSEHOLD_NOTE])
 
       expected = {named => "Booles", nameless => nameless}.sort.map { it.last }
-      assert_equal expected, store.groups_of("aiden")
+      assert_equal expected, store.groups_of("aiden").map(&:label)
       assert_empty store.groups_of("znorth")
     end
   end
@@ -1238,6 +1238,89 @@ class StoreTest < Minitest::Test
       change = store.changes.last
       assert_equal "group", change.action
       assert_equal ["NOTE:Gate code."], change.diff.added
+    end
+  end
+
+  ## Authoring a group
+
+  def test_a_group_reads_whole
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      id = add_group(store, name: "Household", members: %w[znorth aiden], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+
+      group = store.group(id)
+      assert_equal "Household", group.label
+      assert_equal [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE], group.lines
+      assert_equal %w[aiden znorth], group.members
+      assert_nil store.group("zzzz")
+    end
+  end
+
+  def test_every_group_is_listed_by_id_under_its_label
+    with_store do |store|
+      named = store.create_group(name: "Household")
+      nameless = store.create_group
+
+      assert_equal({named => "Household", nameless => nameless}.sort.to_h,
+                   store.all_groups.to_h { [it.id, it.label] })
+    end
+  end
+
+  # What a group lends is what every member serves, so setting it logs
+  # a `group` entry on each (docs/plans/2026-09-09-group-edits-propagate.md,
+  # "The fan-out").
+  def test_setting_a_groups_lines_reaches_every_member
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      id = add_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
+
+      store.set_group_lines(id, [EDITED_ADDRESS, HOUSEHOLD_NOTE])
+
+      %w[aiden znorth].each do |member|
+        assert_includes store.contact(member).vcard.to_s, EDITED_ADDRESS
+        change = store.changes_of(member).first
+        assert_equal "group", change.action
+        assert_equal store.contact(member).etag, change.etag
+        assert_equal [EDITED_ADDRESS, HOUSEHOLD_NOTE], change.diff.added
+      end
+    end
+  end
+
+  def test_a_joining_member_serves_the_group_and_is_logged
+    with_store({"aiden" => AIDEN}) do |store|
+      id = add_group(store, members: [], lines: [HOUSEHOLD_ADDRESS])
+
+      store.add_member(id, "aiden")
+      store.add_member(id, "aiden")
+
+      assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
+      assert_equal %w[group put], store.changes_of("aiden").map(&:action)
+      assert_equal [HOUSEHOLD_ADDRESS], store.changes_of("aiden").first.diff.added
+    end
+  end
+
+  def test_a_leaving_member_stops_serving_the_group_and_is_logged
+    with_store({"aiden" => AIDEN}) do |store|
+      id = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+
+      store.remove_member(id, "aiden")
+
+      assert_equal AIDEN, store.contact("aiden").vcard.to_s
+      assert_equal [HOUSEHOLD_ADDRESS], store.changes_of("aiden").first.diff.removed
+    end
+  end
+
+  # Nothing a client downloads moved, so nothing is logged: a group
+  # that lends nothing composes nothing into a new member, and a name
+  # is on no card.
+  def test_writes_that_move_no_served_card_log_nothing
+    with_store({"aiden" => AIDEN}) do |store|
+      id = add_group(store, members: [], lines: [])
+
+      store.add_member(id, "aiden")
+      store.rename_group(id, name: "Household")
+      store.rename_group(id, name: " ")
+
+      assert_equal ["put"], store.changes_of("aiden").map(&:action)
+      assert_equal id, store.group(id).label
     end
   end
 

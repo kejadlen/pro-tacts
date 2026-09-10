@@ -50,7 +50,8 @@ class AdminContactsPagesTest < Minitest::Test
   # A household's lines, and the seeding a group takes: a created
   # group for the row that mints an id, and its properties and members
   # through the store's own database the way FixtureData's do
-  # (test/fixture_data.rb), authoring being still the admin UI's task.
+  # (test/fixture_data.rb), so the change log holds only what the test
+  # itself wrote.
   HOUSEHOLD = [
     "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
     "NOTE:Gate code 1854.",
@@ -333,16 +334,18 @@ class AdminContactsPagesTest < Minitest::Test
 
   # The card says what the contact belongs to, as tags: the group
   # lending it two rows and the group lending it nothing both appear,
-  # because the row is membership rather than what came of it.
+  # because the row is membership rather than what came of it. Every
+  # tag opens the group it names (docs/DESIGN.md, "Relationships are
+  # navigable").
   def test_show_tags_the_groups_a_contact_belongs_to
     with_contacts({"ada" => ADA}) do |store|
       named = add_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
       nameless = add_group(store, members: ["ada"], lines: [])
 
       get "/contacts/ada"
-      tags = last_response.body.scan(%r{<span class="tag">([^<]*)</span>}).flatten
+      tags = last_response.body.scan(%r{<a href="/groups/([^"]*)" class="tag">([^<]*)</a>})
 
-      assert_equal({named => "Booles", nameless => nameless}.sort.map { it.last }, tags)
+      assert_equal({named => "Booles", nameless => nameless}.sort, tags)
       # The grid leads with what the contact belongs to, so the values
       # under it are read already knowing whose they might be.
       assert_equal "groups", last_response.body[%r{<dt class="type-label">([^<]*)<}, 1]

@@ -87,6 +87,36 @@ module ProTacts
     # @rbs skip
     GroupEdit = Data.define(:group_id, :position, :line)
 
+    # A group as the admin screens read one: its own row, the lines it
+    # lends in the order it lends them, and its members' card ids. The
+    # label is the SQL one #group_label computes, so a tag and a
+    # heading can never disagree about what to call a nameless group.
+    # @rbs skip
+    Group = Data.define(:id, :name, :label, :lines, :members)
+
+    # Reopened rather than defined in the block above, for the reason
+    # CardDiff is.
+    class Group
+      # The group's lines read through the one model that knows how to
+      # read an address and a note — a Contact over a card made of
+      # those lines and nothing else — for the screens that render and
+      # edit them. It composes nothing and is never stored or served.
+      #: () -> Contact
+      def reading
+        Contact.new(id:, stored: VCard.new(lines.map { "#{it}\r\n" }.join), birthday: nil, inherited: [])
+      end
+
+      # The group's etag, for the editor's snapshot guard: a hash of
+      # everything the edit screen shows and the save writes, so a
+      # group edited since the page loaded refuses the stale save
+      # rather than reverting what changed (Web#apply_edit's rule).
+      # Nothing serves it, so nothing has to agree with it but the form.
+      #: () -> String
+      def version
+        Digest::SHA256.hexdigest([name, lines, members].to_json)
+      end
+    end
+
     # SQLite has no ON UPDATE, so the column default stamps a row on
     # insert and this stamps it again on the way past. Same expression as
     # the migration's, deliberately: the database keeps the clock, so two
@@ -130,6 +160,10 @@ module ProTacts
     # (docs/plans/2026-09-09-group-edits-propagate.md, "The line a
     # group cannot hold").
     SHAREABLE_NAMES = %w[ADR NOTE].freeze #: Array[String]
+
+    # A groups row's own columns, qualified for #group_label's reason:
+    # the label is written against the table by name.
+    GROUP_COLUMNS = [Sequel[:groups][:id], Sequel[:groups][:name]].freeze #: Array[untyped]
 
     # Sequel's migrations, run on open. They ship with the code rather
     # than with a deployment, so the path is relative to this file.
@@ -273,22 +307,24 @@ module ProTacts
       nil
     end
 
-    # The groups a contact belongs to, by the label each is shown
-    # under, ordered by group id — a rename must not move a tag, the
+    # The groups a contact belongs to, whole — a tag names one and
+    # opens it — ordered by group id: a rename must not move a tag, the
     # same reason #inherited_rows orders by it. Membership is the whole
     # answer here, so a group that lends nothing appears too, where the
     # inherited reads have nothing of it to carry. Off the contact
     # rather than on it: what a group lends is in the card and belongs
     # to the model of one, and which groups a contact is in is a
     # relationship the card never carries.
-    #: (String id) -> Array[String]
+    #: (String id) -> Array[Group]
     def groups_of(id)
-      group_members
-        .join(:groups, id: Sequel[:group_members][:group_id])
-        .where(card_id: id)
-        .order(Sequel[:groups][:id])
-        .select(group_label.as(:label))
-        .map { it.fetch(:label).to_s }
+      load_groups(
+        groups
+          .join(:group_members, group_id: :id)
+          .where(card_id: id)
+          .order(Sequel[:groups][:id])
+          .select(*GROUP_COLUMNS, group_label.as(:label))
+          .all,
+      )
     end
 
     # The id of the card whose UID property holds this value, if one
@@ -484,6 +520,83 @@ module ProTacts
       raise "no free group id in #{GROUP_ID_ATTEMPTS} draws: #{groups.count} groups already"
     end
 
+    # Every group, ordered by id — the order #groups_of and the
+    # composition both use, so a rename never moves one.
+    #: () -> Array[Group]
+    def all_groups
+      load_groups(groups.select(*GROUP_COLUMNS, group_label.as(:label)).order(:id).all)
+    end
+
+    # One group, or nil for an id nobody has: the admin's 404 path,
+    # #contact's own shape.
+    #: (String id) -> Group?
+    def group(id)
+      load_groups([groups.select(*GROUP_COLUMNS, group_label.as(:label)).where(id:).sole]).fetch(0)
+    rescue Sequel::NoMatchingRow
+      nil
+    end
+
+    # A group's name, or none — NULL being the one spelling of
+    # nameless (db/migrations/005_group_identity.rb), so a blank is
+    # stored as that rather than refused by the schema. A name is on no
+    # card, so no member's bytes move and nothing is logged.
+    #: (String id, name: String?) -> void
+    def rename_group(id, name:)
+      groups.where(id:).update(name: name.to_s.strip.empty? ? nil : name)
+    end
+
+    # Replaces what a group lends, wholesale, at positions from zero.
+    # Every member serves the new lines from here on, so every member
+    # whose served card moved is logged (#fan_out). A line outside what
+    # a group may hold is refused by the CHECK, which is a caller's bug
+    # — the editor only builds ADR and NOTE lines — and raises.
+    #: (String id, Array[String] lines) -> void
+    def set_group_lines(id, lines)
+      @database.transaction do
+        fan_out(member_ids([id])) do
+          group_properties.where(group_id: id).delete
+          lines.each.with_index do |line, position|
+            group_properties.insert(group_id: id, position:, line:)
+          end
+        end
+      end
+    end
+
+    # The editor's whole save, as one transaction: a failure part-way
+    # leaves the group as it was rather than half renamed. Leavers go
+    # first and joiners last, so no card is logged for lines it was
+    # about to stop or had yet to start serving.
+    #: (String id, name: String?, lines: Array[String], members: Array[String]) -> void
+    def edit_group(id, name:, lines:, members:)
+      @database.transaction do
+        current = member_ids([id])
+        (current - members).each { remove_member(id, it) }
+        rename_group(id, name:)
+        set_group_lines(id, lines)
+        (members - current).each { add_member(id, it) }
+      end
+    end
+
+    # A card joins a group, and starts serving what the group lends.
+    # Joining twice is joining once.
+    #: (String group_id, String card_id) -> void
+    def add_member(group_id, card_id)
+      @database.transaction do
+        fan_out([card_id]) { group_members.insert_conflict.insert(group_id:, card_id:) }
+      end
+    end
+
+    # A card leaves a group, and stops serving what the group lends —
+    # the one lever the model has for "everyone but this member"
+    # (docs/plans/2026-08-24-vcard-storage-and-groups.md, "Edits
+    # propagate to the group").
+    #: (String group_id, String card_id) -> void
+    def remove_member(group_id, card_id)
+      @database.transaction do
+        fan_out([card_id]) { group_members.where(group_id:, card_id:).delete }
+      end
+    end
+
     # The change log from a sequence number on, oldest first: the window
     # a sync-collection report answers from (RFC 6578 section 3.2) — the
     # entries after the client's token are the changes it has not seen.
@@ -597,6 +710,10 @@ module ProTacts
     # writing, whose own entry already carries this composition
     # (docs/plans/2026-09-09-group-edits-propagate.md, "The fan-out").
     #
+    # Card ids rather than groups, because the cards a write can move
+    # are not always members yet: a card joining a group is read before
+    # the row that makes it one exists.
+    #
     # Inside whatever transaction the caller has open: Sequel joins one
     # rather than nesting, which is what lets this run from #put.
     #: (Array[String] cards, ?except: String?) { () -> void } -> void
@@ -626,6 +743,27 @@ module ProTacts
         row = group_properties.where(group_id: edit.group_id, position: edit.position)
         edit.line ? row.update(line: edit.line) : row.delete
       end
+    end
+
+    # Groups rows read whole: the lines and members of every group in
+    # `rows`, two reads however many groups there are.
+    #: (Array[Hash[Symbol, untyped]] rows) -> Array[Group]
+    def load_groups(rows)
+      ids = rows.map { it.fetch(:id).to_s }
+      lines = group_properties.where(group_id: ids).order(:group_id, :position).all
+        .group_by { it.fetch(:group_id).to_s }
+      members = group_members.where(group_id: ids).order(:card_id).all
+        .group_by { it.fetch(:group_id).to_s }
+      rows.map { |row|
+        id = row.fetch(:id).to_s
+        Group.new(
+          id:,
+          name: row.fetch(:name)&.to_s,
+          label: row.fetch(:label).to_s,
+          lines: lines.fetch(id, []).map { it.fetch(:line).to_s },
+          members: members.fetch(id, []).map { it.fetch(:card_id).to_s },
+        )
+      }
     end
 
     # The cards belonging to any of these groups, each once — the
