@@ -365,6 +365,16 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  def test_show_labels_a_value_with_every_type_it_carries
+    typed = ADA.sub("TEL;TYPE=mobile:", "TEL;type=WORK;type=FAX;type=VOICE;type=pref:")
+
+    with_contacts({"ada" => typed}) do
+      get "/contacts/ada"
+
+      assert_includes last_response.body, '<dt class="type-label">work, fax</dt>'
+    end
+  end
+
   # Empty attributes do not render (docs/DESIGN.md) — a bare card shows
   # only the header, not a scaffold of blank rows.
   def test_show_hides_attributes_the_contact_has_no_data_for

@@ -8,18 +8,18 @@ module ProTacts
   class Contact
     class Phone
       attr_reader value: String
-      attr_reader type: String?
+      attr_reader types: Array[String]
       attr_reader line: VCard::Parser::Line
 
-      def self.new: (value: String, type: String?, line: VCard::Parser::Line) -> instance
+      def self.new: (value: String, types: Array[String], line: VCard::Parser::Line) -> instance
     end
 
     class Email
       attr_reader value: String
-      attr_reader type: String?
+      attr_reader types: Array[String]
       attr_reader line: VCard::Parser::Line
 
-      def self.new: (value: String, type: String?, line: VCard::Parser::Line) -> instance
+      def self.new: (value: String, types: Array[String], line: VCard::Parser::Line) -> instance
     end
 
     class Note
@@ -51,7 +51,7 @@ module ProTacts
       attr_reader region: String?
       attr_reader postal_code: String?
       attr_reader country: String?
-      attr_reader type: String?
+      attr_reader types: Array[String]
       attr_reader line: VCard::Parser::Line
 
       def self.new: (
@@ -62,7 +62,7 @@ module ProTacts
         region: String?,
         postal_code: String?,
         country: String?,
-        type: String?,
+        types: Array[String],
         line: VCard::Parser::Line
       ) -> instance
     end

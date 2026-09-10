@@ -56,6 +56,13 @@ module ProTacts
         ].compact.reject { it.empty? }
       end
 
+      # A row's types as its key, or the kind of value when it has
+      # none, so no row renders unlabeled in the grid.
+      #: (Array[String] types, String kind) -> String
+      def self.type_label(types, kind)
+        types.empty? ? kind : types.join(", ")
+      end
+
       # How much of an etag's hash is shown before it is cut. Twelve
       # hex digits is git's own longest short-hash, and this address
       # book will never hold enough cards for two to collide in a

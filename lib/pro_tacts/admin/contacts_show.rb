@@ -133,13 +133,13 @@ module ProTacts
       def rows
         groups_row if @groups.any?
         @contact.phones.each do |phone|
-          row(phone.type || "phone", phone.value, phone.line)
+          row(Format.type_label(phone.types, "phone"), phone.value, phone.line)
         end
         @contact.emails.each do |email|
-          row(email.type || "email", email.value, email.line)
+          row(Format.type_label(email.types, "email"), email.value, email.line)
         end
         @contact.addresses.each do |address|
-          row(address.type || "address", Format.address_lines(address), address.line)
+          row(Format.type_label(address.types, "address"), Format.address_lines(address), address.line)
         end
         row("birthday", @birthday) if @birthday
         @contact.notes.each do |note|

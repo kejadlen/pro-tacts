@@ -1,6 +1,7 @@
 require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/contacts_edit"
+require "pro_tacts/admin/format"
 require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
 
@@ -84,7 +85,7 @@ module ProTacts
       #: (Contact::Address address) -> void
       def address_row(address)
         div(class: "field", data: {blank_removes: address.po_box.nil?}) do
-          span { address.type || "address" }
+          span { Format.type_label(address.types, "address") }
           div(class: "field-stack") do
             ContactsEdit::ADDRESS_FIELDS.each do |component, label|
               input(type: "text", name: "address[#{address.line.digest}][#{component}]",

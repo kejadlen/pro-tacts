@@ -112,9 +112,15 @@ class ContactTest < Minitest::Test
     assert_equal "Ada, Countess of Lovelace", contact(escaped).name
   end
 
-  def test_reads_every_phone_with_its_type
-    assert_equal [["+1-555-0100", "mobile"], ["+1-555-0199", "work"]],
-      contact(STRUCTURED).phones.map { [it.value, it.type] }
+  def test_reads_every_phone_with_its_types
+    assert_equal [["+1-555-0100", ["mobile"]], ["+1-555-0199", ["work"]]],
+      contact(STRUCTURED).phones.map { [it.value, it.types] }
+  end
+
+  def test_a_phone_keeps_every_type_but_voice_and_pref
+    apple = STRUCTURED.sub("TEL;TYPE=work:", "TEL;TYPE=work,fax;type=VOICE;type=pref:")
+
+    assert_equal %w[work fax], contact(apple).phones.fetch(1).types
   end
 
   # Each phone carries the line it was read from — the address a save
@@ -136,7 +142,7 @@ class ContactTest < Minitest::Test
   def test_a_phone_line_that_would_not_read_is_no_phone
     broken = STRUCTURED.sub("TEL;TYPE=mobile:+1-555-0100\r\n", "TEL;=;:+1-555-0100\r\n")
 
-    assert_equal [["+1-555-0199", "work"]], contact(broken).phones.map { [it.value, it.type] }
+    assert_equal [["+1-555-0199", ["work"]]], contact(broken).phones.map { [it.value, it.types] }
     assert contact(broken).vcard.lines.any? { it.names?("TEL") && it.property.nil? }
   end
 
@@ -144,19 +150,19 @@ class ContactTest < Minitest::Test
     emails = contact(STRUCTURED).emails
     assert_equal 1, emails.length
     assert_equal "ada@example.com", emails.fetch(0).value
-    assert_equal "home", emails.fetch(0).type
+    assert_equal ["home"], emails.fetch(0).types
   end
 
-  def test_an_emails_type_skips_internet_and_pref
+  def test_an_emails_types_skip_internet_and_pref
     apple = STRUCTURED.sub("EMAIL;TYPE=home:", "EMAIL;type=INTERNET;type=pref;type=HOME:")
 
-    assert_equal "home", contact(apple).emails.fetch(0).type
+    assert_equal ["home"], contact(apple).emails.fetch(0).types
   end
 
-  def test_an_email_typed_only_internet_and_pref_has_no_type
+  def test_an_email_typed_only_internet_and_pref_has_no_types
     apple = STRUCTURED.sub("EMAIL;TYPE=home:", "EMAIL;type=INTERNET;type=pref:")
 
-    assert_nil contact(apple).emails.fetch(0).type
+    assert_empty contact(apple).emails.fetch(0).types
   end
 
   def test_every_email_carries_the_line_it_was_read_from
@@ -183,7 +189,13 @@ class ContactTest < Minitest::Test
     assert_equal "England", address.region
     assert_equal "NW1 1AA", address.postal_code
     assert_equal "United Kingdom", address.country
-    assert_equal "home", address.type
+    assert_equal ["home"], address.types
+  end
+
+  def test_an_address_keeps_every_type_but_pref
+    apple = STRUCTURED.sub("ADR;TYPE=home:", "ADR;type=HOME;type=pref;type=POSTAL:")
+
+    assert_equal %w[home postal], contact(apple).addresses.fetch(0).types
   end
 
   def test_every_address_carries_the_line_it_was_read_from

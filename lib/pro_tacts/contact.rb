@@ -61,7 +61,7 @@ module ProTacts
     # outside this charset cannot be served.
     ID_FORMAT = /\A[\w-]+\z/ #: Regexp
 
-    # The structured shapes the accessors return: text value and type
+    # The structured shapes the accessors return: text value and types
     # for TEL (RFC 2426 section 3.3.1) and EMAIL (section 3.3.2), and
     # ADR's seven components (section 3.2.1: post office box, extended
     # address, street, locality, region, postal code, country — nil
@@ -74,9 +74,9 @@ module ProTacts
     # Data classes, whose members the inline syntax cannot read; the
     # signatures live in sig/pro_tacts/contact.rbs.
     # @rbs skip
-    Phone = Data.define(:value, :type, :line)
+    Phone = Data.define(:value, :types, :line)
     # @rbs skip
-    Email = Data.define(:value, :type, :line)
+    Email = Data.define(:value, :types, :line)
     # @rbs skip
     Note = Data.define(:value, :line)
     # @rbs skip
@@ -97,7 +97,7 @@ module ProTacts
       :region,
       :postal_code,
       :country,
-      :type,
+      :types,
       :line,
     )
 
@@ -277,7 +277,9 @@ module ProTacts
     def phones
       rows("TEL") { |property, line|
         value = text_of(property)
-        Phone.new(value:, type: type_of(property), line:) if value
+        # RFC 2426 section 3.3.1: `voice` is the type every number has
+        # by default, so it names none.
+        Phone.new(value:, types: types_of(property, except: %w[voice]), line:) if value
       }
     end
 
@@ -286,8 +288,8 @@ module ProTacts
       rows("EMAIL") { |property, line|
         value = text_of(property)
         # RFC 2426 section 3.3.2: `internet` is the format every address
-        # has by default and `pref` a preference, so neither names one.
-        Email.new(value:, type: type_of(property, except: %w[internet pref]), line:) if value
+        # has by default, so it names none.
+        Email.new(value:, types: types_of(property, except: %w[internet]), line:) if value
       }
     end
 
@@ -391,18 +393,20 @@ module ProTacts
       return if components.none?
 
       po_box, extended, street, locality, region, postal_code, country = components
-      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, type: type_of(property), line:)
+      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: types_of(property), line:)
     end
 
-    # RFC 2426 section 3.3.1: the first TYPE not in `except`, which
-    # holds the values a property uses for something other than a
-    # label. Downcased: the spelling is the card's, and a screen shows
-    # one.
-    #: (VCard::Parser::Property property, ?except: Array[String]) -> String?
-    def type_of(property, except: [])
+    # Every TYPE value (RFC 2426 section 3.3.1) that names a kind of
+    # line. `pref` ranks a line instead, and the client adds it on its
+    # own (docs/macos-contacts.md, "The client rewrites every card it
+    # touches"); `except` holds a property's own values that name no
+    # kind either. Downcased: the spelling is the card's, and a screen
+    # shows one.
+    #: (VCard::Parser::Property property, ?except: Array[String]) -> Array[String]
+    def types_of(property, except: [])
       property.parameters
         .filter_map { |name, value| value.downcase if name.casecmp?("TYPE") }
-        .find { !except.include?(it) }
+        .uniq - ["pref", *except]
     end
   end
 end
