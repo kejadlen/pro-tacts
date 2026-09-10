@@ -147,6 +147,18 @@ class ContactTest < Minitest::Test
     assert_equal "home", emails.fetch(0).type
   end
 
+  def test_an_emails_type_skips_internet_and_pref
+    apple = STRUCTURED.sub("EMAIL;TYPE=home:", "EMAIL;type=INTERNET;type=pref;type=HOME:")
+
+    assert_equal "home", contact(apple).emails.fetch(0).type
+  end
+
+  def test_an_email_typed_only_internet_and_pref_has_no_type
+    apple = STRUCTURED.sub("EMAIL;TYPE=home:", "EMAIL;type=INTERNET;type=pref:")
+
+    assert_nil contact(apple).emails.fetch(0).type
+  end
+
   def test_every_email_carries_the_line_it_was_read_from
     email = contact(STRUCTURED).emails.fetch(0)
 

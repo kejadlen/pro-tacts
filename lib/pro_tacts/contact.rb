@@ -285,7 +285,9 @@ module ProTacts
     def emails
       rows("EMAIL") { |property, line|
         value = text_of(property)
-        Email.new(value:, type: type_of(property), line:) if value
+        # RFC 2426 section 3.3.2: `internet` is the format every address
+        # has by default and `pref` a preference, so neither names one.
+        Email.new(value:, type: type_of(property, except: %w[internet pref]), line:) if value
       }
     end
 
@@ -392,11 +394,15 @@ module ProTacts
       Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, type: type_of(property), line:)
     end
 
-    # RFC 2426 section 3.3.1. Downcased: the spelling is the card's,
-    # and a screen shows one.
-    #: (VCard::Parser::Property property) -> String?
-    def type_of(property)
-      property.parameter("TYPE")&.downcase
+    # RFC 2426 section 3.3.1: the first TYPE not in `except`, which
+    # holds the values a property uses for something other than a
+    # label. Downcased: the spelling is the card's, and a screen shows
+    # one.
+    #: (VCard::Parser::Property property, ?except: Array[String]) -> String?
+    def type_of(property, except: [])
+      property.parameters
+        .filter_map { |name, value| value.downcase if name.casecmp?("TYPE") }
+        .find { !except.include?(it) }
     end
   end
 end
