@@ -217,4 +217,70 @@ namespace :probe do
          annotation survives only on its own line".
     NEXT
   end
+
+  # What a composed member looks like to a client: its own NOTE and the
+  # one its group lends, two lines where RFC 2426 section 3.6.2 gives a
+  # note "a single text value" and RFC 6350 section 6.7.2 allows any
+  # number of them. Told apart by their text, since values survive.
+  NOTES_ID = "probe-notes"
+  NOTES_CARD = <<~CARD.gsub("\n", "\r\n")
+    BEGIN:VCARD
+    VERSION:3.0
+    N:Boole;Notes;;;
+    FN:Notes Boole
+    NOTE:Own note: gate code 1854.
+    NOTE:Lent note: bins go out on Tuesday.
+    UID:#{NOTES_ID}
+    END:VCARD
+  CARD
+
+  # Whether tags can ride in the card as CATEGORIES (RFC 2426 section
+  # 3.6.1) rather than becoming server-side records. Two lines, one
+  # holding two values, because a client that keeps the property might
+  # still merge the lines or split the list.
+  CATEGORIES_ID = "probe-categories"
+  CATEGORIES_CARD = <<~CARD.gsub("\n", "\r\n")
+    BEGIN:VCARD
+    VERSION:3.0
+    N:Boole;Categories;;;
+    FN:Categories Boole
+    CATEGORIES:family,school run
+    CATEGORIES:neighbours
+    UID:#{CATEGORIES_ID}
+    END:VCARD
+  CARD
+
+  desc "Seed the two-NOTE probe: what a client shows and writes for a composed note"
+  task :notes do
+    code = seed(NOTES_ID, NOTES_CARD)
+
+    puts <<~NEXT
+      Seeded #{NOTES_ID} (#{code}).
+
+      Before editing, look at the Note field in Contacts: does it show
+      the own note, the lent note, both joined, or only one?
+
+      #{reading_the_result(NOTES_ID, "Notes Boole", edit: "any field other than the note").chomp}
+      4. Read the NOTE lines that come back: both as sent, one joined
+         line, or one dropped — and which.
+      5. Record what happened in docs/macos-contacts.md.
+    NEXT
+  end
+
+  desc "Seed the CATEGORIES probe: does a tag survive a client round trip?"
+  task :categories do
+    code = seed(CATEGORIES_ID, CATEGORIES_CARD)
+
+    puts <<~NEXT
+      Seeded #{CATEGORIES_ID} (#{code}).
+
+      Before editing, look for the categories anywhere in Contacts —
+      the card, a smart group, search for "neighbours".
+
+      #{reading_the_result(CATEGORIES_ID, "Categories Boole").chomp}
+      4. Read the CATEGORIES lines that come back: both as sent, merged
+         into one, split one value per line, or gone.
+      5. Record what happened in docs/macos-contacts.md.
+    NEXT
+  end
 end
