@@ -594,3 +594,23 @@ img.avatar {
 .change-log dd > .type-mono {
   overflow-wrap: anywhere;
 }
+
+/* The lines a write moved, under the etag they hashed to. Removed
+   above added, the order a diff hunk reads in, and the sign in front
+   of each line is what says which — the color is a second telling of
+   it, not the only one, so a row survives being read in one hue. Both
+   wrap for the etag's reason: a line here is a card's, and a card's
+   lines run past 75 octets often enough that the RFC has a folding
+   rule for it. */
+.diff {
+  margin-top: var(--gl-space-2xs);
+}
+.diff > div {
+  overflow-wrap: anywhere;
+}
+.diff-removed {
+  color: var(--gl-color-danger);
+}
+.diff-added {
+  color: var(--gl-color-success);
+}

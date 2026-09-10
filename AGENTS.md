@@ -169,6 +169,12 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   one — no second path takes an etag on trust. The etag in `changes` is
   the exception and is not the same fact — it is what the card hashed
   to at that write, which nothing can recompute once the card moves on.
+  Its `diff` is the same kind of fact and the same kind of exception
+  (`CardDiff`): the lines that write added and removed, of the card as
+  served, so the etag and the diff describe one download. It records a
+  card's lines and not its bytes — folding is normalized away — so it
+  says what a write did without being able to rebuild what it did it
+  to.
 - Nothing above `vcard/parser.rb` handles a parse error, and nothing
   should start. `Parser.lines` is the only read: a line that will not
   read comes back as a Line with no property. The card is served from

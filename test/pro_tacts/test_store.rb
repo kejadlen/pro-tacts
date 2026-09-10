@@ -445,6 +445,65 @@ class StoreTest < Minitest::Test
     end
   end
 
+  def test_a_first_write_adds_the_whole_card
+    with_store({"aiden" => AIDEN}) do |store|
+      diff = store.changes.last.diff
+
+      assert_equal AIDEN.lines.map(&:chomp), diff.added
+      assert_empty diff.removed
+    end
+  end
+
+  def test_a_writes_diff_records_the_lines_it_moved
+    with_store({"aiden" => AIDEN}) do |store|
+      store.put("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")))
+
+      diff = store.changes.last.diff
+      assert_equal ["FN:Aiden Smith"], diff.added
+      assert_equal ["FN:Aiden"], diff.removed
+    end
+  end
+
+  # The tombstone is the only record left of a deleted card, the row
+  # being gone: what it carries away is the whole of what was there.
+  def test_a_tombstone_carries_the_card_away
+    with_store({"aiden" => AIDEN}) do |store|
+      store.delete("aiden")
+
+      diff = store.changes.last.diff
+      assert_equal AIDEN.lines.map(&:chomp), diff.removed
+      assert_empty diff.added
+    end
+  end
+
+  # The diff describes the card a client downloads, the same one the
+  # logged etag hashes — so a birthday that moved to the model, and is
+  # composed back in on every read, is a line the diff records adding
+  # even though no stored card carries it.
+  def test_the_diff_is_of_the_card_as_served
+    with_store({"aiden" => AIDEN}) do |store|
+      store.put("aiden", vcard(AIDEN_BORN))
+
+      assert_equal ["BDAY:1985-04-12"], store.changes.last.diff.added
+    end
+  end
+
+  # A group's line is in the served card either side of a member's
+  # write, so it cancels: what a member's entry records is what the
+  # member's write did, not what it inherited while doing it.
+  def test_a_lent_line_is_no_part_of_a_members_diff
+    with_store({"aiden" => AIDEN}) do |store|
+      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub("FN:Aiden", "FN:Aiden Smith")))
+
+      diff = store.changes.last.diff
+      assert_equal ["FN:Aiden Smith"], diff.added
+      assert_equal ["FN:Aiden"], diff.removed
+    end
+  end
+
   def test_an_unknown_cards_changes_are_empty
     with_store({"aiden" => AIDEN}) do |store|
       assert_empty store.changes_of("nobody")
@@ -1164,9 +1223,12 @@ class StoreTest < Minitest::Test
   # one when it does.
   def test_the_change_log_admits_the_group_action
     with_store({"aiden" => AIDEN}) do |store|
-      database(store)[:changes].insert(card_id: "aiden", action: "group", etag: "\"x\"")
+      database(store)[:changes]
+        .insert(card_id: "aiden", action: "group", etag: "\"x\"", diff: diff_json(added: ["NOTE:Gate code."]))
 
-      assert_equal "group", store.changes.last.action
+      change = store.changes.last
+      assert_equal "group", change.action
+      assert_equal ["NOTE:Gate code."], change.diff.added
     end
   end
 
@@ -1418,11 +1480,12 @@ class StoreTest < Minitest::Test
 
   ## The migration
 
-  # A database at the old action vocabulary — put and delete only — is
-  # carried over with its sequences intact: they are every client's
-  # sync token state, and a rebuilt table that skipped or reused one
-  # would silently drop a change from some client's window.
-  def test_the_migration_carries_the_change_log_and_its_sequences
+  # A database from before the diff column loses its log to 006, which
+  # is what that migration trades for a column that is never null: an
+  # entry written then has no diff and no way to be given one. The
+  # sequence restarts with it, and the widened action vocabulary is
+  # still there on the other side.
+  def test_the_diff_migration_drops_the_change_log
     Dir.mktmpdir do |dir|
       path = Pathname.new(dir) / "contacts.db"
       Sequel.connect("sqlite://#{path}") do |db|
@@ -1432,16 +1495,13 @@ class StoreTest < Minitest::Test
       end
 
       ProTacts::Store.connect(path) do |store|
-        assert_equal [%w[aiden put], %w[aiden delete]], store.changes.map { [it.card_id, it.action] }
-        assert_equal [1, 2], store.changes.map(&:sequence)
+        assert_empty store.changes
 
-        # The widened vocabulary admits the editor's action, and the
-        # sequence continues past the copied high-water mark.
         store.put("aiden", vcard(AIDEN))
         store.rewrite("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")), birthday: nil)
         change = store.changes.last
         assert_equal %w[aiden edit], [change.card_id, change.action]
-        assert_equal 4, change.sequence
+        assert_equal 2, change.sequence
       end
     end
   end
@@ -1518,7 +1578,7 @@ class StoreTest < Minitest::Test
   class FailingLog < ProTacts::Store
     private
 
-    def record(card_id, action, etag)
+    def record(card_id, action, etag, diff)
       raise "the change log is unavailable"
     end
   end
@@ -1528,6 +1588,11 @@ class StoreTest < Minitest::Test
   # can be.
   def database(store)
     store.instance_variable_get(:@database)
+  end
+
+  # A diff column's value, for a row inserted around the store.
+  def diff_json(added: [], removed: [])
+    ProTacts::CardDiff.new(added:, removed:).to_json
   end
 
   def card_row(store, id)

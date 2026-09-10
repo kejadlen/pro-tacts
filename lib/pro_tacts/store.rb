@@ -5,6 +5,7 @@ require "sequel"
 require "sentry-ruby"
 
 require "pro_tacts/birthday"
+require "pro_tacts/card_diff"
 require "pro_tacts/contact"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
@@ -49,10 +50,11 @@ module ProTacts
   class Store
     # @rbs @database: Sequel::Database
 
-    # One entry in the change log. The signature is in
-    # sig/pro_tacts/store.rbs with Store's own.
+    # One entry in the change log: what happened to a card, what it
+    # hashed to afterwards, and which of its lines the write moved. The
+    # signature is in sig/pro_tacts/store.rbs with Store's own.
     # @rbs skip
-    Change = Data.define(:sequence, :card_id, :action, :etag, :created_at)
+    Change = Data.define(:sequence, :card_id, :action, :etag, :diff, :created_at)
 
     # A contact paired with when its card last changed. Contact itself
     # carries no timestamp — it is derived from the card alone, see its
@@ -343,6 +345,11 @@ module ProTacts
       # logged etag is its hash, so a client's token describes the card
       # it downloads.
       inherited = inherited_of(id)
+      # The card this write replaces, composed from the parts already
+      # read here rather than through #contact, which would read all
+      # three again. Membership cannot move during a put, so the
+      # inheritance either side of it is the one read above.
+      before = own && Contact.new(id:, stored: own, birthday: existing, inherited:)
       stored = subtract_inherited(stored, inherited, own)
       contact = Contact.new(id:, stored:, birthday:, inherited:)
       @database.transaction do
@@ -350,7 +357,7 @@ module ProTacts
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
           .insert(id: contact.id, vcard: stored.to_s)
         write_birthday(contact.id, birthday)
-        record(contact.id, "put", contact.etag)
+        record(contact.id, "put", contact.etag, CardDiff.between(before&.vcard, contact.vcard))
         reindex(contact.id, stored)
       end
       contact
@@ -368,25 +375,29 @@ module ProTacts
     # again to reach what the caller already had.
     #: (String id, VCard vcard, birthday: Birthday?) -> Contact
     def rewrite(id, vcard, birthday:)
+      before = contact(id)
       contact = Contact.new(id:, stored: vcard, birthday:, inherited: inherited_of(id))
       @database.transaction do
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
           .insert(id: contact.id, vcard: vcard.to_s)
         write_birthday(contact.id, birthday)
-        record(contact.id, "edit", contact.etag)
+        record(contact.id, "edit", contact.etag, CardDiff.between(before&.vcard, contact.vcard))
         reindex(contact.id, vcard)
       end
       contact
     end
 
     # Removes a card, leaving the change-log entry that tells a syncing
-    # client it is gone.
+    # client it is gone. The tombstone carries the whole card away in
+    # its diff — every line removed and none added — which is the only
+    # record left of what was here, the row itself being gone.
     #: (String id) -> bool
     def delete(id)
       @database.transaction do
+        before = contact(id)
         deleted = cards.where(id:).delete.positive?
-        record(id, "delete", nil) if deleted
+        record(id, "delete", nil, CardDiff.between(before&.vcard, nil)) if deleted
         deleted
       end
     end
@@ -500,9 +511,13 @@ module ProTacts
       SecureRandom.hex(2).tr("0-9a-f", REVERSE_HEX)
     end
 
-    #: (String card_id, String action, String? etag) -> void
-    def record(card_id, action, etag)
-      change_log.insert(card_id:, action:, etag:)
+    # The diff comes in already computed rather than being taken here
+    # off a `before` and an `after`: only the caller knows which two
+    # cards its write was between, and a delete's `after` is nothing at
+    # all.
+    #: (String card_id, String action, String? etag, CardDiff diff) -> void
+    def record(card_id, action, etag, diff)
+      change_log.insert(card_id:, action:, etag:, diff: diff.to_json)
     end
 
     # Replaces a card's rows in the index. Rebuilt wholesale rather than
@@ -966,6 +981,7 @@ module ProTacts
         card_id: row.fetch(:card_id).to_s,
         action: row.fetch(:action).to_s,
         etag: row.fetch(:etag),
+        diff: CardDiff.from_json(row.fetch(:diff).to_s),
         created_at: row.fetch(:created_at).to_s,
       )
     end

@@ -478,6 +478,36 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # Each entry shows the lines its write moved, removed above added
+  # and signed rather than only colored.
+  def test_the_change_log_shows_what_each_write_moved
+    with_contacts({"ada" => ADA}) do |store|
+      store.rewrite("ada", ProTacts::VCard.new(ADA.sub("FN:Ada Lovelace", "FN:Ada L.")),
+                    birthday: store.contact("ada").birthday)
+
+      get "/contacts/ada"
+
+      body = last_response.body
+      assert_includes body, '<div class="diff-removed">-FN:Ada Lovelace</div>'
+      assert_includes body, '<div class="diff-added">+FN:Ada L.</div>'
+      assert_operator body.index("-FN:Ada Lovelace"), :<, body.index("+FN:Ada L.")
+    end
+  end
+
+  # A first write's diff is the whole card, so a picture's payload
+  # would be a base64 wall in the log as surely as in the raw card —
+  # and elides the same way. The refuted chunk is a continuation line
+  # of the stored card, contiguous only in an unelided render.
+  def test_the_change_log_elides_a_photo_payload
+    with_contacts({"pic" => PhotoCard.photo("pic", bytes: 256)}) do |store|
+      get "/contacts/pic"
+
+      body = last_response.body
+      assert_includes body, '<div class="diff-added">+PHOTO'
+      refute_includes body, store.contact("pic").vcard.to_s.lines.grep(/\A /).first.to_s
+    end
+  end
+
   # A photo card's raw section elides the base64 wall to its octet
   # count; the property's name and parameters, and every other line,
   # stay byte for byte. The refuted chunk is a continuation line of

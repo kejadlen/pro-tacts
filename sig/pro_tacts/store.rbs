@@ -8,9 +8,10 @@ module ProTacts
       attr_reader card_id: String
       attr_reader action: String
       attr_reader etag: String?
+      attr_reader diff: CardDiff
       attr_reader created_at: String
 
-      def self.new: (sequence: Integer, card_id: String, action: String, etag: String?, created_at: String) -> instance
+      def self.new: (sequence: Integer, card_id: String, action: String, etag: String?, diff: CardDiff, created_at: String) -> instance
     end
 
     class RecentContact

@@ -214,12 +214,12 @@ module ProTacts
 
       # One row per entry, on the record's own grid: the action in the
       # type column, because it is the kind of thing the row is, and
-      # the moment and the etag in the value column. Both of those are
-      # the value — the etag is what the card hashed to at that write
-      # and the one hash in the schema that is stored rather than
-      # derived (AGENTS.md), so it is shown whole. A delete's etag is
-      # null, and the row is its moment alone: a tombstone hashes
-      # nothing.
+      # the moment, the etag, and the lines the write moved in the
+      # value column. All three are the value — the etag is what the
+      # card hashed to at that write and the one hash in the schema
+      # that is stored rather than derived (AGENTS.md), so it is shown
+      # whole. A delete's etag is null, and the row is its moment and
+      # the card it carried away: a tombstone hashes nothing.
       #: () -> void
       def change_rows
         @changes.each do |change|
@@ -227,8 +227,43 @@ module ProTacts
           dd(class: "type-body-sm") do
             div { Format.stamp(change.created_at) }
             div(class: "type-mono") { change.etag } if change.etag
+            diff_lines(change.diff)
           end
         end
+      end
+
+      # Removed lines and then added ones, each marked the way a diff
+      # marks them — the sign, not the color, is what says which, so a
+      # row reads the same to someone who cannot tell the two hues
+      # apart. Order within each is the card's own (CardDiff), and a
+      # write that moved no line at all renders nothing rather than an
+      # empty block: a rewrite storing what was already there is a real
+      # entry with nothing to show.
+      #: (CardDiff diff) -> void
+      def diff_lines(diff)
+        return if diff.empty?
+
+        div(class: "diff type-mono") do
+          # Named rather than `it`: Phlex yields the component to an
+          # element's block, so an inner `it` is this view, not the
+          # line.
+          diff.removed.each { |line| div(class: "diff-removed") { "-#{elide_text(line)}" } }
+          diff.added.each { |line| div(class: "diff-added") { "+#{elide_text(line)}" } }
+        end
+      end
+
+      # A diff's line elided the way the raw card's are. It arrives as
+      # text rather than as a card's line, so it is read back into one
+      # to reach #elide's rebuild — worth the parse: the first entry of
+      # a card with a picture is the whole card, and a base64 payload
+      # is exactly the wall ELIDE_ABOVE exists for. A line the parser
+      # cannot read still elides, by the byte surgery #elide falls back
+      # to; a line the terminator was stripped from keeps none, so the
+      # rebuilt one sheds the CRLF #elide gives it.
+      #: (String text) -> String
+      def elide_text(text)
+        line = VCard::Parser.lines(text).first
+        line ? elide(line).chomp : text
       end
 
       # The stored card for display: byte for byte, except a value long

@@ -1,0 +1,12 @@
+# CardDiff is a Data class, whose members the inline parser cannot
+# read (see sig/pro_tacts/contact.rbs). It is marked `@rbs skip` in
+# card_diff.rb and signed here instead; the methods reopened onto it
+# carry their own inline types.
+module ProTacts
+  class CardDiff
+    attr_reader added: Array[String]
+    attr_reader removed: Array[String]
+
+    def self.new: (added: Array[String], removed: Array[String]) -> instance
+  end
+end
