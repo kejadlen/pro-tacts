@@ -389,6 +389,24 @@ permanently. Only the year and month, year alone, and day alone shapes were
 tested; month alone (`BDAY:--04`) has a seed card but no observation yet.
 Verified 2026-09-01, macOS 26.5.1 (AddressBookCore/2732.600.11).
 
+## Only the last of two notes survives
+
+`rake probe:notes` serves a card with two `NOTE` lines, the shape a group
+member with a note of its own is served in. RFC 6350 section 6.7.2 allows
+any number of them; Contacts keeps one. The Note field shows only the last,
+and the card it writes back after an unrelated edit carries only that one:
+
+```
+NOTE:Own note: gate code 1854.           ->  (dropped)
+NOTE:Lent note: bins go out on Tuesday.  ->  NOTE:Lent note: bins go out on Tuesday.
+```
+
+Nothing is joined, and the first note is lost the way an unrenderable
+birthday is. Composition appends a group's lines after the member's own
+(`ProTacts::Contact`), so for a member that has both, the note that
+survives is the group's and the one lost is the member's. Verified
+2026-09-10, macOS 26.5.1 (AddressBookCore/2732.600.11).
+
 ## One address book per account
 
 Through at least macOS 10.10, Contacts binds one address book per account
