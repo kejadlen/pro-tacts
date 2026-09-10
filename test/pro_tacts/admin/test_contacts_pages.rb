@@ -308,9 +308,9 @@ class AdminContactsPagesTest < Minitest::Test
       nameless = FixtureData.seed_group(store, members: ["ada"], lines: [])
 
       get "/contacts/ada"
-      tags = last_response.body.scan(%r{<a href="/groups/([^"]*)" class="tag">([^<]*)</a>})
+      tags = last_response.body.scan(%r{<a href="/groups/([^"]*)" class="tag">(.*?)</a>})
 
-      assert_equal({named => "Booles", nameless => nameless}.sort, tags)
+      assert_equal({named => "Booles", nameless => %(<span data-nameless>#{nameless}</span>)}.sort, tags)
       # The grid leads with what the contact belongs to, so the values
       # under it are read already knowing whose they might be.
       assert_equal "groups", last_response.body[%r{<dt class="type-label">([^<]*)<}, 1]
@@ -335,9 +335,9 @@ class AdminContactsPagesTest < Minitest::Test
       id = FixtureData.seed_group(store, members: ["ada"], lines: HOUSEHOLD)
 
       get "/contacts/ada"
-      marks = last_response.body.scan(%r{<span class="badge">([^<]*)</span>})
+      marks = last_response.body.scan(%r{<span class="badge">(.*?)</span></dd>})
 
-      assert_equal [[id], [id]], marks
+      assert_equal [[%(<span data-nameless>#{id}</span>)]] * 2, marks
     end
   end
 

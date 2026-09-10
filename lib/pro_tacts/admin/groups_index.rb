@@ -1,5 +1,6 @@
 require "pro_tacts/admin/phlex"
 
+require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
 
 module ProTacts
@@ -35,7 +36,7 @@ module ProTacts
                 @groups.each do |group|
                   li do
                     a(href: "/groups/#{group.id}") do
-                      div(style: "flex: 1; min-width: 0; font-weight: 550;") { group.label }
+                      div(style: "flex: 1; min-width: 0; font-weight: 550;") { render GroupLabel.new(group:) }
                       span(class: "type-label") { members_label(group) }
                     end
                   end

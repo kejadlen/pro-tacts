@@ -1,6 +1,7 @@
 require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/contacts_edit"
+require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
 
 module ProTacts
@@ -38,7 +39,10 @@ module ProTacts
           # add button sits, and the row it reveals is inside the form.
           div(class: "record", x_data: "{ adding: false }") do
             div(class: "record-nav") do
-              a(href: "/groups/#{@group.id}", class: "type-label") { "‹ #{@group.label}" }
+              a(href: "/groups/#{@group.id}", class: "type-label") do
+                plain "‹ "
+                render GroupLabel.new(group: @group)
+              end
               button(type: "button", data_size: "sm", "x-show": "!adding",
                      "@click": "adding = true") { "add address" }
             end

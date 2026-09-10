@@ -2,6 +2,7 @@ require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/format"
+require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
 
 module ProTacts
@@ -159,7 +160,7 @@ module ProTacts
         dt(class: "type-label") { "groups" }
         dd(class: "type-body-sm") do
           div(class: "tag-set") do
-            @groups.each { |group| a(href: "/groups/#{group.id}", class: "tag") { group.label } }
+            @groups.each { |group| a(href: "/groups/#{group.id}", class: "tag") { render GroupLabel.new(group:) } }
           end
         end
       end
@@ -182,8 +183,17 @@ module ProTacts
           # value column (admin.css) — under the value it could be
           # read as marking the row below. No tone: the accent is held
           # constant across a view, and inherited is not a status.
-          span(class: "badge") { group } if group
+          span(class: "badge") { group_mark(group) } if group
         end
+      end
+
+      # A lent row knows its group only by label (Contact#group_of), and
+      # a nameless group's label is its id — so the id is looked up among
+      # the contact's own groups to mark it the way GroupLabel does.
+      #: (String label) -> void
+      def group_mark(label)
+        nameless = @groups.find { it.name.nil? && it.id == label }
+        nameless ? render(GroupLabel.new(group: nameless)) : plain(label)
       end
 
       #: (String | Array[String] value) -> void

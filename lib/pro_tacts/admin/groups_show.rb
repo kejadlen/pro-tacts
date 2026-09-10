@@ -1,6 +1,7 @@
 require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/format"
+require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
 
 module ProTacts
@@ -33,7 +34,7 @@ module ProTacts
             div(class: "card") do
               div(class: "card-body") do
                 div(class: "detail-header") do
-                  h1(class: "type-h2", style: "margin: 0;") { @group.label }
+                  h1(class: "type-h2", style: "margin: 0;") { render GroupLabel.new(group: @group) }
                 end
                 # Never empty, unlike ContactsShow's: the members row
                 # always renders (#members_row).

@@ -3,6 +3,7 @@ require "pro_tacts/admin/phlex"
 require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/contact_dialog"
 require "pro_tacts/admin/format"
+require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
 require "pro_tacts/admin/upcoming_birthdays"
 
@@ -117,7 +118,7 @@ module ProTacts
           @groups.each do |group|
             li do
               a(href: "/groups/#{group.id}") do
-                div(style: "flex: 1; min-width: 0; font-weight: 550;") { group.label }
+                div(style: "flex: 1; min-width: 0; font-weight: 550;") { render GroupLabel.new(group:) }
               end
             end
           end
