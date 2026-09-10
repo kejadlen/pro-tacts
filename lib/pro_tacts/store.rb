@@ -69,6 +69,24 @@ module ProTacts
     # @rbs skip
     UpcomingBirthday = Data.define(:contact, :occurs_on)
 
+    # One line a group lends one card, with the row it is lent from —
+    # the write path's reading of what #inherited_of answers as the
+    # model's. A member's edit has to reach the group_properties row
+    # the line came from, and the label a screen marks the row with
+    # cannot name it: two groups may share a name, and a nameless one
+    # is labelled by its id. The signature is in
+    # sig/pro_tacts/store.rbs with Store's own.
+    # @rbs skip
+    Lent = Data.define(:group_id, :position, :label, :line)
+
+    # What one classified line asks of the group it came from: the row
+    # to write, and the line that replaces it — or nil to remove the
+    # row, which is what a member's deletion of a shared line means
+    # (docs/plans/2026-09-09-group-edits-propagate.md, "The open
+    # question, decided").
+    # @rbs skip
+    GroupEdit = Data.define(:group_id, :position, :line)
+
     # SQLite has no ON UPDATE, so the column default stamps a row on
     # insert and this stamps it again on the way past. Same expression as
     # the migration's, deliberately: the database keeps the clock, so two
@@ -99,6 +117,19 @@ module ProTacts
     # Which reading applies is the caller's to know — the parser holds
     # no value types — and this is the one caller that compares values.
     STRUCTURED_VALUES = %w[ADR].freeze #: Array[String]
+
+    # The property names a group may lend, which is a second copy of
+    # the CHECK in db/migrations/004_groups.rb and says so here. The
+    # constraint stays the authority; this is the pre-check a
+    # propagated edit passes first, because the line a member's client
+    # hands back is not always one the group can hold — an address
+    # type Contacts cannot model comes back as an `item1.ADR` with its
+    # label beside it (see #kept_types?), which reads as an edit and
+    # which the CHECK refuses. Without this the refusal would be an
+    # exception on an ordinary sync
+    # (docs/plans/2026-09-09-group-edits-propagate.md, "The line a
+    # group cannot hold").
+    SHAREABLE_NAMES = %w[ADR NOTE].freeze #: Array[String]
 
     # Sequel's migrations, run on open. They ship with the code rather
     # than with a deployment, so the path is relative to this file.
@@ -136,6 +167,17 @@ module ProTacts
       # pragma: Sequel turns them on for every SQLite connection it
       # opens, which is what makes the index's cascades fire.
       @database.run("PRAGMA journal_mode = WAL")
+      # BEGIN IMMEDIATE for every transaction, so that the writes which
+      # read before they write serialize instead of one of them dying.
+      # A deferred transaction — SQLite's default — takes no write lock
+      # until its first write, and the busy handler declines to retry
+      # that upgrade because retrying could deadlock, so the second of
+      # two concurrent group edits gets SQLITE_BUSY straight back
+      # however long BUSY_TIMEOUT is. Taking the lock at BEGIN is what
+      # puts the wait back under the timeout
+      # (docs/plans/2026-09-09-group-edits-propagate.md, "Two edits,
+      # one shared value"). Readers are unaffected: WAL is on above.
+      @database.transaction_mode = :immediate
       # lib/sequel/extensions/sole.rb, for the reads that mean one row.
       @database.extension(:sole)
       migrate
@@ -344,23 +386,38 @@ module ProTacts
       # back, read off membership as it stands at this write — and the
       # logged etag is its hash, so a client's token describes the card
       # it downloads.
-      inherited = inherited_of(id)
+      lent = lent_of(id)
+      inherited = inheritance(lent)
       # The card this write replaces, composed from the parts already
       # read here rather than through #contact, which would read all
       # three again. Membership cannot move during a put, so the
       # inheritance either side of it is the one read above.
       before = own && Contact.new(id:, stored: own, birthday: existing, inherited:)
-      stored = subtract_inherited(stored, inherited, own)
+      stored, edits = subtract_inherited(stored, lent, own)
+      # Built before the transaction as well as inside it, because its
+      # constructor is where an id that could not be served is refused
+      # and a refusal from inside a transaction reaches the caller
+      # wearing Sequel's own error class. Composition is lazy, so the
+      # one that gets replaced below cost nothing to make.
       contact = Contact.new(id:, stored:, birthday:, inherited:)
       @database.transaction do
+        # The groups move first, so that everything composed below is
+        # the card this write leaves behind: the etag the change log
+        # records is what a client downloading this member now gets,
+        # group line included. The fan-out brackets the edits with a
+        # read of every other member either side of them.
+        unless edits.empty?
+          fan_out(member_ids(edits.map(&:group_id).uniq), except: id) { apply_group_edits(edits) }
+          contact = Contact.new(id:, stored:, birthday:, inherited: inheritance(lent_of(id)))
+        end
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
           .insert(id: contact.id, vcard: stored.to_s)
         write_birthday(contact.id, birthday)
         record(contact.id, "put", contact.etag, CardDiff.between(before&.vcard, contact.vcard))
         reindex(contact.id, stored)
+        contact
       end
-      contact
     end
 
     # The store's own editor changed a contact, against #put's "a
@@ -502,6 +559,11 @@ module ProTacts
       @database[:group_members]
     end
 
+    #: () -> Sequel::Dataset
+    def group_properties
+      @database[:group_properties]
+    end
+
     # Four hex digits spelled in REVERSE_HEX. SecureRandom rather than
     # rand: the draws have to be independent of anything a caller can
     # observe or seed, and two bytes of it is exactly the four digits
@@ -518,6 +580,73 @@ module ProTacts
     #: (String card_id, String action, String? etag, CardDiff diff) -> void
     def record(card_id, action, etag, diff)
       change_log.insert(card_id:, action:, etag:, diff: diff.to_json)
+    end
+
+    # The block's group writes, bracketed by a read of every member
+    # they could move: what each served before and what each serves
+    # after, and a `group` entry wherever the two differ. A group edit
+    # moves bytes on cards nobody wrote to, and a client is told a card
+    # changed only by the log — a sync token silently skips whatever
+    # the log missed (see the class comment).
+    #
+    # An entry only where the bytes actually moved, which is narrower
+    # than one per member: a rename moves nothing and a group that
+    # lends nothing lends nothing to a new member either, and an entry
+    # for either would spend every client's next poll re-fetching a
+    # card that reads the same. `except` is the member doing the
+    # writing, whose own entry already carries this composition
+    # (docs/plans/2026-09-09-group-edits-propagate.md, "The fan-out").
+    #
+    # Inside whatever transaction the caller has open: Sequel joins one
+    # rather than nesting, which is what lets this run from #put.
+    #: (Array[String] cards, ?except: String?) { () -> void } -> void
+    def fan_out(cards, except: nil)
+      ids = cards - [except].compact
+      before = ids.to_h {
+        [it, composed(it)] #: [String, Contact]
+      }
+      yield
+      ids.each do |id|
+        was = before.fetch(id)
+        now = composed(id)
+        next if was.vcard.to_s == now.vcard.to_s
+
+        record(id, "group", now.etag, CardDiff.between(was.vcard, now.vcard))
+      end
+    end
+
+    # The group's rows as the classification asked for them: a line
+    # rewritten in place, or the row removed where a member deleted
+    # what it lent. A removal leaves a gap in the positions, which
+    # costs nothing — position orders a group's lines and is not
+    # counted.
+    #: (Array[GroupEdit] edits) -> void
+    def apply_group_edits(edits)
+      edits.each do |edit|
+        row = group_properties.where(group_id: edit.group_id, position: edit.position)
+        edit.line ? row.update(line: edit.line) : row.delete
+      end
+    end
+
+    # The cards belonging to any of these groups, each once — the
+    # members a write to those groups can move.
+    #: (Array[String] group_ids) -> Array[String]
+    def member_ids(group_ids)
+      group_members
+        .where(group_id: group_ids)
+        .distinct
+        .order(:card_id)
+        .select(:card_id)
+        .map { it.fetch(:card_id).to_s }
+    end
+
+    # A member's card as it composes right now. #contact's read without
+    # the rescue it makes: a group_members row names a card by foreign
+    # key, so no row here is the corruption `sole` exists to raise on
+    # rather than the ordinary miss an href off the wire is.
+    #: (String id) -> Contact
+    def composed(id)
+      contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
     end
 
     # Replaces a card's rows in the index. Rebuilt wholesale rather than
@@ -634,51 +763,124 @@ module ProTacts
     # materialize the group's lines into its own card, and a later edit
     # to the group would reach nobody.
     #
-    # Each lent line is classified against the submission, and only one
-    # of the four shapes moves a byte. The line coming back saying what
-    # the group lends is the group's, untouched, and it goes. One line
-    # of that name left over is an edit to the shared line and none is
-    # a deletion of it: both stay in the card as they arrived, because
-    # propagating either is the next task's (the plan's "Edits
-    # propagate to the group"), and storing the edit is what keeps it
-    # from being lost meanwhile. More than one left over is a line this
-    # cannot attribute at all, and reports rather than guesses.
+    # Each lent line is classified against the submission, and three of
+    # the four shapes act. The line coming back saying what the group
+    # lends is the group's, untouched, and it goes. One line of that
+    # name left over is an edit to the shared value: it goes too, and
+    # the group's row takes its bytes, so the member does not end up
+    # carrying its own copy beside the one composition puts back. None
+    # left over is a deletion, and the group's row goes with it
+    # (docs/plans/2026-09-09-group-edits-propagate.md). More than one
+    # left over is a line this cannot attribute at all, and reports
+    # rather than guesses.
+    #
+    # Two passes, because one lent line must not be attributed a line
+    # another lent line would have matched exactly. A member of two
+    # groups that each lend an address, editing one of them, submits
+    # one edited address and one untouched: walked in a single pass,
+    # whichever group came first would read the other's untouched line
+    # as its own edit and the other would read a deletion. Every
+    # untouched line is struck first, and only what is left is
+    # attributed.
     #
     # #substitute rather than #extract and #insert, which would move a
     # member's own lines of the same name to the card's end: the lines
     # this leaves keep their positions, so a submission that was the
     # served card round-trips to the bytes it was composed from and the
     # PUT can answer with a strong etag (RFC 6352 section 6.3.2.3).
-    #: (VCard vcard, Array[Contact::Inherited] inherited, VCard? own) -> VCard
-    def subtract_inherited(vcard, inherited, own)
-      return vcard if inherited.empty?
+    #: (VCard vcard, Array[Lent] lent, VCard? own) -> [VCard, Array[GroupEdit]]
+    def subtract_inherited(vcard, lent, own)
+      return [vcard, []] if lent.empty?
 
       unaccounted = unaccounted_lines(vcard, own)
-      untouched = [] #: Array[VCard::Parser::Line]
-      ambiguous = 0
+      taken = [] #: Array[VCard::Parser::Line]
 
-      inherited.each do |lent|
-        lent_line = parsed_line(lent.line)
-        candidates = unaccounted.select { it.names?(property_name(lent.line)) }
+      moved = lent.reject { |row|
+        candidates = unaccounted.select { it.names?(property_name(row.line)) }
         # Blind to lines saying the same thing the way the editor's
         # digests are blind to identical bytes
         # (VCard::Parser::Line#digest): where a member's own card
         # carries what its group lends, which copy this takes is
         # undecidable and their saying the same thing makes it not
         # matter.
-        match = candidates.find { unedited?(it, lent_line) }
-        if match
-          unaccounted.delete_at(
-            unaccounted.index(match) #: Integer
-          )
-          untouched << match
-        elsif candidates.length > 1
-          ambiguous += 1
+        match = candidates.find { unedited?(it, parsed_line(row.line)) }
+        taken << strike(unaccounted, match) if match
+        match
+      }
+
+      edits = [] #: Array[GroupEdit]
+      ambiguous = 0
+      unshareable = 0
+      moved.each do |row|
+        case classify(row, unaccounted, taken)
+        in GroupEdit => edit then edits << edit
+        in :ambiguous then ambiguous += 1
+        in :unshareable then unshareable += 1
         end
       end
 
       report_ambiguous_inherited_lines(ambiguous)
-      untouched.reduce(vcard) { |rest, line| rest.substitute(line.digest, []) }
+      report_unshareable_lines(unshareable)
+      [taken.reduce(vcard) { |rest, line| rest.substitute(line.digest, []) }, edits]
+    end
+
+    # What a lent line that came back changed asks of its group: the
+    # edit the one candidate of its name is, or the deletion no
+    # candidate at all is. The two refusals ask nothing — more than one
+    # candidate cannot be attributed, and a candidate the group could
+    # not hold must not be tried (#shareable?) — and both leave the
+    # line in the member's own card, where an edit at least is not
+    # lost.
+    #
+    # An edit's line is struck from the pool and carried by the group
+    # from here on, so `taken` grows the way it does for an untouched
+    # one.
+    #: (Lent row, Array[VCard::Parser::Line] unaccounted, Array[VCard::Parser::Line] taken) -> (GroupEdit | :ambiguous | :unshareable)
+    def classify(row, unaccounted, taken)
+      candidates = unaccounted.select { it.names?(property_name(row.line)) }
+      return GroupEdit.new(group_id: row.group_id, position: row.position, line: nil) if candidates.empty?
+      return :ambiguous unless candidates.length == 1
+
+      edited = candidates.fetch(0)
+      return :unshareable unless shareable?(edited)
+
+      taken << strike(unaccounted, edited)
+      GroupEdit.new(group_id: row.group_id, position: row.position, line: content_line(edited))
+    end
+
+    # The line out of the pool, so no second lent line is attributed
+    # it. `index` rather than `delete`, which would take every copy of
+    # a line a card carries twice.
+    #: (Array[VCard::Parser::Line] unaccounted, VCard::Parser::Line line) -> VCard::Parser::Line
+    def strike(unaccounted, line)
+      unaccounted.delete_at(
+        unaccounted.index(line) #: Integer
+      )
+      line
+    end
+
+    # A line as a group holds one: unfolded and shorn of its
+    # terminator, the same unit CardDiff records a write in and the
+    # shape db/migrations/004_groups.rb's own rows are written in.
+    # The bytes are the client's, not a re-render under the group's old
+    # header — a relabel is one of the edits this carries, and
+    # rebuilding the header would propagate the value and drop the
+    # label (the plan's "What a propagated edit stores").
+    #: (VCard::Parser::Line line) -> String
+    def content_line(line)
+      VCard::Parser.unfold(line.verbatim).sub(/(\r\n|[\r\n])\z/, "")
+    end
+
+    # Whether a group could hold this line: one of the names
+    # SHAREABLE_NAMES admits, and no property group in front of it —
+    # the CHECK's two clauses, read off the parse rather than matched
+    # as bytes. A line that would not read is not one to share.
+    #: (VCard::Parser::Line line) -> bool
+    def shareable?(line)
+      property = line.property
+      return false if property.nil?
+
+      property.group.nil? && SHAREABLE_NAMES.include?(property.name.upcase)
     end
 
     # A lent line as the parser reads it: one logical line, the group
@@ -810,6 +1012,24 @@ module ProTacts
       )
     end
 
+    # The refusal report: a member edited a shared line into a shape no
+    # group may hold, so the edit stays on the member and the group
+    # keeps what it lent. The known cause is a type Contacts cannot
+    # model, which comes back as a property group with an `X-ABLabel`
+    # beside it (#kept_types?), and the news is worth having because
+    # that member now serves the line twice — its own copy and the
+    # group's — until someone reconciles them. No card content, the
+    # ambiguity report's own line.
+    #: (Integer count) -> void
+    def report_unshareable_lines(count)
+      return if count.zero?
+
+      Sentry.capture_message(
+        "a submitted card edited #{count} inherited line(s) into a shape no group may hold",
+        level: :warning,
+      )
+    end
+
     # The loss report, the rewrite's half of the arrival one: a stored
     # BDAY no client renders and no whitelist recognizes is about to be
     # dropped, and nobody would know.
@@ -880,7 +1100,15 @@ module ProTacts
     # composed card is the same bytes every read.
     #: (String id) -> Array[Contact::Inherited]
     def inherited_of(id)
-      inherited_rows.where(card_id: id).map { inherited_from(it) }
+      inheritance(lent_of(id))
+    end
+
+    # The same read as it stands for a write: the rows a member's edit
+    # has to reach back to, before #inheritance drops them to what the
+    # model wants (see Lent).
+    #: (String id) -> Array[Lent]
+    def lent_of(id)
+      inherited_rows.where(card_id: id).map { lent_from(it) }
     end
 
     # Every contact's inheritance in one pass, keyed by card, for the
@@ -892,7 +1120,15 @@ module ProTacts
     def inherited_by_id
       inherited_rows.all
         .group_by { it.fetch(:card_id).to_s }
-        .transform_values { |rows| rows.map { inherited_from(it) } }
+        .transform_values { |rows| inheritance(rows.map { lent_from(it) }) }
+    end
+
+    # What a model asks of a group's rows: the label to mark a row
+    # with and the line itself. Which group_properties row lent it is
+    # the write path's business and stops here (Contact#group_of).
+    #: (Array[Lent] lent) -> Array[Contact::Inherited]
+    def inheritance(lent)
+      lent.map { Contact::Inherited.new(group: it.label, line: it.line) }
     end
 
     # What to call a group on a screen: its name, or its id where it
@@ -924,6 +1160,8 @@ module ProTacts
         .join(:groups, id: Sequel[:group_members][:group_id])
         .select(
           Sequel[:group_members][:card_id],
+          Sequel[:group_properties][:group_id],
+          Sequel[:group_properties][:position],
           group_label.as(:group_name),
           Sequel[:group_properties][:line],
         )
@@ -934,9 +1172,14 @@ module ProTacts
         )
     end
 
-    #: (Hash[Symbol, untyped] row) -> Contact::Inherited
-    def inherited_from(row)
-      Contact::Inherited.new(group: row.fetch(:group_name).to_s, line: row.fetch(:line).to_s)
+    #: (Hash[Symbol, untyped] row) -> Lent
+    def lent_from(row)
+      Lent.new(
+        group_id: row.fetch(:group_id).to_s,
+        position: row.fetch(:position).to_i,
+        label: row.fetch(:group_name).to_s,
+        line: row.fetch(:line).to_s,
+      )
     end
 
     # A birthday row read as the model. The shape was validated on the

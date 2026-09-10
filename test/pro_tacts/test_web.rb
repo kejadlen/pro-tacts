@@ -362,6 +362,29 @@ class WebTest < Minitest::Test
     end
   end
 
+  # And where the member edited the line its group lends: the group
+  # takes the edit and composes it back in, so the resource serves the
+  # submitted bytes again and the tag is honest
+  # (docs/plans/2026-09-09-group-edits-propagate.md).
+  def test_a_members_edit_to_a_lent_line_keeps_the_strong_etag
+    address = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
+
+    with_contacts({"aiden" => "Aiden"}) do |store|
+      lend(store, "aiden", address)
+
+      get "/dav/addressbook/aiden.vcf"
+      edited = last_response.body.sub("7 Calculus", "8 Calculus")
+
+      put_request "aiden", edited, "CONTENT_TYPE" => VCARD
+
+      assert_equal 204, last_response.status
+      assert_equal %("#{Digest::SHA256.hexdigest(edited)}"), last_response["ETag"]
+
+      get "/dav/addressbook/aiden.vcf"
+      assert_equal edited, last_response.body
+    end
+  end
+
   # The same omission for the rewrite that carries a birthday across:
   # the stored card is the submission plus the BDAY line macOS dropped,
   # so the answer cannot claim the tag — the client refetches, and the

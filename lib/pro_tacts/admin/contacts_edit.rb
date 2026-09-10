@@ -146,10 +146,14 @@ module ProTacts
                   # when it does not, and a box that started blank
                   # cannot lose anything — "removed on save" in it
                   # would be a false alarm.
-                  label(class: "field", data: {blank_removes: !!@contact.nickname}) do
+                  # Off the contact's own card like every row below, so
+                  # no row here depends on which properties a group may
+                  # lend (docs/plans/2026-09-09-group-edits-propagate.md,
+                  # "Where the editor stands").
+                  label(class: "field", data: {blank_removes: !!@own.nickname}) do
                     span { "Nickname" }
-                    input(type: "text", name: "nickname", value: @contact.nickname,
-                          placeholder: @contact.nickname ? "removed on save" : nil)
+                    input(type: "text", name: "nickname", value: @own.nickname,
+                          placeholder: @own.nickname ? "removed on save" : nil)
                   end
                   # A phone row edits its value and nothing else: the
                   # TYPE parameters ride in the line's own header,

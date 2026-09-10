@@ -1012,6 +1012,12 @@ class StoreTest < Minitest::Test
     id
   end
 
+  # What a group lends now, in the order it lends it — the rows a
+  # propagated edit rewrites.
+  def lent_lines(store, group)
+    database(store)[:group_properties].where(group_id: group).order(:position).map { it[:line] }
+  end
+
   # A member's served card is the stored one with the group's lines
   # composed in, and the birthday composed after them — every read,
   # single or listed, hands out the same composed card.
@@ -1098,11 +1104,15 @@ class StoreTest < Minitest::Test
   # the etag each records in the change log is the composed card's, so
   # a client's token describes what there is to download. The first
   # entry is with_store's own seed put, logged before the group existed.
+  #
+  # The PUT submits the served card, as a client does: a submission
+  # missing the lent line is that member deleting it, which is a
+  # different test's subject.
   def test_writes_log_the_composed_etag_for_a_member
     with_store({"aiden" => AIDEN}) do |store|
       add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
-      put = store.put("aiden", vcard(AIDEN))
+      put = store.put("aiden", vcard(store.contact("aiden").vcard.to_s))
       edit = store.rewrite("aiden", vcard(AIDEN), birthday: nil)
       logged = database(store)[:changes].where(card_id: "aiden").order(:sequence).all
 
@@ -1218,9 +1228,8 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The fourth action value exists for the fan-out a group edit will
-  # write; nothing writes it yet, and this pins that the log can hold
-  # one when it does.
+  # The fourth action value is the fan-out's (Store#fan_out); this pins
+  # that the schema admits it, apart from anything the store writes.
   def test_the_change_log_admits_the_group_action
     with_store({"aiden" => AIDEN}) do |store|
       database(store)[:changes]
@@ -1303,21 +1312,22 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # An edit to a shared value is detected and left where it landed:
-  # the member's card keeps it, the group keeps its own, and the
-  # member serves both until the propagation task takes the edit to
-  # the group (the plan's "Edits propagate to the group").
-  def test_an_edited_lent_line_stays_in_the_members_own_card
+  # An edit to a shared value is an edit to the group's line: the row
+  # takes the new bytes, the member stores none of them, and the served
+  # card carries one copy rather than the member's beside the group's
+  # (docs/plans/2026-09-09-group-edits-propagate.md).
+  def test_an_edited_lent_line_becomes_the_groups_line
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      group = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS)))
 
-      assert_includes card_row(store, "aiden").fetch(:vcard), EDITED_ADDRESS
+      assert_equal [EDITED_ADDRESS], lent_lines(store, group)
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       composed = store.contact("aiden").vcard.to_s
       assert_includes composed, EDITED_ADDRESS
-      assert_includes composed, HOUSEHOLD_ADDRESS
+      refute_includes composed, HOUSEHOLD_ADDRESS
       assert_empty sentry_messages
     end
   end
@@ -1355,21 +1365,23 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # Relabelling a shared address is an edit to the shared line, so it
-  # is left in the member's card for the propagation to take to the
-  # group rather than subtracted as the group's own (the plan's "Edits
-  # propagate to the group").
-  def test_a_relabeled_lent_line_reads_as_an_edit
+  # Relabelling a shared address is an edit to the shared line, and the
+  # label travels with the value: the group takes the line as the
+  # client spelled it, because re-rendering under the group's old
+  # header would propagate the address and drop the relabel (the plan's
+  # "What a propagated edit stores").
+  def test_a_relabeled_lent_line_relabels_the_groups_line
     relabeled = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "ADR;type=WORK;type=pref:")
 
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      group = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, relabeled)))
 
-      assert_includes card_row(store, "aiden").fetch(:vcard), relabeled
-      assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
+      assert_equal [relabeled], lent_lines(store, group)
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_includes store.contact("aiden").vcard.to_s, relabeled
       assert_empty sentry_messages
     end
   end
@@ -1393,17 +1405,18 @@ class StoreTest < Minitest::Test
   # Which is what makes labelling one an edit like any other relabel:
   # the type it arrives with is the member's, nobody else having put
   # one there.
-  def test_a_label_on_an_untyped_lent_line_reads_as_an_edit
+  def test_a_label_on_an_untyped_lent_line_labels_the_groups_line
     labeled = UNTYPED_ADDRESS.sub("ADR:", "ADR;type=HOME;type=pref:")
 
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [UNTYPED_ADDRESS])
+      group = add_group(store, members: ["aiden"], lines: [UNTYPED_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(UNTYPED_ADDRESS, labeled)))
 
-      assert_includes card_row(store, "aiden").fetch(:vcard), labeled
-      assert_includes store.contact("aiden").vcard.to_s, UNTYPED_ADDRESS
+      assert_equal [labeled], lent_lines(store, group)
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_includes store.contact("aiden").vcard.to_s, labeled
       assert_empty sentry_messages
     end
   end
@@ -1415,30 +1428,159 @@ class StoreTest < Minitest::Test
     edited = RESERIALIZED_ADDRESS.sub("7 Calculus", "8 Calculus")
 
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      group = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, edited)))
 
-      assert_includes card_row(store, "aiden").fetch(:vcard), edited
-      assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
+      assert_equal [edited], lent_lines(store, group)
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_includes store.contact("aiden").vcard.to_s, edited
       assert_empty sentry_messages
     end
   end
 
-  # A deletion is detected and takes nothing with it: the group still
-  # lends the line, so the next read composes it back in. Whether a
-  # delete should reach the group at all is the plan's open question,
-  # and nothing here decides it.
-  def test_a_deleted_lent_line_comes_straight_back
+  # A deletion leaves the group: the row goes, so the next read
+  # composes nothing back in and the member serves what it stores.
+  # Consistent with an edit, and the plan's open question decided —
+  # a member either inherits or does not, negative overrides included
+  # (docs/plans/2026-09-09-group-edits-propagate.md, "The open
+  # question, decided").
+  def test_a_deleted_lent_line_leaves_the_group
     with_store({"aiden" => AIDEN}) do |store|
-      add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      group = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served.sub("#{HOUSEHOLD_ADDRESS}\r\n", "")))
 
+      assert_empty lent_lines(store, group)
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
-      assert_equal served, store.contact("aiden").vcard.to_s
+      assert_equal AIDEN, store.contact("aiden").vcard.to_s
+      assert_empty sentry_messages
+    end
+  end
+
+  ## The fan-out
+
+  # The whole point of propagating: one member's edit is what every
+  # other member serves, and each of them is told so. The writer gets
+  # no `group` entry — its own `put` entry already carries the
+  # composition (docs/plans/2026-09-09-group-edits-propagate.md, "The
+  # fan-out").
+  def test_an_edit_reaches_every_other_member
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      add_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS)))
+
+      assert_includes store.contact("znorth").vcard.to_s, EDITED_ADDRESS
+      fanned = store.changes_of("znorth").first
+      assert_equal "group", fanned.action
+      assert_equal store.contact("znorth").etag, fanned.etag
+      assert_equal [EDITED_ADDRESS], fanned.diff.added
+      assert_equal [HOUSEHOLD_ADDRESS], fanned.diff.removed
+      assert_equal "put", store.changes_of("aiden").first.action
+    end
+  end
+
+  # A deletion fans out the same way, its diff the line every other
+  # member just lost.
+  def test_a_deletion_reaches_every_other_member
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      add_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub("#{HOUSEHOLD_ADDRESS}\r\n", "")))
+
+      assert_equal ZED, store.contact("znorth").vcard.to_s
+      fanned = store.changes_of("znorth").first
+      assert_equal "group", fanned.action
+      assert_equal [HOUSEHOLD_ADDRESS], fanned.diff.removed
+      assert_empty fanned.diff.added
+    end
+  end
+
+  # A member returning what it downloaded moves no group line, so
+  # nobody else is told anything: an entry per member of the group
+  # rather than per member the edit moved would have every client
+  # re-fetch a card that reads the same.
+  def test_an_unchanged_round_trip_fans_out_nothing
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      add_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
+
+      store.put("aiden", vcard(store.contact("aiden").vcard.to_s))
+
+      assert_equal ["put"], store.changes_of("znorth").map(&:action)
+    end
+  end
+
+  # Both halves land together or neither does: the group's row is
+  # rewritten inside the transaction the member's own write opens, so a
+  # log that will not take an entry leaves the group holding what it
+  # lent. The card row and the group row are two tables, and a client's
+  # sync token counts on the entry that ties them.
+  def test_a_propagated_edit_rolls_back_with_the_members_write
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      group = ProTacts::Store.connect(path) do |store|
+        store.put("aiden", vcard(AIDEN))
+        add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        served = store.contact("aiden").vcard.to_s
+        submitted = vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS))
+
+        assert_raises(RuntimeError) { FailingLog.new(database(store)).put("aiden", submitted) }
+        assert_equal [HOUSEHOLD_ADDRESS], lent_lines(store, group)
+        assert_equal served, store.contact("aiden").vcard.to_s
+      end
+    end
+  end
+
+  ## What propagation refuses
+
+  # An edit into a shape no group may hold stays on the member: an
+  # address type Contacts cannot model comes back as a property group
+  # with its label beside it, which reads as an edit and which
+  # group_properties refuses. Propagating it would be an exception on
+  # an ordinary sync, so the member keeps the line — serving it twice,
+  # which is what the report is for
+  # (docs/plans/2026-09-09-group-edits-propagate.md, "The line a group
+  # cannot hold").
+  def test_an_edit_the_group_cannot_hold_stays_on_the_member
+    labeled = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "item1.ADR:") + "\r\nitem1.X-ABLabel:dom"
+
+    with_store({"aiden" => AIDEN}) do |store|
+      group = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, labeled)))
+
+      assert_equal [HOUSEHOLD_ADDRESS], lent_lines(store, group)
+      assert_includes card_row(store, "aiden").fetch(:vcard), labeled
+      assert_equal 1, sentry_messages.length
+    end
+  end
+
+  # One group's untouched line must not be attributed to another
+  # group's lent line. A member of two groups that each lend an
+  # address, editing one of them, submits one edited line and one
+  # untouched: attributed in a single pass, whichever group came first
+  # would take the other's line as its own edit and the other would
+  # read a deletion.
+  def test_a_lent_line_is_not_attributed_anothers_untouched_line
+    with_store({"aiden" => AIDEN}) do |store|
+      household = add_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      other = add_group(store, members: ["aiden"], lines: [OWN_ADDRESS])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS)))
+
+      assert_equal [EDITED_ADDRESS], lent_lines(store, household)
+      assert_equal [OWN_ADDRESS], lent_lines(store, other)
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       assert_empty sentry_messages
     end
   end
