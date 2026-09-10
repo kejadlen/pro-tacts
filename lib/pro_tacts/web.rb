@@ -183,7 +183,8 @@ module ProTacts
 
             if contact
               response["Content-Type"] = "text/html; charset=utf-8"
-              Admin::ContactsShow.call(contact:, groups: store.groups_of(id))
+              Admin::ContactsShow.call(contact:, groups: store.groups_of(id),
+                                       changes: store.changes_of(id))
             end
           end
         end

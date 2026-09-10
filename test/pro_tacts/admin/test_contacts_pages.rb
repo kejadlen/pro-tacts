@@ -442,6 +442,42 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # The seeded card has been written once, so its log is one put, at
+  # the etag that write recorded — which for a card whose birthday is
+  # composed back in on read is the served card's, not the stored
+  # bytes'. Collapsed like the card above it, and the stamp is the
+  # store's own minus the milliseconds.
+  def test_show_renders_the_change_log_collapsed
+    with_contacts({"ada" => ADA}) do |store|
+      get "/contacts/ada"
+
+      body = last_response.body
+      assert_includes body, '<details><summary class="type-label">change log</summary>'
+      assert_includes body, '<dt class="type-label">put</dt>'
+      # An entity-tag's quotes are part of it (Contact.etag_for), so
+      # they reach the page as the escape Phlex writes them with.
+      assert_includes body, store.contact("ada").etag.gsub('"', "&quot;")
+      assert_includes body, store.changes.last.created_at.sub(/\.\d+Z\z/, "Z")
+      refute_includes body, "<details open"
+    end
+  end
+
+  # Newest first, and an edit is logged as an edit rather than a put —
+  # the distinction db/migrations/003_change_log_edit_action.rb added
+  # the action for, rendered here.
+  def test_the_change_log_leads_with_the_latest_entry
+    with_contacts({"ada" => ADA}) do |store|
+      store.rewrite("ada", ProTacts::VCard.new(ADA.sub("Ada Lovelace", "Ada L.")),
+                    birthday: store.contact("ada").birthday)
+
+      get "/contacts/ada"
+
+      body = last_response.body
+      actions = body.scan(/<dt class="type-label">(put|edit|delete|group)<\/dt>/).flatten
+      assert_equal %w[edit put], actions
+    end
+  end
+
   # A photo card's raw section elides the base64 wall to its octet
   # count; the property's name and parameters, and every other line,
   # stay byte for byte. The refuted chunk is a continuation line of
@@ -493,13 +529,15 @@ class AdminContactsPagesTest < Minitest::Test
   # A card that will not parse is served from its bytes regardless —
   # the raw section is the one thing such a card has to show, so it
   # renders with no grid under the header, not instead of the page.
+  # The record card, specifically: the change log rides the same grid
+  # in a card of its own, and every card has a history.
   def test_show_of_a_bare_contact_renders_no_grid
     bare = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Bare Contact\r\nUID:bare\r\nEND:VCARD\r\n"
 
     with_contacts({"bare" => bare}) do
       get "/contacts/bare"
 
-      refute_includes last_response.body, "detail-grid"
+      refute_includes last_response.body, '<dl class="detail-grid">'
       assert_includes last_response.body, "<details"
     end
   end

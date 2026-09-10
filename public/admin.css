@@ -579,3 +579,18 @@ img.avatar {
   margin: var(--gl-space-2xs) 0 0;
   overflow-x: auto;
 }
+
+/* The change log in the third card, on the record's own grid so the
+   two read as one page (ContactsShow#change_rows). The margin is the
+   pre's above, for the same reason: a summary and the block it
+   discloses are one line apart, not a card's gap. An etag is 64 hex
+   digits and a pair of quotes, which is wider than the value column
+   on a phone and the one thing here that must not be shortened — so
+   it breaks mid-hash rather than pushing the card sideways, the whole
+   value on the screen either way. */
+.change-log {
+  margin-top: var(--gl-space-2xs);
+}
+.change-log dd > .type-mono {
+  overflow-wrap: anywhere;
+}

@@ -423,6 +423,34 @@ class StoreTest < Minitest::Test
     end
   end
 
+  def test_one_cards_changes_come_back_newest_first
+    with_store({"aiden" => AIDEN}) do |store|
+      store.put("znorth", vcard(ZED))
+      store.delete("aiden")
+
+      log = store.changes_of("aiden")
+      assert_equal %w[delete put], log.map { it.action }
+      assert_operator log.first.sequence, :>, log.last.sequence
+    end
+  end
+
+  # The tombstone outlives the card, which is the point of a card id
+  # rather than a foreign key — and the history stays readable for an
+  # id the cards table no longer has a row for.
+  def test_a_deleted_cards_changes_still_read
+    with_store({"aiden" => AIDEN}) do |store|
+      store.delete("aiden")
+
+      assert_equal %w[delete put], store.changes_of("aiden").map { it.action }
+    end
+  end
+
+  def test_an_unknown_cards_changes_are_empty
+    with_store({"aiden" => AIDEN}) do |store|
+      assert_empty store.changes_of("nobody")
+    end
+  end
+
   # A sequence number is never reused, so a client holding an old token
   # cannot be handed changes numbered below ones it has already seen.
   def test_sequence_numbers_are_not_reused_after_a_delete

@@ -43,6 +43,19 @@ module ProTacts
         birthday&.to_s || property.value
       end
 
+      # The other way to render one of those stamps: as itself, minus
+      # the milliseconds. What the change log records happened at a
+      # moment someone may need to line up against a client's own logs,
+      # so this one stays absolute where #time_ago goes coarse — and the
+      # fraction is the clock's precision rather than the change's.
+      # String surgery rather than a parse and a reformat, because the
+      # column's spelling is fixed by the expression that writes it (see
+      # db/migrations/001_create_contacts_schema.rb).
+      #: (String iso8601) -> String
+      def self.stamp(iso8601)
+        iso8601.sub(/\.\d+Z\z/, "Z")
+      end
+
       # A card's updated_at, UTC ISO 8601 to the millisecond (see
       # Store), rendered the way "recently updated" wants it: coarse and
       # relative, not a timestamp to read precisely.

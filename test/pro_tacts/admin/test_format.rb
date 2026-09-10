@@ -137,6 +137,16 @@ class FormatTest < Minitest::Test
     assert_nil ProTacts::Admin::Format.birthday(contact(bare))
   end
 
+  def test_a_stamp_drops_the_milliseconds_and_nothing_else
+    assert_equal "2026-09-04T20:35:22Z",
+                 ProTacts::Admin::Format.stamp("2026-09-04T20:35:22.481Z")
+  end
+
+  def test_a_stamp_without_milliseconds_is_left_alone
+    assert_equal "2026-09-04T20:35:22Z",
+                 ProTacts::Admin::Format.stamp("2026-09-04T20:35:22Z")
+  end
+
   def test_time_ago_buckets_by_how_long_ago
     now = Time.now.utc
 

@@ -28,11 +28,16 @@ module ProTacts
       # off it: a contact's card carries what its groups lend it, never
       # which groups those are (Store#groups_of). Required, and not
       # defaulted to none, so a caller cannot render a contact as
-      # belonging to nothing by forgetting to ask.
-      #: (Contact contact, Array[String] groups) -> void
-      def initialize(contact:, groups:)
+      # belonging to nothing by forgetting to ask. The change log is
+      # beside it for the same reason and required for the stronger
+      # one: a card with no entries is a card whose history was lost,
+      # and an empty default would render that as an ordinary quiet
+      # record.
+      #: (Contact contact, Array[String] groups, Array[Store::Change] changes) -> void
+      def initialize(contact:, groups:, changes:)
         @contact = contact
         @groups = groups
+        @changes = changes
         @birthday = Format.birthday(contact)
       end
 
@@ -88,6 +93,21 @@ module ProTacts
               details do
                 summary(class: "type-label") { "raw vCard" }
                 pre(class: "type-mono") { raw_card }
+              end
+            end
+          end
+          # What this card has done, under the bytes it currently is:
+          # the log the sync tokens count on (Store#changes_of), which
+          # until now nothing here showed. Collapsed and in the raw
+          # card's shape for the raw card's reason — the record is
+          # about the person, and a sequence of etags is about the
+          # wire — and last of the three, because a history is read
+          # after the thing that has one.
+          div(class: "card") do
+            div(class: "card-body") do
+              details do
+                summary(class: "type-label") { "change log" }
+                dl(class: "detail-grid change-log") { change_rows }
               end
             end
           end
@@ -189,6 +209,25 @@ module ProTacts
           end
         else
           div(style: "white-space: pre-wrap;") { value }
+        end
+      end
+
+      # One row per entry, on the record's own grid: the action in the
+      # type column, because it is the kind of thing the row is, and
+      # the moment and the etag in the value column. Both of those are
+      # the value — the etag is what the card hashed to at that write
+      # and the one hash in the schema that is stored rather than
+      # derived (AGENTS.md), so it is shown whole. A delete's etag is
+      # null, and the row is its moment alone: a tombstone hashes
+      # nothing.
+      #: () -> void
+      def change_rows
+        @changes.each do |change|
+          dt(class: "type-label") { change.action }
+          dd(class: "type-body-sm") do
+            div { Format.stamp(change.created_at) }
+            div(class: "type-mono") { change.etag } if change.etag
+          end
         end
       end
 

@@ -426,6 +426,19 @@ module ProTacts
       change_log.where(Sequel[:sequence] > after).order(:sequence).map { change_from(it) }
     end
 
+    # One card's entries, newest first — the history the admin's contact
+    # page renders. The order is against #changes' deliberately: that
+    # read is a sync window and hands back the order a client applies,
+    # this one is a record someone reads, where the last thing that
+    # happened is what they came for. A card id and not a foreign key
+    # (see db/migrations/001_create_contacts_schema.rb), so an id whose
+    # card is gone still answers with the history that ends in its
+    # tombstone.
+    #: (String id) -> Array[Change]
+    def changes_of(id)
+      change_log.where(card_id: id).order(Sequel.desc(:sequence)).map { change_from(it) }
+    end
+
     # Drops the index and derives it again from the stored cards alone.
     # Always safe to run: nothing is authoritative here, so if the
     # projection ever disagrees with the cards, this is the repair. Raw
