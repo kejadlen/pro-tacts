@@ -72,12 +72,11 @@ module ProTacts
     # One line a group lends one card, with the row it is lent from —
     # the write path's reading of what #inherited_of answers as the
     # model's. A member's edit has to reach the group_properties row
-    # the line came from, and the label a screen marks the row with
-    # cannot name it: two groups may share a name, and a nameless one
-    # is labelled by its id. The signature is in
-    # sig/pro_tacts/store.rbs with Store's own.
+    # the line came from, which takes the position as well as the
+    # group. The signature is in sig/pro_tacts/store.rbs with Store's
+    # own.
     # @rbs skip
-    Lent = Data.define(:group_id, :position, :label, :line)
+    Lent = Data.define(:group_id, :position, :line)
 
     # What one classified line asks of the group it came from: the row
     # to write, and the line that replaces it — or nil to remove the
@@ -1231,8 +1230,8 @@ module ProTacts
       row && birthday_from(row)
     end
 
-    # The content lines a contact inherits, each beside the name of the
-    # group lending it — every property of every group it belongs to,
+    # The content lines a contact inherits, each beside the group
+    # lending it — every property of every group it belongs to,
     # nothing of a group that holds nothing, and [] for a contact in no
     # group at all. Ordered by group id and then position, so the
     # composed card is the same bytes every read.
@@ -1256,51 +1255,55 @@ module ProTacts
     # caller, which is what it means.
     #: () -> Hash[String, Array[Contact::Inherited]]
     def inherited_by_id
-      inherited_rows.all
+      rows = inherited_rows.all
+      lenders = groups_by_id(rows.map { it.fetch(:group_id).to_s })
+      rows
         .group_by { it.fetch(:card_id).to_s }
-        .transform_values { |rows| inheritance(rows.map { lent_from(it) }) }
+        .transform_values { |mine| inheritance(mine.map { lent_from(it) }, lenders) }
     end
 
-    # What a model asks of a group's rows: the label to mark a row
-    # with and the line itself. Which group_properties row lent it is
+    # What a model asks of a group's rows: the group lending each,
+    # whole, and the line itself. Which group_properties row lent it is
     # the write path's business and stops here (Contact#group_of).
-    #: (Array[Lent] lent) -> Array[Contact::Inherited]
-    def inheritance(lent)
-      lent.map { Contact::Inherited.new(group: it.label, line: it.line) }
+    #: (Array[Lent] lent, ?Hash[String, Group] lenders) -> Array[Contact::Inherited]
+    def inheritance(lent, lenders = groups_by_id(lent.map(&:group_id)))
+      lent.map { Contact::Inherited.new(group: lenders.fetch(it.group_id), line: it.line) }
+    end
+
+    # The groups these ids name, whole and keyed by id; no reads at all
+    # for a contact in no group, the common case.
+    #: (Array[String] ids) -> Hash[String, Group]
+    def groups_by_id(ids)
+      return {} if ids.empty?
+
+      load_groups(groups.select(*GROUP_COLUMNS, group_label.as(:label)).where(id: ids.uniq).all).to_h {
+        [it.id, it] #: [String, Group]
+      }
     end
 
     # What to call a group on a screen: its name, or its id where it
     # has none (db/migrations/005_group_identity.rb). In SQL rather
-    # than in Ruby so that both reads of it — a tag and an inherited
-    # row's mark — are the one answer.
+    # than in Ruby so that every read of a group — a tag, a heading —
+    # is the one answer.
     #: () -> untyped
     def group_label
       Sequel.function(:coalesce, Sequel[:groups][:name], Sequel[:groups][:id])
     end
 
     # The join both inherited reads walk: a membership to the property
-    # it inherits and to the group's own row for its name, qualified
-    # and ordered so the composition neither depends on what SQLite
-    # feels like returning nor trips over the group_id the tables
-    # share. Ordered by the group's id rather than its name, because a
-    # rename must not move a member's lines and change every etag in
-    # the group.
-    #
-    # A group with no name is lent under its id instead, coalesced here
-    # rather than at the surfaces: a mark on an inherited row names the
-    # group it came from, and a group with no name still has to be
-    # named as some one group among several
-    # (db/migrations/005_group_identity.rb).
+    # it inherits, qualified and ordered so the composition neither
+    # depends on what SQLite feels like returning nor trips over the
+    # group_id the tables share. Ordered by the group's id rather than
+    # its name, because a rename must not move a member's lines and
+    # change every etag in the group.
     #: () -> Sequel::Dataset
     def inherited_rows
       group_members
         .join(:group_properties, group_id: :group_id)
-        .join(:groups, id: Sequel[:group_members][:group_id])
         .select(
           Sequel[:group_members][:card_id],
           Sequel[:group_properties][:group_id],
           Sequel[:group_properties][:position],
-          group_label.as(:group_name),
           Sequel[:group_properties][:line],
         )
         .order(
@@ -1315,7 +1318,6 @@ module ProTacts
       Lent.new(
         group_id: row.fetch(:group_id).to_s,
         position: row.fetch(:position).to_i,
-        label: row.fetch(:group_name).to_s,
         line: row.fetch(:line).to_s,
       )
     end

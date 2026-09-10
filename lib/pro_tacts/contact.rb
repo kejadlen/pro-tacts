@@ -55,7 +55,7 @@ module ProTacts
     # @rbs @inherited: Array[Inherited]
     # @rbs @vcard: VCard
     # @rbs @etag: String
-    # @rbs @groups_by_line: Hash[String, String]
+    # @rbs @groups_by_line: Hash[String, Store::Group]
 
     # Ids end up in paths and arrive from client-supplied hrefs, so an id
     # outside this charset cannot be served.
@@ -82,12 +82,10 @@ module ProTacts
     # @rbs skip
     Photo = Data.define(:mime_type, :bytes)
 
-    # One line a group lends this contact, and what to call the group
-    # that lends it: its name, or its id where it has no name
-    # (Store#inherited_rows). A label rather than the group itself,
-    # because the label is the whole of what a card shows about it
-    # today and nothing here can navigate to a record that has no
-    # screen yet (docs/DESIGN.md, "Relationships are navigable").
+    # One line a group lends this contact, and the group that lends it,
+    # whole (Store#inheritance). Not its name, because two groups may
+    # share one, and a screen marking the line opens the one group that
+    # lent it (docs/DESIGN.md, "Relationships are navigable").
     # @rbs skip
     Inherited = Data.define(:group, :line)
     # @rbs skip
@@ -311,7 +309,7 @@ module ProTacts
       }
     end
 
-    # The name of the group a composed line came from, or nil for a
+    # The group a composed line came from, or nil for a
     # line the contact's own card carries — the provenance a screen
     # marks an inherited row with.
     #
@@ -323,7 +321,7 @@ module ProTacts
     # card spells the line exactly as its group does still has one, and
     # naming the group over both copies says something true about the
     # value even where it is wrong about the byte.
-    #: (VCard::Parser::Line line) -> String?
+    #: (VCard::Parser::Line line) -> Store::Group?
     def group_of(line)
       groups_by_line[line.verbatim.chomp]
     end
@@ -333,12 +331,12 @@ module ProTacts
     # Every inherited line's group, keyed by the line's own bytes with
     # the terminator off — a group's line is stored without one and
     # composes with the card's, so neither side is compared as it lies.
-    #: () -> Hash[String, String]
+    #: () -> Hash[String, Store::Group]
     def groups_by_line
       return @groups_by_line if defined?(@groups_by_line)
 
       @groups_by_line = @inherited.to_h {
-        [it.line.chomp, it.group] #: [String, String]
+        [it.line.chomp, it.group] #: [String, Store::Group]
       }
     end
 

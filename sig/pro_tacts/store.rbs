@@ -31,10 +31,9 @@ module ProTacts
     class Lent
       attr_reader group_id: String
       attr_reader position: Integer
-      attr_reader label: String
       attr_reader line: String
 
-      def self.new: (group_id: String, position: Integer, label: String, line: String) -> instance
+      def self.new: (group_id: String, position: Integer, line: String) -> instance
     end
 
     class Group

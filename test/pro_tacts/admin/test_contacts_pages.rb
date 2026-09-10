@@ -279,16 +279,16 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # A row a group lends is marked with the group's name, and the
+  # A row a group lends is marked with a tag opening the group, and the
   # contact's own rows are not: Ada carries an address and a note of
   # her own beside the household's two, and only the household's are
   # marked.
   def test_show_marks_the_rows_a_group_lends
     with_contacts({"ada" => ADA}) do |store|
-      FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
+      id = FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
 
       get "/contacts/ada"
-      marks = last_response.body.scan('<span class="badge">Booles</span>')
+      marks = last_response.body.scan(%(<a href="/groups/#{id}" class="tag">Booles</a></dd>))
 
       assert_equal 2, marks.size
       assert_includes last_response.body, "7 Calculus Close"
@@ -308,7 +308,8 @@ class AdminContactsPagesTest < Minitest::Test
       nameless = FixtureData.seed_group(store, members: ["ada"], lines: [])
 
       get "/contacts/ada"
-      tags = last_response.body.scan(%r{<a href="/groups/([^"]*)" class="tag">(.*?)</a>})
+      tag_set = last_response.body[%r{<div class="tag-set">.*?</div>}].to_s
+      tags = tag_set.scan(%r{<a href="/groups/([^"]*)" class="tag">(.*?)</a>})
 
       assert_equal({named => "Booles", nameless => %(<span data-nameless>#{nameless}</span>)}.sort, tags)
       # The grid leads with what the contact belongs to, so the values
@@ -328,26 +329,26 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # A group with no name marks its rows with its id, which is what the
-  # mark is for: an empty badge would say a row came from somewhere and
+  # mark is for: an empty tag would say a row came from somewhere and
   # then not say where.
   def test_show_marks_a_nameless_groups_rows_with_its_id
     with_contacts({"ada" => ADA}) do |store|
       id = FixtureData.seed_group(store, members: ["ada"], lines: HOUSEHOLD)
 
       get "/contacts/ada"
-      marks = last_response.body.scan(%r{<span class="badge">(.*?)</span></dd>})
+      marks = last_response.body.scan(%r{<a href="/groups/#{id}" class="tag">((?:(?!</a>).)*)</a></dd>})
 
       assert_equal [[%(<span data-nameless>#{id}</span>)]] * 2, marks
     end
   end
 
-  # A contact in no group is marked nowhere: the badge is provenance,
+  # A contact in no group is marked nowhere: the tag is provenance,
   # not decoration, so a card with nothing lent renders none.
   def test_show_marks_nothing_on_a_contact_in_no_group
     with_contacts({"ada" => ADA}) do
       get "/contacts/ada"
 
-      refute_includes last_response.body, "badge"
+      refute_includes last_response.body, 'class="tag"'
     end
   end
 

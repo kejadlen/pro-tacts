@@ -30,10 +30,10 @@ module ProTacts
     end
 
     class Inherited
-      attr_reader group: String
+      attr_reader group: Store::Group
       attr_reader line: String
 
-      def self.new: (group: String, line: String) -> instance
+      def self.new: (group: Store::Group, line: String) -> instance
     end
 
     class Photo

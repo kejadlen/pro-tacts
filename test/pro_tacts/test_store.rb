@@ -1104,30 +1104,16 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # Every inherited line carries the name of the group lending it, on
-  # the single read and on the listing read that composes a whole
-  # collection — a screen marks a row as the household's from either.
-  def test_an_inherited_line_carries_its_groups_name
+  # Every inherited line carries the group lending it, whole, on the
+  # single read and on the listing read that composes a whole
+  # collection — a screen tags a row as the household's from either.
+  def test_an_inherited_line_carries_its_group
     with_store({"aiden" => AIDEN}) do |store|
-      FixtureData.seed_group(store, name: "Household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      id = FixtureData.seed_group(store, name: "Household", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
       listed = store.contacts.find { it.id == "aiden" }
       [store.contact("aiden"), listed].each do |contact|
-        assert_equal "Household", contact.group_of(contact.addresses.fetch(0).line)
-      end
-    end
-  end
-
-  # A group with no name lends its lines under its id, on both reads —
-  # a mark that says which group a row came from, where the name would
-  # otherwise leave the row marked with nothing at all.
-  def test_a_nameless_groups_lines_are_marked_with_its_id
-    with_store({"aiden" => AIDEN}) do |store|
-      id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
-
-      listed = store.contacts.find { it.id == "aiden" }
-      [store.contact("aiden"), listed].each do |contact|
-        assert_equal id, contact.group_of(contact.addresses.fetch(0).line)
+        assert_equal store.group(id), contact.group_of(contact.addresses.fetch(0).line)
       end
     end
   end
@@ -1735,7 +1721,7 @@ class StoreTest < Minitest::Test
       ProTacts::Store.connect(path) do |store|
         contact = store.contact("aiden")
         assert_includes contact.vcard.to_s, HOUSEHOLD_ADDRESS
-        assert_equal "Booles", contact.group_of(contact.addresses.fetch(0).line)
+        assert_equal "nous", contact.group_of(contact.addresses.fetch(0).line)&.id
 
         database(store)[:cards].where(id: "aiden").delete
         assert_empty database(store)[:group_members].all

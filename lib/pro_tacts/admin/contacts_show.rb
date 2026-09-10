@@ -149,20 +149,23 @@ module ProTacts
 
       # Membership as its own row, above the card's own: what a contact
       # belongs to frames the values under it, and several of those
-      # values are the group's rather than the contact's. Gloss' Tag
-      # rather than the Badge the inherited rows carry — a badge marks
-      # the row it sits on, and these are the row's whole value
-      # (docs/DESIGN.md, "Relationships are navigable"). Every tag opens
-      # the group it names, the other half of the member tags on a
-      # group's own card (Admin::GroupsShow).
+      # values are the group's rather than the contact's. Every tag opens
+      # the group it names (docs/DESIGN.md, "Relationships are
+      # navigable"), the other half of the member tags on a group's own
+      # card (Admin::GroupsShow).
       #: () -> void
       def groups_row
         dt(class: "type-label") { "groups" }
         dd(class: "type-body-sm") do
           div(class: "tag-set") do
-            @groups.each { |group| a(href: "/groups/#{group.id}", class: "tag") { render GroupLabel.new(group:) } }
+            @groups.each { group_tag(it) }
           end
         end
+      end
+
+      #: (Store::Group group) -> void
+      def group_tag(group)
+        a(href: "/groups/#{group.id}", class: "tag") { render GroupLabel.new(group:) }
       end
 
       # The type in one column and the value in the other, with the
@@ -178,22 +181,11 @@ module ProTacts
         dt(class: "type-label") { type }
         dd(class: "type-body-sm") do
           render_value(value)
-          # Gloss' Badge: a catalog mark annotating the row it sits on,
-          # pinned to that row's first line at the right edge of the
-          # value column (admin.css) — under the value it could be
-          # read as marking the row below. No tone: the accent is held
-          # constant across a view, and inherited is not a status.
-          span(class: "badge") { group_mark(group) } if group
+          # The groups row's own tag, pinned to this row's first line
+          # at the right edge of the value column (admin.css) — under
+          # the value it could be read as marking the row below.
+          group_tag(group) if group
         end
-      end
-
-      # A lent row knows its group only by label (Contact#group_of), and
-      # a nameless group's label is its id — so the id is looked up among
-      # the contact's own groups to mark it the way GroupLabel does.
-      #: (String label) -> void
-      def group_mark(label)
-        nameless = @groups.find { it.name.nil? && it.id == label }
-        nameless ? render(GroupLabel.new(group: nameless)) : plain(label)
       end
 
       #: (String | Array[String] value) -> void
