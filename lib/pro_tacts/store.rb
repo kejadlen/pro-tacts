@@ -152,9 +152,9 @@ module ProTacts
     # constraint stays the authority; this is the pre-check a
     # propagated edit passes first, because the line a member's client
     # hands back is not always one the group can hold — an address
-    # type Contacts cannot model comes back as an `item1.ADR` with its
-    # label beside it (see #kept_types?), which reads as an edit and
-    # which the CHECK refuses. Without this the refusal would be an
+    # edited in a type Contacts cannot model comes back as an
+    # `item1.ADR` with its label beside it (see #kept_types?), which
+    # the CHECK refuses. Without this the refusal would be an
     # exception on an ordinary sync
     # (docs/plans/2026-09-09-group-edits-propagate.md, "The line a
     # group cannot hold").
@@ -940,8 +940,12 @@ module ProTacts
         # carries what its group lends, which copy this takes is
         # undecidable and their saying the same thing makes it not
         # matter.
-        match = candidates.find { unedited?(it, parsed_line(row.line)) }
-        taken << strike(unaccounted, match) if match
+        match = candidates.find { unedited?(it, parsed_line(row.line), unaccounted) }
+        if match
+          label = label_of(match, unaccounted)
+          taken << strike(unaccounted, match)
+          taken << strike(unaccounted, label) if label
+        end
         match
       }
 
@@ -1048,31 +1052,48 @@ module ProTacts
     #
     # A line that will not read has no value to compare and falls back
     # to its bytes, which still recognize the line nobody touched.
-    #: (VCard::Parser::Line line, VCard::Parser::Line lent) -> bool
-    def unedited?(line, lent)
+    #: (VCard::Parser::Line line, VCard::Parser::Line lent, Array[VCard::Parser::Line] pool) -> bool
+    def unedited?(line, lent, pool)
       value = value_of(lent)
       return line.verbatim.chomp == lent.verbatim.chomp if value.nil?
 
-      value_of(line) == value && kept_types?(line, lent)
+      value_of(line) == value && kept_types?(line, lent, pool)
     end
 
     # Whether a submitted line carries the types the group lent it,
-    # across the two rewrites they survive: the values come back
+    # across the three rewrites they survive: the values come back
     # uppercased and `pref` filled in, so neither side's case counts
     # and neither counts `pref` (types_of drops it). An untyped line
     # comes back untyped, so no types compares to no types and a
-    # member who labels one has edited it (docs/macos-contacts.md, "An
-    # address type the client cannot model becomes a custom label").
+    # member who labels one has edited it.
     #
-    # One shape this reads as an edit that nobody made: a type
-    # Contacts has no field for comes back as an `X-ABLabel` on a
-    # property group, taking the `TYPE` parameter with it, on an
-    # address nobody touched. A group lending `ADR;TYPE=dom` therefore
-    # materializes into every member's card at their next sync — see
-    # the task "Read a custom label as the type it was made from".
-    #: (VCard::Parser::Line line, VCard::Parser::Line lent) -> bool
-    def kept_types?(line, lent)
-      types_of(line) == types_of(lent)
+    # The third: a type Contacts has no field for comes back moved,
+    # not kept — into a property group, `TYPE` parameter gone, the type
+    # the value of an `X-ABLabel` beside it — on an address nobody
+    # touched (docs/macos-contacts.md, "An address type the client
+    # cannot model becomes a custom label"). So that label counts as
+    # one of the line's types, and `ADR;TYPE=dom` coming back as
+    # `item1.ADR` with `item1.X-ABLabel:dom` is unedited.
+    #: (VCard::Parser::Line line, VCard::Parser::Line lent, Array[VCard::Parser::Line] pool) -> bool
+    def kept_types?(line, lent, pool)
+      label = label_of(line, pool)&.property
+      types = types_of(line)
+      types = (types + [label.text.downcase]).uniq.sort if label
+      types == types_of(lent)
+    end
+
+    # The `X-ABLabel` sharing a property group with `line`, the other
+    # half of the pair #kept_types? reads as one. Nil for an ungrouped
+    # line, or a group the pool holds no label for.
+    #: (VCard::Parser::Line line, Array[VCard::Parser::Line] pool) -> VCard::Parser::Line?
+    def label_of(line, pool)
+      group = line.property&.group
+      return if group.nil?
+
+      pool.find { |other|
+        property = other.property
+        !property.nil? && property.group&.casecmp?(group) == true && property.name.casecmp?("X-ABLABEL")
+      }
     end
 
     # What a line says, as the reading its property's value type calls
@@ -1151,12 +1172,13 @@ module ProTacts
 
     # The refusal report: a member edited a shared line into a shape no
     # group may hold, so the edit stays on the member and the group
-    # keeps what it lent. The known cause is a type Contacts cannot
-    # model, which comes back as a property group with an `X-ABLabel`
-    # beside it (#kept_types?), and the news is worth having because
-    # that member now serves the line twice — its own copy and the
-    # group's — until someone reconciles them. No card content, the
-    # ambiguity report's own line.
+    # keeps what it lent. The known cause is an edit that lands in a
+    # type Contacts cannot model — a relabel to one, or a new value
+    # under one — which comes back as a property group with an
+    # `X-ABLabel` beside it (#kept_types?), and the news is worth
+    # having because that member now serves the line twice — its own
+    # copy and the group's — until someone reconciles them. No card
+    # content, the ambiguity report's own line.
     #: (Integer count) -> void
     def report_unshareable_lines(count)
       return if count.zero?

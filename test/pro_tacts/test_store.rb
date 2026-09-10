@@ -1473,6 +1473,25 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # The label goes with the line it was made from: left behind, it
+  # would be a label in the member's card naming nothing.
+  def test_a_lent_type_the_client_made_a_label_of_comes_back_unedited
+    domestic = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "ADR;TYPE=dom:")
+    labeled = domestic.sub("ADR;TYPE=dom:", "item1.ADR:") + "\r\nitem1.X-ABLabel:dom"
+
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      group = FixtureData.seed_group(store, members: %w[aiden znorth], lines: [domestic])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub(domestic, labeled)))
+
+      assert_equal [domestic], lent_lines(store, group)
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_equal ["put"], store.changes_of("znorth").map(&:action)
+      assert_empty sentry_messages
+    end
+  end
+
   # An edit still reads as one through the re-serialization it arrives
   # wrapped in: the value moved, and the spelling around it is what the
   # comparison sees past.
