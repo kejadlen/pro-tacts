@@ -511,6 +511,22 @@ compliant, not a compromise.
   and making an unauthenticated request before retrying with credentials.
   Expect a 401 round trip on every request.
 
+## iOS Contacts syncs against the same minimal set
+
+The response set above was cut down against macOS alone, and iOS
+Contacts (`dataaccessd/1.0`) needs nothing it leaves out. On 2026-09-11,
+iOS 26.6.2 discovered the account on the dev server and synced it. Its
+first multiget asked for all 20 cards and got 20 back, two cards seeded
+afterwards reached the phone on a later poll, and every response was a
+200 or 207, with nothing captured in `log/unhandled`. An earlier session,
+iOS 26.6.1 on 2026-09-08, also edited a card and deleted one.
+
+iOS differs from macOS on the wire rather than in what it needs:
+namespace prefixes spelled differently, a multiget without `Brief`,
+`Depth`, or `Prefer`, grouped properties in a PUT, and a DELETE macOS
+has never sent. `test/fixtures/ios-exchange/README.md` records each
+difference as a fixture the test suite replays.
+
 ## Reference implementations to compare against
 
 `servers/` runs Baikal, Radicale, and Monica behind mitmproxy, because those
