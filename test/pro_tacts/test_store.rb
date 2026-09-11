@@ -772,7 +772,7 @@ class StoreTest < Minitest::Test
 
   # macOS Contacts drops the lines it cannot render from every card it
   # writes, so a rewrite that omits the BDAY carries them across rather
-  # than reading the absence as a deletion (docs/macos-contacts.md, "A
+  # than reading the absence as a deletion (docs/apple-contacts.md, "A
   # birthday the client cannot render is dropped from the card").
   def test_a_birthday_no_client_renders_survives_a_rewrite_that_drops_it
     ["BDAY:1985-04", "BDAY:1985", "BDAY:--04", "BDAY:---12"].each do |line|
@@ -1304,7 +1304,7 @@ class StoreTest < Minitest::Test
   # The group's lines as macOS returns them on a card whose address and
   # note nobody edited: the parameter name lowercased, its value
   # uppercased, `pref` filled in, an unmodeled parameter dropped, and
-  # every value byte-identical (docs/macos-contacts.md, "The client
+  # every value byte-identical (docs/apple-contacts.md, "The client
   # rewrites every card it touches" and "An annotation survives only on
   # its own line").
   RESERIALIZED_ADDRESS = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "ADR;type=HOME;type=pref:") #: String
@@ -1439,7 +1439,7 @@ class StoreTest < Minitest::Test
   end
 
   # An untyped line comes back untyped: the client invents no type to
-  # fill the gap (docs/macos-contacts.md, "An address type the client
+  # fill the gap (docs/apple-contacts.md, "An address type the client
   # cannot model becomes a custom label").
   def test_an_untyped_lent_line_comes_back_untyped
     with_store({"aiden" => AIDEN}) do |store|

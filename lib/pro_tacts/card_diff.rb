@@ -11,7 +11,7 @@ module ProTacts
   #
   # A multiset difference over the card's lines, not an edit script:
   # macOS Contacts reorders properties on every card it touches
-  # (docs/macos-contacts.md), so a positional diff would report a
+  # (docs/apple-contacts.md), so a positional diff would report a
   # shuffle as a change to every line below the first move. Lines that
   # both cards carry cancel, however far apart they sit, and what is
   # left is the write. A card carrying the same line twice is two

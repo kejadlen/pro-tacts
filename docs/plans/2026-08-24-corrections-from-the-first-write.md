@@ -5,7 +5,7 @@ the first time, and the captures in `log/unhandled` contradict three
 things in `2026-08-24-vcard-storage-and-groups.md`. That record stands
 as written; this one says what the first real card changed.
 
-The client behavior itself is in `../macos-contacts.md`. This covers
+The client behavior itself is in `../apple-contacts.md`. This covers
 only what it means for the storage design.
 
 ## Diffing a submitted card has to be semantic

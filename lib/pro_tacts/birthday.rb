@@ -38,7 +38,7 @@ module ProTacts
     FULL_DATE = /\A(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(?:T\d{2}:?\d{2}(:?\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?\z/ #: Regexp
 
     # The no-year shape macOS writes, with 1604 standing in for the year
-    # in both the parameter and the value (docs/macos-contacts.md,
+    # in both the parameter and the value (docs/apple-contacts.md,
     # "Birthdays without a year"). 1604 because it is the first year of
     # the Gregorian calendar; the parameter names the year to omit.
     # Components in range, like FULL_DATE.
@@ -54,7 +54,7 @@ module ProTacts
     # across a rewrite, by the same probe: the served shapes in any
     # spelling were visible, so their absence is a deletion, and an
     # unrecognized or out-of-range value is cleaner dying with the
-    # rewrite than living forever (docs/macos-contacts.md, "A birthday
+    # rewrite than living forever (docs/apple-contacts.md, "A birthday
     # the client cannot render is dropped from the card").
     YEAR_AND_MONTH = /\A(\d{4})-(0[1-9]|1[0-2])\z/ #: Regexp
     YEAR_ALONE = /\A(\d{4})\z/ #: Regexp
@@ -70,7 +70,7 @@ module ProTacts
 
     # The reduced no-year values macOS reads on a card it did not write
     # and converts to the sentinel on its own
-    # (docs/macos-contacts.md, "Birthdays without a year"). Together
+    # (docs/apple-contacts.md, "Birthdays without a year"). Together
     # with #from_property's two spellings this is the rendered set: a
     # BDAY a client could see, and so could have deleted. Capturing
     # for #from_value, like the unrendered patterns above.

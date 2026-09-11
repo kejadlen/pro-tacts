@@ -9,7 +9,7 @@ showing nothing, so the idea is dropped.
 ## Every lever fails on macOS
 
 A client learns what it may do from `DAV:current-user-privilege-set`
-(RFC 3744 section 5.4) on the collection. `docs/macos-contacts.md`
+(RFC 3744 section 5.4) on the collection. `docs/apple-contacts.md`
 records what Contacts does with each form the property can take:
 
 | Server advertises | Contacts does | Recorded under |

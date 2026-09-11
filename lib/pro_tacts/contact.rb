@@ -398,7 +398,7 @@ module ProTacts
 
     # Every TYPE value (RFC 2426 section 3.3.1) that names a kind of
     # line. `pref` ranks a line instead, and the client adds it on its
-    # own (docs/macos-contacts.md, "The client rewrites every card it
+    # own (docs/apple-contacts.md, "The client rewrites every card it
     # touches"); `except` holds a property's own values that name no
     # kind either. Downcased: the spelling is the card's, and a screen
     # shows one.

@@ -585,7 +585,7 @@ module ProTacts
           # creates with If-None-Match: * and a UUID it mints into both
           # the URI and the card's UID, and updates with If-Match
           # carrying the strong etag it was last served — see
-          # docs/macos-contacts.md, "What a write looks like on the wire".
+          # docs/apple-contacts.md, "What a write looks like on the wire".
           r.put String do |filename|
             id = filename.delete_suffix(".vcf")
             # A last segment that is not this server's <id>.vcf shape

@@ -54,4 +54,4 @@ at 76 octets a continuation — are built synthetically in
 `test/photo_card.rb`, and a later session that set pictures on the
 synthetic seed contacts deliberately (2026-09-04) is seeded directly
 as `test/fixtures/cards/{photo,emoji,memoji}.vcf`; see
-docs/macos-contacts.md, "Profile pictures".
+docs/apple-contacts.md, "Profile pictures".

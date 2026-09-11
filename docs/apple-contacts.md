@@ -1,9 +1,10 @@
-# macOS Contacts as a CardDAV client
+# Apple Contacts as a CardDAV client
 
-What the macOS Contacts client does, where it deviates from the RFCs, and
-which failures look like protocol bugs but are not. Most of this is
-distilled from sabre/dav's [client notes][sabre-osx] and from traffic
-captures against the servers in `servers/`.
+What the Contacts clients on macOS and iOS do, where they deviate from the
+RFCs, and which failures look like protocol bugs but are not. Most of this
+is macOS, distilled from sabre/dav's [client notes][sabre-osx] and from
+traffic captures against the servers in `servers/`; sections that cover
+iOS say so.
 
 [sabre-osx]: https://sabre.io/dav/clients/osx-addressbook/
 

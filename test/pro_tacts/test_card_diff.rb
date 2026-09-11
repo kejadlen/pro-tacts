@@ -36,7 +36,7 @@ class CardDiffTest < Minitest::Test
   end
 
   # macOS reorders properties on every card it touches
-  # (docs/macos-contacts.md), so a diff that read position would call a
+  # (docs/apple-contacts.md), so a diff that read position would call a
   # shuffle a rewrite of everything below the first move.
   def test_reordering_a_card_is_no_change
     shuffled = AIDEN.sub("FN:Aiden\r\nUID:aiden\r\n", "UID:aiden\r\nFN:Aiden\r\n")

@@ -93,7 +93,7 @@ class BirthdayTest < Minitest::Test
       ProTacts::Birthday.from_property(property("1985-04-12"))
   end
 
-  # docs/macos-contacts.md, "Birthdays without a year": the verified
+  # docs/apple-contacts.md, "Birthdays without a year": the verified
   # Apple form, with 1604 standing in for the year in both halves.
   def test_the_apple_no_year_form_reads_into_the_model
     sentinel = property("1604-04-12", parameters: [["X-APPLE-OMIT-YEAR", "1604"]])

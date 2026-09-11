@@ -17,7 +17,7 @@ questions into experiments: change one response, resync, observe.
 It also fixes the network path early. Tailscale serve terminates TLS and
 proxies to the app, which is exactly the arrangement that breaks
 `/.well-known/carddav` redirects for everyone else (see
-`../macos-contacts.md`).
+`../apple-contacts.md`).
 
 ## Capabilities
 
@@ -48,7 +48,7 @@ Explicitly out of scope, to be built only after this milestone lands:
 
 ## Constraints
 
-- vCard 3.0, with an Apple-shaped `PRODID`. See `../macos-contacts.md`.
+- vCard 3.0, with an Apple-shaped `PRODID`. See `../apple-contacts.md`.
 - The `.well-known` redirect must be an absolute `https://` URL. A
   scheme-relative or `http://` redirect is dropped by the client without
   reaching the server.

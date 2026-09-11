@@ -109,7 +109,7 @@ carry:
   is its test.
 
 Three properties are load-bearing in non-obvious ways, documented in
-`docs/macos-contacts.md`: the collection's `resourcetype` (without
+`docs/apple-contacts.md`: the collection's `resourcetype` (without
 `card:addressbook` the client drops the account data), the
 `sync-collection` advertisement (without it the warm sync never runs), and
 `getctag` (without it no vCard is ever requested). Everything else the
@@ -118,7 +118,7 @@ me-card, principal-URL, the multiget/query advertisements — is optional.
 
 sabre/dav's [notes on the macOS Address Book client][sabre-osx] are the best
 single source of client quirks beyond this list, and they explain several
-failures that look like protocol bugs but are not. See `docs/macos-contacts.md`
+failures that look like protocol bugs but are not. See `docs/apple-contacts.md`
 for the details worth keeping close, including how to turn on the client's own
 debug logging.
 

@@ -2,7 +2,7 @@
 # probe is a card built to be edited by a real client and read back off
 # the wire, because what Apple does with a property is empirical and
 # every guess about it has been wrong at least once
-# (docs/macos-contacts.md).
+# (docs/apple-contacts.md).
 #
 # Seeded over HTTP rather than into the database, so the card travels
 # the same route a client's would and the dev server needs no
@@ -173,7 +173,7 @@ namespace :probe do
            cannot carry into a propagating write.
          - 3 Untyped Way: which types did the client write where the
            card carried none?
-      5. Record what happened in docs/macos-contacts.md, under "The
+      5. Record what happened in docs/apple-contacts.md, under "The
          client rewrites every card it touches".
       6. Then relabel one address to a custom label and read it again:
          a custom label is an itemN.ADR with an X-ABLabel beside it,
@@ -192,7 +192,7 @@ namespace :probe do
       4. Compare it with the card in tasks/probe.rake: which of the five
          forms came back, whether itemN was renumbered, and whether a
          companion stayed with the line it was grouped with.
-      5. Record what happened in docs/macos-contacts.md. Repeat on iOS,
+      5. Record what happened in docs/apple-contacts.md. Repeat on iOS,
          which numbers item groups differently (see
          test/fixtures/ios-exchange/05-put-contact-edit/request).
     NEXT
@@ -213,7 +213,7 @@ namespace :probe do
            item3.X-PT-GROUP follow them there, or stay at item3?
          The second answers whether a companion is a binding the client
          maintains or two numbers that happened to agree.
-      5. Record what happened in docs/macos-contacts.md, under "An
+      5. Record what happened in docs/apple-contacts.md, under "An
          annotation survives only on its own line".
     NEXT
   end
@@ -263,7 +263,7 @@ namespace :probe do
       #{reading_the_result(NOTES_ID, "Notes Boole", edit: "any field other than the note").chomp}
       4. Read the NOTE lines that come back: both as sent, one joined
          line, or one dropped — and which.
-      5. Record what happened in docs/macos-contacts.md.
+      5. Record what happened in docs/apple-contacts.md.
     NEXT
   end
 
@@ -280,7 +280,7 @@ namespace :probe do
       #{reading_the_result(CATEGORIES_ID, "Categories Boole").chomp}
       4. Read the CATEGORIES lines that come back: both as sent, merged
          into one, split one value per line, or gone.
-      5. Record what happened in docs/macos-contacts.md.
+      5. Record what happened in docs/apple-contacts.md.
     NEXT
   end
 end

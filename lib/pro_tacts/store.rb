@@ -377,7 +377,7 @@ module ProTacts
       # model emptied so nothing composes a second BDAY beside it
       # (RFC 6352 section 6.3.2.2). No BDAY at all is a client's
       # rewrite, and macOS Contacts drops the BDAY lines it cannot
-      # render from every card it writes (docs/macos-contacts.md):
+      # render from every card it writes (docs/apple-contacts.md):
       # what the stored card held in a spelling no client renders
       # rides across the rewrite, what it held that a client could
       # see was the user's deletion, an unseen model row survives as
@@ -1035,7 +1035,7 @@ module ProTacts
     # is a question about what it says and not about its bytes: macOS
     # re-serializes every card it touches, so `ADR;TYPE=home` comes
     # back `ADR;type=HOME;type=pref` on an address nobody edited
-    # (docs/macos-contacts.md, "The client rewrites every card it
+    # (docs/apple-contacts.md, "The client rewrites every card it
     # touches"). Comparing bytes reads every such line as an edit.
     #
     # What a line says is its value and its types: a member who
@@ -1070,7 +1070,7 @@ module ProTacts
     # The third: a type Contacts has no field for comes back moved,
     # not kept — into a property group, `TYPE` parameter gone, the type
     # the value of an `X-ABLabel` beside it — on an address nobody
-    # touched (docs/macos-contacts.md, "An address type the client
+    # touched (docs/apple-contacts.md, "An address type the client
     # cannot model becomes a custom label"). So that label counts as
     # one of the line's types, and `ADR;TYPE=dom` coming back as
     # `item1.ADR` with `item1.X-ABLabel:dom` is unedited.
