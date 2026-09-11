@@ -161,6 +161,27 @@ Updates carry `If-Match` with the server's strong etag, so conditional
 requests work and an etag derived from the rendered card is a usable basis
 for them. Both use `Content-Type: text/vcard; charset=utf-8`.
 
+## A PUT answered without an ETag costs one GET
+
+A card with a birthday is stored without its `BDAY`
+(`plans/2026-08-31-partial-birthdays.md`), so what the server keeps is not
+octet-equal to what was sent, and RFC 6352 section 6.3.2.3 promises a
+strong ETag in the PUT response only when it is. Contacts takes the
+omission in stride. Editing a card with a complete birthday produced:
+
+```
+PUT bday-complete.vcf    ->  204, no ETag
+REPORT sync-collection   ->  the card's new etag
+GET bday-complete.vcf    ->  200, 195 bytes
+```
+
+The GET came 108 ms after the PUT and took the server 3 ms. The two other
+writes in the same session were answered with an ETag and got the same
+`REPORT` but no GET. So the cost is one request per save, the size of the
+card: nothing for a bare card, up to a photo's size for one with a picture
+(see "Profile pictures"). Verified 2026-09-10, macOS 26.5.1
+(AddressBookCore/2732.600.11).
+
 ## The client rewrites every card it touches
 
 A card served by pro-tacts and edited in Contacts does not come back in the
