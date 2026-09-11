@@ -150,6 +150,30 @@ every few minutes, byte-identical apart from a refreshed `REV`. An
 experiment round that fails for server-side reasons does not need the edit
 redone — fix the server and the queued write arrives by itself.
 
+## Advertising only `read` stops the sync
+
+Leaving the privilege set out lets Contacts read and holds back its
+writes. Advertising `read` alone does not do the same thing: the client
+reads nothing at all.
+
+With `current-user-privilege-set` listing only `DAV:read`, a fresh
+install of the account ran discovery twice. Each round ended in a
+`Depth: 1` PROPFIND of the collection whose 207 listed every card and its
+etag. Then the client stopped. It sent no `getctag` poll, no
+`sync-collection`, and no GET, and Contacts showed the account with no
+cards in it.
+
+Restoring `read`, `write`, `bind`, and `unbind` did not wake that
+account; it sent nothing for the next six minutes. A second install with
+the full set did sync. After the same discovery, the client asked for
+`getctag` and `sync-token`, listed etags, and fetched all 20 cards within
+15 seconds of the install.
+
+Neither form makes Contacts show a read-only address book. With no
+privilege set, the cards sync and an edit is accepted locally but never
+sent. With `read` alone, there are no cards to edit. Verified 2026-09-10,
+macOS 26.5.1 (AddressBookCore/2732.600.11).
+
 ## What a write looks like on the wire
 
 Creates carry `If-None-Match: *` (RFC 6352 section 6.3.2) and a
