@@ -28,16 +28,16 @@ module ProTacts
       # form serves it (the editor can save a shape nothing renders,
       # and the details page still shows what the record holds) — then
       # any well-shaped stored spelling parsed by Birthday.from_value,
-      # bare properties only, like the model's own reads, and the raw
-      # value for everything else, shown as stored. The prose itself is
-      # Birthday#to_s, every shape's one rendering.
+      # bare properties only (VALUE=date aside), like the model's own
+      # reads, and the raw value for everything else, shown as stored.
+      # The prose itself is Birthday#to_s, every shape's one rendering.
       #: (Contact contact) -> String?
       def self.birthday(contact)
         property = contact.properties.find { it.name.casecmp?("BDAY") }
         return contact.birthday&.to_s if property.nil?
 
         birthday = contact.birthday
-        if birthday.nil? && property.group.nil? && property.parameters.empty?
+        if birthday.nil? && property.group.nil? && Birthday.significant_parameters(property).empty?
           birthday = Birthday.from_value(property.value)
         end
         birthday&.to_s || property.value

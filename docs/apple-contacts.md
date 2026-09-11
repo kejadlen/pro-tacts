@@ -470,7 +470,7 @@ of the year 2 and goes back that way. A day-only birthday iOS never
 displayed comes back as a year-2 date it made up.
 
 Every birthday it writes spells out `value=date`, the default value type
-of RFC 2426 section 3.1.5, which `ProTacts::Birthday` does not read. The
+of RFC 2426 section 3.1.5, so the parameter adds nothing to the line. The
 carry across a rewrite (`plans/2026-09-01-birthdays-across-a-rewrite.md`)
 kept the three shapes iOS dropped; the made-up dates replaced what was
 stored. Verified 2026-09-11 against iOS 26.6.2 (dataaccessd/1.0).

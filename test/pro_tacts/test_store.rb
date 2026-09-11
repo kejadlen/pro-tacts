@@ -704,6 +704,19 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # iOS writes every birthday with VALUE=date spelled out
+  # (docs/apple-contacts.md), and the line moves into the model like a
+  # bare one, served back in the model's spelling.
+  def test_a_birthday_spelling_out_value_date_moves_into_the_model
+    with_store({"aiden" => AIDEN}) do |store|
+      store.put("aiden", vcard(AIDEN.sub("END:VCARD\r\n", "BDAY;value=date:1985-04-12\r\nEND:VCARD\r\n")))
+
+      assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), birthday_row(store, "aiden")
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_equal AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n"), store.contact("aiden").vcard.to_s
+    end
+  end
+
   def test_an_apple_no_year_birthday_round_trips
     with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY;X-APPLE-OMIT-YEAR=1604:1604-04-12\r\nEND:VCARD\r\n")}) do |store|
       assert_equal ProTacts::Birthday.new(month: 4, day: 12), birthday_row(store, "aiden")

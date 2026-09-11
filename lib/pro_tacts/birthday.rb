@@ -181,28 +181,39 @@ module ProTacts
     # Reads one parsed BDAY property into the model, or nil for every
     # spelling the model does not recompose — which keeps it in the card
     # verbatim rather than losing it (RFC 6352 section 6.3.2.2). Only the
-    # two forms #to_line emits are accepted, and only bare: any extra
-    # parameter travels with the line, so a line carrying one is left
-    # whole. A grouped `item1.BDAY` likewise stays, because its label
-    # pairing belongs to the card.
+    # two forms #to_line emits are accepted, and only bare but for
+    # VALUE=date (#significant_parameters): any other parameter travels
+    # with the line, so a line carrying one is left whole. A grouped
+    # `item1.BDAY` likewise stays, because its label pairing belongs to
+    # the card.
     def self.from_property(property)
       return nil if property.group
 
-      if property.parameters.empty? && (m = property.value.match(FULL_DATE))
+      parameters = significant_parameters(property)
+      if parameters.empty? && (m = property.value.match(FULL_DATE))
         new(year: m[1].to_i, month: m[2].to_i, day: m[3].to_i)
-      elsif apple_no_year?(property) && (m = property.value.match(OMIT_YEAR_DATE))
+      elsif apple_no_year?(parameters) && (m = property.value.match(OMIT_YEAR_DATE))
         new(month: m[1].to_i, day: m[2].to_i)
       end
+    end
+
+    # A BDAY's parameters without VALUE=date, which names the default
+    # value type (RFC 2426 section 3.1.5) and so says nothing the bare
+    # line does not. iOS spells it out on every birthday it writes
+    # (docs/apple-contacts.md, "iOS writes a birthday it cannot hold as
+    # a date it made up").
+    def self.significant_parameters(property)
+      property.parameters.reject { |name, value| name.casecmp?("VALUE") && value.casecmp?("date") }
     end
 
     # The parameter half of the Apple form, exactly: the one parameter,
     # named for the year it stands in. A different sentinel or a value
     # disagreeing with the year in the date is not the verified form and
     # is not claimed.
-    def self.apple_no_year?(property)
-      return false unless property.parameters.length == 1
+    def self.apple_no_year?(parameters)
+      return false unless parameters.length == 1
 
-      name, value = property.parameters.fetch(0)
+      name, value = parameters.fetch(0)
       name.casecmp?("X-APPLE-OMIT-YEAR") && value == OMIT_YEAR
     end
 
@@ -224,7 +235,7 @@ module ProTacts
     # the loss — Store#put, to Sentry.
     def self.rendered?(property)
       !from_property(property).nil? ||
-        (property.group.nil? && property.parameters.empty? && property.value.match?(REDUCED_DATE))
+        (property.group.nil? && significant_parameters(property).empty? && property.value.match?(REDUCED_DATE))
     end
   end
 end

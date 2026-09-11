@@ -102,6 +102,14 @@ class FormatTest < Minitest::Test
     assert_equal "February 30", ProTacts::Admin::Format.birthday(contact(nonsense))
   end
 
+  # A line stored before the model read VALUE=date still carries it,
+  # and displays as the date it names.
+  def test_a_stored_value_date_birthday_displays_its_date
+    stored = CARD.sub("END:VCARD\r\n", "BDAY;value=date:1985-12-10\r\nEND:VCARD\r\n")
+
+    assert_equal "December 10, 1985", ProTacts::Admin::Format.birthday(contact(stored))
+  end
+
   def test_a_birthday_that_will_not_parse_is_shown_as_stored
     unparseable = CARD.sub("END:VCARD\r\n", "BDAY:not-a-date\r\nEND:VCARD\r\n")
 

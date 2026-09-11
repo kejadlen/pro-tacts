@@ -117,6 +117,26 @@ class BirthdayTest < Minitest::Test
     assert_equal ProTacts::Birthday.new(month: 4, day: 12), ProTacts::Birthday.from_property(sentinel)
   end
 
+  # VALUE=date names BDAY's default type (RFC 2426 section 3.1.5), and
+  # iOS spells it out on every birthday it writes.
+  def test_value_date_reads_as_the_bare_line_would
+    assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12),
+      ProTacts::Birthday.from_property(property("1985-04-12", parameters: [["value", "date"]]))
+    assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12),
+      ProTacts::Birthday.from_property(property("1985-04-12", parameters: [["VALUE", "DATE"]]))
+
+    sentinel = property("1604-04-12", parameters: [["VALUE", "date"], ["X-APPLE-OMIT-YEAR", "1604"]])
+    assert_equal ProTacts::Birthday.new(month: 4, day: 12), ProTacts::Birthday.from_property(sentinel)
+  end
+
+  # What iOS writes back for a no-year birthday: the sentinel's date
+  # without its parameter, a real 1604 as the bare line is
+  # (docs/plans/2026-08-31-partial-birthdays.md).
+  def test_a_value_date_1604_is_a_real_year
+    assert_equal ProTacts::Birthday.new(year: 1604, month: 3, day: 8),
+      ProTacts::Birthday.from_property(property("1604-03-08", parameters: [["value", "date"]]))
+  end
+
   # A component out of range is unmodeled, not exceptional: the
   # patterns encode the ranges, so the value never matches and the
   # line stays wherever it was — Store reports it as unrecognized
@@ -132,6 +152,7 @@ class BirthdayTest < Minitest::Test
   def test_what_the_model_cannot_recompose_reads_as_nil
     [property("--0412"), property("1985-04"), property("19850412"),
       property("1985-04-12", parameters: [["X-OTHER", "1"]]),
+      property("1985-04-12", parameters: [["VALUE", "text"]]),
       property("1604-04-12", parameters: [["X-APPLE-OMIT-YEAR", "1604"], ["X-OTHER", "1"]]),
       property("1985-04-12", group: "item1")].each do |unmodeled|
       assert_nil ProTacts::Birthday.from_property(unmodeled), unmodeled.value
@@ -195,7 +216,9 @@ class BirthdayTest < Minitest::Test
   def test_rendered_reads_the_spellings_clients_show
     [property("1985-04-12"), property("1985-04-12T23:10:00Z"),
       property("1604-04-12", parameters: [["X-APPLE-OMIT-YEAR", "1604"]]),
-      property("--0412"), property("--04-12")].each do |rendered|
+      property("--0412"), property("--04-12"),
+      property("1985-04-12", parameters: [["value", "date"]]),
+      property("--0412", parameters: [["value", "date"]])].each do |rendered|
       assert ProTacts::Birthday.rendered?(rendered), rendered.value
     end
   end

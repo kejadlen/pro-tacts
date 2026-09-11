@@ -29,7 +29,9 @@ module ProTacts
 
     def self.from_property: (VCard::Parser::Property property) -> Birthday?
 
-    def self.apple_no_year?: (VCard::Parser::Property property) -> bool
+    def self.significant_parameters: (VCard::Parser::Property property) -> Array[[String, String]]
+
+    def self.apple_no_year?: (Array[[String, String]] parameters) -> bool
 
     def self.unrendered_value?: (String value) -> bool
 
