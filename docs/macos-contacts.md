@@ -407,6 +407,25 @@ birthday is. Composition appends a group's lines after the member's own
 survives is the group's and the one lost is the member's. Verified
 2026-09-10, macOS 26.5.1 (AddressBookCore/2732.600.11).
 
+## Categories survive a round trip but are never shown
+
+`rake probe:categories` serves two `CATEGORIES` lines (RFC 2426 section
+3.6.1), one of them a comma list. Contacts shows neither anywhere on the
+card, and keeps both anyway. The card it writes back after an unrelated
+edit carries both, values byte-identical and the list unsplit, in reverse
+order:
+
+```
+Sent:       CATEGORIES:family,school run
+            CATEGORIES:neighbours
+Came back:  CATEGORIES:neighbours
+            CATEGORIES:family,school run
+```
+
+A tag can therefore ride in the stored card through a macOS edit, but
+someone using Contacts can neither see nor change it; only this server's
+own UI can. Verified 2026-09-10, macOS 26.5.1 (AddressBookCore/2732.600.11).
+
 ## One address book per account
 
 Through at least macOS 10.10, Contacts binds one address book per account
