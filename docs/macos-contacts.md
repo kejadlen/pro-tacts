@@ -316,13 +316,24 @@ to begin with. Line-level provenance cannot rest on a companion.
 What a card-level property can carry is a fact about the card as a whole
 — which version of a group's lines it was composed from, for instance.
 What it cannot do is name a line, which is what attribution needs.
-Verified 2026-09-09 against macOS 26.5.1; iOS numbers property groups
-differently and has not been tested.
+Verified 2026-09-09 against macOS 26.5.1.
 
 One thing the second probe caught in passing: the card went out with
 `N:Boole;Renumber;;;` and `FN:Probe Renumber`, and came back with
 `FN:Renumber Boole`. The client recomputes `FN` from `N` where the two
 disagree, so a composed `FN` is not stable across a round trip.
+
+iOS gets to the same place by a different route. The standalone
+property survives and both parameters are dropped, as on macOS. Every
+companion comes back with its `itemN.` prefix stripped: `item9.X-PT-GROUP`
+and `item8.X-PT-GROUP` return as bare `X-PT-GROUP` lines at the end of
+the card, and so do both markers from the renumbering probe. iOS reorders
+and renumbers the modeled groups the way macOS does, puts every address
+in a group whether or not it has a label, and recomputes `FN` from `N`
+too. A companion on iOS detaches instead of re-attaching to the wrong
+line, which makes the marker harmless but still leaves it unable to name
+the line it came with. Verified 2026-09-11 against iOS 26.6.2
+(dataaccessd/1.0).
 
 ## Profile pictures
 
