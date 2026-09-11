@@ -1,0 +1,21 @@
+# BirthdayLine's variants are Data classes, whose members the inline
+# parser cannot read (see sig/pro_tacts/birthday.rbs for the same
+# limit). Each is marked `@rbs skip` in birthday_line.rb and signed
+# here; the module's own reader carries its signature inline.
+module ProTacts
+  module BirthdayLine
+    class Modeled
+      attr_reader birthday: Birthday
+
+      def self.new: (birthday: Birthday) -> instance
+    end
+
+    class Unrecognized
+      def self.new: () -> instance
+    end
+
+    class Unreadable
+      def self.new: () -> instance
+    end
+  end
+end

@@ -1535,7 +1535,7 @@ class AdminContactsPagesTest < Minitest::Test
   # submitted birthday would compose a second BDAY beside it. Refused
   # whole, name edit included: one submit, one write.
   def test_a_birthday_against_a_cards_own_spelling_is_refused
-    resident = ADA.sub("BDAY:1985-12-10\r\n", "BDAY:1985-04\r\n")
+    resident = ADA.sub("BDAY:1985-12-10\r\n", "BDAY:1985-13\r\n")
 
     with_contacts({"ada" => resident}) do |store|
       assert_nil store.contact("ada").birthday
@@ -1549,7 +1549,7 @@ class AdminContactsPagesTest < Minitest::Test
       contact = store.contact("ada")
       assert_nil contact.birthday
       assert_equal 1, contact.vcard.to_s.scan("BDAY").length
-      assert_includes contact.vcard.to_s, "BDAY:1985-04\r\n"
+      assert_includes contact.vcard.to_s, "BDAY:1985-13\r\n"
       assert_includes contact.vcard.to_s, "FN:Ada Lovelace\r\n"
     end
   end

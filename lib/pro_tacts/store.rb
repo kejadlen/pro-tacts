@@ -5,6 +5,7 @@ require "sequel"
 require "sentry-ruby"
 
 require "pro_tacts/birthday"
+require "pro_tacts/birthday_line"
 require "pro_tacts/card_diff"
 require "pro_tacts/contact"
 require "pro_tacts/vcard"
@@ -367,49 +368,42 @@ module ProTacts
     # the bind is the third line.
     #: (String id, VCard vcard) -> Contact
     def put(id, vcard)
-      # The birthday half of the split a write makes, one arm per shape
-      # a submitted card's BDAY lines can take. One line that reads as
-      # a modeled birthday moves out of the card and into the model;
-      # any other BDAY — the vCard 4.0 forms, a foreign sentinel, a
-      # line that will not parse, a BDAY sharing its line's bytes with
-      # another, more than one — is data the model
-      # cannot recompose and stays in the card byte for byte, with the
-      # model emptied so nothing composes a second BDAY beside it
-      # (RFC 6352 section 6.3.2.2). No BDAY at all is a client's
-      # rewrite, and macOS Contacts drops the BDAY lines it cannot
-      # render from every card it writes (docs/apple-contacts.md):
-      # what the stored card held in a spelling no client renders
-      # rides across the rewrite, what it held that a client could
-      # see was the user's deletion, an unseen model row survives as
-      # nothing a client ever saw, and what nobody recognizes is
-      # reported rather than lost in silence.
+      # The birthday half of the split a write makes
+      # (docs/plans/2026-09-11-every-birthday-in-the-model.md). A card
+      # holds at most one BDAY, and one that reads as a birthday leaves
+      # the card for the model. Any other stays in the card byte for
+      # byte, reported, with the model emptied so nothing composes a
+      # second BDAY beside it (RFC 6352 section 6.3.2.2).
       existing = birthday_of(id)
       # The card as it stands before this write, read once for the two
-      # halves that need it: the rewrite arm below, which carries
-      # unrendered BDAY lines across, and the subtraction after the
-      # case, which accounts for the member's own lines before
-      # attributing any to a group.
+      # halves that need it: the no-BDAY arm below, which reports what
+      # it drops, and the subtraction after it, which accounts for the
+      # member's own lines before attributing any to a group.
       own = stored_card(id)
+      bdays, rest = vcard.extract("BDAY")
       birthday, stored =
-        case vcard.extract("BDAY")
-        in [[line], rest]
-          report_unrecognized_bday_lines([line])
-          property = bday_of(line)
-          birthday = property && Birthday.from_property(property)
-          [birthday, birthday ? rest : vcard]
-        in [[], _]
-          # The rewrite arm: carry the unrendered lines out of the
-          # stored card, report the unrecognized ones' loss, and keep
-          # whatever an unseen model row holds.
-          carried, lost = carried_and_lost_bday_lines(own)
-          kept = existing && !existing.served? ? existing : nil
-          report_lost_bday_lines(lost)
-          [kept, vcard.insert(carried)]
-        in [lines, _]
-          # More than one BDAY: cardinality-broken data, kept verbatim
-          # and reported like any other unrecognized line.
-          report_unrecognized_bday_lines(lines)
+        if bdays.empty?
+          # No BDAY: a client that was sent the birthday removed it, and
+          # one that was never sent it cannot have. A BDAY line left in
+          # the stored card goes with the rewrite, which is worth saying.
+          report_lost_bday_lines(own)
+          [existing && !existing.served? ? existing : nil, vcard]
+        elsif bdays.length > 1
+          report_many_bday_lines(bdays.length)
           [nil, vcard]
+        else
+          line = BirthdayLine.read(bdays.fetch(0))
+          case line
+          when BirthdayLine::Modeled
+            [line.birthday, rest]
+          when BirthdayLine::Unrecognized
+            report_unrecognized_bday_line
+            [nil, vcard]
+          when BirthdayLine::Unreadable
+            [nil, vcard]
+          else
+            raise "no arm for #{line.class}"
+          end
         end
 
       # The other half of the split, the same shape as the birthday's:
@@ -832,63 +826,21 @@ module ProTacts
       row && VCard.new(row.fetch(:vcard).to_s)
     end
 
-    # The BDAY a decision may be made of: the line's property, when it
-    # has one and it names BDAY. Found by name rather than position,
-    # and safe to act on because the line is the unit a rewrite or a
-    # move to the model carries and a line holds at most one property
-    # (VCard::Parser::Line) — so moving its bytes moves this and
-    # nothing else. Nil for any other shape, the empty line a failed
-    # read leaves included.
-    #: (VCard::Parser::Line line) -> VCard::Parser::Property?
-    def bday_of(line)
-      property = line.property
-      property if property&.name&.casecmp?("BDAY")
-    end
-
-    # A stored card's BDAY lines in two piles: the verbatim lines a
-    # rewrite carries across — values no client renders — and the ones
-    # it drops unwitnessed, which no client renders and no whitelist
-    # recognizes. Lines a client rendered are in neither pile: their
-    # absence is a deletion the rewrite already honors.
-    #: (VCard? vcard) -> [Array[String], Array[VCard::Parser::Line]]
-    def carried_and_lost_bday_lines(vcard)
-      return [[], []] if vcard.nil?
-
-      bdays, = vcard.extract("BDAY")
-      carried, rest = bdays.partition { |line|
-        property = bday_of(line)
-        property && Birthday.unrendered_value?(property.value)
-      }
-      lost = rest.reject { |line|
-        property = bday_of(line)
-        property && Birthday.rendered?(property)
-      }
-      [carried.map(&:verbatim), lost]
-    end
-
-    # The arrival report: a BDAY line this server can neither model,
-    # recognize as rendered, nor recognize as carried is unexpected
+    # The arrival report: a BDAY the model does not take is unexpected
     # input, and storing it verbatim would be the last anyone heard of
     # it. The message carries no card content
-    # (ProTacts::SentryScrubber's line); the values stay on the
-    # machine, where the admin view shows them raw.
-    #: (Array[VCard::Parser::Line] lines) -> void
-    def report_unrecognized_bday_lines(lines)
-      unrecognized = lines.count { |line|
-        # A line with no property is one this server could not read at
-        # all, and a value it never read is not a value it failed to
-        # recognize. The line's bytes are stored either way.
-        next false if line.property.nil?
+    # (ProTacts::SentryScrubber's line); the value stays on the
+    # machine, where the admin view shows it raw.
+    #: () -> void
+    def report_unrecognized_bday_line
+      Sentry.capture_message("a submitted card carried a BDAY line the model does not take", level: :warning)
+    end
 
-        property = bday_of(line)
-        property.nil? || (!Birthday.rendered?(property) && !Birthday.unrendered_value?(property.value))
-      }
-      return if unrecognized.zero?
-
-      Sentry.capture_message(
-        "a submitted card carried #{unrecognized} BDAY line(s) no client renders and no whitelist recognizes",
-        level: :warning,
-      )
+    # A contact has one birthday, so a card with several cannot say
+    # which it means, whatever each line holds.
+    #: (Integer count) -> void
+    def report_many_bday_lines(count)
+      Sentry.capture_message("a submitted card carried #{count} BDAY lines", level: :warning)
     end
 
     # The submitted card with the lines its groups lend it taken back
@@ -1158,7 +1110,7 @@ module ProTacts
     # attribute — two lines of that name arrived that the member's card
     # does not explain, and calling either the edit would be a guess.
     # The card is stored as it arrived and the line is news, the same
-    # bargain report_unrecognized_bday_lines makes, and carries no card
+    # bargain report_unrecognized_bday_line makes, and carries no card
     # content for the same reason (ProTacts::SentryScrubber).
     #: (Integer count) -> void
     def report_ambiguous_inherited_lines(count)
@@ -1189,17 +1141,17 @@ module ProTacts
       )
     end
 
-    # The loss report, the rewrite's half of the arrival one: a stored
-    # BDAY no client renders and no whitelist recognizes is about to be
-    # dropped, and nobody would know.
-    #: (Array[VCard::Parser::Line] lines) -> void
-    def report_lost_bday_lines(lines)
+    # The loss report, the rewrite's half of the arrival one: a BDAY
+    # line still in the stored card is one the model did not take, and a
+    # rewrite without it is about to drop it with nobody told.
+    #: (VCard? own) -> void
+    def report_lost_bday_lines(own)
+      return if own.nil?
+
+      lines, = own.extract("BDAY")
       return if lines.empty?
 
-      Sentry.capture_message(
-        "a rewrite dropped #{lines.length} BDAY line(s) no client renders and no whitelist carries",
-        level: :warning,
-      )
+      Sentry.capture_message("a rewrite dropped #{lines.length} BDAY line(s) the model did not take", level: :warning)
     end
 
     # The birthday travels beside the card rather than inside it, and

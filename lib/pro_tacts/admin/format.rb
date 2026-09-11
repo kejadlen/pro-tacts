@@ -23,24 +23,18 @@ module ProTacts
         (contact.name || contact.id).to_s.strip[0].to_s.upcase
       end
 
-      # A contact's birthday, for display: the model's — composed into
-      # the served card when a client can carry it, held alone when no
-      # form serves it (the editor can save a shape nothing renders,
-      # and the details page still shows what the record holds) — then
-      # any well-shaped stored spelling parsed by Birthday.from_value,
-      # bare properties only (VALUE=date aside), like the model's own
-      # reads, and the raw value for everything else, shown as stored.
-      # The prose itself is Birthday#to_s, every shape's one rendering.
+      # A contact's birthday, for display: the model's, including the
+      # shapes no client is sent, then a BDAY still in the card — read the
+      # way a write reads one, else shown raw. The prose is Birthday#to_s.
       #: (Contact contact) -> String?
       def self.birthday(contact)
-        property = contact.properties.find { it.name.casecmp?("BDAY") }
-        return contact.birthday&.to_s if property.nil?
-
         birthday = contact.birthday
-        if birthday.nil? && property.group.nil? && Birthday.significant_parameters(property).empty?
-          birthday = Birthday.from_value(property.value)
-        end
-        birthday&.to_s || property.value
+        return birthday.to_s if birthday
+
+        property = contact.properties.find { it.name.casecmp?("BDAY") }
+        return nil if property.nil?
+
+        Birthday.from_property(property)&.to_s || property.value
       end
 
       # ADR's components as display lines — street, then everything

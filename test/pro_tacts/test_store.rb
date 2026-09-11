@@ -752,7 +752,7 @@ class StoreTest < Minitest::Test
   # The card's own line speaks for itself, and nothing composes a
   # second one beside it. A fold travels with its line, byte for byte.
   def test_an_unmodeled_bday_stays_in_the_card_and_empties_the_model
-    ["BDAY:--0412", "BDAY:1985-\r\n 04\r\n", "BDAY:1985-04-12\r\nBDAY:1986-04-12\r\n"].each do |bday|
+    ["BDAY:1985-13", "BDAY:1985-\r\n 13\r\n", "BDAY:1985-04-12\r\nBDAY:1986-04-12\r\n"].each do |bday|
       unmodeled = AIDEN.sub("END:VCARD\r\n", "#{bday}END:VCARD\r\n")
 
       with_store({"aiden" => AIDEN_BORN}) do |store|
@@ -783,27 +783,42 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # macOS Contacts drops the lines it cannot render from every card it
-  # writes, so a rewrite that omits the BDAY carries them across rather
-  # than reading the absence as a deletion (docs/apple-contacts.md, "A
-  # birthday the client cannot render is dropped from the card").
-  def test_a_birthday_no_client_renders_survives_a_rewrite_that_drops_it
-    ["BDAY:1985-04", "BDAY:1985", "BDAY:--04", "BDAY:---12"].each do |line|
+  # The four shapes no client displays go into the model and are never
+  # sent, so a card sent back without them has not deleted them.
+  def test_a_birthday_no_client_is_sent_survives_a_rewrite
+    {
+      "BDAY:1985-04" => ProTacts::Birthday.new(year: 1985, month: 4),
+      "BDAY:1985" => ProTacts::Birthday.new(year: 1985),
+      "BDAY:--04" => ProTacts::Birthday.new(month: 4),
+      "BDAY:---12" => ProTacts::Birthday.new(day: 12),
+    }.each do |line, birthday|
       with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")}) do |store|
-        edited = AIDEN.sub("FN:Aiden", "FN:Aiden Smith")
+        assert_equal AIDEN, store.contact("aiden").vcard.to_s, line
 
+        edited = AIDEN.sub("FN:Aiden", "FN:Aiden Smith")
         store.put("aiden", vcard(edited))
 
-        assert_equal edited.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n"), store.contact("aiden").vcard.to_s, line
-        assert_nil birthday_row(store, "aiden"), line
+        assert_equal edited, store.contact("aiden").vcard.to_s, line
+        assert_equal birthday, birthday_row(store, "aiden"), line
       end
     end
   end
 
-  # The divider is the shape, not the spelling: macOS renders --0412,
-  # so a rewrite without it has removed a birthday the client could
-  # see, and the deletion is honored. Honoring it is what keeps these
-  # deletable at all.
+  # A month and day goes out as the sentinel whatever spelling it came
+  # in, including the extended one iOS misreads as a year-2 date and the
+  # parameterless 1604 iOS writes back.
+  def test_a_month_and_day_in_any_spelling_goes_out_as_the_sentinel
+    ["BDAY:--11-27", "BDAY:--1127", "BDAY;value=date:1604-11-27"].each do |line|
+      with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")}) do |store|
+        assert_equal ProTacts::Birthday.new(month: 11, day: 27), birthday_row(store, "aiden"), line
+        assert_equal AIDEN.sub("END:VCARD\r\n", "BDAY;X-APPLE-OMIT-YEAR=1604:1604-11-27\r\nEND:VCARD\r\n"),
+          store.contact("aiden").vcard.to_s, line
+      end
+    end
+  end
+
+  # --0412 goes out as the sentinel, so a rewrite without it removed a
+  # birthday the client was sent, and the deletion is honored.
   def test_a_birthday_a_client_renders_is_deleted_by_a_rewrite_without_it
     with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n")}) do |store|
       store.put("aiden", vcard(AIDEN))
@@ -813,9 +828,8 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The rewrite's half of the same rule: a shared line is not carried
-  # (carrying it would carry its fellow bytes too), so dropping it is
-  # reported rather than silent.
+  # A shared line never reaches the model, so it stays in the stored
+  # card, and a rewrite dropping it is reported rather than silent.
   def test_a_rewrite_dropping_a_shared_bday_line_is_reported
     shared = AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04\rNOTE:b\r\nEND:VCARD\r\n")
     edited = AIDEN.sub("FN:Aiden", "FN:Aiden Smith")
@@ -829,9 +843,9 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # A submission carrying any BDAY replaces what was there, carried
-  # line included: PUT is a whole-card replace, not a merge.
-  def test_a_submitted_birthday_replaces_the_carried_line
+  # A submission carrying any BDAY replaces what was there, a birthday
+  # no client was sent included: PUT is a whole-card replace.
+  def test_a_submitted_birthday_replaces_one_no_client_was_sent
     with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04\r\nEND:VCARD\r\n")}) do |store|
       born = AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n")
 
@@ -843,8 +857,8 @@ class StoreTest < Minitest::Test
   end
 
   # The loss report, the rewrite's half of the arrival one: a stored
-  # BDAY no client renders and no whitelist recognizes is about to be
-  # dropped, and nobody would know.
+  # BDAY the model did not take is about to be dropped, and nobody
+  # would know.
   def test_a_rewrite_dropping_an_unrecognized_bday_is_reported
     with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "BDAY:1985-13\r\nEND:VCARD\r\n")}) do |store|
       # The seed's own arrival report is not this test's subject.
@@ -857,9 +871,7 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # A rewrite's quiet cases: a carried line survives (asserted above),
-  # a rendered one was deleted by a user who could see it, and a card
-  # with no BDAY at all has nothing to say.
+  # A rewrite over birthdays the model holds has no line to drop.
   def test_a_rewrite_over_known_bdays_stays_quiet
     ["BDAY:--0412", "BDAY:1985-04"].each do |line|
       with_store({"aiden" => AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")}) do |store|
@@ -870,13 +882,11 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The arrival report: a submitted BDAY this server can neither model,
-  # recognize as rendered, nor recognize as carried is unexpected input,
-  # and storing it verbatim would be the last anyone heard of it.
-  # Known forms — the modeled spellings, the reduced values macOS
-  # reads, the carried shapes — stay quiet.
+  # The arrival report: a submitted BDAY the model does not take is
+  # unexpected input, and storing it verbatim would be the last anyone
+  # heard of it.
   def test_an_unrecognized_bday_arriving_is_reported
-    ["BDAY:1985-13", "BDAY:--0432", "BDAY:19850412", "BDAY:1985-4"].each do |line|
+    ["BDAY:1985-13", "BDAY:--0432", "BDAY:19850412", "BDAY:1985-4", "item1.BDAY:1985-04-12"].each do |line|
       with_store({}) do |store|
         clear_sentry_events
         store.put("aiden", vcard(AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")))
@@ -888,12 +898,25 @@ class StoreTest < Minitest::Test
 
   def test_a_bday_the_server_knows_arrives_quietly
     ["BDAY:1985-04-12", "BDAY:1985-04-12T23:10:00Z", "BDAY;X-APPLE-OMIT-YEAR=1604:1604-04-12",
-      "BDAY:--0412", "BDAY:--04-12", "BDAY:1985-04", "BDAY:1985"].each do |line|
+      "BDAY:--0412", "BDAY:--04-12", "BDAY:1985-04", "BDAY:1985", "BDAY:--04", "BDAY:---12",
+      "BDAY;value=date:1985-04-12"].each do |line|
       with_store({}) do |store|
         store.put("aiden", vcard(AIDEN.sub("END:VCARD\r\n", "#{line}\r\nEND:VCARD\r\n")))
 
         assert_empty sentry_messages, line
       end
+    end
+  end
+
+  # A contact has one birthday, so several BDAY lines are reported even
+  # when each would read on its own.
+  def test_several_bday_lines_are_reported_whatever_they_hold
+    with_store({}) do |store|
+      store.put("aiden", vcard(AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nBDAY:1986-04-12\r\nEND:VCARD\r\n")))
+      messages = sentry_messages
+
+      assert_equal 1, messages.length
+      assert_match "2 BDAY lines", messages.fetch(0)
     end
   end
 
@@ -1774,7 +1797,7 @@ class StoreTest < Minitest::Test
       Sequel.connect("sqlite://#{path}") do |db|
         Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 1)
         db[:cards].insert(id: "aiden", vcard: AIDEN_BORN)
-        db[:cards].insert(id: "znorth", vcard: ZED.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n"))
+        db[:cards].insert(id: "znorth", vcard: ZED.sub("END:VCARD\r\n", "BDAY:19850412\r\nEND:VCARD\r\n"))
         db[:cards].insert(id: "xavi", vcard: shared)
       end
 
@@ -1784,7 +1807,7 @@ class StoreTest < Minitest::Test
         assert_equal AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n"), store.contact("aiden").vcard.to_s
 
         # Unmodeled: byte-identical, no birthday row beside it.
-        assert_equal ZED.sub("END:VCARD\r\n", "BDAY:--0412\r\nEND:VCARD\r\n"), store.contact("znorth").vcard.to_s
+        assert_equal ZED.sub("END:VCARD\r\n", "BDAY:19850412\r\nEND:VCARD\r\n"), store.contact("znorth").vcard.to_s
         assert_nil birthday_row(store, "znorth")
 
         # A BDAY sharing its line's bytes stays put: the line moves as

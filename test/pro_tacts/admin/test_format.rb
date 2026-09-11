@@ -77,10 +77,9 @@ class FormatTest < Minitest::Test
     assert_equal "December 10", ProTacts::Admin::Format.birthday(contact(CARD, birthday:))
   end
 
-  # The reduced no-year spelling (Birthday::REDUCED_DATE), which macOS
-  # reads on a card it did not write: the model does not recompose it,
-  # so the line stays in the card verbatim — display renders it as a
-  # day all the same, not as the stored string.
+  # A month-day spelling still in a card rather than the model: a write
+  # moves it out, and display reads it the way a write would
+  # (Birthday::MONTH_AND_DAY), not as the stored string.
   def test_a_reduced_no_year_birthday_displays_its_day
     reduced = CARD.sub("END:VCARD\r\n", "BDAY:--12-10\r\nEND:VCARD\r\n")
 

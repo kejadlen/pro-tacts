@@ -384,24 +384,26 @@ class WebTest < Minitest::Test
     end
   end
 
-  # The same omission for the rewrite that carries a birthday across:
-  # the stored card is the submission plus the BDAY line macOS dropped,
-  # so the answer cannot claim the tag — the client refetches, and the
-  # refetch is what shows the birthday survived its edit.
-  def test_a_put_that_carries_a_birthday_back_goes_without_the_strong_etag
-    unrendered = card("new", "New").sub("END:VCARD\r\n", "BDAY:1985-04\r\nEND:VCARD\r\n")
+  # A birthday no client is sent is not in the card a client downloads
+  # (docs/plans/2026-09-11-every-birthday-in-the-model.md), so sending
+  # that card back is the served card octet for octet and keeps the
+  # tag — and keeps the birthday.
+  def test_a_birthday_no_client_is_sent_stays_off_the_wire
+    unserved = card("new", "New").sub("END:VCARD\r\n", "BDAY:1985-04\r\nEND:VCARD\r\n")
 
-    with_contacts({}) do
-      put_request "new", unrendered, "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
-
-      edited = card("new", "New Smith")
-      put_request "new", edited, "CONTENT_TYPE" => VCARD
-
-      assert_equal 204, last_response.status
+    with_contacts({}) do |store|
+      put_request "new", unserved, "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
       assert_nil last_response["ETag"]
 
       get "/dav/addressbook/new.vcf"
-      assert_includes last_response.body, "BDAY:1985-04\r\nEND:VCARD"
+      served = last_response.body
+      refute_includes served, "BDAY"
+
+      put_request "new", served, "CONTENT_TYPE" => VCARD
+
+      assert_equal 204, last_response.status
+      assert_equal %("#{Digest::SHA256.hexdigest(served)}"), last_response["ETag"]
+      assert_equal ProTacts::Birthday.new(year: 1985, month: 4), store.contact("new")&.birthday
     end
   end
 

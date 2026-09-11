@@ -3,15 +3,15 @@
 # birthday.rb and signed here instead.
 module ProTacts
   class Birthday
-    FULL_DATE: Regexp
-    OMIT_YEAR_DATE: Regexp
+    NO_YEAR: Integer
     OMIT_YEAR: String
+    FULL_DATE: Regexp
+    MONTH_AND_DAY: Regexp
     YEAR_AND_MONTH: Regexp
     YEAR_ALONE: Regexp
     MONTH_ALONE: Regexp
     DAY_ALONE: Regexp
-    UNRENDERED_VALUES: Array[Regexp]
-    REDUCED_DATE: Regexp
+    OMIT_YEAR_DATE: Regexp
 
     attr_reader year: Integer?
     attr_reader month: Integer?
@@ -25,16 +25,12 @@ module ProTacts
 
     def served?: () -> bool
 
-    def self.from_value: (String value) -> Birthday?
-
     def self.from_property: (VCard::Parser::Property property) -> Birthday?
 
     def self.significant_parameters: (VCard::Parser::Property property) -> Array[[String, String]]
 
     def self.apple_no_year?: (Array[[String, String]] parameters) -> bool
 
-    def self.unrendered_value?: (String value) -> bool
-
-    def self.rendered?: (VCard::Parser::Property property) -> bool
+    def self.from_value: (String value) -> Birthday?
   end
 end
