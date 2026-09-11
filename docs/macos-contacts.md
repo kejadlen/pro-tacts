@@ -445,6 +445,35 @@ permanently. Only the year and month, year alone, and day alone shapes were
 tested; month alone (`BDAY:--04`) has a seed card but no observation yet.
 Verified 2026-09-01, macOS 26.5.1 (AddressBookCore/2732.600.11).
 
+## iOS writes a birthday it cannot hold as a date it made up
+
+The birthday seed cards, served to iOS 26.6.2 and each saved after an
+unrelated edit, came back like this:
+
+| Served | iOS showed | iOS wrote back |
+|---|---|---|
+| `BDAY:1987-06-21` | the full date | `BDAY;value=date:1987-06-21` |
+| `BDAY:1992-09-03` | the full date | `BDAY;value=date:1992-09-03` |
+| `BDAY;X-APPLE-OMIT-YEAR=1604:1604-01-15` | January 15 | `BDAY;value=date:1604-01-15` |
+| `BDAY:--0308` | March 8 | `BDAY;value=date:1604-03-08` |
+| `BDAY:--11-27` | Jan 27, 2 | `BDAY;value=date:0002-01-27` |
+| `BDAY:---04` | nothing | `BDAY;value=date:0002-11-26` |
+| `BDAY:1998-10` | nothing | (dropped) |
+| `BDAY:1972` | nothing | (dropped) |
+| `BDAY:--07` | not checked | (dropped) |
+
+It displays what macOS displays except for one spelling, and writes back
+worse. The 1604 sentinel keeps its year but loses `X-APPLE-OMIT-YEAR`,
+so nothing marks it as yearless any more. `--11-27` reads as January 27
+of the year 2 and goes back that way. A day-only birthday iOS never
+displayed comes back as a year-2 date it made up.
+
+Every birthday it writes spells out `value=date`, the default value type
+of RFC 2426 section 3.1.5, which `ProTacts::Birthday` does not read. The
+carry across a rewrite (`plans/2026-09-01-birthdays-across-a-rewrite.md`)
+kept the three shapes iOS dropped; the made-up dates replaced what was
+stored. Verified 2026-09-11 against iOS 26.6.2 (dataaccessd/1.0).
+
 ## Only the last of two notes survives
 
 `rake probe:notes` serves a card with two `NOTE` lines, the shape a group
