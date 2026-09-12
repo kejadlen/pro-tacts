@@ -18,6 +18,7 @@ class AdminDeviceSetupTest < Minitest::Test
 
   def setup
     header "Tailscale-User-Login", "test@example.com"
+    header "Tailscale-User-Name", "Test User"
     header "Host", "box.example.ts.net"
   end
 

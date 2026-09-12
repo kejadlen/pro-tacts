@@ -27,6 +27,7 @@ class WebTest < Minitest::Test
   def setup
     setup_sentry
     header "Tailscale-User-Login", "test@example.com"
+    header "Tailscale-User-Name", "Test User"
   end
 
   def teardown

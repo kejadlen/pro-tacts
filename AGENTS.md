@@ -80,8 +80,9 @@ not a fixture; edit a `.vcf` to change what the replay serves.
 - Response bodies are built with heredocs in `web.rb`. A comment written
   inside one is sent to the client — keep notes about the code in Ruby
   comments outside the heredoc.
-- Every request needs a `Tailscale-User-Login` header or it gets a 403, so
-  a bare `curl` against `rake dev` is refused until you pass one. The
+- Every request needs `Tailscale-User-Login` and `Tailscale-User-Name`
+  headers or it gets a 403, so a bare `curl` against `rake dev` is
+  refused until you pass both. The
   security of that rests on the app being reachable only through
   `tailscale serve` — never bind it to anything but localhost.
 - Unanswered requests (404s, app-level 403s, and 5xx) are written to

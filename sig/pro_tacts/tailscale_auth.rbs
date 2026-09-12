@@ -1,0 +1,13 @@
+# Identity is a Data class, whose members the inline parser cannot read
+# (see sig/pro_tacts/contact.rbs). TailscaleAuth itself is an ordinary
+# class and its types are inline in tailscale_auth.rb.
+module ProTacts
+  class TailscaleAuth
+    class Identity
+      attr_reader login: String
+      attr_reader name: String
+
+      def self.new: (login: String, name: String) -> instance
+    end
+  end
+end

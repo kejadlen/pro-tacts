@@ -23,11 +23,12 @@ class ExchangeFixtures < Data.define(:directory)
   # Date, server) is plumbing.
   RESPONSE_HEADERS = %w[Content-Type ETag DAV Allow Location].freeze
 
-  # Stands in for the Tailscale-User-Login the recorded sessions carried.
-  # It was stripped from the request files because it names a real tailnet
-  # user; the app now refuses requests without one, so the replay has to
-  # put an identity back.
+  # Stand in for the Tailscale identity headers the recorded sessions
+  # carried. They were stripped from the request files because they name
+  # a real tailnet user; the app refuses requests without them, so the
+  # replay has to put an identity back.
   REPLAY_LOGIN = "replay@example.com"
+  REPLAY_NAME = "Replay"
 
   # Every recording, for the callers that run all of them.
   def self.all
@@ -58,7 +59,10 @@ class ExchangeFixtures < Data.define(:directory)
     step.headers.to_h { |name, value|
       key = name == "Content-Type" ? "CONTENT_TYPE" : "HTTP_#{name.tr('-', '_').upcase}"
       [key, value]
-    }.merge(ProTacts::TailscaleAuth::LOGIN_HEADER => REPLAY_LOGIN)
+    }.merge(
+      ProTacts::TailscaleAuth::LOGIN_HEADER => REPLAY_LOGIN,
+      ProTacts::TailscaleAuth::NAME_HEADER => REPLAY_NAME,
+    )
   end
 
   # Replays every recorded request against the app and rewrites the

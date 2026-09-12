@@ -57,9 +57,10 @@ PUT stores the submitted card verbatim (RFC 6352 section 6.3.2), and the
 change log the sync tokens count on is written with it, in one
 transaction.
 
-Requests are authenticated by the `Tailscale-User-Login` header that
-`tailscale serve` injects, which it strips from incoming requests so a
-client cannot forge one. A request without it gets a 403. That holds only
+Requests are authenticated by the `Tailscale-User-Login` and
+`Tailscale-User-Name` headers that `tailscale serve` injects, which it
+strips from incoming requests so a client cannot forge them. A request
+without both gets a 403. That holds only
 while the app is reachable through serve alone — bind it to localhost.
 Tailscale documents two cases that carry no identity and so cannot get in:
 Funnel traffic, which is public, and traffic from tagged devices.

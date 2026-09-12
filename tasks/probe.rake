@@ -22,11 +22,12 @@ namespace :probe do
 
     request = Net::HTTP::Put.new(url)
     request["Content-Type"] = "text/vcard"
-    # Serve strips this header from incoming requests and sets it from
-    # the tailnet identity, so supplying one is only possible — and only
-    # meaningful — against a dev server on localhost
+    # Serve strips these headers from incoming requests and sets them
+    # from the tailnet identity, so supplying them is only possible — and
+    # only meaningful — against a dev server on localhost
     # (ProTacts::TailscaleAuth).
     request["Tailscale-User-Login"] = ENV.fetch("PROBE_LOGIN", "probe@example.com")
+    request["Tailscale-User-Name"] = ENV.fetch("PROBE_NAME", "Probe")
     request.body = card
 
     response = Net::HTTP.start(url.hostname, url.port) { it.request(request) }
