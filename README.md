@@ -16,7 +16,7 @@ does work is under Status below.
 
 - Groups with attributes (e.g., an address shared by all members)
 - Selective sync (choose which contacts to sync rather than all-or-nothing)
-- vCards exported to git after each write (version history, human-readable)
+- A readable dump of the database, for history kept in version control (`rake db:dump`)
 
 ## Status
 
@@ -42,7 +42,10 @@ makes the case at length. The same database holds the change log and
 the birthdays — the two things in it that cannot be rebuilt, the
 birthdays because a partial date has no vCard 3.0 spelling — and an
 index of parsed properties, which can: `rake index:rebuild` derives
-that again from the stored cards alone.
+that again from the stored cards alone. `rake db:dump` writes the
+cards, birthdays, and groups out as plain files, into `data/dump`
+unless `DUMP` names another directory
+(`docs/plans/2026-09-12-database-dump.md`).
 
 macOS Contacts displays them over Tailscale serve as of 2026-08-14, so
 later work has a known-good baseline to change. See

@@ -1819,6 +1819,19 @@ class StoreTest < Minitest::Test
     end
   end
 
+  def test_a_snapshot_holds_the_stored_state
+    with_store({"aiden" => AIDEN_BORN}) do |store|
+      group = store.create_group(name: "Booles")
+      store.add_member(group, "aiden")
+
+      snapshot = store.snapshot
+
+      assert_equal({"aiden" => AIDEN}, snapshot.cards)
+      assert_equal({"aiden" => ProTacts::Birthday.new(year: 1985, month: 4, day: 12)}, snapshot.birthdays)
+      assert_equal [["Booles", ["aiden"]]], snapshot.groups.map { [it.name, it.members] }
+    end
+  end
+
   private
 
   # A store whose change-log write fails, after Store#put has already put

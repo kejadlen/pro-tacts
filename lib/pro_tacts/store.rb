@@ -87,6 +87,12 @@ module ProTacts
     # @rbs skip
     GroupEdit = Data.define(:group_id, :position, :line)
 
+    # Everything the store cannot rebuild, read at one moment: the
+    # stored cards by id, the birthdays by card id, and the groups.
+    # What `rake db:dump` writes (tasks/db.rake).
+    # @rbs skip
+    Snapshot = Data.define(:cards, :birthdays, :groups)
+
     # A group as the admin screens read one: its own row, the lines it
     # lends in the order it lends them, and its members' card ids. The
     # label is the SQL one #group_label computes, so a tag and a
@@ -220,6 +226,22 @@ module ProTacts
     #: () -> void
     def close
       @database.disconnect
+    end
+
+    # The store's state for a dump, in one read transaction so the parts
+    # agree. Deferred rather than the store's usual immediate: a read
+    # needs no write lock, and taking one would hold up writers.
+    #: () -> Snapshot
+    def snapshot
+      @database.transaction(mode: :deferred) do
+        Snapshot.new(
+          cards: cards.order(:id).all.to_h {
+            [it.fetch(:id).to_s, it.fetch(:vcard).to_s] #: [String, String]
+          },
+          birthdays: birthdays_by_id,
+          groups: all_groups,
+        )
+      end
     end
 
     # Every contact, ordered by id so that a listing does not depend on

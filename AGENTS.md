@@ -15,6 +15,8 @@ rake                  # Tests (the default task)
 rake steep            # Type check lib against the RBS comments in it
 rake fixtures         # Re-record response fixtures from current behavior
 rake index:rebuild    # Derive the parsed index again from the stored cards
+rake db:dump          # Write the cards, birthdays, and groups to data/dump
+                      # (DUMP=path to move it)
 rake dev              # Dev server, seeded from test/fixtures/cards into a
                       # throwaway tmpdir on every start, reloading on change
                       # (needs fd and entr)

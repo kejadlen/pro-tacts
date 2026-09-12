@@ -55,7 +55,7 @@ module Sequel
 
     # Joins a transaction already open rather than nesting, so a write
     # inside a write is still one atomic unit.
-    def transaction: [T] () { () -> T } -> T
+    def transaction: [T] (?mode: Symbol) { () -> T } -> T
 
     # SQLite's own: which BEGIN every transaction opens with. Nil,
     # :deferred, :immediate, or :exclusive.
