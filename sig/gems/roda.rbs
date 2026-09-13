@@ -1,6 +1,6 @@
 # Roda ships no signatures. This is the routing surface web.rb uses and
 # no more of it: the class methods that build the app, the request
-# methods that match, and the two response setters.
+# methods that match and halt, and the response setters and writer.
 #
 # Matchers stay untyped on purpose. Roda's matcher vocabulary — strings,
 # classes, regexps, symbols, hashes, and arrays of those — is open, and
@@ -54,11 +54,15 @@ class Roda
 
     # Halts the request, so nothing after it in a route block runs.
     def redirect: (String path, ?Integer status) -> bot
+
+    # Ends the request with the response as it stands.
+    def halt: () -> bot
   end
 
   class RodaResponse
     def []=: (String header, String value) -> void
     def status=: (Integer status) -> void
+    def write: (String body) -> void
   end
 
   module RodaPlugins

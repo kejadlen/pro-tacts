@@ -29,6 +29,7 @@ module ProTacts
   class Web < Roda
     # @rbs @contacts: Array[Contact]?
     # @rbs @ctag: String?
+    # @rbs @identity: TailscaleAuth::Identity
 
     # The vendored Gloss CSS and the admin app's own stylesheet (see
     # docs/DESIGN.md); relative to this file rather than $0 for the same
@@ -76,14 +77,16 @@ module ProTacts
     use Rack::RewindableInput::Middleware
     use Sentry::Rack::CaptureExceptions
 
-    # Ahead of the debug logger on purpose: an unauthenticated request should
-    # not get its body dumped to the log.
-    use ProTacts::TailscaleAuth
-
-    # Below the auth gate: a refused request is not missing functionality,
-    # and recording one would write an unauthenticated body to disk.
+    # Outside the route's identity gate (#unauthorized), and safe there
+    # because a refusal is a 401, which it does not keep
+    # (UnhandledRequests.capture?): a refused request is not missing
+    # functionality, and recording one would write an unauthenticated
+    # body to disk.
     use ProTacts::UnhandledRequests, directory: ProTacts.config.unhandled_dir
 
+    # Outside the identity gate too, so a refused request is dumped with
+    # the rest. That is the point of a debug log, which is off by default
+    # and kept on a local machine.
     if ProTacts.config.debug?
       logger = ProTacts::DebugLogger.open_log(ProTacts.config.debug_log_path)
       use ProTacts::DebugLogger, logger: logger
@@ -103,6 +106,10 @@ module ProTacts
     # and service discovery (RFC 6764). Each handler cites its section, and
     # the texts are vendored under docs/rfcs to check them against.
     route do |r|
+      # Every request names a tailnet user or is refused, the static
+      # files included (ProTacts::TailscaleAuth).
+      @identity = TailscaleAuth.identity(r.env) || unauthorized(r)
+
       r.public
 
       # The card browser, one segment down from the page at the root:
@@ -633,6 +640,19 @@ module ProTacts
         groups: store.all_groups,
         notice:,
       )
+    end
+
+    # The refusal of a request that names nobody. A 401 must carry a
+    # challenge (RFC 9110 section 15.5.2), and `Tailscale` is no
+    # registered scheme: it tells the client that the credential is its
+    # tailnet identity, which nothing it could send supplies.
+    #: (Roda::RodaRequest r) -> bot
+    def unauthorized(r)
+      response.status = 401
+      response["WWW-Authenticate"] = "Tailscale"
+      response["Content-Type"] = "text/plain"
+      response.write("Unauthorized: no Tailscale identity on this request.\n")
+      r.halt
     end
 
     # Sync tokens are opaque to the client (RFC 6578 section 3); the URI

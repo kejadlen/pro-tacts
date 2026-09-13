@@ -81,7 +81,7 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   inside one is sent to the client — keep notes about the code in Ruby
   comments outside the heredoc.
 - Every request needs `Tailscale-User-Login` and `Tailscale-User-Name`
-  headers or it gets a 403, so a bare `curl` against `rake dev` is
+  headers or it gets a 401, so a bare `curl` against `rake dev` is
   refused until you pass both. The
   security of that rests on the app being reachable only through
   `tailscale serve` — never bind it to anything but localhost.

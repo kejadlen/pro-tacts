@@ -60,7 +60,7 @@ transaction.
 Requests are authenticated by the `Tailscale-User-Login` and
 `Tailscale-User-Name` headers that `tailscale serve` injects, which it
 strips from incoming requests so a client cannot forge them. A request
-without both gets a 403. That holds only
+without both gets a 401. That holds only
 while the app is reachable through serve alone — bind it to localhost.
 Tailscale documents two cases that carry no identity and so cannot get in:
 Funnel traffic, which is public, and traffic from tagged devices.

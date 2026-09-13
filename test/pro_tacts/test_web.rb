@@ -21,8 +21,8 @@ class WebTest < Minitest::Test
     ProTacts::Web
   end
 
-  # Every request needs a Tailscale identity; the middleware refuses without
-  # one. Tests for that refusal are in TailscaleAuthTest. The sentry setup
+  # Every request needs a Tailscale identity; the route refuses without
+  # one (see the refusal tests below). The sentry setup
   # pins the transport the app's reports land in; teardown clears it.
   def setup
     setup_sentry
@@ -121,8 +121,8 @@ class WebTest < Minitest::Test
     assert_includes last_response.body, "AB12C345-6789-0DEF-1234-567890ABCDEF.vcf"
   end
 
-  # Guards the wiring rather than the middleware: mounted in the stack, below
-  # the auth gate, pointed at the configured directory.
+  # Guards the wiring rather than the middleware: mounted in the stack and
+  # pointed at the configured directory.
   def test_an_unhandled_request_is_kept_on_disk
     directory = ProTacts.config.unhandled_dir
     FileUtils.rm_rf(directory)
@@ -146,10 +146,43 @@ class WebTest < Minitest::Test
     header "Tailscale-User-Login", ""
     get "/dav/addressbook/no-such-contact.vcf"
 
-    assert_equal 403, last_response.status
+    assert_equal 401, last_response.status
     refute Pathname.new(directory).exist?, "a refused request should leave nothing behind"
   ensure
     FileUtils.rm_rf(directory)
+  end
+
+  ## Refusing a request that names nobody
+
+  def test_a_request_without_a_name_is_refused
+    header "Tailscale-User-Name", ""
+
+    get "/dav/principal/"
+
+    assert_equal 401, last_response.status
+  end
+
+  # RFC 9110 section 15.5.2: a 401 carries a challenge.
+  def test_a_refusal_names_tailscale_as_the_credential
+    header "Tailscale-User-Login", ""
+
+    get "/"
+
+    assert_equal "Tailscale", last_response["WWW-Authenticate"]
+    assert_equal "text/plain", last_response["Content-Type"]
+    assert_includes last_response.body, "Tailscale"
+  end
+
+  # Every route is gated, not just the address book: an unauthenticated
+  # request must not learn whether a path exists.
+  def test_a_refusal_covers_every_path
+    header "Tailscale-User-Login", ""
+
+    %w[/ /.well-known/carddav /dav/ /dav/principal/ /dav/addressbook/ /contacts /groups /setup /admin.css].each do |path|
+      get path
+
+      assert_equal 401, last_response.status, path
+    end
   end
 
   def test_get_unknown_contact_is_404
