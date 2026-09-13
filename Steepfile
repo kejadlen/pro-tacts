@@ -8,17 +8,22 @@
 # (see sig/pro_tacts/). Both are documented where they are defined.
 target :lib do
   check "lib", inline: true
-  # Phlex ships no RBS of its own, and lib/pro_tacts/admin is built on
-  # it — unlike Sequel, Roda, Nokogiri, and friends, which have hand
-  # written stand-ins under sig/gems. Ignored rather than stubbed for
-  # now; add sig/gems/phlex.rbs and drop this once the admin surface is
-  # worth typing.
+  # Phlex ships no RBS of its own, and the admin views are built on it —
+  # unlike Sequel, Roda, Nokogiri, and friends, which have hand written
+  # stand-ins under sig/gems. Ignored rather than stubbed for now; add
+  # sig/gems/phlex.rbs and drop this once the admin surface is worth
+  # typing. Named file by file so that what lives beside the views
+  # without being one — card_form.rb, the forms read back into cards —
+  # stays checked; a new file there is checked until it is listed.
   #
   # inline: true is load-bearing: `ignore` keeps separate lists for
   # plain and inline sources, and these files were enrolled by
   # `check ... inline: true`. A bare `ignore` feeds the other list and
   # the files stay checked.
-  ignore "lib/pro_tacts/admin", inline: true
+  ignore(*%w[
+    avatar contact_dialog contacts_edit contacts_index contacts_show device_setup format
+    group_label groups_edit groups_index groups_show icons layout phlex upcoming_birthdays
+  ].map { "lib/pro_tacts/admin/#{it}.rb" }, inline: true)
   signature "sig"
 
   library "date", "digest", "fileutils", "json", "logger", "pathname", "securerandom", "strscan", "yaml"

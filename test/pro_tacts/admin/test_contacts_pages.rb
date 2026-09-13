@@ -880,9 +880,9 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # A po box has no field, and the save's removal is blank throughout,
-  # po box included (Web#address_line) — so a line surviving by its po
-  # box alone cannot be removed from this form, and its row, blank as
-  # it renders, wears no removal state.
+  # po box included (Admin::CardForm.address_line) — so a line
+  # surviving by its po box alone cannot be removed from this form, and
+  # its row, blank as it renders, wears no removal state.
   def test_a_po_box_only_address_row_wears_no_removal_state
     po = ADA.sub(
       "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",

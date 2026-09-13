@@ -19,8 +19,8 @@ module ProTacts
     # (docs/plans/2026-09-07-web-birthday-editor.md).
     #
     # The fields prefill from the accessors' unescaped readings, and
-    # blank equals absent on the way back (Web#edited_card), so write
-    # and read agree on what an empty value means. Blank's meaning is
+    # blank equals absent on the way back (CardForm.contact_card), so
+    # write and read agree on what an empty value means. Blank's meaning is
     # stated before the save, not only enforced by it: a standing row
     # whose blanking deletes — a phone, email, or address line, the
     # nickname or note property, a held birthday — wears
@@ -96,7 +96,7 @@ module ProTacts
         # N's first two components (RFC 2426 section 3.1.2: family;
         # given) — the two fields the create dialog also asks for. The
         # remaining three are preserved byte-for-byte by the save's
-        # raw splice (Web#n_line), never rendered here.
+        # raw splice (CardForm.n_line), never rendered here.
         family, given = contact.name_components || []
         @first = given
         @last = family
@@ -189,7 +189,8 @@ module ProTacts
                   birthday_row
                   added_rows
                   # The first NOTE the card carries: this row edits one,
-                  # and a save writes one (Web#edited_card's replace).
+                  # and a save writes one (CardForm.contact_card's
+                  # replace).
                   note = @own.notes.first&.value
                   label(class: "field", data: {blank_removes: !!note}) do
                     span { "Note" }
@@ -221,7 +222,7 @@ module ProTacts
       # scaffold docs/DESIGN.md refuses, and a trailing one left over
       # from a row already filled is the same scaffold arriving late.
       # A blank added row is a no-op rather than a removal
-      # (Web#edited_phones), so these rows wear no removal state —
+      # (CardForm.edited_phones), so these rows wear no removal state —
       # the class comment's exemption.
       # That verb — make a row, now, without a round trip — is what
       # CSS could not do and what Alpine is here for (see Layout).
@@ -348,8 +349,8 @@ module ProTacts
       # in each field's name is the row's address; the po box has no
       # field, and the save preserves its bytes. The removal state
       # rides only on a line with no po box: the save's removal is
-      # blank throughout, po box included (Web#address_line), so a
-      # line surviving by its po box alone cannot be removed from
+      # blank throughout, po box included (CardForm.address_line), so
+      # a line surviving by its po box alone cannot be removed from
       # this form at all — its row wears no state however blank it
       # renders.
       #: (Contact::Address address) -> void
