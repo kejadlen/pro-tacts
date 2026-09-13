@@ -35,10 +35,13 @@ is already `pro-tacts` — don't pass `--backlog` or verify it.
 
 ```
 lib/pro_tacts/
-├── web.rb          # The Roda app: the identity gate, the root, and
-│                   # the admin routes
+├── web.rb          # The Roda app: the identity gate and the root;
+│                   # each first segment is a hash_branch in web/
 ├── web/dav.rb      # Discovery and the address book: every DAV route
 │                   # and response body
+├── web/contacts.rb # The card browser and its editor
+├── web/groups.rb   # The group screens and their editor
+├── web/setup.rb    # The device setup screen and its profile
 ├── store.rb        # Sequel over SQLite: cards, change log, derived index
 ├── contact.rb      # the one model of a contact: id, vCard, etag,
 │                   # and the structured accessors over the card

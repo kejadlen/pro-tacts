@@ -1,0 +1,178 @@
+require "securerandom"
+
+require "pro_tacts/admin/card_form"
+require "pro_tacts/admin/contact_dialog"
+require "pro_tacts/admin/contacts_edit"
+require "pro_tacts/admin/contacts_index"
+require "pro_tacts/admin/contacts_show"
+
+module ProTacts
+  class Web < Roda
+    # The card browser, one segment down from the page at the root:
+    # /contacts/:id names what the id is without spending the whole
+    # single-segment namespace on contact ids. Under the same auth
+    # gate as the CardDAV routes — "a few family members, all
+    # trusted" is the whole access model this app has, see README's
+    # simplifying assumptions.
+    hash_branch("contacts") do |r|
+      # The browser's create, from the dashboard's dialog: POST is
+      # the one method the admin UI adds to the DAV set (see
+      # config/puma.rb, whose list Puma replaces rather than
+      # extends), and the collection is the resource a create
+      # names. Stored through Store#put like any client write, so
+      # the change log a sync token counts on lands with the card.
+      # A nameless create is a dashboard re-render with a toast: the
+      # browser cannot produce one (the dialog's first field is
+      # required), so this is the backstop, and a popover cannot be
+      # declared open in markup — the toast is the refusal the
+      # re-rendered page can actually show. `r.is` because a bare
+      # verb block matches any remaining path in Roda — without it,
+      # the collection's create would swallow the record's apply,
+      # POST /contacts/:id below.
+      r.is do
+        r.post do
+          first = r.params["first"].to_s.strip
+          last = r.params["last"].to_s.strip
+          if first.empty? && last.empty?
+            dashboard(query: r.params["q"], notice: "A contact needs a name.")
+          else
+            id = SecureRandom.uuid
+            store.put(id, Admin::CardForm.new_card(id, first, last))
+            r.redirect "/contacts/#{id}", 303
+          end
+        end
+      end
+
+      r.on String do |id|
+        # The browser's edit of one contact
+        # (docs/plans/2026-09-05-web-card-editor.md): an explicit
+        # mode — GET renders the form, POST applies it, success is a
+        # 303 back to the details page so the back button cannot
+        # double-submit. POST stays the wire verb, the create's
+        # precedent: HTML forms speak only GET and POST, and the
+        # admin surface's one client is the form.
+        r.get "edit" do
+          contact = store.contact(id)
+
+          # No match falls through to the empty-body 404 the
+          # not_found handler fills in, same as the page below.
+          if contact
+            response["Content-Type"] = "text/html; charset=utf-8"
+            Admin::ContactsEdit.call(contact:)
+          end
+        end
+
+        r.post do
+          apply_edit(r, id)
+        end
+
+        # The picture the avatars render (Admin::Avatar): decoded
+        # bytes under their own content type, served from a route
+        # rather than inlined as base64 so a page of avatars is a
+        # page of cacheable image requests instead of ten 330 KB
+        # payloads stitched into the HTML. The contact's etag, so a
+        # picture changes exactly when its card does.
+        r.get "photo" do
+          contact = store.contact(id)
+
+          # The views never point at a photo the card lacks, so a
+          # contact with none is the 404 case above.
+          if contact && (photo = contact.photo)
+            response["Content-Type"] = photo.mime_type
+            response["ETag"] = contact.etag
+            photo.bytes
+          end
+        end
+
+        r.get do
+          contact = store.contact(id)
+
+          if contact
+            response["Content-Type"] = "text/html; charset=utf-8"
+            Admin::ContactsShow.call(contact:, groups: store.groups_of(id),
+                                     changes: store.changes_of(id))
+          end
+        end
+      end
+    end
+
+    private
+
+    # The dashboard GET and a refused create render the same page,
+    # which is why the query travels both paths — a create refused
+    # under a search re-renders the results it was refused over.
+    #: (query: String?, ?notice: String?) -> String
+    def dashboard(query:, notice: nil)
+      response["Content-Type"] = "text/html; charset=utf-8"
+      Admin::ContactsIndex.call(
+        recent: store.contacts_by_recency,
+        upcoming: store.upcoming_birthdays(Admin::UpcomingBirthdays::LIMIT),
+        query:,
+        groups: store.all_groups,
+        notice:,
+      )
+    end
+
+    # The whole of the edit POST, a private method for the same reason
+    # write_card is one: a Roda route block cannot return early, so each
+    # refusal is a value the block ends with rather than a branch it
+    # exits. The checks run in write_card's order — the request's own
+    # validity first, the conditionals on stored state after.
+    #: (untyped r, String id) -> String?
+    def apply_edit(r, id)
+      contact = store.contact(id)
+      return if contact.nil?
+
+      # N and FN are mandatory (RFC 2426 section 4), so a save blank
+      # throughout is refused — the toast is the backstop, the form's
+      # required field being the browser's own refusal of the same.
+      first = r.params["first"].to_s.strip
+      last = r.params["last"].to_s.strip
+      return edit_screen(contact, notice: "A contact needs a name.") if first.empty? && last.empty?
+
+      # Request validity, standing with the name check rather than the
+      # stored-state conditionals below (write_card's ordering rule). A
+      # POST that carries no birthday group keeps the model, the phones'
+      # is-a-Hash posture — this form's own save does when it rendered
+      # no birthday row, and anything else never carried one; a group of
+      # three blanks is the row's blank-equals-absent, a removal.
+      birthday =
+        if (fields = r.params["birthday"]).is_a?(Hash)
+          begin
+            Admin::CardForm.birthday(fields)
+          rescue ArgumentError
+            return edit_screen(contact, notice: "That birthday is not a shape a date can take.")
+          end
+        else
+          contact.birthday
+        end
+
+      # The snapshot guard, the lost-update half If-Match gives DAV
+      # clients (RFC 7232 section 3.1): the form carried the etag of
+      # the card it was rendered from, and a contact that hashes
+      # differently now was edited in between — another tab, or a
+      # client sync — so applying this save over that one would revert
+      # it. The refusal re-renders from the current card, so the screen
+      # shows what changed; the check shares write_card's millisecond
+      # race window between check and write, noted there.
+      return edit_screen(contact, notice: "This contact changed since the page loaded; nothing was saved.") if r.params["etag"].to_s != contact.etag
+
+      # The one state the birthday row cannot write, refused whole:
+      # docs/plans/2026-09-07-web-birthday-editor.md, "The one hazard:
+      # a card that carries its own BDAY", which also records the
+      # migration not taken.
+      if birthday && contact.stored.lines.any? { it.names?("BDAY") }
+        return edit_screen(contact, notice: "This contact's card carries its own birthday spelling; nothing was saved.")
+      end
+
+      store.rewrite(id, Admin::CardForm.contact_card(contact, first, last, r.params), birthday:)
+      r.redirect "/contacts/#{id}", 303
+    end
+
+    #: (Contact contact, ?notice: String) -> String
+    def edit_screen(contact, notice: nil)
+      response["Content-Type"] = "text/html; charset=utf-8"
+      Admin::ContactsEdit.call(contact:, notice:)
+    end
+  end
+end
