@@ -35,7 +35,10 @@ is already `pro-tacts` — don't pass `--backlog` or verify it.
 
 ```
 lib/pro_tacts/
-├── web.rb          # The Roda app: every route and response body
+├── web.rb          # The Roda app: the identity gate, the root, and
+│                   # the admin routes
+├── web/dav.rb      # Discovery and the address book: every DAV route
+│                   # and response body
 ├── store.rb        # Sequel over SQLite: cards, change log, derived index
 ├── contact.rb      # the one model of a contact: id, vCard, etag,
 │                   # and the structured accessors over the card
@@ -77,7 +80,7 @@ not a fixture; edit a `.vcf` to change what the replay serves.
 
 ## Gotchas
 
-- Response bodies are built with heredocs in `web.rb`. A comment written
+- Response bodies are built with heredocs in `web/dav.rb`. A comment written
   inside one is sent to the client — keep notes about the code in Ruby
   comments outside the heredoc.
 - Every request needs `Tailscale-User-Login` and `Tailscale-User-Name`

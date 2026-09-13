@@ -17,6 +17,12 @@ class Roda
   # The block is the router, run against a fresh instance per request.
   def self.route: () { (RodaRequest) [self: instance] -> untyped } -> void
 
+  # The hash_branches plugin's: a routing block for one next segment,
+  # compiled into a method on the app and run against the same instance
+  # the route block is, so it sees what the route set before it.
+  def self.hash_branch: (String segment) { (RodaRequest) [self: instance] -> untyped } -> void
+                      | (String | Symbol namespace, String segment) { (RodaRequest) [self: instance] -> untyped } -> void
+
   def request: () -> RodaRequest
   def response: () -> RodaResponse
 
@@ -57,6 +63,10 @@ class Roda
 
     # Ends the request with the response as it stands.
     def halt: () -> bot
+
+    # Dispatches to the hash_branch for the next segment, if one is
+    # defined, and ends the request with its answer.
+    def hash_branches: (?String | Symbol namespace) -> void
   end
 
   class RodaResponse
