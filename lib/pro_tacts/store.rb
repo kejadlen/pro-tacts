@@ -171,6 +171,13 @@ module ProTacts
     # the label is written against the table by name.
     GROUP_COLUMNS = [Sequel[:groups][:id], Sequel[:groups][:name]].freeze #: Array[untyped]
 
+    # The group names that choose what a client syncs: `sync:*` for
+    # everyone, `sync:<display name>` for one user
+    # (docs/plans/2026-09-12-per-user-books.md). Unique among groups
+    # (db/migrations/007_sync_names.rb), where other names may repeat.
+    SYNC_PREFIX = "sync:" #: String
+    EVERYONE = "#{SYNC_PREFIX}*" #: String
+
     # Sequel's migrations, run on open. They ship with the code rather
     # than with a deployment, so the path is relative to this file.
     # `__dir__` is nil only for code with no file behind it, which a
@@ -349,6 +356,19 @@ module ProTacts
       )
     end
 
+    # The cards one user's client syncs: every member of `sync:*` and of
+    # `sync:<name>`, each once (docs/plans/2026-09-12-per-user-books.md).
+    #: (String name) -> Set[String]
+    def book(name)
+      Set.new(
+        group_members
+          .join(:groups, id: :group_id)
+          .where(Sequel[:groups][:name] => [EVERYONE, "#{SYNC_PREFIX}#{name}"])
+          .select(Sequel[:group_members][:card_id])
+          .map { it.fetch(:card_id).to_s },
+      )
+    end
+
     # The id of the card whose UID property holds this value, if one
     # does — the read behind the no-uid-conflict precondition (RFC 6352
     # section 6.3.2.1). It reads the index, so a card whose UID line
@@ -388,8 +408,14 @@ module ProTacts
     # nothing that is not text gets this far; VCard's own raise, at the
     # construction the caller makes, is the assertion under that, and
     # the bind is the third line.
-    #: (String id, VCard vcard) -> Contact
-    def put(id, vcard)
+    #
+    # `sync_to` is the writing user's display name, for a client's
+    # write: a card it creates joins that user's `sync:` group, created
+    # on first use, or it would drop out of the collection it was
+    # written to (docs/plans/2026-09-12-per-user-books.md, "The wire").
+    # A rewrite of a card that exists joins nothing.
+    #: (String id, VCard vcard, ?sync_to: String?) -> Contact
+    def put(id, vcard, sync_to: nil)
       # The birthday half of the split a write makes
       # (docs/plans/2026-09-11-every-birthday-in-the-model.md). A card
       # holds at most one BDAY, and one that reads as a birthday leaves
@@ -464,6 +490,14 @@ module ProTacts
         cards
           .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
           .insert(id: contact.id, vcard: stored.to_s)
+        # After the card, which the membership names by foreign key, and
+        # before the log entry, which records the card composed with
+        # whatever the group lends. The put's entry is the card's arrival
+        # in the book, so the join writes none of its own.
+        if sync_to && own.nil?
+          group_members.insert(group_id: sync_group_id(sync_to), card_id: contact.id)
+          contact = Contact.new(id:, stored:, birthday:, inherited: inherited_of(contact.id))
+        end
         write_birthday(contact.id, birthday)
         record(contact.id, "put", contact.etag, CardDiff.between(before&.vcard, contact.vcard))
         reindex(contact.id, stored)
@@ -529,6 +563,11 @@ module ProTacts
           groups.insert(id:, name:)
           return id
         rescue Sequel::UniqueConstraintViolation
+          # The id collided, or a `sync:` name did
+          # (db/migrations/007_sync_names.rb). Drawing again only helps
+          # the first; the second is the caller's to hear.
+          raise if groups.where(id:).empty?
+
           next
         end
       end
@@ -554,10 +593,21 @@ module ProTacts
     # A group's name, or none — NULL being the one spelling of
     # nameless (db/migrations/005_group_identity.rb), so a blank is
     # stored as that rather than refused by the schema. A name is on no
-    # card, so no member's bytes move and nothing is logged.
+    # card, so no member's bytes move, but a `sync:` name is what puts a
+    # card in a book: a rename into, out of, or between them moves every
+    # member between books and logs each one (#fan_out's `moved`).
     #: (String id, name: String?) -> void
     def rename_group(id, name:)
-      groups.where(id:).update(name: name.to_s.strip.empty? ? nil : name)
+      name = nil if name.to_s.strip.empty?
+      @database.transaction do
+        was = groups.where(id:).sole.fetch(:name)&.to_s
+        if was != name && (sync_name?(was) || sync_name?(name))
+          members = member_ids([id])
+          fan_out(members, moved: members) { groups.where(id:).update(name:) }
+        else
+          groups.where(id:).update(name:)
+        end
+      end
     end
 
     # Replaces what a group lends, wholesale, at positions from zero.
@@ -593,22 +643,30 @@ module ProTacts
     end
 
     # A card joins a group, and starts serving what the group lends.
-    # Joining twice is joining once.
+    # Joining twice is joining once. Joining a `sync:` group puts the
+    # card in a book, which is logged whether or not its bytes moved.
     #: (String group_id, String card_id) -> void
     def add_member(group_id, card_id)
       @database.transaction do
-        fan_out([card_id]) { group_members.insert_conflict.insert(group_id:, card_id:) }
+        joining = sync_group?(group_id) && !member?(group_id, card_id)
+        fan_out([card_id], moved: joining ? [card_id] : []) {
+          group_members.insert_conflict.insert(group_id:, card_id:)
+        }
       end
     end
 
     # A card leaves a group, and stops serving what the group lends —
     # the one lever the model has for "everyone but this member"
     # (docs/plans/2026-08-24-vcard-storage-and-groups.md, "Edits
-    # propagate to the group").
+    # propagate to the group"). Leaving a `sync:` group takes the card
+    # out of a book, logged the way joining one is.
     #: (String group_id, String card_id) -> void
     def remove_member(group_id, card_id)
       @database.transaction do
-        fan_out([card_id]) { group_members.where(group_id:, card_id:).delete }
+        leaving = sync_group?(group_id) && member?(group_id, card_id)
+        fan_out([card_id], moved: leaving ? [card_id] : []) {
+          group_members.where(group_id:, card_id:).delete
+        }
       end
     end
 
@@ -725,14 +783,20 @@ module ProTacts
     # writing, whose own entry already carries this composition
     # (docs/plans/2026-09-09-group-edits-propagate.md, "The fan-out").
     #
+    # `moved` is the exception: cards logged whatever their bytes did,
+    # because a `sync:` membership moves a card into or out of a book
+    # without touching what it serves, and the log is the only way a
+    # client's sync token hears of it
+    # (docs/plans/2026-09-12-per-user-books.md, "The change log").
+    #
     # Card ids rather than groups, because the cards a write can move
     # are not always members yet: a card joining a group is read before
     # the row that makes it one exists.
     #
     # Inside whatever transaction the caller has open: Sequel joins one
     # rather than nesting, which is what lets this run from #put.
-    #: (Array[String] cards, ?except: String?) { () -> void } -> void
-    def fan_out(cards, except: nil)
+    #: (Array[String] cards, ?except: String?, ?moved: Array[String]) { () -> void } -> void
+    def fan_out(cards, except: nil, moved: [])
       ids = cards - [except].compact
       before = ids.to_h {
         [it, composed(it)] #: [String, Contact]
@@ -741,7 +805,7 @@ module ProTacts
       ids.each do |id|
         was = before.fetch(id)
         now = composed(id)
-        next if was.vcard.to_s == now.vcard.to_s
+        next if was.vcard.to_s == now.vcard.to_s && !moved.include?(id)
 
         record(id, "group", now.etag, CardDiff.between(was.vcard, now.vcard))
       end
@@ -779,6 +843,31 @@ module ProTacts
           members: members.fetch(id, []).map { it.fetch(:card_id).to_s },
         )
       }
+    end
+
+    # The id of one user's `sync:` group, created on first use. `sole`
+    # because a `sync:` name is unique (db/migrations/007_sync_names.rb),
+    # and no row is the ordinary answer for a user's first create.
+    #: (String name) -> String
+    def sync_group_id(name)
+      groups.where(name: "#{SYNC_PREFIX}#{name}").sole.fetch(:id).to_s
+    rescue Sequel::NoMatchingRow
+      create_group(name: "#{SYNC_PREFIX}#{name}")
+    end
+
+    #: (String? name) -> bool
+    def sync_name?(name)
+      name&.start_with?(SYNC_PREFIX) == true
+    end
+
+    #: (String group_id) -> bool
+    def sync_group?(group_id)
+      sync_name?(groups.where(id: group_id).sole.fetch(:name)&.to_s)
+    end
+
+    #: (String group_id, String card_id) -> bool
+    def member?(group_id, card_id)
+      !group_members.where(group_id:, card_id:).empty?
     end
 
     # The cards belonging to any of these groups, each once — the

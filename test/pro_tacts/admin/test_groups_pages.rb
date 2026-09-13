@@ -92,6 +92,19 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
+  # Only a `sync:` name has to be unique (db/migrations/007_sync_names.rb).
+  def test_a_create_under_a_taken_sync_name_is_refused
+    with_contacts({}) do |store|
+      store.create_group(name: "sync:Test User")
+
+      post "/groups", name: "sync:Test User"
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "Another group is already named sync:Test User."
+      assert_equal 1, store.all_groups.size
+    end
+  end
+
   ## The card
 
   def test_the_card_shows_what_the_group_lends_and_to_whom
@@ -199,6 +212,21 @@ class AdminGroupsPagesTest < Minitest::Test
       assert_equal 200, last_response.status
       assert_includes last_response.body, "This group changed since the page loaded; nothing was saved."
       assert_equal "The Booles", store.group(id).name
+      assert_equal %w[george mary], store.group(id).members
+    end
+  end
+
+  def test_a_rename_to_a_taken_sync_name_is_refused_and_changes_nothing
+    with_contacts(BOOLES) do |store|
+      store.create_group(name: "sync:Test User")
+      id = household(store)
+
+      post "/groups/#{id}", version: store.group(id).version, name: "sync:Test User", note: "Gate code 1854.",
+                            members: ["", "ada"]
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "Another group is already named sync:Test User; nothing was saved."
+      assert_equal "Booles", store.group(id).name
       assert_equal %w[george mary], store.group(id).members
     end
   end

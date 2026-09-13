@@ -217,6 +217,11 @@ module ProTacts
             name = r.params["name"].to_s.strip
             id = store.create_group(name: name.empty? ? nil : name)
             r.redirect "/groups/#{id}/edit", 303
+          rescue Sequel::UniqueConstraintViolation
+            # A taken `sync:` name, the one kind that must be unique
+            # (db/migrations/007_sync_names.rb).
+            response["Content-Type"] = "text/html; charset=utf-8"
+            Admin::GroupsIndex.call(groups: store.all_groups, notice: "Another group is already named #{name}.")
           end
         end
 
@@ -871,7 +876,13 @@ module ProTacts
           group.members
         end #: Array[String]
 
-      store.edit_group(id, name: r.params["name"].to_s, lines: group_lines(card), members:)
+      begin
+        store.edit_group(id, name: r.params["name"].to_s, lines: group_lines(card), members:)
+      rescue Sequel::UniqueConstraintViolation
+        # A taken `sync:` name (db/migrations/007_sync_names.rb). The save
+        # is one transaction, so nothing of it landed.
+        return group_edit_screen(group, notice: "Another group is already named #{r.params['name']}; nothing was saved.")
+      end
       r.redirect "/groups/#{id}", 303
     end
 

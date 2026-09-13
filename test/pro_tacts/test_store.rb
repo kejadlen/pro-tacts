@@ -1329,6 +1329,104 @@ class StoreTest < Minitest::Test
     end
   end
 
+  ## Books
+
+  YUKI = AIDEN.sub("FN:Aiden", "FN:Yuki").sub("UID:aiden", "UID:yuki") #: String
+
+  # A card in `sync:*` is everyone's, one in `sync:<name>` that user's
+  # alone, and one in any other group nobody's
+  # (docs/plans/2026-09-12-per-user-books.md).
+  def test_a_book_is_everyones_cards_and_the_users_own
+    with_store({"aiden" => AIDEN, "znorth" => ZED, "yuki" => YUKI}) do |store|
+      FixtureData.seed_group(store, name: "sync:*", members: ["aiden"])
+      FixtureData.seed_group(store, name: "sync:Alpha Chen", members: %w[aiden znorth])
+      FixtureData.seed_group(store, name: "Household", members: ["yuki"])
+
+      assert_equal Set["aiden", "znorth"], store.book("Alpha Chen")
+      assert_equal Set["aiden"], store.book("Zoë Chen")
+    end
+  end
+
+  # The put's own entry is the card's arrival in the book, so the join
+  # logs nothing beside it.
+  def test_a_client_create_joins_the_writers_book
+    with_store do |store|
+      store.put("aiden", vcard(AIDEN), sync_to: "Alpha Chen")
+      store.put("znorth", vcard(ZED), sync_to: "Alpha Chen")
+
+      assert_equal Set["aiden", "znorth"], store.book("Alpha Chen")
+      assert_equal ["sync:Alpha Chen"], store.all_groups.map(&:name)
+      assert_equal ["put"], store.changes_of("aiden").map(&:action)
+    end
+  end
+
+  def test_a_client_rewrite_joins_nothing
+    with_store({"aiden" => AIDEN}) do |store|
+      store.put("aiden", vcard(AIDEN), sync_to: "Alpha Chen")
+
+      assert_empty store.book("Alpha Chen")
+    end
+  end
+
+  # A `sync:` group can lend lines like any other, and the logged etag
+  # is the card as the book serves it.
+  def test_a_client_create_is_logged_as_its_book_serves_it
+    with_store do |store|
+      FixtureData.seed_group(store, name: "sync:Alpha Chen", lines: [HOUSEHOLD_NOTE])
+
+      contact = store.put("aiden", vcard(AIDEN), sync_to: "Alpha Chen")
+
+      assert_includes contact.vcard.to_s, HOUSEHOLD_NOTE
+      assert_equal store.contact("aiden").etag, store.changes_of("aiden").first.etag
+    end
+  end
+
+  # Joining or leaving moves no bytes when the group lends nothing, but
+  # it moves the card between books, which a sync token hears of only
+  # through the log. Joining twice is still joining once.
+  def test_joining_and_leaving_a_sync_group_is_logged
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, name: "sync:Alpha Chen")
+
+      store.add_member(id, "aiden")
+      store.add_member(id, "aiden")
+      store.remove_member(id, "aiden")
+      store.remove_member(id, "aiden")
+
+      assert_equal %w[group group put], store.changes_of("aiden").map(&:action)
+    end
+  end
+
+  def test_a_rename_into_between_or_out_of_sync_logs_every_member
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      id = FixtureData.seed_group(store, name: "Household", members: %w[aiden znorth])
+
+      store.rename_group(id, name: "sync:Alpha Chen")
+      store.rename_group(id, name: "sync:Alpha Chen")
+      store.rename_group(id, name: "sync:Zoë Chen")
+      store.rename_group(id, name: "Household")
+
+      %w[aiden znorth].each do
+        assert_equal %w[group group group put], store.changes_of(it).map(&:action)
+      end
+    end
+  end
+
+  # A client's create has to join exactly one group, so a `sync:` name
+  # is unique (db/migrations/007_sync_names.rb); any other may repeat.
+  def test_a_sync_name_is_unique_and_others_are_not
+    with_store do |store|
+      store.create_group(name: "sync:Alpha Chen")
+      store.create_group(name: "Household")
+      store.create_group(name: "Household")
+      other = store.create_group(name: "sync:Zoë Chen")
+
+      assert_raises(Sequel::UniqueConstraintViolation) { store.create_group(name: "sync:Alpha Chen") }
+      assert_raises(Sequel::UniqueConstraintViolation) { store.rename_group(other, name: "sync:Alpha Chen") }
+      assert_equal "sync:Zoë Chen", store.group(other).name
+    end
+  end
+
   ## Subtracting what a group lends
 
   # The member's own address, deliberately unlike the group's so a

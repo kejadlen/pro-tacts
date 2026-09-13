@@ -108,6 +108,9 @@ module Sequel
     def first: () -> Sequel::row?
     def all: () -> Array[Sequel::row]
     def count: () -> Integer
+    # Whether any row matches, asked of the database rather than by
+    # fetching one.
+    def empty?: () -> bool
     def columns: () -> Array[Symbol]
     def single_value: () -> untyped
     def select_map: (untyped columns) -> Array[untyped]
