@@ -1,4 +1,5 @@
 
+require "digest"
 require "pathname"
 require "securerandom"
 
@@ -30,6 +31,7 @@ module ProTacts
     # @rbs @contacts: Array[Contact]?
     # @rbs @ctag: String?
     # @rbs @identity: TailscaleAuth::Identity
+    # @rbs @book: Set[String]?
 
     # The vendored Gloss CSS and the admin app's own stylesheet (see
     # docs/DESIGN.md); relative to this file rather than $0 for the same
@@ -494,9 +496,13 @@ module ProTacts
               # The warm-sync ask is etag-only; a changed etag sends the
               # client back through multiget, so no address-data here.
               #
-              # The token carries the change log's sequence (see
-              # #sync_token), and the delta is the log after it: one
-              # response per member, the net of everything it did in the
+              # The token carries the change log's sequence and whose book
+              # it was issued for (see #sync_token), and the delta is the
+              # log after the sequence, answered from the requester's book
+              # as it is now: a card that left it answers as removed
+              # (section 3.5.2), and so does one that never was in it,
+              # which the log cannot tell apart. One response per
+              # member, the net of everything it did in the
               # window — a member put twice since the token answers once,
               # at its current etag, the multiple-changes case section 3.5
               # allows one response for. A member whose net is a removal
@@ -514,7 +520,7 @@ module ProTacts
                 # No token is the initial sync: every member, changed
                 # (section 3.4).
                 multistatus(contacts.map { etag_response(it) }, sync_token:)
-              elsif (sequence = token[%r{\Ahttp://pro-tacts/sync/(\d+)\z}, 1]) &&
+              elsif (sequence = token[%r{\Ahttp://pro-tacts/sync/(\d+)/#{book_digest}\z}, 1]) &&
                   sequence.to_i <= store.latest_sequence
                 net = store.changes(after: sequence.to_i).map { it.card_id }.uniq
                 responses = net.map { |id|
@@ -523,8 +529,9 @@ module ProTacts
                 }
                 multistatus(responses, sync_token:)
               else
-                # A token this server never issued, or one naming a state
-                # past the present: the section's DAV:valid-sync-token
+                # A token this server never issued, one issued for another
+                # book, or one naming a state past the present: the
+                # section's DAV:valid-sync-token
                 # precondition, marshalled per RFC 4918 section 16. 410
                 # rather than 403 because its fallback is a full resync —
                 # the request will not always fail, and the state the
@@ -581,7 +588,7 @@ module ProTacts
           # Read on its own rather than through the collection: serving
           # one href has no reason to load every other contact first.
           r.get String do |filename|
-            contact = store.contact(filename.delete_suffix(".vcf"))
+            contact = member(filename.delete_suffix(".vcf"))
 
             if contact
               response["Content-Type"] = "text/vcard; charset=utf-8"
@@ -622,9 +629,25 @@ module ProTacts
     # Read once per request — Roda builds a fresh app instance for each
     # one — from the store the whole process shares. Reading a family
     # address book per request is cheap and can never serve a stale one.
+    #
+    # The requester's book and nothing else: every route under /dav serves
+    # that collection (docs/plans/2026-09-12-per-user-books.md).
     #: () -> Array[Contact]
     def contacts
-      @contacts ||= store.contacts
+      @contacts ||= store.contacts.select { book.include?(it.id) }
+    end
+
+    #: () -> Set[String]
+    def book
+      @book ||= store.book(@identity.name)
+    end
+
+    # One member of the requester's book, or nil for a card outside it
+    # as for one that does not exist: neither is a member of this
+    # collection.
+    #: (String id) -> Contact?
+    def member(id)
+      store.contact(id) if book.include?(id)
     end
 
     #: () -> String
@@ -662,10 +685,20 @@ module ProTacts
 
     # Sync tokens are opaque to the client (RFC 6578 section 3); the URI
     # form is conventional. Built on the ctag so a client polling either
-    # one sees changes at the same points.
+    # one sees changes at the same points, and on the requester's name so
+    # that a token is refused by any other book, the one a rename leaves
+    # a user with included (docs/plans/2026-09-12-per-user-books.md, "The
+    # wire").
     #: () -> String
     def sync_token
-      "http://pro-tacts/sync/#{ctag}"
+      "http://pro-tacts/sync/#{ctag}/#{book_digest}"
+    end
+
+    # The name half of a sync token: the first 16 hex digits of the
+    # SHA-256 of the requester's display name.
+    #: () -> String
+    def book_digest
+      Digest::SHA256.hexdigest(@identity.name)[0, 16].to_s
     end
 
     #: () -> Store
@@ -682,6 +715,11 @@ module ProTacts
     # CARDDAV:valid-address-data even when its If-Match is stale too.
     #: (String id) -> String?
     def write_card(id)
+      # A card outside the requester's book is no member of this
+      # collection (#member), and its id cannot be created here either,
+      # being taken: the 404 the GET of it gets.
+      return if !book.include?(id) && store.contact(id)
+
       # CARDDAV:supported-address-data (RFC 6352 section 6.3.2.1): what
       # arrived must be a vCard, and text/vcard is the one media type
       # this server stores. Asked before the body is read because it is
@@ -739,7 +777,7 @@ module ProTacts
       report_unreadable_lines(vcard)
       report_broken_assumptions(vcard)
 
-      stored = store.put(id, vcard)
+      stored = store.put(id, vcard, sync_to: @identity.name)
       response.status = existing ? 204 : 201
       # A strong ETag belongs on the answer only when what the resource
       # now serves is the submitted bytes, octet for octet — the one
@@ -767,8 +805,9 @@ module ProTacts
       # An unmapped URI is a 404, not a silent success: RFC 4918 section
       # 9.6 gives DELETE no idempotent status, and a client deleting what
       # it believes exists is owed the disagreement. Falls through to the
-      # not_found handler the way the GET and PUT of a bad id do.
-      existing = store.contact(id)
+      # not_found handler the way the GET and PUT of a bad id do. A card
+      # outside the requester's book is unmapped here too (#member).
+      existing = member(id)
       return unless existing
 
       # The lost-update conditional, RFC 7232 section 3.1, on the same

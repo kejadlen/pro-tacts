@@ -86,10 +86,14 @@ module FixtureData
     cards.keys.grep(/\Abday-/)
   end
 
+  # The third is `sync:*` holding every card, so every user's book is
+  # the whole seed — the replay's included, whose recorded sessions saw
+  # every card (docs/plans/2026-09-12-per-user-books.md).
   #: (ProTacts::Store store) -> void
   def self.seed_groups(store)
     seed_group(store, name: "Booles", lines: HOUSEHOLD, members: MEMBERS)
     seed_group(store, members: birthday_cards)
+    seed_group(store, name: ProTacts::Store::EVERYONE, members: cards.keys)
   end
 
   # A group, seeded without a change-log entry for any member it moves

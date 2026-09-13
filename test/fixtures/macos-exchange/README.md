@@ -27,6 +27,14 @@ behavior: regenerate them with `rake fixtures` after changing responses
 deliberately, and review the diff — accidental drift is exactly what the
 comparison test exists to catch.
 
+## The sync step
+
+Step 08's request carries `http://pro-tacts/sync/1`, a token from before
+tokens named the book they were issued for
+(`docs/plans/2026-09-12-per-user-books.md`). The replay answers it with
+410 and `DAV:valid-sync-token` rather than the 207 delta the recorded
+session received. What macOS does after a 410 has not been recorded.
+
 ## The PUT steps
 
 Both are the same edit to the same contact. Step 10 is the edit, which

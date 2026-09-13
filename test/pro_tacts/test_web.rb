@@ -768,8 +768,20 @@ class WebTest < Minitest::Test
     text.gsub("&lt;", "<").gsub("&gt;", ">").gsub("&amp;", "&")
   end
 
-  # Contacts by id and name, each a bare card.
-  def with_contacts(names, &) = super(names.to_h { |id, name| [id, card(id, name)] }, &)
+  # Contacts by id and name, each a bare card, and every one in `sync:*`
+  # so the requester's book is all of them. Seeded without a change-log
+  # entry, so the sequences the sync tests read are the puts' alone.
+  def with_contacts(names, &block)
+    super(names.to_h { |id, name| [id, card(id, name)] }) do |store|
+      FixtureData.seed_group(store, name: ProTacts::Store::EVERYONE, members: names.keys)
+      block.call(store)
+    end
+  end
+
+  # A sync token as the route issues one to a user (Web#sync_token).
+  def issued_token(sequence, name: "Test User")
+    "http://pro-tacts/sync/#{sequence}/#{Digest::SHA256.hexdigest(name)[0, 16]}"
+  end
 
   def etag_only_propfind
     <<~XML
@@ -868,7 +880,7 @@ class WebTest < Minitest::Test
   # here.
   def test_sync_collection_reports_the_delta_since_the_token
     with_contacts({"aiden" => "Aiden"}) do |store|
-      request "/dav/addressbook/", method: "REPORT", input: sync_collection("http://pro-tacts/sync/0")
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(0))
 
       assert_equal 207, last_response.status
       assert_includes last_response.body, "/dav/addressbook/aiden.vcf"
@@ -898,14 +910,14 @@ class WebTest < Minitest::Test
       assert_equal 207, last_response.status
       assert_includes last_response.body, "/dav/addressbook/aiden.vcf"
       assert_includes last_response.body, "/dav/addressbook/znorth.vcf"
-      assert_includes last_response.body, "<d:sync-token>http://pro-tacts/sync/2</d:sync-token>"
+      assert_includes last_response.body, "<d:sync-token>#{issued_token(2)}</d:sync-token>"
     end
   end
 
   # RFC 6578 section 3.2 spells a removal href and 404, no propstat.
   def test_sync_collection_reports_a_removal_as_404
     with_contacts({"aiden" => "Aiden", "znorth" => "Znorth"}) do |store|
-      request "/dav/addressbook/", method: "REPORT", input: sync_collection("http://pro-tacts/sync/2")
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(2))
       token = last_response.body[%r{<d:sync-token>(.+)</d:sync-token>}, 1]
       store.delete("znorth")
 
@@ -924,7 +936,7 @@ class WebTest < Minitest::Test
   # section 3.2, marshalled per RFC 4918 section 16.
   def test_sync_collection_refuses_a_token_it_never_issued
     with_contacts({"aiden" => "Aiden"}) do
-      request "/dav/addressbook/", method: "REPORT", input: sync_collection("http://pro-tacts/sync/9")
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(9))
 
       assert_equal 410, last_response.status
       assert_includes last_response.body, "<d:valid-sync-token/>"
@@ -932,6 +944,94 @@ class WebTest < Minitest::Test
       request "/dav/addressbook/", method: "REPORT", input: sync_collection("https://elsewhere/sync/1")
 
       assert_equal 410, last_response.status
+    end
+  end
+
+  # A token names the book it was issued for, so a user whose name
+  # changed resyncs rather than taking a delta against another book —
+  # and a token from before tokens named one is refused the same way.
+  def test_sync_collection_refuses_a_token_from_another_book
+    with_contacts({"aiden" => "Aiden"}) do
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(1, name: "Zoë Chen"))
+      assert_equal 410, last_response.status
+
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection("http://pro-tacts/sync/1")
+      assert_equal 410, last_response.status
+
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(1))
+      assert_equal 207, last_response.status
+    end
+  end
+
+  ## Books
+
+  # A card in nobody's book is no member of this collection, to any
+  # method (docs/plans/2026-09-12-per-user-books.md, "The wire").
+  def test_a_card_outside_the_book_is_not_a_member
+    with_contacts({"aiden" => "Aiden"}) do |store|
+      store.put("znorth", ProTacts::VCard.new(card("znorth", "Zed")))
+
+      request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
+      assert_includes last_response.body, "aiden.vcf"
+      refute_includes last_response.body, "znorth"
+
+      get "/dav/addressbook/znorth.vcf"
+      assert_equal 404, last_response.status
+
+      request "/dav/addressbook/", method: "REPORT", input: multiget("znorth")
+      assert_includes last_response.body, "HTTP/1.1 404 Not Found"
+      refute_includes last_response.body, "FN:Zed"
+
+      put_request "znorth", card("znorth", "Zed Smith"), "CONTENT_TYPE" => VCARD
+      assert_equal 404, last_response.status
+
+      delete "/dav/addressbook/znorth.vcf"
+      assert_equal 404, last_response.status
+      assert_includes store.contact("znorth").vcard.to_s, "FN:Zed\r\n"
+    end
+  end
+
+  def test_each_user_syncs_their_own_book
+    with_contacts({"aiden" => "Aiden"}) do |store|
+      store.put("znorth", ProTacts::VCard.new(card("znorth", "Zed")))
+      FixtureData.seed_group(store, name: "sync:Zoë Chen", members: ["znorth"])
+
+      request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
+      refute_includes last_response.body, "znorth"
+
+      header "Tailscale-User-Name", "=?utf-8?q?Zo=C3=AB_Chen?="
+      request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
+      assert_includes last_response.body, "aiden.vcf"
+      assert_includes last_response.body, "znorth.vcf"
+    end
+  end
+
+  # A card a client creates stays in the collection it was written to.
+  def test_a_put_create_joins_the_writers_book
+    with_contacts({}) do |store|
+      put_request "new", card("new", "New"), "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
+
+      assert_equal 201, last_response.status
+      assert_equal Set["new"], store.book("Test User")
+    end
+  end
+
+  # RFC 6578 section 3.5.2: a card whose mapping left the collection is
+  # reported removed, which a card leaving the book is.
+  def test_a_card_leaving_the_book_reaches_a_syncing_client_as_a_removal
+    with_contacts({"aiden" => "Aiden", "znorth" => "Zed"}) do |store|
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection("")
+      token = last_response.body[%r{<d:sync-token>([^<]+)</d:sync-token>}, 1]
+      everyone = store.all_groups.find { it.name == ProTacts::Store::EVERYONE }.id
+
+      store.remove_member(everyone, "znorth")
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(token)
+
+      body = last_response.body
+      assert_equal 207, last_response.status
+      assert_includes body, "<d:href>/dav/addressbook/znorth.vcf</d:href>"
+      assert_includes body, "HTTP/1.1 404 Not Found"
+      refute_includes body, "aiden"
     end
   end
 

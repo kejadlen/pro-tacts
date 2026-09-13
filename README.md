@@ -65,6 +65,11 @@ while the app is reachable through serve alone — bind it to localhost.
 Tailscale documents two cases that carry no identity and so cannot get in:
 Funnel traffic, which is public, and traffic from tagged devices.
 
+Each user syncs a book of their own rather than every card: the members
+of the group `sync:*`, which everyone gets, and of `sync:<name>`, where
+the name is the user's Tailscale display name. A card a client creates
+joins its writer's group. See `docs/plans/2026-09-12-per-user-books.md`.
+
 Requests the server cannot answer — a 404, a refused report, or a crash —
 are kept under `log/unhandled`, one directory per distinct request, in the
 same layout as `test/fixtures/macos-exchange`. A client asking for
