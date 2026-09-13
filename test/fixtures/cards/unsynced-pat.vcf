@@ -1,0 +1,7 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Private;Pat;;;
+FN:Pat Private
+EMAIL:pat@example.com
+UID:unsynced-pat
+END:VCARD

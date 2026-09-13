@@ -97,6 +97,17 @@ class WebTest < Minitest::Test
     assert_includes last_response.body, "END:VCARD"
   end
 
+  # The seed's unsynced card is in no `sync:` group, so no book holds it
+  # (FixtureData.unsynced_cards).
+  def test_a_seed_card_in_no_book_is_not_served
+    request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
+    assert_includes last_response.body, "household-george.vcf"
+    refute_includes last_response.body, "unsynced-"
+
+    get "/dav/addressbook/unsynced-pat.vcf"
+    assert_equal 404, last_response.status
+  end
+
   def test_propfind_addressbook_includes_ctag
     request "/dav/addressbook/", method: "PROPFIND"
 

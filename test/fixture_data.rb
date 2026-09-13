@@ -86,14 +86,23 @@ module FixtureData
     cards.keys.grep(/\Abday-/)
   end
 
-  # The third is `sync:*` holding every card, so every user's book is
-  # the whole seed — the replay's included, whose recorded sessions saw
-  # every card (docs/plans/2026-09-12-per-user-books.md).
+  # The seed's cards that no client syncs, read off the ids for
+  # birthday_cards' reason.
+  #: () -> Array[String]
+  def self.unsynced_cards
+    cards.keys.grep(/\Aunsynced-/)
+  end
+
+  # The third is `sync:*`, holding every card but the unsynced ones, so
+  # every user's book is the rest of the seed — the replay's included,
+  # whose recorded sessions saw every card they asked for — and the
+  # admin UI still shows a contact that is in nobody's
+  # (docs/plans/2026-09-12-per-user-books.md).
   #: (ProTacts::Store store) -> void
   def self.seed_groups(store)
     seed_group(store, name: "Booles", lines: HOUSEHOLD, members: MEMBERS)
     seed_group(store, members: birthday_cards)
-    seed_group(store, name: ProTacts::Store::EVERYONE, members: cards.keys)
+    seed_group(store, name: ProTacts::Store::EVERYONE, members: cards.keys - unsynced_cards)
   end
 
   # A group, seeded without a change-log entry for any member it moves
