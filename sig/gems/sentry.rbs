@@ -4,7 +4,7 @@
 # and the photo decode refusal contact.rb captures. ExchangeLog tags the
 # request's scope and reads whether anything was reported under it.
 module Sentry
-  def self.capture_message: (String message, ?level: Symbol, ?fingerprint: Array[String]) -> untyped
+  def self.capture_message: (String message, ?level: Symbol, ?fingerprint: Array[String], ?tags: Hash[Symbol, String]) -> untyped
 
   def self.capture_exception: (Exception exception, ?level: Symbol) -> untyped
 

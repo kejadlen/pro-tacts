@@ -56,6 +56,15 @@ class RefusalAlertsTest < Minitest::Test
     assert_equal "PUT /dav/addressbook/{id}.vcf answered 412 Precondition Failed", sentry_messages.first
   end
 
+  def test_the_card_a_refusal_names_is_a_tag
+    @status = 412
+
+    dav "/dav/addressbook/aiden.vcf"
+    dav "/dav/addressbook/"
+
+    assert_equal ["aiden", nil], sentry_events.map { it.tags[:card] }
+  end
+
   def test_the_method_and_status_split_groups
     @status = 412
     dav "/dav/addressbook/aiden.vcf", method: "PUT"

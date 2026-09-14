@@ -34,16 +34,21 @@ module ProTacts
     private
 
     # Fingerprinted on the route with the card id replaced, so Sentry
-    # groups a refusal that repeats across cards as one issue.
+    # groups a refusal that repeats across cards as one issue. The id
+    # rides as the `card` tag instead, so an issue's events can be
+    # searched by card.
     #: (Rack::env env, Integer status) -> void
     def alert(env, status)
       method = env.fetch("REQUEST_METHOD")
-      route = env["PATH_INFO"].to_s.sub(%r{/[^/]+\.vcf\z}, "/{id}.vcf")
+      path = env["PATH_INFO"].to_s
+      card = path[%r{/([^/]+)\.vcf\z}, 1]
+      route = path.sub(%r{/[^/]+\.vcf\z}, "/{id}.vcf")
 
       Sentry.capture_message(
         "#{method} #{route} answered #{status} #{Rack::Utils::HTTP_STATUS_CODES[status]}",
         level: :warning,
         fingerprint: [method, route, status.to_s],
+        tags: card ? { card: } : {},
       )
     end
   end
