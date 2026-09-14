@@ -1,5 +1,7 @@
 require "pro_tacts/admin/phlex"
 
+require "pro_tacts/admin/name_pair"
+
 module ProTacts
   module Admin
     # The new-contact dialog — the dashboard's quiet add affordance,
@@ -30,10 +32,11 @@ module ProTacts
     # the fixture sessions show macOS writing.
     #
     # A popover cannot be declared open in markup, so the empty-name
-    # refusal is not a re-opened dialog: the first field is `required`
-    # — native validation, which no browser submit gets past — and the
-    # server's backstop for a hand-crafted empty POST answers with a
-    # toast on the dashboard instead (see Web's POST handler).
+    # refusal is not a re-opened dialog: each name box is `required`
+    # while the other is blank (NamePair) — native validation, which no
+    # browser submit gets past — and the server's backstop for a
+    # hand-crafted empty POST answers with a toast on the dashboard
+    # instead (see Web's POST handler).
     # `autofocus` fires when the popover is shown (it is scoped to the
     # popover, so the header search's own page-load autofocus stands).
     class ContactDialog < Phlex::HTML
@@ -47,14 +50,15 @@ module ProTacts
       def view_template
         dialog(id: "new-contact", popover: "auto") do
           header { "New contact" }
-          form(id: "new-contact-form", action: "/contacts", method: "post") do
+          form(id: "new-contact-form", action: "/contacts", method: "post",
+               x_data: "{ #{NamePair.state(nil, nil)} }") do
             label(class: "field") do
               plain "First"
-              input(type: "text", name: "first", required: true, autofocus: true)
+              input(**NamePair.first(nil, nil), autofocus: true)
             end
             label(class: "field") do
               plain "Last"
-              input(type: "text", name: "last")
+              input(**NamePair.last(nil, nil))
             end
             # The search the dialog opened over — opening a popover
             # loads no page, so this survives only the failed-create

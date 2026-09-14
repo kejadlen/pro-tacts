@@ -22,9 +22,10 @@ module ProTacts
       # names. Stored through Store#put like any client write, so
       # the change log a sync token counts on lands with the card.
       # A nameless create is a dashboard re-render with a toast: the
-      # browser cannot produce one (the dialog's first field is
-      # required), so this is the backstop, and a popover cannot be
-      # declared open in markup — the toast is the refusal the
+      # browser cannot produce one (the dialog requires one name box
+      # or the other, Admin::NamePair), so this is the backstop, and
+      # a popover cannot be declared open in markup — the toast is
+      # the refusal the
       # re-rendered page can actually show. `r.is` because a bare
       # verb block matches any remaining path in Roda — without it,
       # the collection's create would swallow the record's apply,
@@ -125,7 +126,8 @@ module ProTacts
 
       # N and FN are mandatory (RFC 2426 section 4), so a save blank
       # throughout is refused — the toast is the backstop, the form's
-      # required field being the browser's own refusal of the same.
+      # name pair (Admin::NamePair) being the browser's own refusal of
+      # the same.
       first = r.params["first"].to_s.strip
       last = r.params["last"].to_s.strip
       return edit_screen(contact, notice: "A contact needs a name.") if first.empty? && last.empty?

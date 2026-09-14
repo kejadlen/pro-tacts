@@ -5,6 +5,7 @@ require "pro_tacts/admin/phlex"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/icons"
 require "pro_tacts/admin/layout"
+require "pro_tacts/admin/name_pair"
 
 module ProTacts
   module Admin
@@ -108,8 +109,9 @@ module ProTacts
           # dialog both: the dialog names a type and the form grows a
           # row for it, so the two have to share state, and Alpine
           # scopes by ancestry. `added` is the list of types added
-          # this pass, `type` is the radio's binding.
-          div(x_data: "{ added: [], type: '#{ADDABLE_TYPES.first}' }") do
+          # this pass, `type` is the radio's binding, and the rest is
+          # the name boxes' (NamePair).
+          div(x_data: "{ added: [], type: '#{ADDABLE_TYPES.first}', #{NamePair.state(@first, @last)} }") do
             # The caption-to-card block the details page uses (.record
             # in admin.css): the back link is this card's caption row,
             # and the row's one action sits at its right edge — the
@@ -135,12 +137,11 @@ module ProTacts
                   # it, and the note's caption needs reaching.
                   label(class: "field") do
                     span { "First" }
-                    input(type: "text", name: "first", value: @first,
-                          required: true, autofocus: true)
+                    input(**NamePair.first(@first, @last), autofocus: true)
                   end
                   label(class: "field") do
                     span { "Last" }
-                    input(type: "text", name: "last", value: @last)
+                    input(**NamePair.last(@first, @last))
                   end
                   # The whole-property rows wear the removal state only
                   # over a property the card carries: both render empty

@@ -693,12 +693,15 @@ class AdminContactsPagesTest < Minitest::Test
       body = last_response.body
       assert_includes body, '<button data-size="sm" popovertarget="new-contact">add contact</button>'
       assert_includes body, '<dialog id="new-contact" popover="auto">'
-      assert_includes body, '<form id="new-contact-form" action="/contacts" method="post">'
+      assert_includes body, '<form id="new-contact-form" action="/contacts" method="post" ' \
+                            'x-data="{ firstBlank: true, lastBlank: true }">'
       # The captions render — a bare string mid-block is void in
       # Phlex, so the labels carry their text through plain (the
       # assertion keeps a regression from rendering a silent label).
-      assert_includes body, '<label class="field">First<input type="text" name="first" required autofocus></label>'
-      assert_includes body, '<label class="field">Last<input type="text" name="last"></label>'
+      assert_includes body, '<label class="field">First<input type="text" name="first" required ' \
+                            ':required="lastBlank" @input="firstBlank = !$el.value.trim()" autofocus></label>'
+      assert_includes body, '<label class="field">Last<input type="text" name="last" required ' \
+                            ':required="firstBlank" @input="lastBlank = !$el.value.trim()"></label>'
       assert_includes body, 'popovertargetaction="hide"'
     end
   end
@@ -757,9 +760,9 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The backstop for the one request no browser can send (the first
-  # field is required): a plain dashboard re-render with the refusal
-  # in a toast, and nothing stored.
+  # The backstop for the one request no browser can send (one name
+  # box or the other is required): a plain dashboard re-render with
+  # the refusal in a toast, and nothing stored.
   def test_a_nameless_create_is_refused_with_a_toast
     with_contacts({}) do |store|
       post "/contacts", first: " ", last: ""
@@ -785,8 +788,10 @@ class AdminContactsPagesTest < Minitest::Test
       assert_equal 200, last_response.status
       body = last_response.body
       assert_includes body, '<form action="/contacts/red" method="post" class="field-stack">'
-      assert_includes body, '<input type="text" name="first" value="Ada" required autofocus>'
-      assert_includes body, '<input type="text" name="last" value="Lovelace">'
+      assert_includes body, '<input type="text" name="first" value="Ada" ' \
+                            ':required="lastBlank" @input="firstBlank = !$el.value.trim()" autofocus>'
+      assert_includes body, '<input type="text" name="last" value="Lovelace" ' \
+                            ':required="firstBlank" @input="lastBlank = !$el.value.trim()">'
       assert_includes body,
         '<label class="field" data-blank-removes><span>Nickname</span>' \
         '<input type="text" name="nickname" value="Red" placeholder="removed on save"></label>'
@@ -794,6 +799,28 @@ class AdminContactsPagesTest < Minitest::Test
         "<textarea name=\"note\" rows=\"4\" placeholder=\"removed on save\">Countess of Lovelace.</textarea>"
       # The etag carries its quotes, HTML-escaped in the attribute.
       assert_includes body, %(<input type="hidden" name="etag" value="&quot;#{store.contact("red").etag.delete('"')}&quot;">)
+    end
+  end
+
+  # A family name alone is a name (`N:Prince;;;;`): the blank first box
+  # is not required over it, or the browser would refuse every save.
+  def test_a_family_name_alone_is_a_name_the_editor_can_save
+    prince = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Prince\r\nN:Prince;;;;\r\nUID:prince\r\nEND:VCARD\r\n"
+
+    with_contacts({"prince" => prince}) do |store|
+      get "/contacts/prince/edit"
+
+      body = last_response.body
+      assert_includes body, "firstBlank: true, lastBlank: false"
+      assert_includes body, '<input type="text" name="first" ' \
+                            ':required="lastBlank" @input="firstBlank = !$el.value.trim()" autofocus>'
+      assert_includes body, '<input type="text" name="last" value="Prince" required ' \
+                            ':required="firstBlank" @input="lastBlank = !$el.value.trim()">'
+
+      post "/contacts/prince", first: "", last: "Prince", etag: store.contact("prince").etag
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("prince").vcard.to_s, "N:Prince;;;;\r\n"
     end
   end
 
@@ -1598,7 +1625,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => ADA}) do
       body = (get("/contacts/ada/edit") && last_response.body)
 
-      assert_includes body, %(<div x-data="{ added: [], type: 'phone' }">)
+      assert_includes body, %(<div x-data="{ added: [], type: 'phone', firstBlank: false, lastBlank: false }">)
       # One template serves every kind: the single-value kinds get an
       # input whose type and name bind to the kind, the address kind
       # the same six component fields a standing row gets — named by
