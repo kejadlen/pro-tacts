@@ -49,6 +49,12 @@ class ExchangeLogTest < Minitest::Test
     path.exist? ? path.readlines.reject { it.start_with?("#") }.join : ""
   end
 
+  # The last request's head and body, read back out of the log.
+  def read_back
+    id = last_request.env.fetch(ProTacts::ExchangeLog::ENV_KEY)
+    ProTacts::ExchangeLog.read_request(id, @directory / "exchange.log")
+  end
+
   def test_a_successful_exchange_is_not_logged
     request "/dav/addressbook/", method: "PROPFIND"
 
@@ -166,6 +172,47 @@ class ExchangeLogTest < Minitest::Test
     request "/", method: "PROPFIND"
 
     assert_includes logged, "<< 200 OK"
+  end
+
+  def test_a_logged_request_reads_back_byte_for_byte
+    @stub.status = 412
+    card = "BEGIN:VCARD\r\nNOTE:Zoë\r\n\r\nEND:VCARD\r\n"
+
+    put "/dav/addressbook/new.vcf", card, "CONTENT_TYPE" => "text/vcard", "HTTP_IF_MATCH" => '"abc"'
+
+    head, body = read_back
+    assert_match %r{\APUT /dav/addressbook/new\.vcf HTTP/1\.\d\z}, head.first
+    assert_includes head, "Content-Type: text/vcard"
+    assert_includes head, 'If-Match: "abc"'
+    assert_equal card.b, body
+  end
+
+  def test_a_body_without_a_final_newline_reads_back_without_one
+    @stub.status = 412
+
+    put "/dav/addressbook/new.vcf", "BEGIN:VCARD"
+
+    assert_equal "BEGIN:VCARD", read_back.last
+  end
+
+  def test_a_request_with_no_body_reads_back_with_an_empty_one
+    @stub.status = 404
+
+    delete "/dav/addressbook/nope.vcf"
+
+    assert_equal "", read_back.last
+  end
+
+  def test_a_request_reads_back_from_a_rotated_log
+    @stub.status = 404
+    request "/dav/addressbook/", method: "PROPFIND"
+    (@directory / "exchange.log").rename(@directory / "exchange.log.0")
+
+    assert_match %r{\APROPFIND /dav/addressbook/ }, read_back.first.first
+  end
+
+  def test_an_id_no_log_holds_reads_back_as_nil
+    assert_nil ProTacts::ExchangeLog.read_request("0123456789ab", @directory / "exchange.log")
   end
 
   def test_a_body_that_is_not_utf_8_logs_beside_one_that_is

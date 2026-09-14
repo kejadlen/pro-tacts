@@ -63,6 +63,28 @@ module ProTacts
       end
     end
 
+    # Reads one exchange's request back out of the log at path or a
+    # rotation of it: the request line and headers as logged, and the
+    # body byte for byte. nil when none of them holds the id.
+    #: (String id, String | Pathname path) -> [Array[String], String]?
+    def self.read_request(id, path)
+      marker = "#{id} >> ".b
+      # Logger's rotations, newest first (Logger::LogDevice#shift_log_age).
+      [path.to_s, *(0...ROTATIONS).map { "#{path}.#{it}" }].each do |log|
+        next unless File.exist?(log)
+
+        lines = File.binread(log).split("\n").filter_map do |line|
+          _stamp, _, rest = line.partition(" ")
+          rest.delete_prefix(marker) if rest.start_with?(marker)
+        end
+        next if lines.empty?
+
+        blank = lines.index("") or raise ArgumentError, "exchange #{id} in #{log} has no blank line after its head"
+        return [lines.take(blank), lines.drop(blank + 1).join("\n")]
+      end
+      nil
+    end
+
     # everything logs every DAV exchange rather than the ones that went
     # wrong (Config#debug?).
     #: (Rack::_App app, path: String | Pathname, everything: bool) -> void
@@ -131,24 +153,33 @@ module ProTacts
 
     #: (Rack::env env) -> Array[String]
     def request(env)
-      lines = ["#{env.fetch('REQUEST_METHOD')} #{full_path(env)} #{env.fetch('SERVER_PROTOCOL')}"]
+      head = ["#{env.fetch('REQUEST_METHOD')} #{full_path(env)} #{env.fetch('SERVER_PROTOCOL')}"]
       env.each do |key, value|
         case key
-        when /\AHTTP_(.+)\z/ then lines << "#{header_name(key.delete_prefix('HTTP_'))}: #{value}"
-        when "CONTENT_TYPE" then lines << "Content-Type: #{value}"
-        when "CONTENT_LENGTH" then lines << "Content-Length: #{value}"
+        when /\AHTTP_(.+)\z/ then head << "#{header_name(key.delete_prefix('HTTP_'))}: #{value}"
+        when "CONTENT_TYPE" then head << "Content-Type: #{value}"
+        when "CONTENT_LENGTH" then head << "Content-Length: #{value}"
         end
       end
-      lines.flat_map { prefixed(">>", it) } + prefixed(">>", request_body(env))
+      message(">>", head, request_body(env))
     end
 
     #: (Integer status, Rack::headers headers, String body) -> Array[String]
     def response(status, headers, body)
-      lines = ["#{status}#{reason(status)}"]
+      head = ["#{status}#{reason(status)}"]
       headers.each do |name, value|
-        Array(value).each { lines << "#{name}: #{it}" }
+        Array(value).each { head << "#{name}: #{it}" }
       end
-      lines.flat_map { prefixed("<<", it) } + prefixed("<<", body)
+      message("<<", head, body)
+    end
+
+    # Laid out as HTTP lays out a message, so that read_request can take
+    # it apart: the head, a blank line, then the body split on "\n"
+    # alone, which keeps each CR and leaves a final newline as an empty
+    # last line.
+    #: (String prefix, Array[String] head, String body) -> Array[String]
+    def message(prefix, head, body)
+      (head + [""] + body.b.split("\n", -1)).map { "#{prefix} #{it}".b }
     end
 
     #: (Rack::env env) -> String
@@ -182,8 +213,8 @@ module ProTacts
       phrase ? " #{phrase}" : ""
     end
 
-    # Binary throughout, so a request body that is not UTF-8 and a
-    # response body that is can share one message.
+    # Binary, like message's lines, so an exception message that is not
+    # UTF-8 still joins them.
     #: (String prefix, String text) -> Array[String]
     def prefixed(prefix, text)
       text.b.lines(chomp: true).map { "#{prefix} #{it}".b }
