@@ -40,12 +40,11 @@ Sentry.init do |sentry|
   sentry.before_send = drop_identity
   sentry.before_send_transaction = drop_identity
 
-  # The debug log is a local-only record of full exchanges, bodies and
-  # all. Sentry's sentry_logger hook would otherwise turn every one of
-  # its lines into a breadcrumb, and send_default_pii has no say over
-  # breadcrumbs. Keyed on the progname DebugLogger#write passes with
-  # each line.
-  sentry.exclude_loggers = [ProTacts::DebugLogger::PROGNAME]
+  # The exchange log is a local-only record of whole exchanges, bodies
+  # and all. Sentry's sentry_logger hook would otherwise turn it into
+  # breadcrumbs, and send_default_pii has no say over breadcrumbs. Keyed
+  # on the progname ExchangeLog#write passes with each exchange.
+  sentry.exclude_loggers = [ProTacts::ExchangeLog::PROGNAME]
 
   sentry.traces_sample_rate = 1.0
 end

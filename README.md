@@ -70,12 +70,13 @@ of the group `sync:*`, which everyone gets, and of `sync:<name>`, where
 the name is the user's Tailscale display name. A card a client creates
 joins its writer's group. See `docs/plans/2026-09-12-per-user-books.md`.
 
-Requests the server cannot answer — a 404, a refused report, or a crash —
-are kept under `log/unhandled`, one directory per distinct request, in the
-same layout as `test/fixtures/macos-exchange`. A client asking for
-something unimplemented therefore leaves behind enough to implement it, and
-the capture can be promoted to a fixture by copying it and stripping the
-identifying headers.
+DAV exchanges that go wrong — a status of 400 or more other than the 401
+above, a crash, or a request that reported to Sentry — are written whole
+to `log/exchange.log`, rotated by size. Each exchange has an id that
+Sentry carries as the `exchange` tag, so an alert names the exchange to
+read. A client asking for something unimplemented therefore leaves behind
+enough to implement it. `PRO_TACTS_DEBUG=1` logs every DAV exchange
+instead, for reading back a write that succeeded.
 Sentry gets no request body at all, because `send_default_pii` is off, so
 the cards themselves never leave the machine.
 

@@ -103,7 +103,7 @@ module ProTacts
             # footer exists to end.
             #
             # Debug logging says so while it is on because it dumps
-            # whole requests, contact data included (see DebugLogger),
+            # every sync whole, contact data included (see ExchangeLog),
             # and a log left recording is the kind of thing found months
             # later. Off, the label is absent: the footer states what is
             # true, and the quiet case is the normal one. It reads as a

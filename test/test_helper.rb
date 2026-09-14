@@ -10,17 +10,11 @@
 # which the TestTask command and several test files require first —
 # would fire BEFORE the tests and delete the database mid-suite.
 #
-# The removal is rm_rf rather than remove_entry because WebTest's
-# wired-middleware tests rm_rf the configured unhandled directory to
-# assert capture behavior from a clean slate; whether that directory
-# still exists at cleanup depends on test order, and rm_rf tolerates
-# it being gone.
-#
 # The environment is set before the app is required rather than after it,
 # so the requires cannot all sit at the top: the app reads configuration
-# as it loads, because the unhandled-request middleware is given its
-# directory at class-definition time. Set it afterwards and the captures
-# land in log/ instead of the tmpdir.
+# as it loads, because the exchange log is given its path at
+# class-definition time. Set it afterwards and the failed exchanges land
+# in log/ instead of the tmpdir.
 require "fileutils"
 require "minitest"
 require "pathname"
@@ -28,19 +22,14 @@ require "tmpdir"
 
 data_dir = Pathname.new(Dir.mktmpdir("pro-tacts-test"))
 ENV["PRO_TACTS_DATA_DIR"] = data_dir.to_s
-Minitest.after_run { FileUtils.rm_rf(data_dir) }
+Minitest.after_run { FileUtils.remove_entry(data_dir) }
 
-# Several tests provoke 404s. Keep the captures out of log/ and out of the
-# fixtures; UnhandledRequestsTest points the middleware at its own tmpdir.
-unhandled_dir = Pathname.new(Dir.mktmpdir("pro-tacts-unhandled"))
-ENV["PRO_TACTS_UNHANDLED_DIR"] = unhandled_dir.to_s
-Minitest.after_run { FileUtils.rm_rf(unhandled_dir) }
-
-# Debug exchanges, when PRO_TACTS_DEBUG is exported for a test run, get
-# their own log, truncated per run: stderr would bury the test progress
-# under full bodies, and log/debug.log is for real client sessions only.
-ENV["PRO_TACTS_DEBUG_LOG"] ||= "log/test.log"
-File.truncate("log/test.log", 0) if File.exist?("log/test.log")
+# Several tests provoke failed exchanges. Their log goes with the run
+# unless PRO_TACTS_EXCHANGE_LOG is exported to keep it, and stays out of
+# log/exchange.log, which is for real client sessions only.
+exchange_dir = Pathname.new(Dir.mktmpdir("pro-tacts-exchanges"))
+ENV["PRO_TACTS_EXCHANGE_LOG"] ||= (exchange_dir / "exchange.log").to_s
+Minitest.after_run { FileUtils.remove_entry(exchange_dir) }
 
 require_relative "fixture_data"
 require "pro_tacts/web"

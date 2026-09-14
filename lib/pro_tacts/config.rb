@@ -23,8 +23,10 @@ module ProTacts
       @env.fetch("SENTRY_DSN", nil)
     end
 
-    # Whether to dump full request/response exchanges to the log. Off by
-    # default because it logs contact data. See ProTacts::DebugLogger.
+    # Whether the exchange log keeps every DAV exchange rather than the
+    # ones that went wrong, so a write that succeeded can be read back
+    # (tasks/probe.rake). Off by default because it records every sync
+    # whole. See ProTacts::ExchangeLog.
     #: () -> bool
     def debug?
       value = @env.fetch("PRO_TACTS_DEBUG", nil)
@@ -50,19 +52,13 @@ module ProTacts
       path.nil? ? data_dir / "contacts.db" : Pathname.new(path)
     end
 
-    # Where requests the app could not answer are kept, one directory per
-    # distinct request. Under log/ because it holds request data and is not
-    # meant to be committed. See ProTacts::UnhandledRequests.
-    #: () -> Pathname
-    def unhandled_dir
-      Pathname.new(@env.fetch("PRO_TACTS_UNHANDLED_DIR", "log/unhandled"))
-    end
-
-    # Where the debug logger writes. A path, overridable with
-    # PRO_TACTS_DEBUG_LOG; "stderr" keeps it on the process's stderr.
+    # Where the exchange log writes. A path, overridable with
+    # PRO_TACTS_EXCHANGE_LOG; "stderr" keeps it on the process's stderr.
+    # Under log/ because it holds request data and is not meant to be
+    # committed. See ProTacts::ExchangeLog.
     #: () -> String
-    def debug_log_path
-      @env.fetch("PRO_TACTS_DEBUG_LOG", "log/debug.log")
+    def exchange_log_path
+      @env.fetch("PRO_TACTS_EXCHANGE_LOG", "log/exchange.log")
     end
 
     # The CardDAV account's display name, PRO_TACTS_PROFILE_NAME — what

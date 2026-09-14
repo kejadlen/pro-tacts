@@ -7,11 +7,10 @@ require "sentry-ruby"
 require "rack/rewindable_input"
 require "roda"
 
-require "pro_tacts/debug_logger"
 require "pro_tacts/contact"
+require "pro_tacts/exchange_log"
 require "pro_tacts/store"
 require "pro_tacts/tailscale_auth"
-require "pro_tacts/unhandled_requests"
 require "roda/plugins/dav_verbs"
 
 module ProTacts
@@ -47,25 +46,17 @@ module ProTacts
       end
     end
 
-    # RewindableInput lets the capture middlewares below read the request
-    # body and rewind it for the application.
+    # RewindableInput lets the exchange log below read the request body
+    # after the application has.
     use Rack::RewindableInput::Middleware
     use Sentry::Rack::CaptureExceptions
 
-    # Outside the route's identity gate (#unauthorized), and safe there
-    # because a refusal is a 401, which it does not keep
-    # (UnhandledRequests.capture?): a refused request is not missing
-    # functionality, and recording one would write an unauthenticated
-    # body to disk.
-    use ProTacts::UnhandledRequests, directory: ProTacts.config.unhandled_dir
-
-    # Outside the identity gate too, so a refused request is dumped with
-    # the rest. That is the point of a debug log, which is off by default
-    # and kept on a local machine.
-    if ProTacts.config.debug?
-      logger = ProTacts::DebugLogger.open_log(ProTacts.config.debug_log_path)
-      use ProTacts::DebugLogger, logger: logger
-    end
+    # Inside CaptureExceptions, so the exchange tag lands on the scope it
+    # opens for the request. Outside the route's identity gate
+    # (#unauthorized), and safe there because a 401 is not a failure it
+    # keeps (ExchangeLog#failed?). The log opens when Roda builds the
+    # stack, not here, so requiring the app writes nothing.
+    use ProTacts::ExchangeLog, path: ProTacts.config.exchange_log_path, everything: ProTacts.config.debug?
 
     plugin :all_verbs
     plugin :dav_verbs

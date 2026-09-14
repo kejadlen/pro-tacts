@@ -132,35 +132,19 @@ class WebTest < Minitest::Test
     assert_includes last_response.body, "AB12C345-6789-0DEF-1234-567890ABCDEF.vcf"
   end
 
-  # Guards the wiring rather than the middleware: mounted in the stack and
-  # pointed at the configured directory.
-  def test_an_unhandled_request_is_kept_on_disk
-    directory = ProTacts.config.unhandled_dir
-    FileUtils.rm_rf(directory)
-
+  # Guards the wiring rather than the middleware: mounted inside the
+  # scope Sentry opens for the request, and pointed at the configured
+  # log. The 404's own report is what carries the tag here.
+  def test_a_failed_exchange_is_logged_under_the_id_sentry_carries
     get "/dav/addressbook/no-such-contact.vcf"
 
     assert_equal 404, last_response.status
 
-    captured = Pathname.new(directory).glob("*/request").map(&:read)
+    id = sentry_events.last.tags.fetch(:exchange)
+    logged = Pathname.new(ProTacts.config.exchange_log_path).read
 
-    assert_equal 1, captured.size
-    assert_includes captured.first, "/dav/addressbook/no-such-contact.vcf"
-  ensure
-    FileUtils.rm_rf(directory)
-  end
-
-  def test_a_refused_request_is_not_kept_on_disk
-    directory = ProTacts.config.unhandled_dir
-    FileUtils.rm_rf(directory)
-
-    header "Tailscale-User-Login", ""
-    get "/dav/addressbook/no-such-contact.vcf"
-
-    assert_equal 401, last_response.status
-    refute Pathname.new(directory).exist?, "a refused request should leave nothing behind"
-  ensure
-    FileUtils.rm_rf(directory)
+    assert_includes logged, "#{id} >> GET /dav/addressbook/no-such-contact.vcf"
+    assert_includes logged, "#{id} << 404 Not Found"
   end
 
   ## Refusing a request that names nobody
@@ -1051,8 +1035,8 @@ class WebTest < Minitest::Test
   # it fell through to the multiget branch, found no hrefs, and answered with
   # an empty 207 that read as a successful empty address book.
   def test_unsupported_report_is_refused_rather_than_answered_emptily
-    directory = ProTacts.config.unhandled_dir
-    FileUtils.rm_rf(directory)
+    log = Pathname.new(ProTacts.config.exchange_log_path)
+    offset = log.exist? ? log.size : 0
 
     with_contacts({"aiden" => "Aiden"}) do
       request "/dav/addressbook/", method: "REPORT", input: addressbook_query
@@ -1062,13 +1046,11 @@ class WebTest < Minitest::Test
       refute_includes last_response.body, "multistatus"
 
       # The refusal is what makes the ask visible; an empty 207 left nothing.
-      captured = Pathname.new(directory).glob("*/request").map(&:read)
+      logged = log.read(nil, offset)
 
-      assert_equal 1, captured.size
-      assert_includes captured.first, "addressbook-query"
+      assert_includes logged, "addressbook-query"
+      assert_includes logged, "<< 403 Forbidden"
     end
-  ensure
-    FileUtils.rm_rf(directory)
   end
 
   def test_etags_agree_across_listing_multiget_and_get

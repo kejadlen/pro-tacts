@@ -35,17 +35,17 @@ namespace :probe do
     response.code
   end
 
-  # The shared half of every probe's instructions: a successful PUT is
-  # not an unhandled request, so the debug log is the only place it
-  # lands. `edit` is what to change in the client: a probe that reads
+  # The shared half of every probe's instructions: a successful PUT did
+  # not go wrong, so the exchange log keeps it only with PRO_TACTS_DEBUG
+  # set. `edit` is what to change in the client: a probe that reads
   # what the rewrite does to the rest of the card does not care, and
   # one whose experiment is the edit itself says which to make.
   def reading_the_result(id, name, edit: "any field, the edit itself does not matter")
     <<~STEPS
       1. The server needs PRO_TACTS_DEBUG=1 for the write to be logged —
-         a successful PUT is not an unhandled request, so log/unhandled
-         will not have it. Restart with `PRO_TACTS_DEBUG=1 rake dev` if
-         it is not set.
+         without it the exchange log keeps only exchanges that went
+         wrong. Restart with `PRO_TACTS_DEBUG=1 rake dev` if it is not
+         set.
       2. Resync the client and let a write through, editing "#{name}":
          #{edit}.
       3. The PUT body lands in log/dev.log after a `>>` line, under

@@ -49,7 +49,8 @@ lib/pro_tacts/
 ├── vcard/parser.rb # One card's bytes into lines
 ├── config.rb       # Every environment read in the app
 ├── profile.rb      # carddav.mobileconfig generation
-└── debug_logger.rb # Full request/response dumps, off by default
+└── exchange_log.rb # Failed DAV exchanges, whole, under an id Sentry
+                    # carries
 lib/roda/plugins/dav_verbs.rb     # PROPFIND and REPORT routing verbs
 lib/sequel/extensions/sole.rb     # `first`, minus the ambiguity
 db/migrations/      # Sequel migrations, run on every store open
@@ -91,10 +92,12 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   refused until you pass both. The
   security of that rests on the app being reachable only through
   `tailscale serve` — never bind it to anything but localhost.
-- Unanswered requests (404s, app-level 403s, and 5xx) are written to
-  `log/unhandled` in the fixture layout. When implementing something a
-  client asked for, look there first — and strip the identifying headers
-  before promoting a capture into `test/fixtures`.
+- DAV exchanges that went wrong (a status of 400 or more but 401, a
+  crash, or a report to Sentry) are written whole to `log/exchange.log`,
+  each line prefixed by the id Sentry carries as the `exchange` tag.
+  When implementing something a client asked for, look there first — and
+  strip the identifying headers before promoting an exchange into
+  `test/fixtures`.
 - No request body reaches Sentry: `send_default_pii` is off in
   `config.ru`, because card content never leaves the machine. The URL,
   headers, exception messages, and `capture_message` text still do, so
@@ -116,8 +119,7 @@ not a fixture; edit a `.vcf` to change what the replay serves.
 - `supported_http_methods` in `config/puma.rb` *replaces* Puma's default
   method list rather than extending it. Any method the app answers must be
   named there or Puma returns 501 from the HTTP parser, before Rack runs —
-  so the request never reaches the app and `UnhandledRequests` cannot
-  capture it. Adding a route is two files, not one.
+  so the request never reaches the app and `ExchangeLog` cannot log it. Adding a route is two files, not one.
 - Application code reads configuration through `ProTacts.config` only; add
   a method to `config.rb` rather than reaching for `ENV`. The Rakefile is
   outside that rule and reads `PRO_TACTS_HOSTNAME` directly.
@@ -156,9 +158,9 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   the one being served — a fixture, a test, a task pointed elsewhere.
 - `test/test_helper.rb` sets `ENV` before it requires the app, and the
   requires cannot all move to the top because of it: the app reads
-  configuration as it loads, since the unhandled-request middleware is
-  given its directory at class-definition time. Set it afterwards and
-  the 404 captures land in `log/` instead of `tmp/`.
+  configuration as it loads, since the exchange log is given its path at
+  class-definition time. Set it afterwards and the failed exchanges land
+  in `log/` instead of a tmpdir.
 - Only three things in the database cannot be rebuilt: the cards, the
   change log, and the birthdays — a partial date has no vCard 3.0
   spelling, so it lives beside its card rather than in it (see

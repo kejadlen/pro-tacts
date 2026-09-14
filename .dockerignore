@@ -6,8 +6,8 @@
 .envrc
 .quire
 .ramekin
-# data/ is the real address book; log/ holds unhandled captures with
-# every header. Neither belongs in an image.
+# data/ is the real address book; log/ holds exchange logs with every
+# header and body. Neither belongs in an image.
 data
 log
 tmp
