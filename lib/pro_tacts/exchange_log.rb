@@ -27,6 +27,10 @@ module ProTacts
     # breadcrumbs.
     PROGNAME = "ProTacts::ExchangeLog" #: String
 
+    # Where a DAV exchange's id rides in the env, which is how
+    # RefusalAlerts tells a DAV exchange from an admin one.
+    ENV_KEY = "pro_tacts.exchange" #: String
+
     # A photo PUT is a megabyte of base64 on its own.
     ROTATE_AT = 10 * 1024 * 1024 #: Integer
     ROTATIONS = 5 #: Integer
@@ -73,6 +77,7 @@ module ProTacts
       return @app.call(env) unless dav?(env)
 
       id = SecureRandom.hex(6)
+      env[ENV_KEY] = id
       Sentry.set_tags(exchange: id)
       # The hub's last event id moves only for an error event, so one
       # that moved while the app ran is a report about this exchange.

@@ -49,8 +49,9 @@ lib/pro_tacts/
 ├── vcard/parser.rb # One card's bytes into lines
 ├── config.rb       # Every environment read in the app
 ├── profile.rb      # carddav.mobileconfig generation
-└── exchange_log.rb # Failed DAV exchanges, whole, under an id Sentry
-                    # carries
+├── exchange_log.rb # Failed DAV exchanges, whole, under an id Sentry
+│                   # carries
+└── refusal_alerts.rb # DAV refusals as Sentry warnings, one per route
 lib/roda/plugins/dav_verbs.rb     # PROPFIND and REPORT routing verbs
 lib/sequel/extensions/sole.rb     # `first`, minus the ambiguity
 db/migrations/      # Sequel migrations, run on every store open

@@ -1,10 +1,10 @@
 # Sentry is reached wherever a handler has something to report: the
-# exception-capturing middleware web.rb mounts, the 404 and arrival
-# messages web.rb and store.rb send, and the photo decode refusal
-# contact.rb captures. ExchangeLog tags the request's scope and reads
-# whether anything was reported under it.
+# exception-capturing middleware web.rb mounts, the refusal warnings
+# RefusalAlerts sends, the arrival messages dav.rb and store.rb send,
+# and the photo decode refusal contact.rb captures. ExchangeLog tags the
+# request's scope and reads whether anything was reported under it.
 module Sentry
-  def self.capture_message: (String message, ?level: Symbol) -> untyped
+  def self.capture_message: (String message, ?level: Symbol, ?fingerprint: Array[String]) -> untyped
 
   def self.capture_exception: (Exception exception, ?level: Symbol) -> untyped
 

@@ -9,6 +9,7 @@ require "roda"
 
 require "pro_tacts/contact"
 require "pro_tacts/exchange_log"
+require "pro_tacts/refusal_alerts"
 require "pro_tacts/store"
 require "pro_tacts/tailscale_auth"
 require "roda/plugins/dav_verbs"
@@ -58,13 +59,17 @@ module ProTacts
     # stack, not here, so requiring the app writes nothing.
     use ProTacts::ExchangeLog, path: ProTacts.config.exchange_log_path, everything: ProTacts.config.debug?
 
+    # Inside ExchangeLog, which marks the DAV exchanges this alerts on
+    # and has already tagged the scope the warning is sent from.
+    use ProTacts::RefusalAlerts
+
     plugin :all_verbs
     plugin :dav_verbs
     plugin :public, root: PUBLIC_ROOT.to_s
     plugin :hash_branches
 
+    # A DAV 404 warns through RefusalAlerts; an admin one reports nothing.
     plugin :not_found do
-      Sentry.capture_message("404 Not Found", level: :warning)
       "Not Found"
     end
 

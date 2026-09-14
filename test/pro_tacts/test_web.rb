@@ -134,7 +134,7 @@ class WebTest < Minitest::Test
 
   # Guards the wiring rather than the middleware: mounted inside the
   # scope Sentry opens for the request, and pointed at the configured
-  # log. The 404's own report is what carries the tag here.
+  # log. The 404's refusal warning is what carries the tag here.
   def test_a_failed_exchange_is_logged_under_the_id_sentry_carries
     get "/dav/addressbook/no-such-contact.vcf"
 
@@ -145,6 +145,22 @@ class WebTest < Minitest::Test
 
     assert_includes logged, "#{id} >> GET /dav/addressbook/no-such-contact.vcf"
     assert_includes logged, "#{id} << 404 Not Found"
+  end
+
+  def test_a_refused_write_warns
+    with_contacts({}) do
+      put_request "new", card("new", "New"), "CONTENT_TYPE" => "text/plain"
+
+      assert_equal 412, last_response.status
+      assert_equal ["PUT /dav/addressbook/{id}.vcf answered 412 Precondition Failed"], sentry_messages
+    end
+  end
+
+  def test_an_admin_404_reports_nothing
+    get "/contacts/no-such-contact"
+
+    assert_equal 404, last_response.status
+    assert_empty sentry_events
   end
 
   ## Refusing a request that names nobody
