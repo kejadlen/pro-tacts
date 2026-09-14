@@ -12,8 +12,8 @@ later response change is measured against.
 Each step directory holds:
 
 - `request` — the request line, the headers that affect routing
-  (`Brief`, `Content-Type`, `Depth`, `If-Match`, `Prefer`), a blank
-  line, then the exact body. `Authorization`, `Host`, `User-Agent`, and
+  (`Brief`, `Content-Type`, `Depth`, `If-Match`, `If-None-Match`,
+  `Prefer`), a blank line, then the exact body. `Authorization`, `Host`, `User-Agent`, and
   the `Tailscale-*` / `X-Forwarded-*` / `X-Mme-Client-Info` headers
   were stripped: they identify the tailnet and user, and the app
   ignores them.

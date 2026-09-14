@@ -23,6 +23,11 @@ class ExchangeFixtures < Data.define(:directory)
   # Date, server) is plumbing.
   RESPONSE_HEADERS = %w[Content-Type ETag DAV Allow Location].freeze
 
+  # Request headers a fixture keeps, the ones that affect routing; the
+  # rest identify the tailnet and the user, or are ignored
+  # (macos-exchange/README.md).
+  REQUEST_HEADERS = %w[Brief Content-Type Depth If-Match If-None-Match Prefer].freeze
+
   # Stand in for the Tailscale identity headers the recorded sessions
   # carried. They were stripped from the request files because they name
   # a real tailnet user; the app refuses requests without them, so the
@@ -33,6 +38,18 @@ class ExchangeFixtures < Data.define(:directory)
   # Every recording, for the callers that run all of them.
   def self.all
     [MACOS, IOS]
+  end
+
+  # Writes step's request file in the layout parse_request reads, from a
+  # logged request line, headers, and body (ProTacts::ExchangeLog.read_request).
+  # Keeps only REQUEST_HEADERS, and answers the names of the headers it
+  # dropped. Rake task "fixtures:extract".
+  def self.write_request(step, head, body)
+    request_line, *headers = head
+    kept, dropped = headers.partition { REQUEST_HEADERS.include?(it.split(": ", 2).first) }
+    step.mkpath
+    (step / "request").binwrite([request_line, *kept].join("\n") + "\n\n" + body)
+    dropped.map { it.split(": ", 2).first }
   end
 
   def steps

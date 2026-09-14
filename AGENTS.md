@@ -14,6 +14,8 @@ response — the shape of those responses is empirical, not arbitrary.
 rake                  # Tests (the default task)
 rake steep            # Type check lib against the RBS comments in it
 rake fixtures         # Re-record response fixtures from current behavior
+rake fixtures:extract # A logged exchange's request as a fixture step
+                      # (EXCHANGE=id STEP=test/fixtures/<recording>/NN-name)
 rake index:rebuild    # Derive the parsed index again from the stored cards
 rake db:dump          # Write the cards, birthdays, and groups to data/dump
                       # (DUMP=path to move it)
@@ -96,9 +98,9 @@ not a fixture; edit a `.vcf` to change what the replay serves.
 - DAV exchanges that went wrong (a status of 400 or more but 401, a
   crash, or a report to Sentry) are written whole to `log/exchange.log`,
   each line prefixed by the id Sentry carries as the `exchange` tag.
-  When implementing something a client asked for, look there first — and
-  strip the identifying headers before promoting an exchange into
-  `test/fixtures`.
+  When implementing something a client asked for, look there first, and
+  promote an exchange into `test/fixtures` with `rake fixtures:extract`,
+  which strips the identifying headers.
 - No request body reaches Sentry: `send_default_pii` is off in
   `config.ru`, because card content never leaves the machine. The URL,
   headers, exception messages, and `capture_message` text still do, so
