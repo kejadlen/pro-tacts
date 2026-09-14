@@ -19,7 +19,7 @@ module ProTacts
     # breadcrumb hook, which keys its exclude list on the progname
     # (see config.ru). Every line here is a local-only record of a
     # full exchange — bodies included — so none of it may ride to
-    # Sentry as a breadcrumb, where SentryScrubber would never see it.
+    # Sentry as a breadcrumb, which send_default_pii does not govern.
     PROGNAME = "ProTacts::DebugLogger" #: String
 
     # Builds the Logger the middleware writes to: appended and unbuffered

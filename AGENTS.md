@@ -95,9 +95,10 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   `log/unhandled` in the fixture layout. When implementing something a
   client asked for, look there first — and strip the identifying headers
   before promoting a capture into `test/fixtures`.
-- Anything added to a request body must be assumed to reach Sentry. Card
-  content is redacted by `ProTacts::SentryScrubber`; a new kind of sensitive
-  field would need its own rule there.
+- No request body reaches Sentry: `send_default_pii` is off in
+  `config.ru`, because card content never leaves the machine. The URL,
+  headers, exception messages, and `capture_message` text still do, so
+  keep card content out of all four.
 - Don't hide errors. A `rescue` that swallows an exception and returns a
   fallback value reads as defensive but is actually the opposite: it turns
   a bug or corrupt data into a silently wrong screen instead of a loud one.

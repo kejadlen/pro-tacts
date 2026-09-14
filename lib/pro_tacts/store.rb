@@ -940,7 +940,7 @@ module ProTacts
     # The arrival report: a BDAY the model does not take is unexpected
     # input, and storing it verbatim would be the last anyone heard of
     # it. The message carries no card content
-    # (ProTacts::SentryScrubber's line); the value stays on the
+    # (the line config.ru draws for Sentry); the value stays on the
     # machine, where the admin view shows it raw.
     #: () -> void
     def report_unrecognized_bday_line
@@ -1222,7 +1222,7 @@ module ProTacts
     # does not explain, and calling either the edit would be a guess.
     # The card is stored as it arrived and the line is news, the same
     # bargain report_unrecognized_bday_line makes, and carries no card
-    # content for the same reason (ProTacts::SentryScrubber).
+    # content for the same reason (config.ru).
     #: (Integer count) -> void
     def report_ambiguous_inherited_lines(count)
       return if count.zero?

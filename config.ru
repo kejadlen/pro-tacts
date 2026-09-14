@@ -7,7 +7,6 @@ require "sentry-ruby"
 
 $LOAD_PATH.unshift(Pathname.new(__dir__) / "lib")
 require "pro_tacts/web"
-require "pro_tacts/sentry_scrubber"
 require "pro_tacts/store"
 
 config = ProTacts.config
@@ -26,21 +25,26 @@ Sentry.init do |sentry|
 
   sentry.breadcrumbs_logger = [:sentry_logger, :http_logger]
 
-  # On: request bodies are worth having on a 404, and nothing else this
-  # sends is sensitive. Hrefs carry opaque contact UIDs, not names, and the
-  # IPs are tailnet addresses.
-  sentry.send_default_pii = true
+  # Off, so no request body, query string, or cookie is sent: a write's
+  # body is a card, and card content never leaves the machine. Sentry
+  # says that something went wrong; the full exchange stays local
+  # (docs/plans/2026-09-13-dav-observability.md).
+  sentry.send_default_pii = false
 
-  # The one thing that must not leave the machine is card content, which a
-  # write path would put directly in a PUT body. Full bodies are kept
-  # locally either way, see ProTacts::UnhandledRequests.
-  sentry.before_send = ProTacts::SentryScrubber
+  # Headers are sent regardless, on transactions as well as errors, and
+  # the tailnet identity is not worth sending.
+  drop_identity = lambda do |event, _hint|
+    event.request&.headers&.reject! { |name, _| name.start_with?("Tailscale-User-") }
+    event
+  end
+  sentry.before_send = drop_identity
+  sentry.before_send_transaction = drop_identity
 
   # The debug log is a local-only record of full exchanges, bodies and
   # all. Sentry's sentry_logger hook would otherwise turn every one of
-  # its lines into a breadcrumb, and breadcrumbs reach Sentry without
-  # passing the scrubber above. Keyed on the progname DebugLogger#write
-  # passes with each line.
+  # its lines into a breadcrumb, and send_default_pii has no say over
+  # breadcrumbs. Keyed on the progname DebugLogger#write passes with
+  # each line.
   sentry.exclude_loggers = [ProTacts::DebugLogger::PROGNAME]
 
   sentry.traces_sample_rate = 1.0

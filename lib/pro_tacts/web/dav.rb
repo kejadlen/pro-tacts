@@ -510,7 +510,7 @@ module ProTacts
     # reads every contact on every page load — and one bad card must
     # not alert once per page view. An arrival is the event worth a
     # message, and a PUT is the only arrival there is. The message
-    # carries no card content (ProTacts::SentryScrubber's line); the
+    # carries no card content (the line config.ru draws for Sentry); the
     # admin view shows the card raw.
     #: (VCard vcard) -> void
     def report_broken_assumptions(vcard)

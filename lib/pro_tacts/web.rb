@@ -47,8 +47,8 @@ module ProTacts
       end
     end
 
-    # RewindableInput allows us to read the request body for Sentry logging
-    # and then rewind it so the application can still access it.
+    # RewindableInput lets the capture middlewares below read the request
+    # body and rewind it for the application.
     use Rack::RewindableInput::Middleware
     use Sentry::Rack::CaptureExceptions
 

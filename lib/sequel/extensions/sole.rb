@@ -34,7 +34,7 @@ module Sequel
 
       # The table rather than the SQL: a filter can carry card content,
       # and an exception message is one of the things that reaches
-      # Sentry. See ProTacts::SentryScrubber.
+      # Sentry.
       raise TooManyRows, "more than one row in #{first_source}" if rows.length > 1
       raise Sequel::NoMatchingRow.new(self) if rows.empty?
 
