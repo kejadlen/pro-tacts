@@ -6,6 +6,7 @@ require "rake"
 require "tmpdir"
 
 require "pro_tacts/exchange_log"
+require_relative "../pro_tacts/exchange_fixtures"
 
 class FixturesTasksTest < Minitest::Test
   include Rack::Test::Methods
@@ -32,8 +33,16 @@ class FixturesTasksTest < Minitest::Test
 
     extract(exchange, @root / "07-put")
 
-    assert_equal "PUT /dav/addressbook/new.vcf HTTP/1.0\nContent-Type: text/vcard\nIf-Match: \"abc\"\n\n#{CARD}",
+    assert_equal "PUT /dav/addressbook/new.vcf HTTP/1.0\nContent-Type: text/vcard\nIf-Match: \"abc\"\n\n#{CARD}\n",
       (@root / "07-put" / "request").binread
+  end
+
+  def test_the_step_replays_the_body_the_client_sent
+    put "/dav/addressbook/new.vcf", CARD
+
+    extract(exchange, @root / "07-put")
+
+    assert_equal CARD, ExchangeFixtures.new(@root).parse_request("07-put").fetch(:body)
   end
 
   def test_a_request_file_already_there_is_left_alone

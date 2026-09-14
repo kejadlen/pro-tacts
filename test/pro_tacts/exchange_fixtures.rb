@@ -48,7 +48,7 @@ class ExchangeFixtures < Data.define(:directory)
     request_line, *headers = head
     kept, dropped = headers.partition { REQUEST_HEADERS.include?(it.split(": ", 2).first) }
     step.mkpath
-    (step / "request").binwrite([request_line, *kept].join("\n") + "\n\n" + body)
+    (step / "request").binwrite([request_line, *kept].join("\n") + "\n\n" + body + "\n")
     dropped.map { it.split(": ", 2).first }
   end
 
@@ -99,10 +99,12 @@ class ExchangeFixtures < Data.define(:directory)
     File.read(directory / name / file)
   end
 
+  # The newline that ends the file is not the body's. Only that one
+  # goes: a body's own CRLF is part of what the client sent.
   def split_message(raw)
     head, body = raw.split("\n\n", 2)
     lines = head.split("\n")
-    [lines.first, lines.drop(1), body.to_s.chomp]
+    [lines.first, lines.drop(1), body.to_s.delete_suffix("\n")]
   end
 
   def parse_headers(lines)

@@ -13,7 +13,8 @@ Each step directory holds:
 
 - `request` — the request line, the headers that affect routing
   (`Brief`, `Content-Type`, `Depth`, `If-Match`, `If-None-Match`,
-  `Prefer`), a blank line, then the exact body. `Authorization`, `Host`, `User-Agent`, and
+  `Prefer`), a blank line, then the exact body, then a newline that
+  ends the file and is not part of the body. `Authorization`, `Host`, `User-Agent`, and
   the `Tailscale-*` / `X-Forwarded-*` / `X-Mme-Client-Info` headers
   were stripped: they identify the tailnet and user, and the app
   ignores them.
