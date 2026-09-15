@@ -582,21 +582,25 @@ img.avatar {
    becomes a flex container, which takes its baseline from its first
    item — the tag's text — and so shares the value's. A group card's
    "edit members" takes the same place, and is plain text with a
-   baseline of its own. */
+   baseline of its own; a contact card's "edit groups" button takes
+   it too, a flex container like the tag. */
 .detail-grid dd:has(> .tag),
-.detail-grid dd:has(> a.type-label) {
+.detail-grid dd:has(> a.type-label),
+.detail-grid dd:has(> button) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   column-gap: var(--gl-space-s);
 }
 .detail-grid dd > .tag,
-.detail-grid dd > a.type-label {
+.detail-grid dd > a.type-label,
+.detail-grid dd > button {
   grid-column: 2;
   grid-row: 1;
 }
 .detail-grid dd:has(> .tag) > div,
-.detail-grid dd:has(> a.type-label) > div {
+.detail-grid dd:has(> a.type-label) > div,
+.detail-grid dd:has(> button) > div {
   grid-column: 1;
 }
 /* A nameless group shown by its id (Admin::GroupLabel): set in mono,
@@ -622,6 +626,21 @@ a.tag {
 dialog > header,
 dialog > footer {
   padding-block: var(--gl-space-2xs);
+}
+
+/* The groups dialog (Admin::GroupDialog) is a list of one-line rows,
+   not the settings form Gloss spaces its stacks for, so it closes up
+   the way the record's form does (.card-body form.field-stack): the
+   rows to the scale's smallest step, the filter to the list at the
+   record's row gap, and the filter box shedding its block padding. */
+dialog .field-stack {
+  gap: var(--gl-space-2xs);
+}
+dialog form.field-stack {
+  gap: var(--gl-space-3xs);
+}
+dialog > .field-stack > input[type="search"] {
+  padding-block: var(--gl-space-3xs);
 }
 
 /* The stored card in its own collapsed card under the record — the

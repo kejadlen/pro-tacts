@@ -670,6 +670,16 @@ module ProTacts
       end
     end
 
+    # A card's side of #edit_group: one transaction, leavers first and
+    # joiners last for that method's reason.
+    #: (String card_id, join: Array[String], leave: Array[String]) -> void
+    def regroup(card_id, join:, leave:)
+      @database.transaction do
+        leave.each { remove_member(it, card_id) }
+        join.each { add_member(it, card_id) }
+      end
+    end
+
     # The change log from a sequence number on, oldest first: the window
     # a sync-collection report answers from (RFC 6578 section 3.2) — the
     # entries after the client's token are the changes it has not seen.

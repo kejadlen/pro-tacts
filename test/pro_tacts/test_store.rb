@@ -1313,6 +1313,18 @@ class StoreTest < Minitest::Test
     end
   end
 
+  def test_a_regroup_leaves_and_joins
+    with_store({"aiden" => AIDEN}) do |store|
+      left = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      joined = FixtureData.seed_group(store, members: [])
+
+      store.regroup("aiden", join: [joined], leave: [left])
+
+      assert_equal [joined], store.groups_of("aiden").map(&:id)
+      assert_equal AIDEN, store.contact("aiden").vcard.to_s
+    end
+  end
+
   # Nothing a client downloads moved, so nothing is logged: a group
   # that lends nothing composes nothing into a new member, and a name
   # is on no card.

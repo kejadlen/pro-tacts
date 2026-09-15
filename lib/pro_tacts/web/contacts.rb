@@ -63,6 +63,13 @@ module ProTacts
           end
         end
 
+        # Membership from the contact's side, the groups dialog's save
+        # (Admin::GroupDialog). Above the edit's POST, whose bare verb
+        # block would match this path too.
+        r.post "groups" do
+          apply_groups(r, id)
+        end
+
         r.post do
           apply_edit(r, id)
         end
@@ -88,11 +95,7 @@ module ProTacts
         r.get do
           contact = store.contact(id)
 
-          if contact
-            response["Content-Type"] = "text/html; charset=utf-8"
-            Admin::ContactsShow.call(contact:, groups: store.groups_of(id),
-                                     changes: store.changes_of(id))
-          end
+          contact_screen(contact) if contact
         end
       end
     end
@@ -169,6 +172,40 @@ module ProTacts
 
       store.rewrite(id, Admin::CardForm.contact_card(contact, first, last, r.params), birthday:)
       r.redirect "/contacts/#{id}", 303
+    end
+
+    # The dialog's save as what it toggled rather than the set it shows:
+    # `was` is the boxes checked when the page loaded, so a group joined
+    # or left elsewhere since stays as it is, and a stale page has
+    # nothing to revert and no snapshot to refuse. Only ids naming a
+    # group: Store#add_member reads the group with `sole`, so a doctored
+    # one would be a 500 rather than the bad input it is.
+    #: (untyped r, String id) -> String?
+    def apply_groups(r, id)
+      return if store.contact(id).nil?
+
+      known = store.all_groups.map(&:id)
+      checked = ids_in(r.params["groups"]) & known
+      was = ids_in(r.params["was"]) & known
+      store.regroup(id, join: checked - was, leave: was - checked)
+      r.redirect "/contacts/#{id}", 303
+    end
+
+    # A form's list of ids, and none for a param absent or not a list.
+    #: (untyped param) -> Array[String]
+    def ids_in(param)
+      param.is_a?(Array) ? param.map(&:to_s) : []
+    end
+
+    #: (Contact contact) -> String
+    def contact_screen(contact)
+      response["Content-Type"] = "text/html; charset=utf-8"
+      Admin::ContactsShow.call(
+        contact:,
+        groups: store.groups_of(contact.id),
+        all_groups: store.all_groups,
+        changes: store.changes_of(contact.id),
+      )
     end
 
     #: (Contact contact, ?notice: String) -> String

@@ -2,6 +2,7 @@ require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/format"
+require "pro_tacts/admin/group_dialog"
 require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
 
@@ -33,11 +34,12 @@ module ProTacts
       # beside it for the same reason and required for the stronger
       # one: a card with no entries is a card whose history was lost,
       # and an empty default would render that as an ordinary quiet
-      # record.
-      #: (Contact contact, Array[Store::Group] groups, Array[Store::Change] changes) -> void
-      def initialize(contact:, groups:, changes:)
+      # record. Every group is the groups dialog's (GroupDialog).
+      #: (Contact contact, Array[Store::Group] groups, Array[Store::Group] all_groups, Array[Store::Change] changes) -> void
+      def initialize(contact:, groups:, all_groups:, changes:)
         @contact = contact
         @groups = groups
+        @all_groups = all_groups
         @changes = changes
         @birthday = Format.birthday(contact)
       end
@@ -112,6 +114,8 @@ module ProTacts
               end
             end
           end
+          # No row, so outside the record's grid.
+          render GroupDialog.new(contact: @contact, groups: @all_groups) if @all_groups.any?
         end
       end
 
@@ -120,7 +124,7 @@ module ProTacts
       #: () -> bool
       def has_data?
         @contact.phones.any? || @contact.emails.any? || @contact.addresses.any? ||
-          !@birthday.nil? || @contact.notes.any? || @groups.any?
+          !@birthday.nil? || @contact.notes.any? || @all_groups.any?
       end
 
       # A missing TYPE parameter still gets a key: the fallback names
@@ -131,7 +135,7 @@ module ProTacts
       # and a group holds only addresses and notes anyway (see
       # db/migrations/004_groups.rb).
       def rows
-        groups_row if @groups.any?
+        groups_row if @all_groups.any?
         @contact.phones.each do |phone|
           row(Format.type_label(phone.types, "phone"), phone.value, phone.line)
         end
@@ -152,14 +156,20 @@ module ProTacts
       # values are the group's rather than the contact's. Every tag opens
       # the group it names (docs/DESIGN.md, "Relationships are
       # navigable"), the other half of the member tags on a group's own
-      # card (Admin::GroupsShow).
+      # card (Admin::GroupsShow). Rendered for a contact in no group too
+      # while any group exists, because the row holds the way to join
+      # one — the group card's members row, for the same reason, with
+      # its "edit members" in the same place.
       #: () -> void
       def groups_row
         dt(class: "type-label") { "groups" }
         dd(class: "type-body-sm") do
-          div(class: "tag-set") do
-            @groups.each { group_tag(it) }
+          if @groups.any?
+            div(class: "tag-set") do
+              @groups.each { group_tag(it) }
+            end
           end
+          button(type: "button", data_size: "sm", popovertarget: GroupDialog::ID) { "edit groups" }
         end
       end
 

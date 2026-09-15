@@ -319,9 +319,10 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # No membership, no row: an empty tag set would say a contact
-  # belongs to nothing in the space where belonging is shown.
-  def test_show_omits_the_groups_row_for_a_contact_in_none
+  # No membership and nothing to join, no row: an empty tag set would
+  # say a contact belongs to nothing in the space where belonging is
+  # shown.
+  def test_show_omits_the_groups_row_with_no_group_to_show_or_join
     with_contacts({"ada" => ADA}) do
       get "/contacts/ada"
 
@@ -350,6 +351,90 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/ada"
 
       refute_includes last_response.body, 'class="tag"'
+    end
+  end
+
+  # The row holds the way to join a group, so a contact in none still
+  # gets it while any group exists.
+  def test_show_offers_a_contact_in_no_group_its_groups_to_edit
+    with_contacts({"ada" => ADA}) do |store|
+      FixtureData.seed_group(store, name: "Booles")
+
+      get "/contacts/ada"
+
+      assert_includes last_response.body, %(<dt class="type-label">groups</dt>)
+      assert_includes last_response.body, %(popovertarget="edit-groups")
+    end
+  end
+
+  def test_the_groups_dialog_checks_the_groups_a_contact_is_in
+    with_contacts({"ada" => ADA}) do |store|
+      joined = FixtureData.seed_group(store, name: "Booles", members: ["ada"])
+      other = FixtureData.seed_group(store, name: "Babbages")
+
+      get "/contacts/ada"
+      dialog = last_response.body[%r{<dialog id="edit-groups".*?</dialog>}].to_s
+
+      assert_includes dialog, %(name="groups[]" value="#{joined}" checked>)
+      assert_includes dialog, %(name="groups[]" value="#{other}">)
+    end
+  end
+
+  # Joining is the membership and what comes of it: the card serves
+  # what the group lends, and the change log tells every client so.
+  def test_checking_a_group_adds_the_contact_to_it
+    with_contacts({"ada" => ADA}) do |store|
+      id = FixtureData.seed_group(store, name: "Booles", lines: HOUSEHOLD)
+
+      post "/contacts/ada/groups", groups: [id]
+
+      assert_equal 303, last_response.status
+      assert_equal "/contacts/ada", last_response["Location"]
+      assert_equal ["ada"], store.group(id).members
+      assert_includes store.contact("ada").vcard.to_s, "7 Calculus Close"
+      assert_equal "group", store.changes_of("ada").first.action
+    end
+  end
+
+  # Leaving twice is leaving once: the second finds nothing to remove
+  # and lands on the same page.
+  def test_unchecking_a_group_removes_the_contact_from_it
+    with_contacts({"ada" => ADA}) do |store|
+      id = FixtureData.seed_group(store, name: "Booles", members: ["ada"])
+
+      2.times do
+        post "/contacts/ada/groups", was: [id]
+
+        assert_equal 303, last_response.status
+        assert_equal "/contacts/ada", last_response["Location"]
+      end
+      assert_empty store.group(id).members
+    end
+  end
+
+  # A save moves only the boxes its page toggled: a group joined in
+  # another tab since stays joined, and an id naming no group is
+  # dropped rather than reaching a foreign key.
+  def test_a_save_moves_only_the_groups_it_toggled
+    with_contacts({"ada" => ADA}) do |store|
+      booles = FixtureData.seed_group(store, name: "Booles", members: ["ada"])
+      babbages = FixtureData.seed_group(store, name: "Babbages")
+      elsewhere = FixtureData.seed_group(store, name: "Clarks")
+      store.add_member(elsewhere, "ada")
+
+      post "/contacts/ada/groups", groups: [babbages, "zzzz"], was: [booles]
+
+      assert_equal [babbages, elsewhere].sort, store.groups_of("ada").map(&:id).sort
+    end
+  end
+
+  def test_a_save_for_an_unknown_contact_is_a_404
+    with_contacts({"ada" => ADA}) do |store|
+      id = FixtureData.seed_group(store, name: "Booles")
+
+      post "/contacts/nobody/groups", groups: [id]
+
+      assert_equal 404, last_response.status
     end
   end
 
