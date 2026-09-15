@@ -1012,13 +1012,15 @@ class WebTest < Minitest::Test
     end
   end
 
-  # A card a client creates stays in the collection it was written to.
-  def test_a_put_create_joins_the_writers_book
+  # A card a client creates stays in the collection it was written to,
+  # and reaches everyone else's.
+  def test_a_put_create_joins_everyones_book
     with_contacts({}) do |store|
       put_request "new", card("new", "New"), "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
 
       assert_equal 201, last_response.status
       assert_equal Set["new"], store.book("Test User")
+      assert_equal Set["new"], store.book("Zoë Chen")
     end
   end
 

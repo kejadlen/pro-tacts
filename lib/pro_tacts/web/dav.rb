@@ -427,7 +427,7 @@ module ProTacts
       report_unreadable_lines(vcard)
       report_broken_assumptions(vcard)
 
-      stored = store.put(id, vcard, sync_to: @identity.name)
+      stored = store.put(id, vcard, client: true)
       response.status = existing ? 204 : 201
       # A strong ETag belongs on the answer only when what the resource
       # now serves is the submitted bytes, octet for octet — the one

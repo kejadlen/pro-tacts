@@ -410,13 +410,12 @@ module ProTacts
     # construction the caller makes, is the assertion under that, and
     # the bind is the third line.
     #
-    # `sync_to` is the writing user's display name, for a client's
-    # write: a card it creates joins that user's `sync:` group, created
-    # on first use, or it would drop out of the collection it was
-    # written to (docs/plans/2026-09-12-per-user-books.md, "The wire").
+    # `client` marks a client's write: a card it creates joins `sync:*`,
+    # created on first use, or it would drop out of the collection it
+    # was written to (docs/plans/2026-09-15-client-creates-join-everyone.md).
     # A rewrite of a card that exists joins nothing.
-    #: (String id, VCard vcard, ?sync_to: String?) -> Contact
-    def put(id, vcard, sync_to: nil)
+    #: (String id, VCard vcard, ?client: bool) -> Contact
+    def put(id, vcard, client: false)
       # The birthday half of the split a write makes
       # (docs/plans/2026-09-11-every-birthday-in-the-model.md). A card
       # holds at most one BDAY, and one that reads as a birthday leaves
@@ -495,8 +494,8 @@ module ProTacts
         # before the log entry, which records the card composed with
         # whatever the group lends. The put's entry is the card's arrival
         # in the book, so the join writes none of its own.
-        if sync_to && own.nil?
-          group_members.insert(group_id: sync_group_id(sync_to), card_id: contact.id)
+        if client && own.nil?
+          group_members.insert(group_id: everyone_group_id, card_id: contact.id)
           contact = Contact.new(id:, stored:, birthday:, inherited: inherited_of(contact.id))
         end
         write_birthday(contact.id, birthday)
@@ -856,14 +855,14 @@ module ProTacts
       }
     end
 
-    # The id of one user's `sync:` group, created on first use. `sole`
-    # because a `sync:` name is unique (db/migrations/007_sync_names.rb),
-    # and no row is the ordinary answer for a user's first create.
-    #: (String name) -> String
-    def sync_group_id(name)
-      groups.where(name: "#{SYNC_PREFIX}#{name}").sole.fetch(:id).to_s
+    # The id of the `sync:*` group, created on first use. `sole` because
+    # a `sync:` name is unique (db/migrations/007_sync_names.rb), and no
+    # row is the ordinary answer for the first create.
+    #: () -> String
+    def everyone_group_id
+      groups.where(name: EVERYONE).sole.fetch(:id).to_s
     rescue Sequel::NoMatchingRow
-      create_group(name: "#{SYNC_PREFIX}#{name}")
+      create_group(name: EVERYONE)
     end
 
     #: (String? name) -> bool

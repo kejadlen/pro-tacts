@@ -1373,22 +1373,22 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The put's own entry is the card's arrival in the book, so the join
+  # The put's own entry is the card's arrival in every book, so the join
   # logs nothing beside it.
-  def test_a_client_create_joins_the_writers_book
+  def test_a_client_create_joins_everyones_book
     with_store do |store|
-      store.put("aiden", vcard(AIDEN), sync_to: "Alpha Chen")
-      store.put("znorth", vcard(ZED), sync_to: "Alpha Chen")
+      store.put("aiden", vcard(AIDEN), client: true)
+      store.put("znorth", vcard(ZED), client: true)
 
-      assert_equal Set["aiden", "znorth"], store.book("Alpha Chen")
-      assert_equal ["sync:Alpha Chen"], store.all_groups.map(&:name)
+      assert_equal Set["aiden", "znorth"], store.book("Zoë Chen")
+      assert_equal ["sync:*"], store.all_groups.map(&:name)
       assert_equal ["put"], store.changes_of("aiden").map(&:action)
     end
   end
 
   def test_a_client_rewrite_joins_nothing
     with_store({"aiden" => AIDEN}) do |store|
-      store.put("aiden", vcard(AIDEN), sync_to: "Alpha Chen")
+      store.put("aiden", vcard(AIDEN), client: true)
 
       assert_empty store.book("Alpha Chen")
     end
@@ -1398,9 +1398,9 @@ class StoreTest < Minitest::Test
   # is the card as the book serves it.
   def test_a_client_create_is_logged_as_its_book_serves_it
     with_store do |store|
-      FixtureData.seed_group(store, name: "sync:Alpha Chen", lines: [HOUSEHOLD_NOTE])
+      FixtureData.seed_group(store, name: "sync:*", lines: [HOUSEHOLD_NOTE])
 
-      contact = store.put("aiden", vcard(AIDEN), sync_to: "Alpha Chen")
+      contact = store.put("aiden", vcard(AIDEN), client: true)
 
       assert_includes contact.vcard.to_s, HOUSEHOLD_NOTE
       assert_equal store.contact("aiden").etag, store.changes_of("aiden").first.etag
