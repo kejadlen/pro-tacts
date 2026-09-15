@@ -7,7 +7,7 @@
 module ProTacts
   module Admin
     class ContactsShow
-      def self.call: (contact: Contact, groups: Array[Store::Group], all_groups: Array[Store::Group], changes: Array[Store::Change]) -> String
+      def self.call: (contact: Contact, groups: Array[Store::Group], all_groups: Array[Store::Group], changes: Array[Store::Change], ?notice: String?) -> String
     end
 
     class ContactsEdit

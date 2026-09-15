@@ -179,15 +179,25 @@ module ProTacts
     # or left elsewhere since stays as it is, and a stale page has
     # nothing to revert and no snapshot to refuse. Only ids naming a
     # group: Store#add_member reads the group with `sole`, so a doctored
-    # one would be a 500 rather than the bad input it is.
+    # one would be a 500 rather than the bad input it is. A `new` name
+    # is a group the filter box offered to create, joined in the same
+    # save; a blank one is none.
     #: (untyped r, String id) -> String?
     def apply_groups(r, id)
-      return if store.contact(id).nil?
+      contact = store.contact(id)
+      return if contact.nil?
 
       known = store.all_groups.map(&:id)
       checked = ids_in(r.params["groups"]) & known
       was = ids_in(r.params["was"]) & known
-      store.regroup(id, join: checked - was, leave: was - checked)
+      name = r.params["new"].to_s.strip
+      begin
+        store.regroup(id, join: checked - was, leave: was - checked, create: (name unless name.empty?))
+      rescue Sequel::UniqueConstraintViolation
+        # A taken `sync:` name (db/migrations/007_sync_names.rb), refused
+        # with the rest of the save in regroup's transaction.
+        return contact_screen(contact, notice: "Another group is already named #{name}; nothing was saved.")
+      end
       r.redirect "/contacts/#{id}", 303
     end
 
@@ -197,14 +207,15 @@ module ProTacts
       param.is_a?(Array) ? param.map(&:to_s) : []
     end
 
-    #: (Contact contact) -> String
-    def contact_screen(contact)
+    #: (Contact contact, ?notice: String) -> String
+    def contact_screen(contact, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
       Admin::ContactsShow.call(
         contact:,
         groups: store.groups_of(contact.id),
         all_groups: store.all_groups,
         changes: store.changes_of(contact.id),
+        notice:,
       )
     end
 

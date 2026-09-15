@@ -35,17 +35,18 @@ module ProTacts
       # one: a card with no entries is a card whose history was lost,
       # and an empty default would render that as an ordinary quiet
       # record. Every group is the groups dialog's (GroupDialog).
-      #: (Contact contact, Array[Store::Group] groups, Array[Store::Group] all_groups, Array[Store::Change] changes) -> void
-      def initialize(contact:, groups:, all_groups:, changes:)
+      #: (Contact contact, Array[Store::Group] groups, Array[Store::Group] all_groups, Array[Store::Change] changes, ?notice: String?) -> void
+      def initialize(contact:, groups:, all_groups:, changes:, notice: nil)
         @contact = contact
         @groups = groups
         @all_groups = all_groups
         @changes = changes
+        @notice = notice
         @birthday = Format.birthday(contact)
       end
 
       def view_template
-        render Layout.new(title: @contact.name || @contact.id) do
+        render Layout.new(title: @contact.name || @contact.id, notice: @notice) do
           # The back-link line and the record card are one block, the
           # line its caption row: spaced like the dashboard's
           # section-head over its card (see .record in admin.css), not
@@ -75,11 +76,8 @@ module ProTacts
                   # the avatar is the row's visual anchor, not a caption.
                   render Avatar.new(contact: @contact, size: "xl") if @contact.photo
                 end
-                # Only rendered when there's something to show: an empty
-                # <dl> would still take up the gap card-body puts between
-                # its children, leaving the header off-center in a card
-                # with nothing else in it.
-                dl(class: "detail-grid") { rows } if has_data?
+                # Never empty: the groups row is always there.
+                dl(class: "detail-grid") { rows }
               end
             end
           end
@@ -115,17 +113,11 @@ module ProTacts
             end
           end
           # No row, so outside the record's grid.
-          render GroupDialog.new(contact: @contact, groups: @all_groups) if @all_groups.any?
+          render GroupDialog.new(contact: @contact, groups: @all_groups)
         end
       end
 
       private
-
-      #: () -> bool
-      def has_data?
-        @contact.phones.any? || @contact.emails.any? || @contact.addresses.any? ||
-          !@birthday.nil? || @contact.notes.any? || @all_groups.any?
-      end
 
       # A missing TYPE parameter still gets a key: the fallback names
       # the kind of value, so no row renders unlabeled in the grid.
@@ -135,7 +127,7 @@ module ProTacts
       # and a group holds only addresses and notes anyway (see
       # db/migrations/004_groups.rb).
       def rows
-        groups_row if @all_groups.any?
+        groups_row
         @contact.phones.each do |phone|
           row(Format.type_label(phone.types, "phone"), phone.value, phone.line)
         end
@@ -156,10 +148,10 @@ module ProTacts
       # values are the group's rather than the contact's. Every tag opens
       # the group it names (docs/DESIGN.md, "Relationships are
       # navigable"), the other half of the member tags on a group's own
-      # card (Admin::GroupsShow). Rendered for a contact in no group too
-      # while any group exists, because the row holds the way to join
-      # one — the group card's members row, for the same reason, with
-      # its "edit members" in the same place.
+      # card (Admin::GroupsShow). Rendered for a contact in no group too,
+      # even before any group exists, because the row holds the way to
+      # join or start one — the group card's members row, for the same
+      # reason, with its "edit members" in the same place.
       #: () -> void
       def groups_row
         dt(class: "type-label") { "groups" }

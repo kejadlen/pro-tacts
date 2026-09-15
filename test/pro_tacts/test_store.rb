@@ -1325,6 +1325,14 @@ class StoreTest < Minitest::Test
     end
   end
 
+  def test_a_regroup_creates_the_group_it_names_and_joins_it
+    with_store({"aiden" => AIDEN}) do |store|
+      store.regroup("aiden", join: [], leave: [], create: "Clarks")
+
+      assert_equal ["Clarks"], store.groups_of("aiden").map(&:label)
+    end
+  end
+
   # Nothing a client downloads moved, so nothing is logged: a group
   # that lends nothing composes nothing into a new member, and a name
   # is on no card.

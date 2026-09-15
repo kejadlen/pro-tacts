@@ -319,17 +319,6 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # No membership and nothing to join, no row: an empty tag set would
-  # say a contact belongs to nothing in the space where belonging is
-  # shown.
-  def test_show_omits_the_groups_row_with_no_group_to_show_or_join
-    with_contacts({"ada" => ADA}) do
-      get "/contacts/ada"
-
-      refute_includes last_response.body, "groups</dt>"
-    end
-  end
-
   # A group with no name marks its rows with its id, which is what the
   # mark is for: an empty tag would say a row came from somewhere and
   # then not say where.
@@ -354,16 +343,24 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The row holds the way to join a group, so a contact in none still
-  # gets it while any group exists.
-  def test_show_offers_a_contact_in_no_group_its_groups_to_edit
-    with_contacts({"ada" => ADA}) do |store|
-      FixtureData.seed_group(store, name: "Booles")
-
+  # The row holds the way to join a group or start one, so it renders
+  # before any group exists.
+  def test_show_offers_the_groups_dialog_before_any_group_exists
+    with_contacts({"ada" => ADA}) do
       get "/contacts/ada"
 
       assert_includes last_response.body, %(<dt class="type-label">groups</dt>)
       assert_includes last_response.body, %(popovertarget="edit-groups")
+      assert_includes last_response.body, %(<dialog id="edit-groups")
+    end
+  end
+
+  def test_the_groups_dialog_offers_the_filter_as_an_unchecked_new_group
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada"
+      dialog = last_response.body[%r{<dialog id="edit-groups".*?</dialog>}].to_s
+
+      assert_includes dialog, %(<input type="checkbox" name="new" :value="filter.trim()">)
     end
   end
 
@@ -425,6 +422,42 @@ class AdminContactsPagesTest < Minitest::Test
       post "/contacts/ada/groups", groups: [babbages, "zzzz"], was: [booles]
 
       assert_equal [babbages, elsewhere].sort, store.groups_of("ada").map(&:id).sort
+    end
+  end
+
+  def test_a_new_group_is_created_and_joined_with_the_rest_of_the_save
+    with_contacts({"ada" => ADA}) do |store|
+      booles = FixtureData.seed_group(store, name: "Booles")
+
+      post "/contacts/ada/groups", groups: [booles], new: " Clarks "
+
+      assert_equal 303, last_response.status
+      assert_equal ["Booles", "Clarks"], store.groups_of("ada").map(&:label).sort
+    end
+  end
+
+  def test_a_blank_new_group_creates_nothing
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada/groups", new: "  "
+
+      assert_equal 303, last_response.status
+      assert_empty store.all_groups
+    end
+  end
+
+  # A `sync:` name is the one kind that must be unique
+  # (db/migrations/007_sync_names.rb), and the refusal is the whole save.
+  def test_a_new_group_with_a_taken_sync_name_saves_nothing
+    with_contacts({"ada" => ADA}) do |store|
+      booles = FixtureData.seed_group(store, name: "Booles")
+      FixtureData.seed_group(store, name: "sync:alpha")
+
+      post "/contacts/ada/groups", groups: [booles], new: "sync:alpha"
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "Another group is already named sync:alpha; nothing was saved."
+      assert_empty store.groups_of("ada")
+      assert_equal 2, store.all_groups.length
     end
   end
 
@@ -635,16 +668,17 @@ class AdminContactsPagesTest < Minitest::Test
 
   # A card that will not parse is served from its bytes regardless —
   # the raw section is the one thing such a card has to show, so it
-  # renders with no grid under the header, not instead of the page.
-  # The record card, specifically: the change log rides the same grid
-  # in a card of its own, and every card has a history.
-  def test_show_of_a_bare_contact_renders_no_grid
+  # renders with only the groups row under the header, not instead of
+  # the page. The record card, specifically: the change log rides the
+  # same grid in a card of its own, and every card has a history.
+  def test_show_of_a_bare_contact_renders_only_the_groups_row
     bare = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Bare Contact\r\nUID:bare\r\nEND:VCARD\r\n"
 
     with_contacts({"bare" => bare}) do
       get "/contacts/bare"
+      grid = last_response.body[%r{<dl class="detail-grid">.*?</dl>}].to_s
 
-      refute_includes last_response.body, '<dl class="detail-grid">'
+      assert_equal ["groups"], grid.scan(%r{<dt class="type-label">([^<]*)</dt>}).flatten
       assert_includes last_response.body, "<details"
     end
   end
