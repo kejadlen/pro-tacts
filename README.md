@@ -67,8 +67,9 @@ Funnel traffic, which is public, and traffic from tagged devices.
 
 Each user syncs a book of their own rather than every card: the members
 of the group `sync:*`, which everyone gets, and of `sync:<name>`, where
-the name is the user's Tailscale display name. A card a client creates
-joins its writer's group. See `docs/plans/2026-09-12-per-user-books.md`.
+the name is the user's Tailscale display name in any case. A card a
+client creates joins its writer's group. See
+`docs/plans/2026-09-12-per-user-books.md`.
 
 DAV exchanges that go wrong — a status of 400 or more other than the 401
 above, a crash, or a request that reported to Sentry — are written whole

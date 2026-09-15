@@ -1359,6 +1359,20 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # The display name in any case, beyond ASCII too; the prefix only as
+  # spelled, since a group that is no `sync:` group puts nothing in a
+  # book.
+  def test_a_book_matches_the_display_name_in_any_case
+    with_store({"aiden" => AIDEN, "znorth" => ZED, "yuki" => YUKI}) do |store|
+      FixtureData.seed_group(store, name: "sync:alpha chen", members: ["aiden"])
+      FixtureData.seed_group(store, name: "SYNC:Alpha Chen", members: ["znorth"])
+      FixtureData.seed_group(store, name: "sync:zoë chen", members: ["yuki"])
+
+      assert_equal Set["aiden"], store.book("Alpha Chen")
+      assert_equal Set["yuki"], store.book("ZOË CHEN")
+    end
+  end
+
   # The put's own entry is the card's arrival in the book, so the join
   # logs nothing beside it.
   def test_a_client_create_joins_the_writers_book

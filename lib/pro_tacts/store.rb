@@ -358,15 +358,16 @@ module ProTacts
 
     # The cards one user's client syncs: every member of `sync:*` and of
     # `sync:<name>`, each once (docs/plans/2026-09-12-per-user-books.md).
+    # The name matches in any case, folded here in Ruby because SQLite's
+    # lower() folds ASCII alone; the prefix only as #sync_name? reads it,
+    # since no other group's moves are logged.
     #: (String name) -> Set[String]
     def book(name)
-      Set.new(
-        group_members
-          .join(:groups, id: :group_id)
-          .where(Sequel[:groups][:name] => [EVERYONE, "#{SYNC_PREFIX}#{name}"])
-          .select(Sequel[:group_members][:card_id])
-          .map { it.fetch(:card_id).to_s },
-      )
+      own = "#{SYNC_PREFIX}#{name}"
+      ids = groups.where(Sequel.function(:glob, "#{SYNC_PREFIX}*", :name)).all
+        .select { |group| (label = group.fetch(:name).to_s) == EVERYONE || label.casecmp?(own) }
+        .map { it.fetch(:id) }
+      Set.new(group_members.where(group_id: ids).select_map(:card_id).map(&:to_s))
     end
 
     # The id of the card whose UID property holds this value, if one
