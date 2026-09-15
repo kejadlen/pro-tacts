@@ -17,15 +17,16 @@ module ProTacts
     # namespace left undeclared raises.
     #: (String root, *String prefixes) { (DAV d, CardDAV card, CalendarServer cs) -> void } -> String
     def self.document(root, *prefixes)
-      namespaces = ["d", *prefixes].to_h do |prefix|
+      namespaces = ["d", *prefixes].to_h { |prefix|
         ["xmlns:#{prefix}", PREFIXES.fetch(prefix)] #: [String, String]
-      end
+      }
 
-      Nokogiri::XML::Builder.new(encoding: "UTF-8") { |x|
+      builder = Nokogiri::XML::Builder.new(encoding: "UTF-8") do |x|
         x["d"].send(root, namespaces) do
           yield DAV.new(x, "d"), CardDAV.new(x, "card"), CalendarServer.new(x, "cs")
         end
-      }.to_xml
+      end
+      builder.to_xml
     end
 
     # One namespace's elements. The builder yields itself to an element's

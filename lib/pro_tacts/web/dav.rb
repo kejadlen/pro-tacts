@@ -46,7 +46,9 @@ module ProTacts
 
           multistatus("card") do |d, card|
             d.found("/dav/principal/") do
-              card.addressbook_home_set { d.href "/dav/addressbook/" }
+              card.addressbook_home_set do
+                d.href "/dav/addressbook/"
+              end
             end
           end
         end
@@ -101,21 +103,35 @@ module ProTacts
                 end
                 d.supported_report_set do
                   d.supported_report do
-                    d.report { d.sync_collection }
+                    d.report do
+                      d.sync_collection
+                    end
                   end
                 end
                 cs.getctag ctag
                 d.sync_token sync_token
                 d.current_user_privilege_set do
-                  d.privilege { d.read }
-                  d.privilege { d.write }
-                  d.privilege { d.bind }
-                  d.privilege { d.unbind }
+                  d.privilege do
+                    d.read
+                  end
+                  d.privilege do
+                    d.write
+                  end
+                  d.privilege do
+                    d.bind
+                  end
+                  d.privilege do
+                    d.unbind
+                  end
                 end
               end
             end
 
-            contacts.each { etag_response(d, it) } unless depth == "0"
+            unless depth == "0"
+              contacts.each do
+                etag_response(d, it)
+              end
+            end
           end
         end
 
@@ -170,7 +186,9 @@ module ProTacts
               # No token is the initial sync: every member, changed
               # (section 3.4).
               multistatus("card", sync_token:) do |d|
-                contacts.each { etag_response(d, it) }
+                contacts.each do
+                  etag_response(d, it)
+                end
               end
             elsif (sequence = token[%r{\Ahttp://pro-tacts/sync/(\d+)/#{book_digest}\z}, 1]) &&
                 sequence.to_i <= store.latest_sequence
@@ -191,7 +209,9 @@ module ProTacts
               # token names is gone.
               response.status = 410
 
-              DavXml.document("error") { |d| d.valid_sync_token }
+              DavXml.document("error") do |d|
+                d.valid_sync_token
+              end
             end
           when "addressbook-multiget"
             # CARDDAV:addressbook-multiget (RFC 6352 section 8.7); the
@@ -226,7 +246,9 @@ module ProTacts
             # macOS Contacts has never sent one.
             response.status = 403
 
-            DavXml.document("error") { |d| d.supported_report }
+            DavXml.document("error") do |d|
+              d.supported_report
+            end
           end
         end
 
@@ -280,7 +302,9 @@ module ProTacts
 
       multistatus do |d|
         d.found(href) do
-          d.current_user_principal { d.href "/dav/principal/" }
+          d.current_user_principal do
+            d.href "/dav/principal/"
+          end
         end
       end
     end
@@ -563,7 +587,9 @@ module ProTacts
     # DAV:getetag (RFC 4918 section 15.6).
     #: (DavXml::DAV d, Contact contact) -> void
     def etag_response(d, contact)
-      d.found(contact_href(contact.id)) { d.getetag contact.etag }
+      d.found(contact_href(contact.id)) do
+        d.getetag contact.etag
+      end
     end
 
     #: (DavXml::DAV d, DavXml::CardDAV card, Contact contact) -> void
