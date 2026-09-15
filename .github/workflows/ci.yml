@@ -19,10 +19,10 @@ jobs:
     permissions:
       contents: read # checkout
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: ruby/setup-ruby@e65c17d16e57e481586a6a5a0282698790062f92 # v1
+      - uses: ruby/setup-ruby@bec3f19a76460dbe12f60def7d1a77585f07516c # v1
         with:
           bundler-cache: true
       - run: bundle exec rake
@@ -34,10 +34,10 @@ jobs:
       contents: read # checkout
       security-events: write # upload SARIF to code scanning
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8 # v0.5.2
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
 
   build:
     name: Build
@@ -51,11 +51,11 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       image: ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -64,14 +64,14 @@ jobs:
         run: echo "sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
       - id: change-id
         run: echo "id=$(git cat-file -p HEAD | grep '^change-id ' | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
-      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+      - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         id: meta
         with:
           images: ghcr.io/${{ github.repository }}
           flavor: latest=true
           tags: |
             type=raw,value={{date 'YYYYMMDD-HHmm'}}-${{ steps.short-sha.outputs.sha }}
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           push: true
