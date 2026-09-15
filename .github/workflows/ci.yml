@@ -68,6 +68,7 @@ jobs:
         id: meta
         with:
           images: ghcr.io/${{ github.repository }}
+          flavor: latest=true
           tags: |
             type=raw,value={{date 'YYYYMMDD-HHmm'}}-${{ steps.short-sha.outputs.sha }}
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
