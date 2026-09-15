@@ -194,8 +194,8 @@ module ProTacts
       begin
         store.regroup(id, join: checked - was, leave: was - checked, create: (name unless name.empty?))
       rescue Sequel::UniqueConstraintViolation
-        # A taken `sync:` name (db/migrations/007_sync_names.rb), refused
-        # with the rest of the save in regroup's transaction.
+        # A taken name (db/migrations/008_group_names.rb), refused with
+        # the rest of the save in regroup's transaction.
         return contact_screen(contact, notice: "Another group is already named #{name}; nothing was saved.")
       end
       r.redirect "/contacts/#{id}", 303

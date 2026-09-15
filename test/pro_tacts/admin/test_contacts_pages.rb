@@ -445,17 +445,17 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # A `sync:` name is the one kind that must be unique
-  # (db/migrations/007_sync_names.rb), and the refusal is the whole save.
-  def test_a_new_group_with_a_taken_sync_name_saves_nothing
+  # A name is one group's (db/migrations/008_group_names.rb), and the
+  # refusal is the whole save.
+  def test_a_new_group_under_a_taken_name_saves_nothing
     with_contacts({"ada" => ADA}) do |store|
       booles = FixtureData.seed_group(store, name: "Booles")
-      FixtureData.seed_group(store, name: "sync:alpha")
+      FixtureData.seed_group(store, name: "Clarks")
 
-      post "/contacts/ada/groups", groups: [booles], new: "sync:alpha"
+      post "/contacts/ada/groups", groups: [booles], new: "Clarks"
 
       assert_equal 200, last_response.status
-      assert_includes last_response.body, "Another group is already named sync:alpha; nothing was saved."
+      assert_includes last_response.body, "Another group is already named Clarks; nothing was saved."
       assert_empty store.groups_of("ada")
       assert_equal 2, store.all_groups.length
     end

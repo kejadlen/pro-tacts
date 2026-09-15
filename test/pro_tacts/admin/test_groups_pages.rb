@@ -92,15 +92,15 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
-  # Only a `sync:` name has to be unique (db/migrations/007_sync_names.rb).
-  def test_a_create_under_a_taken_sync_name_is_refused
+  # A name is one group's (db/migrations/008_group_names.rb).
+  def test_a_create_under_a_taken_name_is_refused
     with_contacts({}) do |store|
-      store.create_group(name: "sync:Test User")
+      store.create_group(name: "Booles")
 
-      post "/groups", name: "sync:Test User"
+      post "/groups", name: "Booles"
 
       assert_equal 200, last_response.status
-      assert_includes last_response.body, "Another group is already named sync:Test User."
+      assert_includes last_response.body, "Another group is already named Booles."
       assert_equal 1, store.all_groups.size
     end
   end
@@ -227,16 +227,16 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
-  def test_a_rename_to_a_taken_sync_name_is_refused_and_changes_nothing
+  def test_a_rename_to_a_taken_name_is_refused_and_changes_nothing
     with_contacts(BOOLES) do |store|
-      store.create_group(name: "sync:Test User")
+      store.create_group(name: "Clarks")
       id = household(store)
 
-      post "/groups/#{id}", version: store.group(id).version, name: "sync:Test User", note: "Gate code 1854.",
+      post "/groups/#{id}", version: store.group(id).version, name: "Clarks", note: "Gate code 1854.",
                             members: ["", "ada"]
 
       assert_equal 200, last_response.status
-      assert_includes last_response.body, "Another group is already named sync:Test User; nothing was saved."
+      assert_includes last_response.body, "Another group is already named Clarks; nothing was saved."
       assert_equal "Booles", store.group(id).name
       assert_equal %w[george mary], store.group(id).members
     end

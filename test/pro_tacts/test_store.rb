@@ -1446,18 +1446,24 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # A client's create has to join exactly one group, so a `sync:` name
-  # is unique (db/migrations/007_sync_names.rb); any other may repeat.
-  def test_a_sync_name_is_unique_and_others_are_not
+  # A name is one group's (db/migrations/008_group_names.rb). Nameless
+  # groups are the exception, and a group keeping the name it has is no
+  # collision with itself — every group edit rewrites the name it found
+  # (#edit_group).
+  def test_a_name_is_one_groups_and_nameless_groups_are_any_number
     with_store do |store|
+      household = store.create_group(name: "Household")
       store.create_group(name: "sync:Alpha Chen")
-      store.create_group(name: "Household")
-      store.create_group(name: "Household")
-      other = store.create_group(name: "sync:Zoë Chen")
+      store.create_group
+      other = store.create_group
 
-      assert_raises(Sequel::UniqueConstraintViolation) { store.create_group(name: "sync:Alpha Chen") }
+      assert_raises(Sequel::UniqueConstraintViolation) { store.create_group(name: "Household") }
       assert_raises(Sequel::UniqueConstraintViolation) { store.rename_group(other, name: "sync:Alpha Chen") }
-      assert_equal "sync:Zoë Chen", store.group(other).name
+      assert_nil store.group(other).name
+
+      store.rename_group(household, name: "Household")
+
+      assert_equal "Household", store.group(household).name
     end
   end
 

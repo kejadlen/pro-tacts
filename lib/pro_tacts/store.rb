@@ -173,8 +173,8 @@ module ProTacts
 
     # The group names that choose what a client syncs: `sync:*` for
     # everyone, `sync:<display name>` for one user
-    # (docs/plans/2026-09-12-per-user-books.md). Unique among groups
-    # (db/migrations/007_sync_names.rb), where other names may repeat.
+    # (docs/plans/2026-09-12-per-user-books.md). Unique like every
+    # group's name (db/migrations/008_group_names.rb).
     SYNC_PREFIX = "sync:" #: String
     EVERYONE = "#{SYNC_PREFIX}*" #: String
 
@@ -563,8 +563,8 @@ module ProTacts
           groups.insert(id:, name:)
           return id
         rescue Sequel::UniqueConstraintViolation
-          # The id collided, or a `sync:` name did
-          # (db/migrations/007_sync_names.rb). Drawing again only helps
+          # The id collided, or the name did
+          # (db/migrations/008_group_names.rb). Drawing again only helps
           # the first; the second is the caller's to hear.
           raise if groups.where(id:).empty?
 
@@ -672,8 +672,8 @@ module ProTacts
 
     # A card's side of #edit_group: one transaction, leavers first and
     # joiners last for that method's reason. A name creates a group to
-    # join inside the same transaction, so a taken `sync:` name
-    # (#create_group) moves nothing.
+    # join inside the same transaction, so a taken name (#create_group)
+    # moves nothing.
     #: (String card_id, join: Array[String], leave: Array[String], ?create: String?) -> void
     def regroup(card_id, join:, leave:, create: nil)
       @database.transaction do
@@ -859,8 +859,8 @@ module ProTacts
     end
 
     # The id of the `sync:*` group, created on first use. `sole` because
-    # a `sync:` name is unique (db/migrations/007_sync_names.rb), and no
-    # row is the ordinary answer for the first create.
+    # a group's name is unique (db/migrations/008_group_names.rb), and
+    # no row is the ordinary answer for the first create.
     #: () -> String
     def everyone_group_id
       groups.where(name: EVERYONE).sole.fetch(:id).to_s
