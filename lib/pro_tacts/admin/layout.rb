@@ -41,7 +41,11 @@ module ProTacts
 
       def view_template
         doctype
-        html(lang: "en") do
+        # A run with no release behind it, the footer's "dev server",
+        # marks the root, and admin.css repaints the accent and the
+        # chrome for it: a working copy should not pass for the
+        # deployment at a glance (docs/DESIGN.md).
+        html(lang: "en", **(ProTacts.config.version ? {} : {data: {server: "dev"}})) do
           head do
             meta(charset: "utf-8")
             meta(name: "viewport", content: "width=device-width, initial-scale=1")

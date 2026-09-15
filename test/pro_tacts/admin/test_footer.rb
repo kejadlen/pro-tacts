@@ -71,4 +71,16 @@ class AdminFooterTest < Minitest::Test
 
     refute_includes last_response.body, "+debug"
   end
+
+  def test_an_unversioned_run_marks_the_page_for_the_dev_theme
+    with_env({})
+
+    assert_includes last_response.body, %(<html lang="en" data-server="dev">)
+  end
+
+  def test_a_release_leaves_the_page_unmarked
+    with_env("VERSION" => "20260904-1822-a1b2c3d")
+
+    refute_includes last_response.body, "data-server"
+  end
 end
