@@ -624,26 +624,33 @@ a.tag {
 /* A dialog's title and action bars close to the smallest step the
    record's rows use, a line and its buttons being all either holds;
    Gloss's own spend more of a short dialog on chrome than on content.
-   The title keeps Gloss's side step, lined up with the body under it;
-   the buttons take the small step on every side, sitting in the corner
-   as far from the right edge as from the bottom. */
-dialog > header {
-  padding-block: var(--gl-space-2xs);
-}
+   The body takes one step on every side and the bars take it on
+   theirs, so the title, the fields, and the buttons share one edge:
+   Gloss's side step left the buttons adrift from the corner, and a
+   narrower step for the bars alone broke the edge. */
+dialog > header,
 dialog > footer {
-  padding: var(--gl-space-2xs);
+  padding: var(--gl-space-2xs) var(--gl-space-s);
+}
+dialog > :not(header):not(footer) {
+  padding: var(--gl-space-s);
 }
 
-/* The groups dialog (Admin::GroupDialog) is a list of one-line rows,
-   not the settings form Gloss spaces its stacks for, so it closes up
-   the way the record's form does (.card-body form.field-stack): the
-   rows to the scale's smallest step, the filter to the list at the
-   record's row gap, and the filter box shedding its block padding. */
+/* A dialog's lists of one-line rows — the groups dialog's checkboxes
+   (Admin::GroupDialog), and the add dialog's radios (ContactsEdit)
+   through the first rule — are not the settings form Gloss spaces its
+   stacks for, so they close up the way the record's form does
+   (.card-body form.field-stack). The groups dialog's filter stands a
+   step apart from the list it filters, and its box sheds its block
+   padding. */
 dialog .field-stack {
   gap: var(--gl-space-2xs);
 }
 dialog form.field-stack {
   gap: var(--gl-space-3xs);
+}
+dialog > .field-stack:has(> input[type="search"]) {
+  gap: var(--gl-space-xs);
 }
 dialog > .field-stack > input[type="search"] {
   padding-block: var(--gl-space-3xs);
