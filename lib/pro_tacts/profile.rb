@@ -53,16 +53,65 @@ module ProTacts
     #: (hostname: String, username: String) -> String
     def self.render(hostname:, username:)
       identifier = "#{IDENTIFIER_PREFIX}-#{unique_hex}"
+      name = account_name
 
-      template % {
-        hostname: escape(hostname),
-        username: escape(username),
-        name: escape(account_name),
-        identifier:,
-        account_identifier: "#{identifier}.account",
-        top_level_uuid: SecureRandom.uuid,
-        payload_uuid: SecureRandom.uuid
-      }
+      builder = Nokogiri::XML::Builder.new(encoding: "UTF-8") do |x|
+        x.doc.create_internal_subset(
+          "plist",
+          "-//Apple//DTD PLIST 1.0//EN",
+          "http://www.apple.com/DTDs/PropertyList-1.0.dtd",
+        )
+        x.plist(version: "1.0") do
+          x.dict do
+            x.key "PayloadContent"
+            x.array do
+              x.dict do
+                x.key "PayloadType"
+                x.string "com.apple.carddav.account"
+                x.key "PayloadVersion"
+                x.integer 1
+                x.key "PayloadIdentifier"
+                x.string "#{identifier}.account"
+                x.key "PayloadUUID"
+                x.string SecureRandom.uuid
+                x.key "PayloadDisplayName"
+                x.string name
+                x.key "PayloadOrganization"
+                x.string "pro-tacts"
+                x.key "CardDAVAccountDescription"
+                x.string name
+                x.key "CardDAVHostName"
+                x.string hostname
+                x.key "CardDAVUsername"
+                x.string username
+                x.key "CardDAVPassword"
+                x.string "carddav-dev"
+                x.key "CardDAVUseSSL"
+                x.true
+                # CardDAVPrincipalURL is omitted on purpose: no Server Path,
+                # matching the bare-hostname setup the working session used.
+              end
+            end
+            x.key "PayloadDisplayName"
+            x.string "#{name} CardDAV"
+            x.key "PayloadIdentifier"
+            x.string identifier
+            x.key "PayloadOrganization"
+            x.string "pro-tacts"
+            x.key "PayloadRemovalDisallowed"
+            x.false
+            x.key "PayloadScope"
+            x.string "User"
+            x.key "PayloadType"
+            x.string "Configuration"
+            x.key "PayloadUUID"
+            x.string SecureRandom.uuid
+            x.key "PayloadVersion"
+            x.integer 1
+          end
+        end
+      end
+      builder.to_xml
     end
 
     # Picks our profile identifiers out of `profiles list` output so
@@ -75,69 +124,6 @@ module ProTacts
       # A pattern with no groups scans to whole matches, which is
       # narrower than the signature of String#scan can say.
       list_output.scan(/(?<![\w.-])#{Regexp.escape(IDENTIFIER_PREFIX)}-[\w.-]+/).uniq #: Array[String]
-    end
-
-    #: () -> String
-    def self.template
-      <<~XML
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-          <key>PayloadContent</key>
-          <array>
-            <dict>
-              <key>PayloadType</key>
-              <string>com.apple.carddav.account</string>
-              <key>PayloadVersion</key>
-              <integer>1</integer>
-              <key>PayloadIdentifier</key>
-              <string>%{account_identifier}</string>
-              <key>PayloadUUID</key>
-              <string>%{payload_uuid}</string>
-              <key>PayloadDisplayName</key>
-              <string>%{name}</string>
-              <key>PayloadOrganization</key>
-              <string>pro-tacts</string>
-              <key>CardDAVAccountDescription</key>
-              <string>%{name}</string>
-              <key>CardDAVHostName</key>
-              <string>%{hostname}</string>
-              <key>CardDAVUsername</key>
-              <string>%{username}</string>
-              <key>CardDAVPassword</key>
-              <string>carddav-dev</string>
-              <key>CardDAVUseSSL</key>
-              <true/>
-            </dict>
-          </array>
-          <key>PayloadDisplayName</key>
-          <string>%{name} CardDAV</string>
-          <key>PayloadIdentifier</key>
-          <string>%{identifier}</string>
-          <key>PayloadOrganization</key>
-          <string>pro-tacts</string>
-          <key>PayloadRemovalDisallowed</key>
-          <false/>
-          <key>PayloadScope</key>
-          <string>User</string>
-          <key>PayloadType</key>
-          <string>Configuration</string>
-          <key>PayloadUUID</key>
-          <string>%{top_level_uuid}</string>
-          <key>PayloadVersion</key>
-          <integer>1</integer>
-        </dict>
-        </plist>
-      XML
-    end
-
-    # CardDAVPrincipalURL is omitted on purpose: no Server Path, matching
-    # the bare-hostname setup the working session used.
-
-    #: (String text) -> String
-    def self.escape(text)
-      text.gsub("&", "&amp;").gsub("<", "&lt;").gsub(">", "&gt;")
     end
 
     #: () -> String
