@@ -282,7 +282,9 @@
 
 /* The editor's submit row: the buttons sit beside each other under
    the fields, rather than in the stack's own gap, and start at the
-   value column so the form keeps one edge down its whole height. */
+   value column so the form keeps one edge down its whole height.
+   Cancel comes first and the primary action last, the order every
+   dialog's footer uses. */
 .form-actions {
   display: flex;
   gap: var(--gl-space-2xs);

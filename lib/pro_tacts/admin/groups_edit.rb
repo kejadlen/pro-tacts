@@ -69,8 +69,8 @@ module ProTacts
                              placeholder: note ? "removed on save" : nil) { note.to_s }
                   end
                   div(class: "form-actions") do
-                    button(type: "submit", data: {variant: "primary"}) { "Save" }
                     a(href: "/groups/#{@group.id}", class: "btn") { "Cancel" }
+                    button(type: "submit", data: {variant: "primary"}) { "Save" }
                   end
                 end
               end

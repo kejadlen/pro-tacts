@@ -202,8 +202,8 @@ module ProTacts
                   # link in Gloss's `.btn` contract, which is what an
                   # anchor that acts like a button opts into.
                   div(class: "form-actions") do
-                    button(type: "submit", data: {variant: "primary"}) { "Save" }
                     a(href: "/contacts/#{@contact.id}", class: "btn") { "Cancel" }
+                    button(type: "submit", data: {variant: "primary"}) { "Save" }
                   end
                 end
               end
