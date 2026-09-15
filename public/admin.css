@@ -615,6 +615,15 @@ a.tag {
   text-decoration: none;
 }
 
+/* A dialog's title and action bars close to the smallest step the
+   record's rows use, a line and its buttons being all either holds;
+   Gloss's own spend more of a short dialog on chrome than on content.
+   The sides keep Gloss's step, so the bars stay aligned with the body. */
+dialog > header,
+dialog > footer {
+  padding-block: var(--gl-space-2xs);
+}
+
 /* The stored card in its own collapsed card under the record — the
    column's gap spaces the two, so no margin here. <details> is native,
    keeping the admin UI script-free; the summary rides the label
