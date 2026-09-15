@@ -622,10 +622,14 @@ a.tag {
 /* A dialog's title and action bars close to the smallest step the
    record's rows use, a line and its buttons being all either holds;
    Gloss's own spend more of a short dialog on chrome than on content.
-   The sides keep Gloss's step, so the bars stay aligned with the body. */
-dialog > header,
-dialog > footer {
+   The title keeps Gloss's side step, lined up with the body under it;
+   the buttons take the small step on every side, sitting in the corner
+   as far from the right edge as from the bottom. */
+dialog > header {
   padding-block: var(--gl-space-2xs);
+}
+dialog > footer {
+  padding: var(--gl-space-2xs);
 }
 
 /* The groups dialog (Admin::GroupDialog) is a list of one-line rows,
