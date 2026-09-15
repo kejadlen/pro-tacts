@@ -872,7 +872,8 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 200, last_response.status
       body = last_response.body
-      assert_includes body, '<form action="/contacts/red" method="post" class="field-stack">'
+      assert_includes body, '<form action="/contacts/red" method="post" class="field-stack" id="contact-form">'
+      assert_includes body, '<button type="submit" form="contact-form" data-variant="primary">Save</button>'
       assert_includes body, '<input type="text" name="first" value="Ada" ' \
                             ':required="lastBlank" @input="firstBlank = !$el.value.trim()" autofocus>'
       assert_includes body, '<input type="text" name="last" value="Lovelace" ' \

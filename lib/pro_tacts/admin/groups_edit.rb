@@ -26,6 +26,10 @@ module ProTacts
       # @rbs @reading: Contact
       # @rbs @notice: String?
 
+      # The form's id, for the footer's Save outside it.
+      FORM = "group-form" #: String
+      private_constant :FORM
+
       #: (group: Store::Group, ?notice: String?) -> void
       def initialize(group:, notice: nil)
         @group = group
@@ -49,7 +53,7 @@ module ProTacts
             end
             div(class: "card") do
               div(class: "card-body") do
-                form(action: "/groups/#{@group.id}", method: "post", class: "field-stack") do
+                form(action: "/groups/#{@group.id}", method: "post", class: "field-stack", id: FORM) do
                   input(type: "hidden", name: "version", value: @group.version)
                   # The id as the blank's placeholder, because a group
                   # with no name is shown as its id everywhere else.
@@ -68,11 +72,12 @@ module ProTacts
                     textarea(name: "note", rows: 4,
                              placeholder: note ? "removed on save" : nil) { note.to_s }
                   end
-                  div(class: "form-actions") do
-                    a(href: "/groups/#{@group.id}", class: "btn") { "Cancel" }
-                    button(type: "submit", data: {variant: "primary"}) { "Save" }
-                  end
                 end
+              end
+              # ContactsEdit's action bar.
+              footer do
+                a(href: "/groups/#{@group.id}", class: "btn") { "Cancel" }
+                button(type: "submit", form: FORM, data: {variant: "primary"}) { "Save" }
               end
             end
           end

@@ -146,6 +146,17 @@ class AdminGroupsPagesTest < Minitest::Test
 
   ## The editor
 
+  def test_the_editors_save_submits_its_form
+    with_contacts(BOOLES) do |store|
+      id = household(store)
+
+      get "/groups/#{id}/edit"
+
+      assert_includes last_response.body, %(id="group-form")
+      assert_includes last_response.body, '<button type="submit" form="group-form" data-variant="primary">Save</button>'
+    end
+  end
+
   def test_the_editor_leaves_membership_to_the_card
     with_contacts(BOOLES) do |store|
       id = household(store)

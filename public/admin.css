@@ -280,17 +280,6 @@
   color: var(--gl-color-danger);
 }
 
-/* The editor's submit row: the buttons sit beside each other under
-   the fields, rather than in the stack's own gap, and start at the
-   value column so the form keeps one edge down its whole height.
-   Cancel comes first and the primary action last, the order every
-   dialog's footer uses. */
-.form-actions {
-  display: flex;
-  gap: var(--gl-space-2xs);
-  margin-inline-start: calc(var(--type-column) + var(--gl-space-s));
-}
-
 /* Gloss's field contract styles input and select but not textarea
    (base.css only resets it), and the editor's note field is one —
    multiline text beside a .field caption. The box mirrors field.css's
@@ -634,6 +623,17 @@ dialog > footer {
 }
 dialog > :not(header):not(footer) {
   padding: var(--gl-space-s);
+}
+
+/* An editor's card ends in a dialog's action bar (ContactsEdit,
+   GroupsEdit), restated for a card, which has no footer of its own.
+   Its sides are the card body's, so Save lines up with the fields. */
+.card > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gl-space-2xs);
+  padding: var(--gl-space-2xs) var(--gl-space-m);
+  border-top: 1px solid var(--gl-color-border-hairline);
 }
 
 /* A dialog's lists of one-line rows — the groups dialog's checkboxes

@@ -62,6 +62,10 @@ module ProTacts
       ADDABLE_TYPES = %w[phone email address birthday].freeze #: Array[String]
       private_constant :ADDABLE_TYPES
 
+      # The form's id, for the footer's Save outside it.
+      FORM = "contact-form" #: String
+      private_constant :FORM
+
       # The address row's component fields, stacked in the value
       # column in the order an address form reads — RFC 2426 section
       # 3.2.1's own order minus the po box, which no screen shows and
@@ -128,7 +132,7 @@ module ProTacts
             end
             div(class: "card") do
               div(class: "card-body") do
-                form(action: "/contacts/#{@contact.id}", method: "post", class: "field-stack") do
+                form(action: "/contacts/#{@contact.id}", method: "post", class: "field-stack", id: FORM) do
                   input(type: "hidden", name: "etag", value: @contact.etag)
                   # The caption is an element rather than bare text
                   # because the row is a grid (admin.css): a text node
@@ -198,14 +202,16 @@ module ProTacts
                     textarea(name: "note", rows: 4,
                              placeholder: note ? "removed on save" : nil) { note.to_s }
                   end
-                  # Save is the form's submit; Cancel is navigation — a
-                  # link in Gloss's `.btn` contract, which is what an
-                  # anchor that acts like a button opts into.
-                  div(class: "form-actions") do
-                    a(href: "/contacts/#{@contact.id}", class: "btn") { "Cancel" }
-                    button(type: "submit", data: {variant: "primary"}) { "Save" }
-                  end
                 end
+              end
+              # The card's action bar, a dialog footer's shape (admin.css),
+              # outside the form and reaching it by id. Save is the form's
+              # submit; Cancel is navigation — a link in Gloss's `.btn`
+              # contract, which is what an anchor that acts like a button
+              # opts into.
+              footer do
+                a(href: "/contacts/#{@contact.id}", class: "btn") { "Cancel" }
+                button(type: "submit", form: FORM, data: {variant: "primary"}) { "Save" }
               end
             end
             end
