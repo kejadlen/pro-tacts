@@ -79,6 +79,13 @@ class AdminDeviceSetupTest < Minitest::Test
     assert_includes last_response.body, "<string>other.example.ts.net</string>"
   end
 
+  def test_document_names_the_requester_as_the_username
+    header "Tailscale-User-Login", "zoe@example.com"
+    get "/setup/carddav.mobileconfig"
+
+    assert_match(%r{<key>CardDAVUsername</key>\s*<string>zoe@example.com</string>}, last_response.body)
+  end
+
   # Fresh per download (see Profile): a reinstall is a cold account, not
   # an update of the one already there.
   def test_each_download_carries_its_own_identifier

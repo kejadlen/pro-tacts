@@ -75,6 +75,10 @@ end
 desc "Render the macOS configuration profile (carddav.mobileconfig)"
 task profile: "carddav.mobileconfig"
 
+# The server ignores the username (see ProTacts::Profile.render), and a
+# profile rendered here has no request to read a login from.
+PROFILE_USERNAME = "pro-tacts@example.com"
+
 # Rebuilds when the template changes but not when the environment does
 # (PRO_TACTS_HOSTNAME, PRO_TACTS_PROFILE_NAME); delete carddav.mobileconfig
 # to force a rerender.
@@ -82,7 +86,7 @@ file "carddav.mobileconfig" => "lib/pro_tacts/profile.rb" do |task|
   require "pro_tacts/profile"
 
   File.write(task.name, ProTacts::Profile.render(
-    hostname: ENV.fetch("PRO_TACTS_HOSTNAME")
+    hostname: ENV.fetch("PRO_TACTS_HOSTNAME"), username: PROFILE_USERNAME
   ))
 end
 
@@ -93,7 +97,7 @@ namespace :profile do
     require "pro_tacts/profile"
 
     File.write("carddav.mobileconfig", ProTacts::Profile.render(
-      hostname: ENV.fetch("PRO_TACTS_HOSTNAME")
+      hostname: ENV.fetch("PRO_TACTS_HOSTNAME"), username: PROFILE_USERNAME
     ))
     sh "open", "carddav.mobileconfig"
     sh "open", "x-apple.systempreferences:com.apple.preferences.configurationprofiles"

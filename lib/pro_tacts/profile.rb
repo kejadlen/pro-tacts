@@ -1,4 +1,3 @@
-
 require "securerandom"
 
 require "nokogiri"
@@ -45,17 +44,19 @@ module ProTacts
       ProTacts.config.profile_name || DEFAULT_NAME
     end
 
-    # The username and password are a throwaway fictional pair and the server
-    # ignores them: identity comes from the Tailscale headers that serve
-    # injects (see ProTacts::TailscaleAuth). They stay in the template
-    # because the account form expects the fields; dropping them is
-    # untested.
-    #: (hostname: String) -> String
-    def self.render(hostname:)
+    # The server ignores the username and password: identity comes from
+    # the Tailscale headers that serve injects (see
+    # ProTacts::TailscaleAuth). /setup passes the requester's login
+    # anyway, so the account says which tailnet user it is for. The
+    # password stays a placeholder because the account form expects the
+    # field, and dropping it is untested.
+    #: (hostname: String, username: String) -> String
+    def self.render(hostname:, username:)
       identifier = "#{IDENTIFIER_PREFIX}-#{unique_hex}"
 
       template % {
         hostname: escape(hostname),
+        username: escape(username),
         name: escape(account_name),
         identifier:,
         account_identifier: "#{identifier}.account",
@@ -103,7 +104,7 @@ module ProTacts
               <key>CardDAVHostName</key>
               <string>%{hostname}</string>
               <key>CardDAVUsername</key>
-              <string>alpha@example.com</string>
+              <string>%{username}</string>
               <key>CardDAVPassword</key>
               <string>carddav-dev</string>
               <key>CardDAVUseSSL</key>

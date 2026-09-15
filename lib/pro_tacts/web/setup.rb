@@ -35,7 +35,7 @@ module ProTacts
       # is the point.
       r.get "carddav.mobileconfig" do
         response["Content-Type"] = "application/x-apple-aspen-config"
-        Profile.render(hostname: r.host)
+        Profile.render(hostname: r.host, username: @identity.login)
       end
     end
   end

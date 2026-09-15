@@ -4,8 +4,8 @@ require_relative "../test_helper"
 require "pro_tacts/profile"
 
 class ProfileTest < Minitest::Test
-  def render(hostname: "example.ts.net")
-    ProTacts::Profile.render(hostname:)
+  def render(hostname: "example.ts.net", username: "ada@example.com")
+    ProTacts::Profile.render(hostname:, username:)
   end
 
   # The name comes from the environment now rather than an argument, so
@@ -27,11 +27,11 @@ class ProfileTest < Minitest::Test
     assert_includes render, "<string>com.apple.carddav.account</string>"
   end
 
-  def test_embeds_hostname_and_fixed_dev_credentials
+  def test_embeds_hostname_username_and_placeholder_password
     xml = render
 
     assert_includes xml, "<string>example.ts.net</string>"
-    assert_includes xml, "<string>alpha@example.com</string>"
+    assert_match(%r{<key>CardDAVUsername</key>\s*<string>ada@example.com</string>}, xml)
     assert_includes xml, "<string>carddav-dev</string>"
   end
 
@@ -131,10 +131,11 @@ class ProfileTest < Minitest::Test
   end
 
   def test_escapes_xml_in_field_values
-    xml = render(hostname: "a&b.ts.net")
+    xml = render(hostname: "a&b.ts.net", username: "Ada <& Co>")
 
     assert_includes xml, "<string>a&amp;b.ts.net</string>"
     refute_includes xml, "<string>a&b.ts.net</string>"
+    assert_includes xml, "<string>Ada &lt;&amp; Co&gt;</string>"
     assert_empty Nokogiri::XML(xml).errors
   end
 end
