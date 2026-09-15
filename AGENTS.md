@@ -41,6 +41,8 @@ lib/pro_tacts/
 │                   # each first segment is a hash_branch in web/
 ├── web/dav.rb      # Discovery and the address book: every DAV route
 │                   # and response body
+├── dav_xml.rb      # The elements those bodies are written with, one
+│                   # object per namespace
 ├── web/contacts.rb # The card browser and its editor
 ├── web/groups.rb   # The group screens and their editor
 ├── web/setup.rb    # The device setup screen and its profile
@@ -87,9 +89,10 @@ not a fixture; edit a `.vcf` to change what the replay serves.
 
 ## Gotchas
 
-- Response bodies are built with heredocs in `web/dav.rb`. A comment written
-  inside one is sent to the client — keep notes about the code in Ruby
-  comments outside the heredoc.
+- Response bodies in `web/dav.rb` are built with Nokogiri's builder through
+  `DavXml`, whose methods are the only elements the server can send. Inside
+  an element's block, `it` is the builder, not an enclosing block's value,
+  so name the outer block's parameter.
 - Every request needs `Tailscale-User-Login` and `Tailscale-User-Name`
   headers or it gets a 401, so a bare `curl` against `rake dev` is
   refused until you pass both. The

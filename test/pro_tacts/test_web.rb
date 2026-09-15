@@ -718,8 +718,9 @@ class WebTest < Minitest::Test
       request "/dav/addressbook/", method: "REPORT", input: multiget("new")
 
       assert_equal 207, last_response.status
-      served = last_response.body[%r{<card:address-data>(.*)</card:address-data>}m, 1]
-      assert_equal card.chomp, xml_unescape(served)
+      served = Nokogiri::XML(last_response.body)
+        .at_xpath("//card:address-data", "card" => "urn:ietf:params:xml:ns:carddav").text
+      assert_equal card.chomp, served
     end
   end
 
@@ -771,12 +772,6 @@ class WebTest < Minitest::Test
 
       assert_equal 404, last_response.status
     end
-  end
-
-  # The route's xml_escape, reversed, for reading a card back out of
-  # a multiget body and comparing it with what was PUT.
-  def xml_unescape(text)
-    text.gsub("&lt;", "<").gsub("&gt;", ">").gsub("&amp;", "&")
   end
 
   # Contacts by id and name, each a bare card, and every one in `sync:*`

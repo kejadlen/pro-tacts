@@ -1,6 +1,8 @@
 require "digest"
 require "nokogiri"
 
+require "pro_tacts/dav_xml"
+
 module ProTacts
   # The CardDAV half of the router: service discovery and the one
   # address book each user syncs (docs/plans/2026-09-12-per-user-books.md).
@@ -42,22 +44,11 @@ module ProTacts
           response["Content-Type"] = "text/xml"
           response.status = 207
 
-          <<~XML
-            <?xml version="1.0" encoding="UTF-8"?>
-            <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
-              <d:response>
-                <d:href>/dav/principal/</d:href>
-                <d:propstat>
-                  <d:prop>
-                    <card:addressbook-home-set>
-                      <d:href>/dav/addressbook/</d:href>
-                    </card:addressbook-home-set>
-                  </d:prop>
-                  <d:status>HTTP/1.1 200 OK</d:status>
-                </d:propstat>
-              </d:response>
-            </d:multistatus>
-          XML
+          multistatus("card") do |d, card|
+            d.found("/dav/principal/") do
+              card.addressbook_home_set { d.href "/dav/addressbook/" }
+            end
+          end
         end
       end
 
@@ -75,72 +66,57 @@ module ProTacts
 
           etag_only = body.include?("getetag") && !body.include?("displayname") && !body.include?("resourcetype")
 
-          # The collection self-entry is omitted from an etag-only ask
-          # until a client is found to need it.
-          collection_response = ""
-          unless etag_only
-            # Every property in this body and where it comes from:
-            # DAV:resourcetype, which an address book collection MUST report
-            # as both collection and addressbook (RFC 6352 section 5.2);
-            # DAV:supported-report-set (RFC 3253 section 3.1.5), which RFC
-            # 6578 section 3.2 requires list sync-collection;
-            # DAV:sync-token (RFC 6578 section 4); and
-            # DAV:current-user-privilege-set (RFC 3744 section 5.4), which
-            # RFC 6352 section 7 requires of a CardDAV server. getctag alone
-            # is not standardized — an Apple CalendarServer extension in the
-            # calendarserver.org namespace, kept because macOS polls it.
-            #
-            # The privileges are advertised ahead of the methods
-            # granting some of them. macOS Contacts asks for this
-            # property on every poll and attempts no write without it,
-            # so claiming them is what makes the client send writes at
-            # all — the PUT they prompted was what log/unhandled
-            # captured them for. DAV:write covers PUT and PROPPATCH
-            # (RFC 3744 section 3.2), and PUT is the one of the pair
-            # answered; DAV:unbind is removing a member from the
-            # collection (section 3.10), which DELETE answers.
-            # DAV:bind is adding one (section 3.9), and the create it
-            # names — POST to the collection with DAV:add-member — has
-            # no route: PUT to the member URI is how both clients
-            # create, so nothing has asked for it.
-            collection_response = <<~XML
-              <d:response>
-                <d:href>/dav/addressbook/</d:href>
-                <d:propstat>
-                  <d:prop>
-                    <d:resourcetype>
-                      <d:collection/>
-                      <card:addressbook/>
-                    </d:resourcetype>
-                    <d:supported-report-set>
-                      <d:supported-report>
-                        <d:report><d:sync-collection/></d:report>
-                      </d:supported-report>
-                    </d:supported-report-set>
-                    <cs:getctag>#{ctag}</cs:getctag>
-                    <d:sync-token>#{sync_token}</d:sync-token>
-                    <d:current-user-privilege-set>
-                      <d:privilege><d:read/></d:privilege>
-                      <d:privilege><d:write/></d:privilege>
-                      <d:privilege><d:bind/></d:privilege>
-                      <d:privilege><d:unbind/></d:privilege>
-                    </d:current-user-privilege-set>
-                  </d:prop>
-                  <d:status>HTTP/1.1 200 OK</d:status>
-                </d:propstat>
-              </d:response>
-            XML
+          multistatus("card", "cs") do |d, card, cs|
+            # The collection self-entry is omitted from an etag-only ask
+            # until a client is found to need it.
+            unless etag_only
+              # Every property in this body and where it comes from:
+              # DAV:resourcetype, which an address book collection MUST report
+              # as both collection and addressbook (RFC 6352 section 5.2);
+              # DAV:supported-report-set (RFC 3253 section 3.1.5), which RFC
+              # 6578 section 3.2 requires list sync-collection;
+              # DAV:sync-token (RFC 6578 section 4); and
+              # DAV:current-user-privilege-set (RFC 3744 section 5.4), which
+              # RFC 6352 section 7 requires of a CardDAV server. getctag alone
+              # is not standardized — an Apple CalendarServer extension in the
+              # calendarserver.org namespace, kept because macOS polls it.
+              #
+              # The privileges are advertised ahead of the methods
+              # granting some of them. macOS Contacts asks for this
+              # property on every poll and attempts no write without it,
+              # so claiming them is what makes the client send writes at
+              # all — the PUT they prompted was what log/unhandled
+              # captured them for. DAV:write covers PUT and PROPPATCH
+              # (RFC 3744 section 3.2), and PUT is the one of the pair
+              # answered; DAV:unbind is removing a member from the
+              # collection (section 3.10), which DELETE answers.
+              # DAV:bind is adding one (section 3.9), and the create it
+              # names — POST to the collection with DAV:add-member — has
+              # no route: PUT to the member URI is how both clients
+              # create, so nothing has asked for it.
+              d.found("/dav/addressbook/") do
+                d.resourcetype do
+                  d.collection
+                  card.addressbook
+                end
+                d.supported_report_set do
+                  d.supported_report do
+                    d.report { d.sync_collection }
+                  end
+                end
+                cs.getctag ctag
+                d.sync_token sync_token
+                d.current_user_privilege_set do
+                  d.privilege { d.read }
+                  d.privilege { d.write }
+                  d.privilege { d.bind }
+                  d.privilege { d.unbind }
+                end
+              end
+            end
+
+            contacts.each { etag_response(d, it) } unless depth == "0"
           end
-
-          members = depth == "0" ? "" : contacts.map { etag_response(it) }.join
-
-          <<~XML
-            <?xml version="1.0" encoding="UTF-8"?>
-            <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav" xmlns:cs="http://calendarserver.org/ns/">
-              #{collection_response}
-              #{members}
-            </d:multistatus>
-          XML
         end
 
         r.report do
@@ -193,15 +169,18 @@ module ProTacts
             if token.empty?
               # No token is the initial sync: every member, changed
               # (section 3.4).
-              multistatus(contacts.map { etag_response(it) }, sync_token:)
+              multistatus("card", sync_token:) do |d|
+                contacts.each { etag_response(d, it) }
+              end
             elsif (sequence = token[%r{\Ahttp://pro-tacts/sync/(\d+)/#{book_digest}\z}, 1]) &&
                 sequence.to_i <= store.latest_sequence
               net = store.changes(after: sequence.to_i).map { it.card_id }.uniq
-              responses = net.map { |id|
-                contact = contacts.find { it.id == id }
-                contact ? etag_response(contact) : missing_response(contact_href(id))
-              }
-              multistatus(responses, sync_token:)
+              multistatus("card", sync_token:) do |d|
+                net.each do |id|
+                  contact = contacts.find { it.id == id }
+                  contact ? etag_response(d, contact) : d.missing(contact_href(id))
+                end
+              end
             else
               # A token this server never issued, one issued for another
               # book, or one naming a state past the present: the
@@ -212,28 +191,25 @@ module ProTacts
               # token names is gone.
               response.status = 410
 
-              <<~XML
-                <?xml version="1.0" encoding="UTF-8"?>
-                <d:error xmlns:d="DAV:">
-                  <d:valid-sync-token/>
-                </d:error>
-              XML
+              DavXml.document("error") { |d| d.valid_sync_token }
             end
           when "addressbook-multiget"
             # CARDDAV:addressbook-multiget (RFC 6352 section 8.7); the
             # address-data the client asks for is section 10.4.
             wants_cards = doc.xpath("//address-data").any?
 
-            multistatus(doc.xpath("//href").map { it.text }.map { |requested|
-              id = requested[%r{\A/dav/addressbook/([^/]+)\.vcf\z}, 1]
-              contact = id && contacts.find { it.id == id }
+            multistatus("card") do |d, card|
+              doc.xpath("//href").map { it.text }.each do |requested|
+                id = requested[%r{\A/dav/addressbook/([^/]+)\.vcf\z}, 1]
+                contact = id && contacts.find { it.id == id }
 
-              if contact
-                wants_cards ? card_response(contact) : etag_response(contact)
-              else
-                missing_response(requested)
+                if contact
+                  wants_cards ? card_response(d, card, contact) : etag_response(d, contact)
+                else
+                  d.missing(requested)
+                end
               end
-            })
+            end
           else
             # The DAV:supported-report precondition on REPORT (RFC 3253
             # section 3.6) — the report asked for has to be one the
@@ -250,12 +226,7 @@ module ProTacts
             # macOS Contacts has never sent one.
             response.status = 403
 
-            <<~XML
-              <?xml version="1.0" encoding="UTF-8"?>
-              <d:error xmlns:d="DAV:">
-                <d:supported-report/>
-              </d:error>
-            XML
+            DavXml.document("error") { |d| d.supported_report }
           end
         end
 
@@ -307,22 +278,11 @@ module ProTacts
       response["Content-Type"] = "text/xml"
       response.status = 207
 
-      <<~XML
-        <?xml version="1.0" encoding="UTF-8"?>
-        <d:multistatus xmlns:d="DAV:">
-          <d:response>
-            <d:href>#{href}</d:href>
-            <d:propstat>
-              <d:prop>
-                <d:current-user-principal>
-                  <d:href>/dav/principal/</d:href>
-                </d:current-user-principal>
-              </d:prop>
-              <d:status>HTTP/1.1 200 OK</d:status>
-            </d:propstat>
-          </d:response>
-        </d:multistatus>
-      XML
+      multistatus do |d|
+        d.found(href) do
+          d.current_user_principal { d.href "/dav/principal/" }
+        end
+      end
     end
 
     # Read once per request — Roda builds a fresh app instance for each
@@ -391,7 +351,7 @@ module ProTacts
       # this server stores. Asked before the body is read because it is
       # a question about the request, not about what the request
       # carried.
-      return precondition("supported-address-data") unless request.media_type == "text/vcard"
+      return precondition(:supported_address_data) unless request.media_type == "text/vcard"
 
       # Decoding the body, both halves of it: Rack requires input in
       # ASCII-8BIT and Rack::RewindableInput enforces it again, so the
@@ -407,7 +367,7 @@ module ProTacts
       # Paths need no counterpart: Puma hands PATH_INFO over still
       # percent-encoded, so an id off the wire is ASCII.
       bytes = request.body.read.force_encoding(Encoding::UTF_8)
-      return precondition("valid-address-data") unless bytes.valid_encoding?
+      return precondition(:valid_address_data) unless bytes.valid_encoding?
 
       # CARDDAV:valid-address-data again, on the card this time: the
       # envelope RFC 2426 section 4 requires. That is the whole test. A
@@ -416,7 +376,7 @@ module ProTacts
       # what it does not understand, and it is kept — the stored bytes
       # are what goes back out.
       vcard = VCard.new(bytes)
-      return precondition("valid-address-data") unless vcard.card?
+      return precondition(:valid_address_data) unless vcard.card?
 
       # CARDDAV:no-uid-conflict: the submitted UID must not belong to a
       # different resource, and a mapped URI must not be overwritten by
@@ -427,7 +387,7 @@ module ProTacts
       # the first clause — report where the UID already lives.
       uid = vcard.uid
       owner = uid && store.card_id_with_uid(uid)
-      return precondition("no-uid-conflict", owner) if uid != id || owner && owner != id
+      return precondition(:no_uid_conflict, owner) if uid != id || owner && owner != id
 
       existing = store.contact(id)
 
@@ -489,7 +449,7 @@ module ProTacts
 
       # The change-log entry Store#delete leaves in the same transaction
       # is what a syncing client is told: sync-collection answers a
-      # removed member as href plus 404 (#missing_response).
+      # removed member as href plus 404 (DavXml::DAV#missing).
       store.delete(id)
       response.status = 204
 
@@ -544,21 +504,15 @@ module ProTacts
     # are RFC 6352 section 6.3.2.1's, qualified by the card: namespace
     # the body declares. no-uid-conflict carries the conflicting card's
     # href when there is one.
-    #: (String element, ?String? conflict_id) -> String
+    #: (:supported_address_data | :valid_address_data | :no_uid_conflict element, ?String? conflict_id) -> String
     def precondition(element, conflict_id = nil)
-      named = if conflict_id
-        "<card:#{element}><d:href>#{contact_href(conflict_id)}</d:href></card:#{element}>"
-      else
-        "<card:#{element}/>"
-      end
       response.status = 412
 
-      <<~XML
-        <?xml version="1.0" encoding="UTF-8"?>
-        <d:error xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
-          #{named}
-        </d:error>
-      XML
+      DavXml.document("error", "card") do |d, card|
+        card.public_send(element) do
+          d.href contact_href(conflict_id) if conflict_id
+        end
+      end
     end
 
     # A bare 412: these failures are HTTP's own conditionals (RFC 7232),
@@ -593,15 +547,12 @@ module ProTacts
     # A 207 body. The trailing DAV:sync-token is RFC 6578 section 3.2's
     # — a sync-collection response MUST carry one naming the state the
     # answer reaches; no other multistatus here has a state to name.
-    #: (Array[String] responses, ?sync_token: String) -> String
-    def multistatus(responses, sync_token: nil)
-      trailing = sync_token ? "  <d:sync-token>#{sync_token}</d:sync-token>\n" : ""
-      <<~XML
-        <?xml version="1.0" encoding="UTF-8"?>
-        <d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
-          #{responses.join}#{trailing}
-        </d:multistatus>
-      XML
+    #: (*String prefixes, ?sync_token: String?) { (DavXml::DAV d, DavXml::CardDAV card, DavXml::CalendarServer cs) -> void } -> String
+    def multistatus(*prefixes, sync_token: nil)
+      DavXml.document("multistatus", *prefixes) do |d, card, cs|
+        yield d, card, cs
+        d.sync_token sync_token if sync_token
+      end
     end
 
     #: (String id) -> String
@@ -610,56 +561,17 @@ module ProTacts
     end
 
     # DAV:getetag (RFC 4918 section 15.6).
-    #: (Contact contact) -> String
-    def etag_response(contact)
-      <<~XML
-        <d:response>
-          <d:href>#{contact_href(contact.id)}</d:href>
-          <d:propstat>
-            <d:prop>
-              <d:getetag>#{contact.etag}</d:getetag>
-            </d:prop>
-            <d:status>HTTP/1.1 200 OK</d:status>
-          </d:propstat>
-        </d:response>
-      XML
+    #: (DavXml::DAV d, Contact contact) -> void
+    def etag_response(d, contact)
+      d.found(contact_href(contact.id)) { d.getetag contact.etag }
     end
 
-    #: (Contact contact) -> String
-    def card_response(contact)
-      <<~XML
-        <d:response>
-          <d:href>#{contact_href(contact.id)}</d:href>
-          <d:propstat>
-            <d:prop>
-              <d:getetag>#{contact.etag}</d:getetag>
-              <card:address-data>#{xml_escape(contact.vcard.to_s.chomp)}</card:address-data>
-            </d:prop>
-            <d:status>HTTP/1.1 200 OK</d:status>
-          </d:propstat>
-        </d:response>
-      XML
-    end
-
-    # A member the collection does not answer for: the multiget miss,
-    # reported as a 404 inside the 207 rather than failing the request
-    # (RFC 6352 section 8.7), and the removal shape a sync-collection
-    # delta reports (RFC 6578 section 3.2 — href and 404, no propstat).
-    #: (String requested) -> String
-    def missing_response(requested)
-      <<~XML
-        <d:response>
-          <d:href>#{xml_escape(requested)}</d:href>
-          <d:status>HTTP/1.1 404 Not Found</d:status>
-        </d:response>
-      XML
-    end
-
-    # Text nodes in XML built by interpolation; hrefs and vCard content
-    # can all contain &, <, or >.
-    #: (String text) -> String
-    def xml_escape(text)
-      text.gsub(/[&<>]/, "&" => "&amp;", "<" => "&lt;", ">" => "&gt;")
+    #: (DavXml::DAV d, DavXml::CardDAV card, Contact contact) -> void
+    def card_response(d, card, contact)
+      d.found(contact_href(contact.id)) do
+        d.getetag contact.etag
+        card.address_data contact.vcard.to_s.chomp
+      end
     end
   end
 end

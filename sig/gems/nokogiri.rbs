@@ -1,5 +1,8 @@
 # The nokogiri surface pro-tacts uses to read REPORT bodies: parse, drop
-# the namespaces, and pull elements out by xpath.
+# the namespaces, and pull elements out by xpath. And to write the DAV
+# bodies, through a Builder whose elements are method_missing calls,
+# which DavXml::Namespace#tag makes with send so nothing else needs
+# declaring.
 #
 # `root` is declared non-nil because Nokogiri::XML only returns a
 # document without one for input that is not XML at all, and web.rb
@@ -23,6 +26,12 @@ module Nokogiri
       include Enumerable[Node]
 
       def each: () { (Node) -> void } -> void
+    end
+
+    class Builder
+      def self.new: (?encoding: String) { (Builder) -> void } -> Builder
+      def []: (String prefix) -> Builder
+      def to_xml: () -> String
     end
   end
 end
