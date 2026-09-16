@@ -35,7 +35,7 @@ task :dev do
     ENV["PRO_TACTS_DATA_DIR"] = data_dir.to_s
     require_relative "test/fixture_data"
     FixtureData.install(data_dir).close
-    sh "fd -e rb . lib | entr -r rackup -o localhost"
+    sh "fd -e rb . lib | entr -r rackup -o localhost dev.ru"
   end
 end
 
