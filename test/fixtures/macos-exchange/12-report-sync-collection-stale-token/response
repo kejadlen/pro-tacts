@@ -1,0 +1,7 @@
+410
+Content-Type: text/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<d:error xmlns:d="DAV:">
+  <d:valid-sync-token/>
+</d:error>

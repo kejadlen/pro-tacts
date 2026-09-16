@@ -34,7 +34,20 @@ Step 08's request carries `http://pro-tacts/sync/1`, a token from before
 tokens named the book they were issued for
 (`docs/plans/2026-09-12-per-user-books.md`). The replay answers it with
 410 and `DAV:valid-sync-token` rather than the 207 delta the recorded
-session received. What macOS does after a 410 has not been recorded.
+session received.
+
+Step 12 is a 410 the client really received, captured 2026-09-16 under
+`rake dev` with the dev login switched so the token's digest named
+another login's book. Its replay refuses it for the same reason: the
+digest is not the replay login's. After the 410, macOS sent a ctag
+PROPFIND, the Depth 1 listing, a GET for the one card it lacked, the
+bootstrap PROPFIND, and a sync-collection report with the fresh token.
+The listing and bootstrap match steps 06 and 09 byte for byte, and the
+ctag PROPFIND differs from step 05 only in spelling CalendarServer
+`C:` rather than `D:`, so none of them were promoted. iOS (26.6.2) sent
+the same report apart from the token, took the same 410, and followed it
+with a ctag PROPFIND, the listing, and a multiget for the card it lacked,
+so `../ios-exchange` holds no step for it.
 
 ## The PUT steps
 
