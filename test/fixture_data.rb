@@ -20,7 +20,7 @@ module FixtureData
 
   # The first card is stamped now and each one after it is #SPREAD times
   # older than the last, so the seed book runs from this minute out to
-  # about five years at nineteen cards. Computed rather than tabulated
+  # about thirty years at twenty-one cards. Computed rather than tabulated
   # because a table runs out: adding cards past the end of one either
   # wraps — two cards sharing a stamp, and a recently-updated list that
   # opens on a tie — or leaves the tail unstamped. Spread rather than
@@ -93,16 +93,21 @@ module FixtureData
     cards.keys.grep(/\Aunsynced-/)
   end
 
+  # A household nobody syncs yet: unsynced cards in a group with no
+  # `sync:` prefix, so joining them to a book is one rename in the admin UI.
+  CURIES = %w[unsynced-marie unsynced-pierre].freeze #: Array[String]
+
   # The third is `sync:*`, holding every card but the unsynced ones, so
   # every user's book is the rest of the seed — the replay's included,
   # whose recorded sessions saw every card they asked for — and the
   # admin UI still shows a contact that is in nobody's
-  # (docs/plans/2026-09-12-per-user-books.md).
+  # (docs/plans/2026-09-12-per-user-books.md). The fourth is CURIES'.
   #: (ProTacts::Store store) -> void
   def self.seed_groups(store)
     seed_group(store, name: "Booles", lines: HOUSEHOLD, members: MEMBERS)
     seed_group(store, members: birthday_cards)
     seed_group(store, name: ProTacts::Store::EVERYONE, members: cards.keys - unsynced_cards)
+    seed_group(store, name: "Curies", members: CURIES)
   end
 
   # A group, seeded without a change-log entry for any member it moves
