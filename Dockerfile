@@ -21,6 +21,9 @@ ENV COMMIT_SHA=${COMMIT_SHA}
 ENV CHANGE_ID=${CHANGE_ID}
 ENV BUILD_DATE=${BUILD_DATE}
 ENV VERSION=${VERSION}
+# rackup defaults to development, which wraps the app in Rack::Lint and
+# ShowExceptions.
+ENV RACK_ENV=production
 # Set TZ at runtime — Date.today drives the birthday list's rollover.
 
 WORKDIR /app
