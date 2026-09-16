@@ -32,13 +32,13 @@ class ProxyAuthTest < Minitest::Test
   end
 
   def test_a_login_on_another_header_is_nobody
-    assert_nil login(sent_as: "Tailscale-Login")
+    assert_nil login(sent_as: "Tailscale-User-Login")
   end
 
   def test_the_header_read_is_the_one_named
-    env = { ProTacts::ProxyAuth.env_key("Tailscale-Login") => "alpha@example.com" }
+    env = { ProTacts::ProxyAuth.env_key("Tailscale-User-Login") => "alpha@example.com" }
 
-    assert_equal "alpha@example.com", ProTacts::ProxyAuth.login(env, header: "Tailscale-Login")
+    assert_equal "alpha@example.com", ProTacts::ProxyAuth.login(env, header: "Tailscale-User-Login")
   end
 
   def test_a_header_name_is_upcased_and_prefixed

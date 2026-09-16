@@ -63,9 +63,9 @@ class ConfigTest < Minitest::Test
   end
 
   def test_identity_header_is_overridable
-    config = ProTacts::Config.new("PRO_TACTS_IDENTITY_HEADER" => "Tailscale-Login")
+    config = ProTacts::Config.new("PRO_TACTS_IDENTITY_HEADER" => "Tailscale-User-Name")
 
-    assert_equal "Tailscale-Login", config.identity_header
+    assert_equal "Tailscale-User-Name", config.identity_header
   end
 
   # nil rather than a default, so the fallback stays Profile's alone.

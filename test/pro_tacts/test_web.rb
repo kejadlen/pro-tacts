@@ -174,14 +174,24 @@ class WebTest < Minitest::Test
   end
 
   # RFC 9110 section 15.5.2: a 401 carries a challenge.
-  def test_a_refusal_names_tailscale_as_the_credential
+  def test_a_refusal_names_the_credential
     header "Remote-User", ""
 
     get "/"
 
-    assert_equal "Tailscale", last_response["WWW-Authenticate"]
+    assert_equal "Proxy-Identity", last_response["WWW-Authenticate"]
     assert_equal "text/plain", last_response["Content-Type"]
-    assert_includes last_response.body, "Tailscale"
+  end
+
+  # The header read and the setting that chose it, which is what tells a
+  # deployment reading one header from a proxy writing another apart.
+  def test_a_refusal_names_the_header_it_read
+    header "Remote-User", ""
+
+    get "/"
+
+    assert_includes last_response.body, "Remote-User"
+    assert_includes last_response.body, "PRO_TACTS_IDENTITY_HEADER"
   end
 
   # Every route is gated, not just the address book: an unauthenticated

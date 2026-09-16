@@ -51,14 +51,25 @@ next piece of work, not part of this one.
 `PRO_TACTS_IDENTITY_HEADER` sets it. The default is `Remote-User`, what
 a reverse proxy conventionally writes the authenticated user to; the
 `docs` site in the same Caddyfile already sends it to another backend.
-`rake dev` sets `Tailscale-Login`, because a dev session has no proxy in
-front of it and is testing what the tailnet deployment does.
+`rake dev` sets `Tailscale-User-Name`, because a dev session has no
+proxy in front of it and is testing what the tailnet deployment does.
+That name is a misnomer inherited from the Caddy site: its `header_up`
+writes `{http.auth.user.tailscale_user}` there, which is the login, not
+the display name the header is named for. The app reads a header, not a
+meaning, so the misnomer costs nothing but a reader's double take —
+correcting it is a Caddyfile change and a resync, not an app change.
 
 The header is trustworthy for the same reason the pair was. `tailscale
 serve` strips `Tailscale-User-Login` from an incoming request before it
 writes its own, and Caddy's `header_up` with no `+` prefix sets the
 field, overwriting whatever arrived. Neither guarantee survives reaching
 the app directly, so it still must not listen anywhere but localhost.
+
+The 401 names the header it read and the setting that chose it
+(`Web#unauthorized`). A deployment reading one header while its proxy
+writes another is the failure this whole change came out of, and the
+header name is the only thing that tells the two apart; the refusal said
+"no Tailscale identity" before, which named neither.
 
 An unset header name is not a case the config handles: the default
 covers an absent variable, and a variable set to nothing names no header
