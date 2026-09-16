@@ -1,3 +1,4 @@
+require "digest"
 require "securerandom"
 
 require "nokogiri"
@@ -15,7 +16,8 @@ module ProTacts
   # identity follows the profile, so each install provisions a cold account
   # with no cached sync state — exactly what the experiment loop needs. The
   # cost is that reinstalling without removing first orphans the old account;
-  # rake profile:remove sweeps every profile carrying our prefix.
+  # rake profile:remove sweeps every profile carrying our prefix and the
+  # host it is configured for.
   #
   # The served route keeps that rule rather than deriving a stable identifier
   # from the account, which would make a reinstall a no-op: an identifier is
@@ -52,8 +54,8 @@ module ProTacts
     # and dropping it is untested.
     #: (hostname: String, username: String) -> String
     def self.render(hostname:, username:)
-      identifier = "#{IDENTIFIER_PREFIX}-#{unique_hex}"
       name = account_name
+      identifier = "#{IDENTIFIER_PREFIX}.#{host_digest(hostname)}.#{unique_hex}"
 
       builder = Nokogiri::XML::Builder.new(encoding: "UTF-8") do |x|
         x.doc.create_internal_subset(
@@ -114,16 +116,53 @@ module ProTacts
       builder.to_xml
     end
 
-    # Picks our profile identifiers out of `profiles list` output so
-    # profile:remove can sweep every pro-tacts profile, not just the latest.
-    # Scans for the prefix anywhere in the output rather than assuming a
+    # The host as one identifier segment, so an installed profile says
+    # which server it provisions an account against. The host rather than
+    # the account name, which defaults to the same "pro-tacts" whoever
+    # rendered it, or the username, which is one login across both: two
+    # profiles pointing at the same host are the same account, and two
+    # pointing at different hosts never are.
+    #
+    # A digest rather than the host itself, which would read as a second
+    # dotted name inside a dotted identifier. Hiding nothing — the profile
+    # states the host a few keys down — so a short one is enough, and the
+    # sweep recomputes it from the host it is configured for. Downcased
+    # first, since a host differing only in case is the same server.
+    #: (String hostname) -> String
+    def self.host_digest(hostname)
+      # The message names the argument rather than PRO_TACTS_HOSTNAME: the
+      # rake tasks read that variable, /setup passes the request's host,
+      # and only the caller knows which it was.
+      if hostname.strip.empty?
+        raise ArgumentError, "hostname is #{hostname.inspect}, so the profile would name no server. " \
+          "Pass the host the app answers on, such as \"pro-tacts.example.ts.net\"."
+      end
+
+      Digest::SHA256.hexdigest(hostname.downcase)[0, 8] #: String
+    end
+
+    # Picks the identifiers of profiles provisioned against hostname out of
+    # `profiles list` output, so profile:remove sweeps every profile
+    # pointing at the server it is configured for and no others — a dev
+    # sweep leaves the profile the deployment installed alone. Pass
+    # hostname: nil for every pro-tacts profile whatever server it points
+    # at, including the ones installed before the host was part of the
+    # identifier.
+    #
+    # Scans for the identifier anywhere in the output rather than assuming a
     # key-value layout, since the listing format has changed across macOS
     # versions (key-value today, table under later releases).
-    #: (String list_output) -> Array[String]
-    def self.installed_identifiers(list_output)
+    #: (String list_output, hostname: String?) -> Array[String]
+    def self.installed_identifiers(list_output, hostname:)
+      tail = if hostname
+        /\.#{host_digest(hostname)}\.[\w-]+/
+      else
+        /[.-][\w.-]+/
+      end
+
       # A pattern with no groups scans to whole matches, which is
       # narrower than the signature of String#scan can say.
-      list_output.scan(/(?<![\w.-])#{Regexp.escape(IDENTIFIER_PREFIX)}-[\w.-]+/).uniq #: Array[String]
+      list_output.scan(/(?<![\w.-])#{Regexp.escape(IDENTIFIER_PREFIX)}#{tail}(?![\w.-])/).uniq #: Array[String]
     end
 
     #: () -> String

@@ -103,17 +103,29 @@ namespace :profile do
     sh "open", "x-apple.systempreferences:com.apple.preferences.configurationprofiles"
   end
 
-  desc "Remove every installed pro-tacts configuration profile"
+  desc "Remove the installed configuration profiles pointing at PRO_TACTS_HOSTNAME"
   task :remove do
     require "pro_tacts/profile"
 
-    identifiers = ProTacts::Profile.installed_identifiers(`profiles list`)
+    list = `profiles list`
+    hostname = ENV.fetch("PRO_TACTS_HOSTNAME")
+    identifiers = ProTacts::Profile.installed_identifiers(list, hostname:)
     if identifiers.empty?
-      puts "No pro-tacts profiles found; remove by hand in System Settings → Profiles if one lingers."
+      puts "No #{hostname} profiles found; remove by hand in System Settings → Profiles if one lingers."
     else
       identifiers.each do
         sh "profiles", "remove", "-identifier", it
       end
+    end
+
+    # A profile pointing at another host provisions another server's
+    # account — the deployment's, beside a dev one — and removing it would
+    # take that account down with it. A profile from before the host was
+    # part of the identifier says nothing about where it points, so it is
+    # reported rather than swept.
+    others = ProTacts::Profile.installed_identifiers(list, hostname: nil) - identifiers
+    unless others.empty?
+      puts "Left installed, from another host or an older identifier (remove by hand if stale):", *others
     end
   end
 end

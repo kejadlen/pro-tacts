@@ -28,8 +28,8 @@ refusing a redirect) that never reach the server at all.
 ## The account setup path
 
 The fastest path is a configuration profile: `rake profile:install` (with
-`PRO_TACTS_HOSTNAME` set) first removes any installed pro-tacts profiles,
-then renders `carddav.mobileconfig`, opens it, and
+`PRO_TACTS_HOSTNAME` set) first removes the installed profiles pointing at
+that host, then renders `carddav.mobileconfig`, opens it, and
 opens System Settings on the Profiles pane (via the
 `x-apple.systempreferences:` deep link) — the profiles CLI no longer
 supports installs, so the profile lands there as pending until you click
@@ -43,7 +43,9 @@ fresh identifier and UUIDs, so each install provisions a cold account with
 no cached sync state — that is deliberate for the experiment loop, and
 `rake profile:install` sweeping the old profiles first is what keeps it
 cold. `profile:remove` finds them by scanning `profiles list` output for
-the pro-tacts prefix. Apple's device-management
+the pro-tacts prefix and a digest of `PRO_TACTS_HOSTNAME` (which it needs
+set too), so a dev sweep leaves a profile pointing at the deployment alone
+and prints the identifiers it left behind. Apple's device-management
 reference marks the CardDAV payload as allowing manual install, so no MDM is
 involved.
 
