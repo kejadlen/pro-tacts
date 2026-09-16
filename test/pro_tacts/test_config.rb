@@ -50,12 +50,12 @@ class ConfigTest < Minitest::Test
   end
 
   def test_exchange_log_path_defaults_to_a_file
-    assert_equal "log/exchange.log", ProTacts::Config.new({}).exchange_log_path
+    assert_equal Pathname.new("data/log/exchange.log"), ProTacts::Config.new({}).exchange_log_path
   end
 
   def test_exchange_log_path_is_overridable
-    assert_equal "/tmp/dav.log", ProTacts::Config.new("PRO_TACTS_EXCHANGE_LOG" => "/tmp/dav.log").exchange_log_path
-    assert_equal "stderr", ProTacts::Config.new("PRO_TACTS_EXCHANGE_LOG" => "stderr").exchange_log_path
+    assert_equal Pathname.new("/tmp/dav.log"), ProTacts::Config.new("PRO_TACTS_EXCHANGE_LOG" => "/tmp/dav.log").exchange_log_path
+    assert_equal Pathname.new("stderr"), ProTacts::Config.new("PRO_TACTS_EXCHANGE_LOG" => "stderr").exchange_log_path
   end
 
   # nil rather than a default, so the fallback stays Profile's alone.
