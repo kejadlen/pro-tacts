@@ -30,13 +30,6 @@ task :dev do
   ENV["PRO_TACTS_EXCHANGE_LOG"] ||= "log/dev.log"
   File.truncate("log/dev.log", 0) if File.exist?("log/dev.log")
 
-  # No proxy in front of a dev server, so the identity header is
-  # whatever a client passes by hand. The name the tailnet deployment's
-  # proxy writes the login to, rather than the Remote-User default, so a
-  # dev session reads the header that deployment reads
-  # (ProTacts::Config#identity_header).
-  ENV["PRO_TACTS_IDENTITY_HEADER"] ||= "Tailscale-User-Name"
-
   Dir.mktmpdir("pro-tacts-dev") do |dir|
     data_dir = Pathname.new(dir)
     ENV["PRO_TACTS_DATA_DIR"] = data_dir.to_s

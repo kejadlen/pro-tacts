@@ -51,13 +51,18 @@ next piece of work, not part of this one.
 `PRO_TACTS_IDENTITY_HEADER` sets it. The default is `Remote-User`, what
 a reverse proxy conventionally writes the authenticated user to; the
 `docs` site in the same Caddyfile already sends it to another backend.
-`rake dev` sets `Tailscale-User-Name`, because a dev session has no
-proxy in front of it and is testing what the tailnet deployment does.
-That name is a misnomer inherited from the Caddy site: its `header_up`
-writes `{http.auth.user.tailscale_user}` there, which is the login, not
-the display name the header is named for. The app reads a header, not a
-meaning, so the misnomer costs nothing but a reader's double take —
-correcting it is a Caddyfile change and a resync, not an app change.
+`rake dev` sets nothing and takes the default, because the deployment
+takes it too: the Caddy site writes `{http.auth.user.tailscale_login}`
+into `Remote-User`, so a dev session and the tailnet read the same
+header name.
+
+That placeholder is the username portion of the login — `alpha`, not
+`alpha@kejadlen.dev` — which is what a `sync:` group is named after. It
+reads the way the display name did without being a display name, and it
+is unique within one domain rather than across the tailnet: two users at
+different domains with the same username would share a book. The
+Caddyfile carries a TODO to move to the whole login once the group name
+is a setting of its own.
 
 The header is trustworthy for the same reason the pair was. `tailscale
 serve` strips `Tailscale-User-Login` from an incoming request before it
