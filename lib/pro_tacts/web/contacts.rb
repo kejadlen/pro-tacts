@@ -118,11 +118,10 @@ module ProTacts
       )
     end
 
-    # The whole of the edit POST, a private method for the same reason
-    # write_card is one: a Roda route block cannot return early, so each
-    # refusal is a value the block ends with rather than a branch it
-    # exits. The checks run in write_card's order — the request's own
-    # validity first, the conditionals on stored state after.
+    # The whole of the edit POST, a private method for the reason
+    # Web#write_card is one, and its checks in the same order: the
+    # request's own validity first, the conditionals on stored state
+    # after.
     #: (untyped r, String id) -> String?
     def apply_edit(r, id)
       contact = store.contact(id)

@@ -494,8 +494,6 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # A value with no TYPE parameter still gets a key — the fallback
-  # names the kind of value, so every row in the grid is labeled.
   def test_show_labels_untyped_values_with_the_property_name
     untyped = ADA.sub("TEL;TYPE=mobile:", "TEL:").sub("EMAIL;TYPE=home:", "EMAIL:")
 
@@ -733,9 +731,6 @@ class AdminContactsPagesTest < Minitest::Test
 
   ## Photos
 
-  # No picture, no avatar: an initials circle beside the name in
-  # type-h2 would repeat what the name already says, so a contact
-  # without a photo renders the header as the name alone.
   def test_show_without_a_picture_renders_no_avatar
     with_contacts({"ada" => ADA}) do
       get "/contacts/ada"

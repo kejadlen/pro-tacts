@@ -886,11 +886,9 @@ class WebTest < Minitest::Test
     end
   end
 
-  # RFC 6578 section 3.2: the delta since the client's token, one
-  # response per net-changed member, and a DAV:sync-token naming the
-  # state the answer reaches. The warm-sync ask is etag-only; a changed
-  # etag sends the client back through multiget, so no address-data
-  # here.
+  # The warm sync, whose shape the REPORT route's sync-collection
+  # branch argues in full (web/dav.rb): RFC 6578 section 3.2, etags
+  # only, address-data never.
   def test_sync_collection_reports_the_delta_since_the_token
     with_contacts({"aiden" => "Aiden"}) do |store|
       request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(0))

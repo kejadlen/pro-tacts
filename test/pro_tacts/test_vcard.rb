@@ -54,10 +54,9 @@ class VCardTest < Minitest::Test
     assert_equal ["Smith; Jr.", "John"], ProTacts::VCard.split_components("Smith\\; Jr.;John")
   end
 
-  # The writer's splice: the same split with the escaping left alone,
-  # so components rejoin byte for byte — unescape-then-re-escape is
-  # not byte-stable (unescape leaves an unrecognized escape like "\\x"
-  # alone, and escape would double its backslash).
+  # The third component is the case the byte-stability argument on
+  # VCard.split_raw_components turns on: an escape neither half of the
+  # pair recognizes, which a round trip through them would corrupt.
   def test_split_raw_components_leaves_each_component_escaped
     assert_equal ["Smith\\; Jr.", "John", "a\\xb"],
       ProTacts::VCard.split_raw_components("Smith\\; Jr.;John;a\\xb")

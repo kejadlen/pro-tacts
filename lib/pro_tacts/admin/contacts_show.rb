@@ -76,7 +76,8 @@ module ProTacts
                   # the avatar is the row's visual anchor, not a caption.
                   render Avatar.new(contact: @contact, size: "xl") if @contact.photo
                 end
-                # Never empty: the groups row is always there.
+                # Never empty, #groups_row standing unconditionally
+                # for the reason it gives, so no guard around it.
                 dl(class: "detail-grid") { rows }
               end
             end

@@ -356,6 +356,10 @@ class VCardParserTest < Minitest::Test
     folded
   end
 
+  # Folding and unfolding are inverses on a rendered line, which is what
+  # makes an index rebuilt from stored cards agree with what was served.
+  # The folds are the client's — nothing here writes one — so this is
+  # the read holding up its end of a round trip it only ever finishes.
   def test_an_escaped_and_folded_value_parses_back
     Hegel.test do |tc|
       value = tc.draw(text(max_size: 300))
@@ -367,8 +371,6 @@ class VCardParserTest < Minitest::Test
     end
   end
 
-  # Folding and unfolding are inverses on a rendered line, which is what
-  # makes an index rebuilt from stored cards agree with what was served.
   def test_a_parameter_value_survives_a_round_trip
     token = from_regex("[A-Za-z0-9-]{1,20}", fullmatch: true)
     Hegel.test do |tc|

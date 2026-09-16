@@ -8,10 +8,8 @@ class FormatTest < Minitest::Test
   CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada Lovelace\r\nN:Lovelace;Ada;;;\r\n" \
     "UID:ada\r\nEND:VCARD\r\n"
 
-  # The production shapes: a modeled birthday passes a BDAY-free card
-  # beside a Birthday, a fallback case passes a card carrying an
-  # unmodeled BDAY beside nil, and inheritance defaults to none (see
-  # Contact).
+  # The production shapes, as Contact's class comment lays them out.
+  # Nothing on these screens is in a group, so inheritance is none.
   def contact(bytes = CARD, id: "aiden", birthday: nil, inherited: [])
     ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(bytes), birthday:, inherited:)
   end
