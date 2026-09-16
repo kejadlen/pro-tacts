@@ -28,20 +28,26 @@ refusing a redirect) that never reach the server at all.
 ## The account setup path
 
 The fastest path is a configuration profile: `rake profile:install` (with
-`PRO_TACTS_HOSTNAME` set) first removes the installed profiles pointing at
-that host, then renders `carddav.mobileconfig`, opens it, and
-opens System Settings on the Profiles pane (via the
+`PRO_TACTS_HOSTNAME` set) downloads `carddav.mobileconfig` from that host's
+`/setup`, removes the installed profiles pointing at the same host, opens
+the download, and opens System Settings on the Profiles pane (via the
 `x-apple.systempreferences:` deep link) — the profiles CLI no longer
 supports installs, so the profile lands there as pending until you click
 Install. That click is the whole manual step. `rake profile:remove` runs
 the removal half alone via `profiles remove`.
 
-The profile carries the hostname, fixed dev credentials, and SSL —
-`CardDAVPrincipalURL` is deliberately omitted so the
+The download goes through the identity gate like any other request, so it
+works against a deployment whose proxy writes the header and not against a
+server with nothing in front of it. For one of those, fetch it with the
+header set by hand: `curl -H "Remote-User: you" -o carddav.mobileconfig
+https://host/setup/carddav.mobileconfig`.
+
+The profile carries the hostname, the requester's login, a placeholder
+password, and SSL — `CardDAVPrincipalURL` is deliberately omitted so the
 account gets an empty Server Path, exercising discovery. Every render gets a
 fresh identifier and UUIDs, so each install provisions a cold account with
 no cached sync state — that is deliberate for the experiment loop, and
-`rake profile:install` sweeping the old profiles first is what keeps it
+`rake profile:install` sweeping the old profiles before it is what keeps it
 cold. `profile:remove` finds them by scanning `profiles list` output for
 the pro-tacts prefix and a digest of `PRO_TACTS_HOSTNAME` (which it needs
 set too), so a dev sweep leaves a profile pointing at the deployment alone

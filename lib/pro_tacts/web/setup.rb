@@ -7,7 +7,8 @@ module ProTacts
     # provision itself: until this route existed the only renderer was
     # the Rakefile, so putting the account on a phone meant running
     # rake on the machine holding the checkout and mailing the file
-    # over. The screen and the document are separate paths because a
+    # over. It is now the only renderer — rake profile:install downloads
+    # from here. The screen and the document are separate paths because a
     # mobileconfig is not a page — the screen says what the download
     # will do, and only the link fires the install flow.
     #

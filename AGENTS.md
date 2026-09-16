@@ -22,7 +22,8 @@ rake db:dump          # Write the cards, birthdays, and groups to data/dump
 rake dev              # Dev server, seeded from test/fixtures/cards into a
                       # throwaway tmpdir on every start, reloading on change
                       # (needs fd and entr)
-rake profile:install  # Render and stage carddav.mobileconfig for approval
+rake profile:install  # Download carddav.mobileconfig from the app and
+                      # stage it for approval
 ```
 
 `rake profile:*` needs `PRO_TACTS_HOSTNAME` and touches installed system

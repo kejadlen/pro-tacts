@@ -72,33 +72,25 @@ task :steep do
   sh "steep", "check"
 end
 
-desc "Render the macOS configuration profile (carddav.mobileconfig)"
-task profile: "carddav.mobileconfig"
-
-# The server ignores the username (see ProTacts::Profile.render), and a
-# profile rendered here has no request to read a login from.
-PROFILE_USERNAME = "pro-tacts@example.com"
-
-# Rebuilds when the template changes but not when the environment does
-# (PRO_TACTS_HOSTNAME, PRO_TACTS_PROFILE_NAME); delete carddav.mobileconfig
-# to force a rerender.
-file "carddav.mobileconfig" => "lib/pro_tacts/profile.rb" do |task|
-  require "pro_tacts/profile"
-
-  File.write(task.name, ProTacts::Profile.render(
-    hostname: ENV.fetch("PRO_TACTS_HOSTNAME"), username: PROFILE_USERNAME
-  ))
-end
-
 namespace :profile do
-  desc "Remove installed pro-tacts profiles, then stage a fresh one for approval"
-  task install: :remove do
-    require "pro_tacts"
-    require "pro_tacts/profile"
+  # The profile comes from the running app rather than a render here: the
+  # route is the renderer (ProTacts::Web's setup branch), it writes the
+  # requester's own login into the account where a render here had no
+  # request to read one from, and a host that answers the download is a
+  # host the account can reach. The download needs the identity header
+  # the app reads, so it works against a deployment behind a proxy that
+  # writes it and not against a server with nothing in front.
+  #
+  # Downloaded before the sweep rather than after, so a download that
+  # fails leaves the installed account where it was.
+  desc "Download the profile from PRO_TACTS_HOSTNAME and stage it for approval"
+  task :install do
+    sh "curl", "--fail", "--silent", "--show-error", "--location",
+      "--output", "carddav.mobileconfig",
+      "https://#{ENV.fetch("PRO_TACTS_HOSTNAME")}/setup/carddav.mobileconfig"
 
-    File.write("carddav.mobileconfig", ProTacts::Profile.render(
-      hostname: ENV.fetch("PRO_TACTS_HOSTNAME"), username: PROFILE_USERNAME
-    ))
+    Rake::Task["profile:remove"].invoke
+
     sh "open", "carddav.mobileconfig"
     sh "open", "x-apple.systempreferences:com.apple.preferences.configurationprofiles"
   end
