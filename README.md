@@ -70,11 +70,14 @@ Funnel traffic, which is public, and traffic from tagged devices.
 
 Each user syncs a book of their own rather than every card: the members
 of the group `sync:*`, which everyone gets, and of `sync:<login>`,
-matched in any case. A card a client creates joins `sync:*`, so everyone
+matched exactly. `rake book:name LOGIN=... NAME=...` gives a login's
+book a name to use in place of the login, renaming its group to
+`sync:<name>`. A card a client creates joins `sync:*`, so everyone
 gets it until someone takes it out. See
 `docs/plans/2026-09-12-per-user-books.md`,
-`docs/plans/2026-09-15-client-creates-join-everyone.md`, and
-`docs/plans/2026-09-15-identity-from-one-header.md`.
+`docs/plans/2026-09-15-client-creates-join-everyone.md`,
+`docs/plans/2026-09-15-identity-from-one-header.md`, and
+`docs/plans/2026-09-16-book-names.md`.
 
 DAV exchanges that go wrong — a status of 400 or more other than the 401
 above, a crash, or a request that reported to Sentry — are written whole

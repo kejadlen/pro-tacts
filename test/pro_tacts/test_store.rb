@@ -1367,17 +1367,58 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The display name in any case, beyond ASCII too; the prefix only as
-  # spelled, since a group that is no `sync:` group puts nothing in a
-  # book.
-  def test_a_book_matches_the_display_name_in_any_case
+  # A case variant, or the prefix spelled another way, is some other
+  # group.
+  def test_a_book_matches_its_group_name_exactly
     with_store({"aiden" => AIDEN, "znorth" => ZED, "yuki" => YUKI}) do |store|
-      FixtureData.seed_group(store, name: "sync:alpha chen", members: ["aiden"])
-      FixtureData.seed_group(store, name: "SYNC:Alpha Chen", members: ["znorth"])
-      FixtureData.seed_group(store, name: "sync:zoë chen", members: ["yuki"])
+      FixtureData.seed_group(store, name: "sync:Alpha Chen", members: ["aiden"])
+      FixtureData.seed_group(store, name: "sync:alpha chen", members: ["znorth"])
+      FixtureData.seed_group(store, name: "SYNC:Alpha Chen", members: ["yuki"])
 
       assert_equal Set["aiden"], store.book("Alpha Chen")
-      assert_equal Set["yuki"], store.book("ZOË CHEN")
+    end
+  end
+
+  # A named book is the named group's, and the login's own group moves
+  # to the name with its members logged, so a client hears of nothing
+  # but the rename (docs/plans/2026-09-16-book-names.md).
+  def test_a_named_book_takes_its_group_along
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      id = FixtureData.seed_group(store, name: "sync:alpha@example.com", members: ["aiden"])
+
+      store.name_book("alpha@example.com", "Alpha Chen")
+
+      assert_equal "sync:Alpha Chen", store.group(id).name
+      assert_equal "Alpha Chen", store.book_name("alpha@example.com")
+      assert_equal Set["aiden"], store.book("alpha@example.com")
+      assert_equal %w[group put], store.changes_of("aiden").map(&:action)
+
+      store.name_book("alpha@example.com", " ")
+
+      assert_equal "sync:alpha@example.com", store.group(id).name
+      assert_nil store.book_name("alpha@example.com")
+      assert_equal Set["aiden"], store.book("alpha@example.com")
+    end
+  end
+
+  def test_a_book_is_named_before_its_group_exists
+    with_store({"aiden" => AIDEN}) do |store|
+      store.name_book("alpha@example.com", "Alpha Chen")
+      FixtureData.seed_group(store, name: "sync:Alpha Chen", members: ["aiden"])
+
+      assert_equal Set["aiden"], store.book("alpha@example.com")
+    end
+  end
+
+  # Another login's name would share a book, and `*` is everyone's.
+  def test_a_book_name_is_one_logins
+    with_store do |store|
+      store.name_book("alpha@example.com", "Alpha Chen")
+      store.name_book("alpha@example.com", "Alpha Chen")
+
+      assert_raises(Sequel::UniqueConstraintViolation) { store.name_book("zoe@example.com", "Alpha Chen") }
+      assert_raises(ArgumentError) { store.name_book("zoe@example.com", "*") }
+      assert_nil store.book_name("zoe@example.com")
     end
   end
 

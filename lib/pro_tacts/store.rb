@@ -357,17 +357,44 @@ module ProTacts
     end
 
     # The cards one user's client syncs: every member of `sync:*` and of
-    # `sync:<login>`, each once (docs/plans/2026-09-12-per-user-books.md).
-    # The login matches in any case, folded here in Ruby because SQLite's
-    # lower() folds ASCII alone; the prefix only as #sync_name? reads it,
-    # since no other group's moves are logged.
+    # `sync:<name>`, each once (docs/plans/2026-09-12-per-user-books.md),
+    # where the name is the login's book name or the login itself
+    # (docs/plans/2026-09-16-book-names.md). Matched as spelled: a login
+    # whose case reads badly gets a name rather than a folded match.
     #: (String login) -> Set[String]
     def book(login)
-      own = "#{SYNC_PREFIX}#{login}"
-      ids = groups.where(Sequel.function(:glob, "#{SYNC_PREFIX}*", :name)).all
-        .select { |group| (label = group.fetch(:name).to_s) == EVERYONE || label.casecmp?(own) }
-        .map { it.fetch(:id) }
+      ids = groups.where(name: [EVERYONE, own_sync_name(login)]).select_map(:id)
       Set.new(group_members.where(group_id: ids).select_map(:card_id).map(&:to_s))
+    end
+
+    # The name a login's book goes by in place of the login, or nil for
+    # the login itself.
+    #: (String login) -> String?
+    def book_name(login)
+      book_names.where(login:).sole.fetch(:name).to_s
+    rescue Sequel::NoMatchingRow
+      nil
+    end
+
+    # Sets the name a login's book goes by, or with nil or a blank goes
+    # back to the login. The login's `sync:` group, if it has one, is
+    # renamed in the same transaction, so the book keeps its cards and
+    # #rename_group logs every member for the clients syncing it. A name
+    # another login's book goes by raises on the unique index, and `*`
+    # is refused before the transaction, #put's reason for building a
+    # Contact outside one.
+    #: (String login, String? name) -> void
+    def name_book(login, name)
+      name = name.to_s.strip
+      name = nil if name.empty?
+      raise ArgumentError, "#{EVERYONE} is everyone's book, not #{login}'s" if name == "*"
+
+      @database.transaction do
+        group = groups.where(name: own_sync_name(login)).select_map(:id).first
+        book_names.where(login:).delete
+        book_names.insert(login:, name:) unless name.nil?
+        rename_group(group.to_s, name: own_sync_name(login)) unless group.nil?
+      end
     end
 
     # The id of the card whose UID property holds this value, if one
@@ -759,6 +786,11 @@ module ProTacts
     end
 
     #: () -> Sequel::Dataset
+    def book_names
+      @database[:book_names]
+    end
+
+    #: () -> Sequel::Dataset
     def group_properties
       @database[:group_properties]
     end
@@ -866,6 +898,12 @@ module ProTacts
       groups.where(name: EVERYONE).sole.fetch(:id).to_s
     rescue Sequel::NoMatchingRow
       create_group(name: EVERYONE)
+    end
+
+    # The group name that puts cards in this login's book alone.
+    #: (String login) -> String
+    def own_sync_name(login)
+      "#{SYNC_PREFIX}#{book_name(login) || login}"
     end
 
     #: (String? name) -> bool

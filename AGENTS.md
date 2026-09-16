@@ -17,6 +17,8 @@ rake fixtures         # Re-record response fixtures from current behavior
 rake fixtures:extract # A logged exchange's request as a fixture step
                       # (EXCHANGE=id STEP=test/fixtures/<recording>/NN-name)
 rake index:rebuild    # Derive the parsed index again from the stored cards
+rake book:name        # Name a login's book and rename its sync group
+                      # (LOGIN=login NAME=name; no NAME clears it)
 rake db:dump          # Write the cards, birthdays, and groups to data/dump
                       # (DUMP=path to move it)
 rake dev              # Dev server, seeded from test/fixtures/cards into a
