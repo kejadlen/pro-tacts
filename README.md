@@ -72,7 +72,8 @@ Each user syncs a book of their own rather than every card: the members
 of the group `sync:*`, which everyone gets, and of `sync:<login>`,
 matched exactly. `rake book:name LOGIN=... NAME=...` gives a login's
 book a name to use in place of the login, renaming its group to
-`sync:<name>`. A card a client creates joins `sync:*`, so everyone
+`sync:<name>`; a user can name their own with `POST /setup/book` and a
+`name` field. A card a client creates joins `sync:*`, so everyone
 gets it until someone takes it out. See
 `docs/plans/2026-09-12-per-user-books.md`,
 `docs/plans/2026-09-15-client-creates-join-everyone.md`,

@@ -38,6 +38,21 @@ module ProTacts
         response["Content-Type"] = "application/x-apple-aspen-config"
         Profile.render(hostname: r.host, username: @login)
       end
+
+      # Names the requester's own book, `rake book:name` for whoever is
+      # asking (docs/plans/2026-09-16-book-names.md); no name goes back
+      # to the login. Plain text, for curl rather than a screen.
+      r.post "book" do
+        response["Content-Type"] = "text/plain"
+        begin
+          store.name_book(@login, r.params["name"]&.to_s)
+          "#{@login} syncs #{Store::SYNC_PREFIX}#{store.book_name(@login) || @login}\n"
+        rescue Sequel::UniqueConstraintViolation, Store::EveryonesBookName
+          # Another login's name, a group's already, or everyone's.
+          response.status = 409
+          "#{Store::SYNC_PREFIX}#{r.params['name'].to_s.strip} is taken; #{@login}'s book is unchanged.\n"
+        end
+      end
     end
   end
 end

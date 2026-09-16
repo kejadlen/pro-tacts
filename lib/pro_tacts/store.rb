@@ -178,6 +178,9 @@ module ProTacts
     SYNC_PREFIX = "sync:" #: String
     EVERYONE = "#{SYNC_PREFIX}*" #: String
 
+    # A book named `*`, which would be everyone's (#name_book).
+    class EveryonesBookName < ArgumentError; end
+
     # Sequel's migrations, run on open. They ship with the code rather
     # than with a deployment, so the path is relative to this file.
     # `__dir__` is nil only for code with no file behind it, which a
@@ -387,7 +390,7 @@ module ProTacts
     def name_book(login, name)
       name = name.to_s.strip
       name = nil if name.empty?
-      raise ArgumentError, "#{EVERYONE} is everyone's book, not #{login}'s" if name == "*"
+      raise EveryonesBookName, "#{EVERYONE} is everyone's book, not #{login}'s" if name == "*"
 
       @database.transaction do
         group = groups.where(name: own_sync_name(login)).select_map(:id).first

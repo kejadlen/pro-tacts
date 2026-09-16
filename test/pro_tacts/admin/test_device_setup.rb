@@ -6,11 +6,12 @@ require "pro_tacts/profile"
 require "pro_tacts/web"
 
 # GET /setup and the document it links to, exercised the way the other
-# screens are: real requests through the Roda app. No store is touched —
-# the profile is rendered from the request alone — so unlike the contacts
-# pages these need no database standing behind them.
+# screens are: real requests through the Roda app. The profile is
+# rendered from the request alone, so only naming the book needs a
+# database standing behind it.
 class AdminDeviceSetupTest < Minitest::Test
   include Rack::Test::Methods
+  include ThrowawayContacts
 
   def app
     ProTacts::Web
@@ -95,5 +96,40 @@ class AdminDeviceSetupTest < Minitest::Test
     refute_equal first, last_response.body
     assert_includes first, ProTacts::Profile::IDENTIFIER_PREFIX
     assert_includes last_response.body, ProTacts::Profile::IDENTIFIER_PREFIX
+  end
+
+  ## Naming the book
+
+  def test_naming_the_book_names_the_requesters_own
+    with_contacts({}) do |store|
+      id = store.create_group(name: "sync:test@example.com")
+
+      post "/setup/book", name: "test"
+
+      assert_equal 200, last_response.status
+      assert_equal "test@example.com syncs sync:test\n", last_response.body
+      assert_equal "sync:test", store.group(id).name
+
+      post "/setup/book"
+
+      assert_equal "test@example.com syncs sync:test@example.com\n", last_response.body
+      assert_nil store.book_name("test@example.com")
+    end
+  end
+
+  def test_a_taken_book_name_is_a_conflict
+    with_contacts({}) do |store|
+      store.name_book("zoe@example.com", "zoe")
+
+      post "/setup/book", name: "zoe"
+
+      assert_equal 409, last_response.status
+      assert_equal "sync:zoe is taken; test@example.com's book is unchanged.\n", last_response.body
+      assert_nil store.book_name("test@example.com")
+
+      post "/setup/book", name: "*"
+
+      assert_equal 409, last_response.status
+    end
   end
 end

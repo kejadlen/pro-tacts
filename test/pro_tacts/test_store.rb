@@ -1417,7 +1417,7 @@ class StoreTest < Minitest::Test
       store.name_book("alpha@example.com", "Alpha Chen")
 
       assert_raises(Sequel::UniqueConstraintViolation) { store.name_book("zoe@example.com", "Alpha Chen") }
-      assert_raises(ArgumentError) { store.name_book("zoe@example.com", "*") }
+      assert_raises(ProTacts::Store::EveryonesBookName) { store.name_book("zoe@example.com", "*") }
       assert_nil store.book_name("zoe@example.com")
     end
   end
