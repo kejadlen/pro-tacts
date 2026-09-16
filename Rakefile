@@ -34,7 +34,11 @@ task :dev do
     data_dir = Pathname.new(dir)
     ENV["PRO_TACTS_DATA_DIR"] = data_dir.to_s
     require_relative "test/fixture_data"
-    FixtureData.install(data_dir).close
+    require "pro_tacts/dev_login"
+    store = FixtureData.install(data_dir)
+    # Here rather than in FixtureData, which the tests share.
+    store.name_book(ProTacts::DevLogin::LOGIN, "alpha")
+    store.close
     sh "fd -e rb . lib | entr -r rackup -o localhost dev.ru"
   end
 end
