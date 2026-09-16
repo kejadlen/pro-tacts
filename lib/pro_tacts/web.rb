@@ -119,7 +119,7 @@ module ProTacts
       response["WWW-Authenticate"] = "Proxy-Identity"
       response["Content-Type"] = "text/plain"
       response.write(
-        "Unauthorized: no login on the Remote-User header.\n" \
+        "Unauthorized: no login on the #{ProxyAuth::HEADER} header.\n" \
         "The proxy in front of this app writes that header.\n"
       )
       r.halt

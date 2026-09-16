@@ -164,7 +164,7 @@ class VCardParserTest < Minitest::Test
   ## Pictures
 
   # The two shapes a picture arrives in, built as captured
-  # (test/photo_card.rb, from log/unhandled): the parameter section on
+  # (test/photo_card.rb, from the exchange log): the parameter section on
   # one physical line however long, the base64 payload folded one
   # break below it. The parser reads both without a length ceiling
   # because the line split comes before the token scan — nothing here
@@ -332,10 +332,34 @@ class VCardParserTest < Minitest::Test
     text.gsub(/\r\n|\r/, "\n")
   end
 
+  # Folded input for #unfold to undo, to RFC 2426 section 2.6: physical
+  # lines of at most 75 octets, each continuation a single space. The
+  # walk is character-wise so a multibyte character is never split. It
+  # lives here rather than in VCard because nothing this server writes
+  # folds — a served card is stored bytes going out untouched — so the
+  # only caller a folder has ever had is this test.
+  LINE_LIMIT = 75
+
+  def fold(line)
+    return line if line.bytesize <= LINE_LIMIT
+
+    folded = +""
+    width = 0
+    line.each_char do |char|
+      if width + char.bytesize > LINE_LIMIT
+        folded << "\r\n "
+        width = 1
+      end
+      folded << char
+      width += char.bytesize
+    end
+    folded
+  end
+
   def test_an_escaped_and_folded_value_parses_back
     Hegel.test do |tc|
       value = tc.draw(text(max_size: 300))
-      line = ProTacts::VCard.fold("NOTE:#{ProTacts::VCard.escape(value)}")
+      line = fold("NOTE:#{ProTacts::VCard.escape(value)}")
 
       parsed = properties("#{line}\r\n")
       raise "expected one property, got #{parsed.length}" unless parsed.length == 1

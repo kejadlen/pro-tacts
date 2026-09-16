@@ -20,7 +20,6 @@ handler that implements each one, and `lib/pro_tacts/vcard.rb` cites RFC
 | [2426](rfc2426.txt) | vCard 3.0 | The card format itself; the version Apple clients speak |
 | [2425](rfc2425.txt) | A MIME Content-Type for Directory Information | The value types RFC 2426 defers to rather than define, `date` among them |
 | [6350](rfc6350.txt) | vCard 4.0 | Nothing here implements it; kept for comparison |
-| [2047](rfc2047.txt) | MIME Part Three: Message Header Extensions | The encoded-words `tailscale serve` writes identity headers in |
 
 One property the server sends has no RFC. `getctag` is an Apple
 CalendarServer extension in the `http://calendarserver.org/ns/`

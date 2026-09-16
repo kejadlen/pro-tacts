@@ -11,15 +11,11 @@ COPY . .
 
 FROM ruby:4.0-slim
 
-ARG COMMIT_SHA
-ARG CHANGE_ID
-ARG BUILD_DATE
 # The image's own tag, and the release's name (see ci.yml) — the one
-# build fact the app reads back out, in the admin footer.
+# build fact the app reads back out, in the admin footer. It carries the
+# build time and the short sha, so nothing else about the build has to
+# be passed in beside it.
 ARG VERSION
-ENV COMMIT_SHA=${COMMIT_SHA}
-ENV CHANGE_ID=${CHANGE_ID}
-ENV BUILD_DATE=${BUILD_DATE}
 ENV VERSION=${VERSION}
 # rackup defaults to development, which wraps the app in Rack::Lint and
 # ShowExceptions.

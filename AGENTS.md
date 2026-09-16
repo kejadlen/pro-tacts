@@ -214,9 +214,12 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   unknown key meant a typo silently losing data; it now reads stored
   cards, where an unknown property means a client using the spec, and
   RFC 6352 section 6.3.2.2 requires keeping it.
-- `escape` and `fold` in `vcard.rb` have no caller yet. They are the
-  writer's half of the module, kept deliberately for PUT and the web
-  editor, and tested directly rather than through anything that serves.
+- `escape` and `header_of` in `vcard.rb` are the writer's half of the
+  module, and the web editor's saves are rebuilt through them
+  (`admin/card_form.rb`). There is no `fold` beside them: a served card
+  is stored bytes going out untouched, and the editor writes the one
+  line it changed, so nothing has ever had a logical line to fold.
+  `Parser.unfold` is the reading half and does have callers.
 - `vcard` names a `VCard` and nothing else, and a card with no
   qualifier to give it is named `vcard`. A `vcard` holding a card's
   bytes is the confusion the rule exists to stop: the two sit one

@@ -1,8 +1,8 @@
 # macOS exchange fixtures
 
 Request-level recordings of what macOS Contacts (26.5.1,
-AddressBookCore/2732.600.11) has sent to pro-tacts, promoted from
-`log/unhandled` as each session landed. Steps 01–09 are the read-only
+AddressBookCore/2732.600.11) has sent to pro-tacts, promoted from the
+exchange log as each session landed. Steps 01–09 are the read-only
 exchange of 2026-08-14, the day the one-card milestone landed (see
 `docs/plans/2026-08-12-one-card-on-macos.md`). Steps 10–11 are the
 writes the client began sending once the collection advertised write

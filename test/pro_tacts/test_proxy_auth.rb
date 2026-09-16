@@ -31,33 +31,13 @@ class ProxyAuthTest < Minitest::Test
     assert_nil login(sent_as: "HTTP_TAILSCALE_USER_LOGIN")
   end
 
-  # What Go's mime.QEncoding writes for a non-ASCII value, which is how
-  # serve sends one.
-  def test_a_q_encoded_login_is_decoded
-    assert_equal "zoë@example.com", login("=?utf-8?q?zo=C3=AB@example.com?=")
+  # The proxy copies the value through, so a non-ASCII one arrives as the
+  # UTF-8 it was written in rather than MIME-encoded.
+  def test_a_non_ascii_login_is_read_as_utf8
+    assert_equal "zoë@example.com", login((+"zoë@example.com").force_encoding(Encoding::BINARY))
   end
 
-  def test_whitespace_between_encoded_words_is_dropped
-    assert_equal "Zoë Chen", login("=?utf-8?q?Zo=C3=AB?= =?utf-8?q?_Chen?=")
-  end
-
-  def test_whitespace_around_plain_text_is_kept
-    assert_equal "Dr Zoë Chen", login("Dr =?utf-8?q?Zo=C3=AB?= Chen")
-  end
-
-  def test_a_b_encoded_login_is_decoded
-    assert_equal "Zoë Chen", login("=?UTF-8?B?Wm/DqyBDaGVu?=")
-  end
-
-  def test_a_login_in_another_charset_is_nobody
-    assert_nil login("=?iso-8859-1?q?Zo=EB?=")
-  end
-
-  def test_a_login_that_decodes_to_invalid_utf8_is_nobody
-    assert_nil login("=?utf-8?q?Zo=EB?=")
-  end
-
-  def test_a_malformed_b_word_is_nobody
-    assert_nil login("=?utf-8?b?not*base64?=")
+  def test_a_login_that_is_not_utf8_is_nobody
+    assert_nil login((+"zo\xEB").force_encoding(Encoding::BINARY))
   end
 end

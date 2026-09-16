@@ -1012,7 +1012,7 @@ class WebTest < Minitest::Test
       request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
       refute_includes last_response.body, "znorth"
 
-      header "Remote-User", "=?utf-8?q?zo=C3=AB@example.com?="
+      header "Remote-User", "zoë@example.com"
       request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
       assert_includes last_response.body, "aiden.vcf"
       assert_includes last_response.body, "znorth.vcf"

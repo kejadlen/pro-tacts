@@ -196,11 +196,13 @@ module ProTacts
         logical_lines(card).map { |logical_line| line_of(logical_line) }
       end
 
-      # VCard.fold's inverse, and the first thing a read does: RFC 2426
-      # section 2.6 has a content line unfolded before it is read. It
-      # runs over the whole line rather than token by token because the
-      # RFC puts no constraint on where a fold lands — mid-token and
-      # mid-escape included — so there is no boundary to do it at.
+      # The first thing a read does: RFC 2426 section 2.6 has a content
+      # line unfolded before it is read. It stands alone, with no folder
+      # opposite it — a served card is stored bytes going out untouched,
+      # so nothing here has a logical line to fold. It runs over the
+      # whole line rather than token by token because the RFC puts no
+      # constraint on where a fold lands — mid-token and mid-escape
+      # included — so there is no boundary to do it at.
       #
       # The recorded macOS session folds nothing: it sent a 443-octet
       # X-ADDRESSING-GRAMMAR line and an 81-octet ADR unbroken, both

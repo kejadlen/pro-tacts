@@ -3,7 +3,7 @@ require "base64"
 require "pro_tacts/vcard"
 
 # Builds the cards macOS Contacts sends for a contact with a picture,
-# in the exact wire shapes of the two captures in log/unhandled
+# in the exact wire shapes of the two logged exchanges
 # (put-...-1a6555e1 for the memoji, put-...-ae05fe03 for the photo).
 # The captures stay unpromoted — possibly real images, see
 # test/fixtures/macos-exchange/README.md — so the shapes live here as
@@ -62,9 +62,8 @@ module PhotoCard
 
   # The photo property as the client folds it, per the module comment:
   # parameters unbroken on one line, payload a space then 76 octets a
-  # continuation. Deliberately not VCard.fold, which honors the
-  # 75-octet limit the client ignores here — this half builds what
-  # arrives, and the writer's half is VCard's.
+  # continuation — past the 75-octet limit of RFC 2426 section 2.6, which
+  # is the point. This builds what arrives, not what the spec asks for.
   #: (Array[String] parameters, String image_bytes) -> String
   def self.property(parameters, image_bytes)
     base64 = Base64.strict_encode64(image_bytes)

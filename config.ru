@@ -32,9 +32,10 @@ Sentry.init do |sentry|
   sentry.send_default_pii = false
 
   # Headers are sent regardless, on transactions as well as errors, and
-  # the tailnet identity is not worth sending.
+  # the tailnet identity is not worth sending. Named off ProxyAuth, so
+  # the header that gets dropped is the one the app actually reads.
   drop_identity = lambda do |event, _hint|
-    event.request&.headers&.reject! { |name, _| name.start_with?("Tailscale-User-") }
+    event.request&.headers&.reject! { |name, _| name.casecmp?(ProTacts::ProxyAuth::HEADER) }
     event
   end
   sentry.before_send = drop_identity

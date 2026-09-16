@@ -24,9 +24,10 @@ module ProTacts
     end
 
     # Whether the exchange log keeps every DAV exchange rather than the
-    # ones that went wrong, so a write that succeeded can be read back
-    # (tasks/probe.rake). Off by default because it records every sync
-    # whole. See ProTacts::ExchangeLog.
+    # ones that went wrong, so a write that succeeded can be read back —
+    # which is how a client's handling of a property gets probed at all
+    # (docs/apple-contacts.md). Off by default because it records every
+    # sync whole. See ProTacts::ExchangeLog.
     #: () -> bool
     def debug?
       value = @env.fetch("PRO_TACTS_DEBUG", nil)

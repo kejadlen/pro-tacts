@@ -87,7 +87,7 @@ module ProTacts
               # granting some of them. macOS Contacts asks for this
               # property on every poll and attempts no write without it,
               # so claiming them is what makes the client send writes at
-              # all — the PUT they prompted was what log/unhandled
+              # all — the PUT they prompted is what the exchange log
               # captured them for. DAV:write covers PUT and PROPPATCH
               # (RFC 3744 section 3.2), and PUT is the one of the pair
               # answered; DAV:unbind is removing a member from the

@@ -6,17 +6,11 @@ module ProTacts
   # Parser::Line per logical line — and is the enumeration the
   # questions that move bytes are asked over; #properties folds the
   # same walk down to structure, and #insert puts lines back in. vCard
-  # 3.0 (RFC 2426): escape and fold, the writer's half, are here;
+  # 3.0 (RFC 2426): escape, the writer's half, is here;
   # Parser owns the reading half, down to the line split and the
   # values it comes back as. The walk is lazy for the same reason
   # Contact's parse is: the byte-moving paths never read structure.
   class VCard
-    # Folded lines must not exceed 75 octets, excluding the line break
-    # (RFC 2426 section 2.6). The octet count, not character count, is
-    # what matters: a continuation must never split a multibyte
-    # character.
-    LINE_LIMIT = 75 #: Integer
-
     TEXT_ESCAPES = {
       "\\" => "\\\\",
       ";" => "\\;",
@@ -87,27 +81,6 @@ module ProTacts
         ";#{name}=#{bare ? value : "\"#{value}\""}"
       }
       "#{prefix}#{property.name}#{parameters.join}:"
-    end
-
-    # Folds a logical line into physical lines of at most LINE_LIMIT
-    # octets, each continuation starting with a single space (RFC 2426
-    # section 2.6). The walk is character-wise so a multibyte character
-    # is never split mid-sequence.
-    #: (String line) -> String
-    def self.fold(line)
-      return line if line.bytesize <= LINE_LIMIT
-
-      folded = +""
-      width = 0
-      line.chars.each do |char|
-        if width + char.bytesize > LINE_LIMIT
-          folded << "\r\n "
-          width = 1
-        end
-        folded << char
-        width += char.bytesize
-      end
-      folded
     end
 
     # A card is made of UTF-8 text, and refuses to be made of anything

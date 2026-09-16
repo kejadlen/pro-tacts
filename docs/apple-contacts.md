@@ -243,8 +243,8 @@ reports every untouched property as modified. Verified 2026-08-24.
 
 ## An address type the client cannot model becomes a custom label
 
-`rake probe:types` sends three addresses and asks for one relabel — 1
-Modeled Way from Home to Work — to answer what a round trip does to `TYPE`:
+A probe card of three addresses, with one relabel asked for — 1 Modeled
+Way from Home to Work — answers what a round trip does to `TYPE`:
 
 | Sent | Came back |
 |---|---|
@@ -274,9 +274,8 @@ Verified 2026-09-09 against macOS 26.5.1 (AddressBookCore/2732.600.11).
 ## An annotation survives only on its own line
 
 A server that wants to mark a line — to say which group lent an address,
-say — gets one form that works and four that do not. `rake
-probe:annotations` sends a card carrying five, and one client edit
-answers all of them:
+say — gets one form that works and four that do not. A probe card
+carrying all five, and one client edit, answers all of them:
 
 | Form | Sent | Came back |
 |---|---|---|
@@ -298,9 +297,9 @@ third line of that group behind.
 
 That probe chose its own numbering — `item8` and `item9`, picked to dodge
 collisions — so it could not tell a broken binding from numbering the
-client disliked. `rake probe:renumber` settles it with two groups spelled
-the way a client spells its own, dense and in document order, each
-anchored by an `X-ABLabel`:
+client disliked. A second card settles it with two groups spelled the
+way a client spells its own, dense and in document order, each anchored
+by an `X-ABLabel`:
 
 | Sent | Came back |
 |---|---|
@@ -485,10 +484,10 @@ stored. Verified 2026-09-11 against iOS 26.6.2 (dataaccessd/1.0).
 
 ## Only the last of two notes survives
 
-`rake probe:notes` serves a card with two `NOTE` lines, the shape a group
-member with a note of its own is served in. RFC 6350 section 6.7.2 allows
-any number of them; Contacts keeps one. The Note field shows only the last,
-and the card it writes back after an unrelated edit carries only that one:
+A probe card with two `NOTE` lines, the shape a group member with a note
+of its own is served in. RFC 6350 section 6.7.2 allows any number of
+them; Contacts keeps one. The Note field shows only the last, and the
+card it writes back after an unrelated edit carries only that one:
 
 ```
 NOTE:Own note: gate code 1854.           ->  (dropped)
@@ -503,10 +502,10 @@ survives is the group's and the one lost is the member's. Verified
 
 ## Categories survive a round trip but are never shown
 
-`rake probe:categories` serves two `CATEGORIES` lines (RFC 2426 section
-3.6.1), one of them a comma list. Contacts shows neither anywhere on the
-card, and keeps both anyway. The card it writes back after an unrelated
-edit carries both, values byte-identical and the list unsplit, in reverse
+A probe card with two `CATEGORIES` lines (RFC 2426 section 3.6.1), one
+of them a comma list. Contacts shows neither anywhere on the card, and
+keeps both anyway. The card it writes back after an unrelated edit
+carries both, values byte-identical and the list unsplit, in reverse
 order:
 
 ```
@@ -556,7 +555,7 @@ Contacts (`dataaccessd/1.0`) needs nothing it leaves out. On 2026-09-11,
 iOS 26.6.2 discovered the account on the dev server and synced it. Its
 first multiget asked for all 20 cards and got 20 back, two cards seeded
 afterwards reached the phone on a later poll, and every response was a
-200 or 207, with nothing captured in `log/unhandled`. An earlier session,
+200 or 207, with nothing landing in the exchange log. An earlier session,
 iOS 26.6.1 on 2026-09-08, also edited a card and deleted one.
 
 iOS differs from macOS on the wire rather than in what it needs:
@@ -567,11 +566,7 @@ difference as a fixture the test suite replays.
 
 ## Reference implementations to compare against
 
-`servers/` runs Baikal, Radicale, and Monica behind mitmproxy, because those
-servers cannot be made to log what we need. Monica is the one confirmed
-working with macOS Contacts here. When pro-tacts and a working server
-disagree, the diff between two recordings of the same client action is the
-fastest way to find out why.
-
-pro-tacts itself is debugged through its own debug logging mode rather than
-through a proxy.
+The README's "Reference implementations" section covers what `servers/`
+runs and which of them to trust. What it is for is this: when pro-tacts
+and a working server disagree, the diff between two recordings of the
+same client action is the fastest way to find out why.
