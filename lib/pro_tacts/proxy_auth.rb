@@ -1,12 +1,17 @@
+require "pro_tacts"
+
 module ProTacts
-  # Who is asking, read off the identity headers Tailscale serve injects.
+  # Who is asking: the login on the one request header the proxy in front
+  # of this app writes it to, named by ProTacts.config.identity_header
+  # (docs/plans/2026-09-15-identity-from-one-header.md).
   #
-  # Serve sets Tailscale-User-Login and Tailscale-User-Name from the
-  # tailnet identity of the calling node, and strips both from incoming
-  # requests before proxying so a client cannot supply its own. That makes
-  # the headers trustworthy, but only behind serve: reached directly, the
-  # app trusts whatever it is handed. The app must not be listening
-  # anywhere but localhost.
+  # `tailscale serve` writes Tailscale-User-Login from the tailnet
+  # identity of the calling node and strips it from incoming requests
+  # before proxying, and a Caddy site's `header_up` sets the header it
+  # names, overwriting whatever arrived. Either way a client cannot
+  # supply its own. That makes the header trustworthy, but only behind
+  # such a proxy: reached directly, the app trusts whatever it is
+  # handed. The app must not be listening anywhere but localhost.
   #
   # A request that names nobody is refused at the top of Web's route
   # (Web#unauthorized). That covers the two cases Tailscale documents as
@@ -14,18 +19,10 @@ module ProTacts
   # tagged devices. A family device that gets tagged will start seeing
   # 401s.
   #
-  # Any tailnet identity is accepted. Getting onto the tailnet is the access
-  # control; the name only picks which address book a client syncs
-  # (docs/plans/2026-09-12-per-user-books.md).
-  module TailscaleAuth
-    LOGIN_HEADER = "HTTP_TAILSCALE_USER_LOGIN"
-    NAME_HEADER = "HTTP_TAILSCALE_USER_NAME"
-
-    # Who is asking, both headers decoded. The signature is in
-    # sig/pro_tacts/tailscale_auth.rbs.
-    # @rbs skip
-    Identity = Data.define(:login, :name)
-
+  # Any login the proxy vouches for is accepted. Getting onto the tailnet
+  # is the access control; the login only picks which address book a
+  # client syncs (docs/plans/2026-09-12-per-user-books.md).
+  module ProxyAuth
     # One RFC 2047 encoded-word (section 2), and the whitespace after it
     # when another follows: section 6.2 has that whitespace dropped, so a
     # long value split across words decodes whole.
@@ -33,14 +30,20 @@ module ProTacts
     ENCODED_RUN = /#{ENCODED_WORD}(?:[ \t]+(?=#{ENCODED_WORD}))?/ #: Regexp
     private_constant :ENCODED_WORD, :ENCODED_RUN
 
-    # The identity on a request, or nil for one that names nobody.
-    #: (Rack::env env) -> Identity?
-    def self.identity(env)
-      login = decode(env[LOGIN_HEADER].to_s)&.strip
-      name = decode(env[NAME_HEADER].to_s)&.strip
-      return if login.nil? || login.empty? || name.nil? || name.empty?
+    # The login on a request, or nil for one that names nobody. The
+    # header is an argument so a caller can read one this deployment is
+    # not configured for; every caller in the app takes the default.
+    #: (Rack::env env, ?header: String) -> String?
+    def self.login(env, header: ProTacts.config.identity_header)
+      login = decode(env[env_key(header)].to_s)&.strip
+      login unless login.nil? || login.empty?
+    end
 
-      Identity.new(login:, name:)
+    # Rack's spelling of a request header (the Rack SPEC's environment):
+    # upcased, dashes to underscores, HTTP_ in front.
+    #: (String header) -> String
+    def self.env_key(header)
+      "HTTP_#{header.upcase.tr("-", "_")}"
     end
 
     # A header value as serve writes it: Go's mime.QEncoding over the

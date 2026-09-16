@@ -11,14 +11,14 @@ require "pro_tacts/contact"
 require "pro_tacts/exchange_log"
 require "pro_tacts/refusal_alerts"
 require "pro_tacts/store"
-require "pro_tacts/tailscale_auth"
+require "pro_tacts/proxy_auth"
 require "roda/plugins/dav_verbs"
 
 module ProTacts
   class Web < Roda
     # @rbs @contacts: Array[Contact]?
     # @rbs @ctag: String?
-    # @rbs @identity: TailscaleAuth::Identity
+    # @rbs @login: String
     # @rbs @book: Set[String]?
 
     # The vendored Gloss CSS and the admin app's own stylesheet (see
@@ -79,8 +79,8 @@ module ProTacts
     # what the trunk sets they see.
     route do |r|
       # Every request names a tailnet user or is refused, the static
-      # files included (ProTacts::TailscaleAuth).
-      @identity = TailscaleAuth.identity(r.env) || unauthorized(r)
+      # files included (ProTacts::ProxyAuth).
+      @login = ProxyAuth.login(r.env) || unauthorized(r)
 
       r.public
       r.hash_branches

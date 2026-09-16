@@ -17,8 +17,7 @@ class AdminDeviceSetupTest < Minitest::Test
   end
 
   def setup
-    header "Tailscale-User-Login", "test@example.com"
-    header "Tailscale-User-Name", "Test User"
+    header "Remote-User", "test@example.com"
     header "Host", "box.example.ts.net"
   end
 
@@ -80,7 +79,7 @@ class AdminDeviceSetupTest < Minitest::Test
   end
 
   def test_document_names_the_requester_as_the_username
-    header "Tailscale-User-Login", "zoe@example.com"
+    header "Remote-User", "zoe@example.com"
     get "/setup/carddav.mobileconfig"
 
     assert_match(%r{<key>CardDAVUsername</key>\s*<string>zoe@example.com</string>}, last_response.body)

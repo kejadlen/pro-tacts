@@ -1,7 +1,7 @@
 require "pathname"
 require "rack/test"
 
-require "pro_tacts/tailscale_auth"
+require "pro_tacts/proxy_auth"
 
 # One recorded client exchange: a directory of numbered steps, replayed
 # in order. See each directory's README for provenance and the
@@ -28,12 +28,11 @@ class ExchangeFixtures < Data.define(:directory)
   # (macos-exchange/README.md).
   REQUEST_HEADERS = %w[Brief Content-Type Depth If-Match If-None-Match Prefer].freeze
 
-  # Stand in for the Tailscale identity headers the recorded sessions
-  # carried. They were stripped from the request files because they name
-  # a real tailnet user; the app refuses requests without them, so the
-  # replay has to put an identity back.
+  # Stands in for the identity header the recorded sessions carried. It
+  # was stripped from the request files because it names a real tailnet
+  # user; the app refuses requests without one, so the replay has to put
+  # a login back.
   REPLAY_LOGIN = "replay@example.com"
-  REPLAY_NAME = "Replay"
 
   # Every recording, for the callers that run all of them.
   def self.all
@@ -77,8 +76,7 @@ class ExchangeFixtures < Data.define(:directory)
       key = name == "Content-Type" ? "CONTENT_TYPE" : "HTTP_#{name.tr('-', '_').upcase}"
       [key, value]
     }.merge(
-      ProTacts::TailscaleAuth::LOGIN_HEADER => REPLAY_LOGIN,
-      ProTacts::TailscaleAuth::NAME_HEADER => REPLAY_NAME,
+      ProTacts::ProxyAuth.env_key(ProTacts.config.identity_header) => REPLAY_LOGIN,
     )
   end
 

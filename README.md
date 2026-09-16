@@ -57,20 +57,24 @@ PUT stores the submitted card verbatim (RFC 6352 section 6.3.2), and the
 change log the sync tokens count on is written with it, in one
 transaction.
 
-Requests are authenticated by the `Tailscale-User-Login` and
-`Tailscale-User-Name` headers that `tailscale serve` injects, which it
-strips from incoming requests so a client cannot forge them. A request
-without both gets a 401. That holds only
-while the app is reachable through serve alone — bind it to localhost.
+Requests are authenticated by one request header carrying the
+requester's login: `Remote-User`, unless `PRO_TACTS_IDENTITY_HEADER`
+names another. The proxy in front of the app writes that header.
+`tailscale serve` writes `Tailscale-User-Login` and strips it from
+incoming requests, and a Caddy site's `header_up` overwrites whatever
+arrived, so a client cannot forge either one. A request without a login
+gets a 401. That holds only while the app is reachable through such a
+proxy alone — bind it to localhost.
 Tailscale documents two cases that carry no identity and so cannot get in:
 Funnel traffic, which is public, and traffic from tagged devices.
 
 Each user syncs a book of their own rather than every card: the members
-of the group `sync:*`, which everyone gets, and of `sync:<name>`, where
-the name is the user's Tailscale display name in any case. A card a
-client creates joins `sync:*`, so everyone gets it until someone takes
-it out. See `docs/plans/2026-09-12-per-user-books.md` and
-`docs/plans/2026-09-15-client-creates-join-everyone.md`.
+of the group `sync:*`, which everyone gets, and of `sync:<login>`,
+matched in any case. A card a client creates joins `sync:*`, so everyone
+gets it until someone takes it out. See
+`docs/plans/2026-09-12-per-user-books.md`,
+`docs/plans/2026-09-15-client-creates-join-everyone.md`, and
+`docs/plans/2026-09-15-identity-from-one-header.md`.
 
 DAV exchanges that go wrong — a status of 400 or more other than the 401
 above, a crash, or a request that reported to Sentry — are written whole

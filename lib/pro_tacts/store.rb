@@ -172,7 +172,7 @@ module ProTacts
     GROUP_COLUMNS = [Sequel[:groups][:id], Sequel[:groups][:name]].freeze #: Array[untyped]
 
     # The group names that choose what a client syncs: `sync:*` for
-    # everyone, `sync:<display name>` for one user
+    # everyone, `sync:<login>` for one user
     # (docs/plans/2026-09-12-per-user-books.md). Unique like every
     # group's name (db/migrations/008_group_names.rb).
     SYNC_PREFIX = "sync:" #: String
@@ -357,13 +357,13 @@ module ProTacts
     end
 
     # The cards one user's client syncs: every member of `sync:*` and of
-    # `sync:<name>`, each once (docs/plans/2026-09-12-per-user-books.md).
-    # The name matches in any case, folded here in Ruby because SQLite's
+    # `sync:<login>`, each once (docs/plans/2026-09-12-per-user-books.md).
+    # The login matches in any case, folded here in Ruby because SQLite's
     # lower() folds ASCII alone; the prefix only as #sync_name? reads it,
     # since no other group's moves are logged.
-    #: (String name) -> Set[String]
-    def book(name)
-      own = "#{SYNC_PREFIX}#{name}"
+    #: (String login) -> Set[String]
+    def book(login)
+      own = "#{SYNC_PREFIX}#{login}"
       ids = groups.where(Sequel.function(:glob, "#{SYNC_PREFIX}*", :name)).all
         .select { |group| (label = group.fetch(:name).to_s) == EVERYONE || label.casecmp?(own) }
         .map { it.fetch(:id) }

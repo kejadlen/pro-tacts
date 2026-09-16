@@ -21,8 +21,7 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   def setup
-    header "Tailscale-User-Login", "test@example.com"
-    header "Tailscale-User-Name", "Test User"
+    header "Remote-User", "test@example.com"
   end
 
   ADA = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada Lovelace\r\nN:Lovelace;Ada;;;\r\n" \

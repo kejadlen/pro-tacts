@@ -21,13 +21,13 @@ class WebTest < Minitest::Test
     ProTacts::Web
   end
 
-  # Every request needs a Tailscale identity; the route refuses without
-  # one (see the refusal tests below). The sentry setup
+  # Every request names a tailnet user; the route refuses without one
+  # (see the refusal tests below). The header is the configured default
+  # (ProTacts::Config#identity_header). The sentry setup
   # pins the transport the app's reports land in; teardown clears it.
   def setup
     setup_sentry
-    header "Tailscale-User-Login", "test@example.com"
-    header "Tailscale-User-Name", "Test User"
+    header "Remote-User", "test@example.com"
   end
 
   def teardown
@@ -165,8 +165,8 @@ class WebTest < Minitest::Test
 
   ## Refusing a request that names nobody
 
-  def test_a_request_without_a_name_is_refused
-    header "Tailscale-User-Name", ""
+  def test_a_request_without_a_login_is_refused
+    header "Remote-User", ""
 
     get "/dav/principal/"
 
@@ -175,7 +175,7 @@ class WebTest < Minitest::Test
 
   # RFC 9110 section 15.5.2: a 401 carries a challenge.
   def test_a_refusal_names_tailscale_as_the_credential
-    header "Tailscale-User-Login", ""
+    header "Remote-User", ""
 
     get "/"
 
@@ -187,7 +187,7 @@ class WebTest < Minitest::Test
   # Every route is gated, not just the address book: an unauthenticated
   # request must not learn whether a path exists.
   def test_a_refusal_covers_every_path
-    header "Tailscale-User-Login", ""
+    header "Remote-User", ""
 
     %w[/ /.well-known/carddav /dav/ /dav/principal/ /dav/addressbook/ /contacts /groups /setup /admin.css].each do |path|
       get path
@@ -785,8 +785,8 @@ class WebTest < Minitest::Test
   end
 
   # A sync token as the route issues one to a user (Web#sync_token).
-  def issued_token(sequence, name: "Test User")
-    "http://pro-tacts/sync/#{sequence}/#{Digest::SHA256.hexdigest(name)[0, 16]}"
+  def issued_token(sequence, login: "test@example.com")
+    "http://pro-tacts/sync/#{sequence}/#{Digest::SHA256.hexdigest(login)[0, 16]}"
   end
 
   def etag_only_propfind
@@ -953,12 +953,12 @@ class WebTest < Minitest::Test
     end
   end
 
-  # A token names the book it was issued for, so a user whose name
+  # A token names the book it was issued for, so a user whose login
   # changed resyncs rather than taking a delta against another book —
   # and a token from before tokens named one is refused the same way.
   def test_sync_collection_refuses_a_token_from_another_book
     with_contacts({"aiden" => "Aiden"}) do
-      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(1, name: "Zoë Chen"))
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(1, login: "zoë@example.com"))
       assert_equal 410, last_response.status
 
       request "/dav/addressbook/", method: "REPORT", input: sync_collection("http://pro-tacts/sync/1")
@@ -1000,12 +1000,12 @@ class WebTest < Minitest::Test
   def test_each_user_syncs_their_own_book
     with_contacts({"aiden" => "Aiden"}) do |store|
       store.put("znorth", ProTacts::VCard.new(card("znorth", "Zed")))
-      FixtureData.seed_group(store, name: "sync:Zoë Chen", members: ["znorth"])
+      FixtureData.seed_group(store, name: "sync:zoë@example.com", members: ["znorth"])
 
       request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
       refute_includes last_response.body, "znorth"
 
-      header "Tailscale-User-Name", "=?utf-8?q?Zo=C3=AB_Chen?="
+      header "Remote-User", "=?utf-8?q?zo=C3=AB@example.com?="
       request "/dav/addressbook/", method: "PROPFIND", "HTTP_DEPTH" => "1", input: etag_only_propfind
       assert_includes last_response.body, "aiden.vcf"
       assert_includes last_response.body, "znorth.vcf"
@@ -1019,8 +1019,8 @@ class WebTest < Minitest::Test
       put_request "new", card("new", "New"), "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
 
       assert_equal 201, last_response.status
-      assert_equal Set["new"], store.book("Test User")
-      assert_equal Set["new"], store.book("Zoë Chen")
+      assert_equal Set["new"], store.book("test@example.com")
+      assert_equal Set["new"], store.book("zoë@example.com")
     end
   end
 

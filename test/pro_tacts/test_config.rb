@@ -58,6 +58,16 @@ class ConfigTest < Minitest::Test
     assert_equal Pathname.new("stderr"), ProTacts::Config.new("PRO_TACTS_EXCHANGE_LOG" => "stderr").exchange_log_path
   end
 
+  def test_identity_header_defaults_to_remote_user
+    assert_equal "Remote-User", ProTacts::Config.new({}).identity_header
+  end
+
+  def test_identity_header_is_overridable
+    config = ProTacts::Config.new("PRO_TACTS_IDENTITY_HEADER" => "Tailscale-Login")
+
+    assert_equal "Tailscale-Login", config.identity_header
+  end
+
   # nil rather than a default, so the fallback stays Profile's alone.
   def test_profile_name_is_nil_when_unset
     assert_nil ProTacts::Config.new({}).profile_name

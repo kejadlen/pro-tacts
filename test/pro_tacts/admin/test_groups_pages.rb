@@ -16,8 +16,7 @@ class AdminGroupsPagesTest < Minitest::Test
   end
 
   def setup
-    header "Tailscale-User-Login", "test@example.com"
-    header "Tailscale-User-Name", "Test User"
+    header "Remote-User", "test@example.com"
   end
 
   ADDRESS = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom" #: String

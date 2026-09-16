@@ -322,7 +322,7 @@ module ProTacts
 
     #: () -> Set[String]
     def book
-      @book ||= store.book(@identity.name)
+      @book ||= store.book(@login)
     end
 
     # One member of the requester's book, or nil for a card outside it
@@ -340,20 +340,20 @@ module ProTacts
 
     # Sync tokens are opaque to the client (RFC 6578 section 3); the URI
     # form is conventional. Built on the ctag so a client polling either
-    # one sees changes at the same points, and on the requester's name so
-    # that a token is refused by any other book, the one a rename leaves
-    # a user with included (docs/plans/2026-09-12-per-user-books.md, "The
-    # wire").
+    # one sees changes at the same points, and on the requester's login
+    # so that a token is refused by any other book, the one a rename
+    # leaves a user with included (docs/plans/2026-09-12-per-user-books.md,
+    # "The wire").
     #: () -> String
     def sync_token
       "http://pro-tacts/sync/#{ctag}/#{book_digest}"
     end
 
     # The name half of a sync token: the first 16 hex digits of the
-    # SHA-256 of the requester's display name.
+    # SHA-256 of the requester's login.
     #: () -> String
     def book_digest
-      Digest::SHA256.hexdigest(@identity.name)[0, 16].to_s
+      Digest::SHA256.hexdigest(@login)[0, 16].to_s
     end
 
     # The whole of the PUT route: a private method because a Roda route

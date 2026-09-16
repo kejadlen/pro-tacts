@@ -29,7 +29,7 @@ class FixturesTasksTest < Minitest::Test
   def test_the_request_is_written_as_a_step_without_what_identifies_the_tailnet
     put "/dav/addressbook/new.vcf", CARD,
       "CONTENT_TYPE" => "text/vcard", "HTTP_IF_MATCH" => '"abc"', "HTTP_USER_AGENT" => "AddressBookCore",
-      "HTTP_TAILSCALE_USER_LOGIN" => "ada@example.com", "HTTP_TAILSCALE_USER_NAME" => "Ada"
+      "HTTP_REMOTE_USER" => "ada@example.com"
 
     extract(exchange, @root / "07-put")
 

@@ -17,8 +17,7 @@ class AdminFooterTest < Minitest::Test
   end
 
   def setup
-    header "Tailscale-User-Login", "test@example.com"
-    header "Tailscale-User-Name", "Test User"
+    header "Remote-User", "test@example.com"
     @config = ProTacts.config
   end
 

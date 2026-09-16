@@ -45,11 +45,11 @@ module ProTacts
     end
 
     # The server ignores the username and password: identity comes from
-    # the Tailscale headers that serve injects (see
-    # ProTacts::TailscaleAuth). /setup passes the requester's login
-    # anyway, so the account says which tailnet user it is for. The
-    # password stays a placeholder because the account form expects the
-    # field, and dropping it is untested.
+    # the header the proxy in front of it writes (see
+    # ProTacts::ProxyAuth). /setup passes the requester's login anyway,
+    # so the account says which tailnet user it is for. The password
+    # stays a placeholder because the account form expects the field,
+    # and dropping it is untested.
     #: (hostname: String, username: String) -> String
     def self.render(hostname:, username:)
       identifier = "#{IDENTIFIER_PREFIX}-#{unique_hex}"
