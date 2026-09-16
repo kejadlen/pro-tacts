@@ -58,7 +58,7 @@ module ProTacts
     # committed. See ProTacts::ExchangeLog.
     #: () -> String
     def exchange_log_path
-      @env.fetch("PRO_TACTS_EXCHANGE_LOG", "log/exchange.log")
+      @env.fetch("PRO_TACTS_EXCHANGE_LOG", data_dir / "log/exchange.log")
     end
 
     # The CardDAV account's display name, PRO_TACTS_PROFILE_NAME — what
