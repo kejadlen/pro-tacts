@@ -5,14 +5,10 @@ require "pro_tacts/proxy_auth"
 # What the header says. That a request naming nobody is refused, and how,
 # is Web's (see WebTest).
 class ProxyAuthTest < Minitest::Test
-  # The header these tests configure the read for, passed explicitly so
-  # nothing here depends on what ProTacts.config defaults to.
-  HEADER = "Remote-User"
-
-  def login(value = "alpha@example.com", sent_as: HEADER)
+  def login(value = "alpha@example.com", sent_as: "HTTP_REMOTE_USER")
     env = {} #: Hash[String, String]
-    env[ProTacts::ProxyAuth.env_key(sent_as)] = value unless value.nil?
-    ProTacts::ProxyAuth.login(env, header: HEADER)
+    env[sent_as] = value unless value.nil?
+    ProTacts::ProxyAuth.login(env)
   end
 
   def test_the_header_is_the_login
@@ -32,18 +28,7 @@ class ProxyAuthTest < Minitest::Test
   end
 
   def test_a_login_on_another_header_is_nobody
-    assert_nil login(sent_as: "Tailscale-User-Login")
-  end
-
-  def test_the_header_read_is_the_one_named
-    env = { ProTacts::ProxyAuth.env_key("Tailscale-User-Login") => "alpha@example.com" }
-
-    assert_equal "alpha@example.com", ProTacts::ProxyAuth.login(env, header: "Tailscale-User-Login")
-  end
-
-  def test_a_header_name_is_upcased_and_prefixed
-    assert_equal "HTTP_REMOTE_USER", ProTacts::ProxyAuth.env_key("Remote-User")
-    assert_equal "HTTP_TAILSCALE_USER_LOGIN", ProTacts::ProxyAuth.env_key("tailscale-user-login")
+    assert_nil login(sent_as: "HTTP_TAILSCALE_USER_LOGIN")
   end
 
   # What Go's mime.QEncoding writes for a non-ASCII value, which is how

@@ -22,8 +22,7 @@ class WebTest < Minitest::Test
   end
 
   # Every request names a tailnet user; the route refuses without one
-  # (see the refusal tests below). The header is the configured default
-  # (ProTacts::Config#identity_header). The sentry setup
+  # (see the refusal tests below). The sentry setup
   # pins the transport the app's reports land in; teardown clears it.
   def setup
     setup_sentry
@@ -183,15 +182,13 @@ class WebTest < Minitest::Test
     assert_equal "text/plain", last_response["Content-Type"]
   end
 
-  # The header read and the setting that chose it, which is what tells a
-  # deployment reading one header from a proxy writing another apart.
+  # The header read, which is what tells a proxy writing another apart.
   def test_a_refusal_names_the_header_it_read
     header "Remote-User", ""
 
     get "/"
 
     assert_includes last_response.body, "Remote-User"
-    assert_includes last_response.body, "PRO_TACTS_IDENTITY_HEADER"
   end
 
   # Every route is gated, not just the address book: an unauthenticated

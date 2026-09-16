@@ -58,11 +58,9 @@ change log the sync tokens count on is written with it, in one
 transaction.
 
 Requests are authenticated by one request header carrying the
-requester's login: `Remote-User`, unless `PRO_TACTS_IDENTITY_HEADER`
-names another. The proxy in front of the app writes that header.
-`tailscale serve` writes `Tailscale-User-Login` and strips it from
-incoming requests, and a Caddy site's `header_up` overwrites whatever
-arrived, so a client cannot forge either one. A request without a login
+requester's login: `Remote-User`. The proxy in front of the app writes
+that header. A Caddy site's `header_up` overwrites whatever arrived, so
+a client cannot forge it. A request without a login
 gets a 401. That holds only while the app is reachable through such a
 proxy alone — bind it to localhost.
 Tailscale documents two cases that carry no identity and so cannot get in:

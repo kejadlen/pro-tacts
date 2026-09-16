@@ -76,7 +76,7 @@ class ExchangeFixtures < Data.define(:directory)
       key = name == "Content-Type" ? "CONTENT_TYPE" : "HTTP_#{name.tr('-', '_').upcase}"
       [key, value]
     }.merge(
-      ProTacts::ProxyAuth.env_key(ProTacts.config.identity_header) => REPLAY_LOGIN,
+      ProTacts::ProxyAuth::ENV_KEY => REPLAY_LOGIN,
     )
   end
 

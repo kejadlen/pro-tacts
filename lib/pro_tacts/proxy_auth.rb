@@ -1,17 +1,14 @@
 require "pro_tacts"
 
 module ProTacts
-  # Who is asking: the login on the one request header the proxy in front
-  # of this app writes it to, named by ProTacts.config.identity_header
-  # (docs/plans/2026-09-15-identity-from-one-header.md).
+  # Who is asking: the login on Remote-User, which the proxy in front of
+  # this app writes (docs/plans/2026-09-15-identity-from-one-header.md).
   #
-  # `tailscale serve` writes Tailscale-User-Login from the tailnet
-  # identity of the calling node and strips it from incoming requests
-  # before proxying, and a Caddy site's `header_up` sets the header it
-  # names, overwriting whatever arrived. Either way a client cannot
-  # supply its own. That makes the header trustworthy, but only behind
-  # such a proxy: reached directly, the app trusts whatever it is
-  # handed. The app must not be listening anywhere but localhost.
+  # The Caddy site's `header_up` sets Remote-User, overwriting whatever
+  # arrived, so a client cannot supply its own. That makes the header
+  # trustworthy, but only behind such a proxy: reached directly, the app
+  # trusts whatever it is handed. The app must not be listening anywhere
+  # but localhost.
   #
   # A request that names nobody is refused at the top of Web's route
   # (Web#unauthorized). That covers the two cases Tailscale documents as
@@ -30,20 +27,14 @@ module ProTacts
     ENCODED_RUN = /#{ENCODED_WORD}(?:[ \t]+(?=#{ENCODED_WORD}))?/ #: Regexp
     private_constant :ENCODED_WORD, :ENCODED_RUN
 
-    # The login on a request, or nil for one that names nobody. The
-    # header is an argument so a caller can read one this deployment is
-    # not configured for; every caller in the app takes the default.
-    #: (Rack::env env, ?header: String) -> String?
-    def self.login(env, header: ProTacts.config.identity_header)
-      login = decode(env[env_key(header)].to_s)&.strip
-      login unless login.nil? || login.empty?
-    end
+    # Remote-User as Rack spells it in the environment.
+    ENV_KEY = "HTTP_REMOTE_USER" #: String
 
-    # Rack's spelling of a request header (the Rack SPEC's environment):
-    # upcased, dashes to underscores, HTTP_ in front.
-    #: (String header) -> String
-    def self.env_key(header)
-      "HTTP_#{header.upcase.tr("-", "_")}"
+    # The login on a request, or nil for one that names nobody.
+    #: (Rack::env env) -> String?
+    def self.login(env)
+      login = decode(env[ENV_KEY].to_s)&.strip
+      login unless login.nil? || login.empty?
     end
 
     # A header value as serve writes it: Go's mime.QEncoding over the

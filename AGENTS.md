@@ -96,12 +96,10 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   `DavXml`, whose methods are the only elements the server can send. Inside
   an element's block, `it` is the builder, not an enclosing block's value,
   so name the outer block's parameter.
-- Every request needs the identity header or it gets a 401, so a bare
-  `curl` against `rake dev` is refused until you pass `Remote-User`
-  (`PRO_TACTS_IDENTITY_HEADER` renames it, and the refusal says which
-  name it read). The security of that rests on the app being reachable
-  only through a proxy that writes the header itself — never bind it to
-  anything but localhost.
+- Every request needs a `Remote-User` header or it gets a 401, so a bare
+  `curl` against `rake dev` is refused until you pass it. The security of
+  that rests on the app being reachable only through a proxy that writes
+  the header itself — never bind it to anything but localhost.
 - DAV exchanges that went wrong (a status of 400 or more but 401, a
   crash, or a report to Sentry) are written whole to `log/exchange.log`,
   each line prefixed by the id Sentry carries as the `exchange` tag.

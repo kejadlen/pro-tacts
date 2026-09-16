@@ -109,21 +109,18 @@ module ProTacts
     # login its proxy vouches for, which nothing the client could send
     # supplies.
     #
-    # The body names the header that was read and the setting that chose
-    # it, because the failure it reports is almost always a deployment
-    # reading one header while its proxy writes another, and the name is
-    # the whole of what tells them apart. Naming it hands an attacker
-    # nothing: the proxy overwrites the header on every request, so
-    # knowing which one it is buys no way to forge it.
+    # The body names the header that was read, because the failure it
+    # reports is almost always a proxy writing some other one. Naming it
+    # hands an attacker nothing: the proxy overwrites the header on every
+    # request, so knowing which one it is buys no way to forge it.
     #: (Roda::RodaRequest r) -> bot
     def unauthorized(r)
       response.status = 401
       response["WWW-Authenticate"] = "Proxy-Identity"
       response["Content-Type"] = "text/plain"
       response.write(
-        "Unauthorized: no login on the #{ProTacts.config.identity_header} header.\n" \
-        "The proxy in front of this app writes that header; " \
-        "PRO_TACTS_IDENTITY_HEADER names which one is read.\n"
+        "Unauthorized: no login on the Remote-User header.\n" \
+        "The proxy in front of this app writes that header.\n"
       )
       r.halt
     end

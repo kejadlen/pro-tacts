@@ -61,17 +61,6 @@ module ProTacts
       Pathname.new(@env.fetch("PRO_TACTS_EXCHANGE_LOG", data_dir / "log/exchange.log"))
     end
 
-    # The request header a requester's login is read off,
-    # PRO_TACTS_IDENTITY_HEADER — the whole of the identity this app has
-    # (see ProTacts::ProxyAuth). A deployment names the header its own
-    # proxy writes: `tailscale serve` writes Tailscale-User-Login, and a
-    # Caddy site writes whatever its header_up names. The default is what
-    # a reverse proxy conventionally writes the authenticated user to.
-    #: () -> String
-    def identity_header
-      @env.fetch("PRO_TACTS_IDENTITY_HEADER", "Remote-User")
-    end
-
     # The CardDAV account's display name, PRO_TACTS_PROFILE_NAME — what
     # a device labels the account it installs, and the one way to tell
     # two pro-tacts accounts apart on the same phone. nil when unset
