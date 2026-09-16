@@ -315,7 +315,10 @@ module ProTacts
             # class) carrying the Lucide x (Admin::Icon), its
             # aria-label the name the glyph cannot show; the card
             # UI's removal register — low-contrast at rest, danger
-            # on hover — is admin.css's.
+            # on hover — is admin.css's. The picker's own date input
+            # is swept along by the bare `input` here, which is
+            # right: what the calendar had staged is no longer what
+            # the row says.
             clear = "$el.closest('.date-row').querySelectorAll('select, input').forEach(el => el.value = '')"
             button(type: "button", class: "icon-button", data_size: "sm",
                    aria_label: "Remove birthday", "@click": clear) do
@@ -325,9 +328,12 @@ module ProTacts
         end
       end
 
-      # The birthday row's three controls, shared by the standing row
-      # and the add dialog's — the control choices and their order are
-      # docs/plans/2026-09-07-web-birthday-editor.md, "The row". The
+      # The birthday row's controls, shared by the standing row and
+      # the add dialog's — the three fields, their order, and why they
+      # are three rather than one date input are
+      # docs/plans/2026-09-07-web-birthday-editor.md, "The row", and
+      # the picker beside them is
+      # docs/plans/2026-09-15-a-picker-beside-the-birthday.md. The
       # same names for both callers is the point: a birthday needs no
       # digest, there being at most one, and the save reads either
       # caller's row identically. A nil birthday is the added row.
@@ -344,6 +350,56 @@ module ProTacts
               min: 1, max: 31, placeholder: "day", aria_label: "day")
         input(type: "number", name: "birthday[year]", value: birthday&.year,
               min: 1, max: 9999, placeholder: "year", aria_label: "year")
+        birthday_picker
+      end
+
+      # The calendar affordance: a date input the row never shows and
+      # never submits, and the button that opens its native picker.
+      # The three fields stay the value — a date input holds only the
+      # complete shape, and four of the six this row edits have no
+      # spelling in one — so the picker writes into them and they are
+      # what posts (docs/plans/2026-09-15-a-picker-beside-the-birthday.md).
+      #
+      # The input carries no `name`, so nothing of it reaches the
+      # save; `tabindex` and `aria-hidden` keep it out of both orders,
+      # the button being the control a person actually meets. It is
+      # hidden by being taken out of flow at zero width rather than by
+      # `display: none` (admin.css), because showPicker() on an
+      # element that is not rendered is not a thing the HTML standard
+      # promises to honor.
+      #
+      # aria-hidden is spelled out rather than left bare: ARIA's
+      # true/false attributes are enumerated, not HTML booleans, and
+      # a present-but-empty one is not the same claim as "true" in
+      # every reading of the spec. Icon writes the bare form and is
+      # harmless doing it — a decorative svg inside a labelled button
+      # contributes no name either way — but this is an input, and
+      # an input that reaches the tree unlabelled is not harmless.
+      #
+      # Opening syncs the picker to the fields rather than the fields
+      # being prefilled once at render: a date typed into the boxes is
+      # then where the calendar opens. A blank component makes a
+      # string no date input accepts, and the assignment of an invalid
+      # value leaves the input empty (HTML section 4.10.5.1.7) — so a
+      # partial birthday opens the picker on its own default with no
+      # guard here. Picking writes all three fields, which is the
+      # trade this control is: the year is the one a no-year birthday
+      # then blanks by hand.
+      #: () -> void
+      def birthday_picker
+        sync = "const r = $el.closest('.date-row'), n = r.querySelectorAll('input[type=number]'), " \
+               "p = r.querySelector('input[type=date]'); " \
+               "p.value = `${n[1].value.padStart(4, '0')}-${r.querySelector('select').value.padStart(2, '0')}" \
+               "-${n[0].value.padStart(2, '0')}`; p.showPicker()"
+        fill = "if (!$el.value) return; " \
+               "const r = $el.closest('.date-row'), n = r.querySelectorAll('input[type=number]'), " \
+               "[y, m, d] = $el.value.split('-'); " \
+               "r.querySelector('select').value = +m; n[0].value = +d; n[1].value = +y"
+        input(type: "date", tabindex: -1, aria_hidden: "true", "@change": fill)
+        button(type: "button", class: "icon-button", data_size: "sm",
+               aria_label: "Pick a birthday from a calendar", "@click": sync) do
+          render Icon.new(:calendar)
+        end
       end
 
       # An address row: the type's caption and a stack of component

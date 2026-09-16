@@ -35,6 +35,30 @@ class AdminContactsPagesTest < Minitest::Test
     "NOTE:Gate code 1854.",
   ].freeze #: Array[String]
 
+  # The birthday row's calendar affordance
+  # (docs/plans/2026-09-15-a-picker-beside-the-birthday.md): a date
+  # input the row never shows and never submits, and the button that
+  # opens its native picker. Byte-identical in the standing row and
+  # the one the add dialog reveals — the picker prefills from the
+  # three boxes rather than from anything rendered, so there is
+  # nothing for the two callers to differ about — which is why the
+  # two tests over it share this rather than each spelling it out.
+  BIRTHDAY_PICKER =
+    %(<input type="date" tabindex="-1" aria-hidden="true" @change="if (!$el.value) return; ) +
+    %(const r = $el.closest('.date-row'), n = r.querySelectorAll('input[type=number]'), ) +
+    %([y, m, d] = $el.value.split('-'); ) +
+    %(r.querySelector('select').value = +m; n[0].value = +d; n[1].value = +y">) +
+    %(<button type="button" class="icon-button" data-size="sm" ) +
+    %(aria-label="Pick a birthday from a calendar" ) +
+    %(@click="const r = $el.closest('.date-row'), n = r.querySelectorAll('input[type=number]'), ) +
+    %(p = r.querySelector('input[type=date]'); ) +
+    %(p.value = `${n[1].value.padStart(4, '0')}-${r.querySelector('select').value.padStart(2, '0')}) +
+    %(-${n[0].value.padStart(2, '0')}`; p.showPicker()">) +
+    %(<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" ) +
+    %(stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden>) +
+    %(<path d="M8 2v4"></path><path d="M16 2v4"></path>) +
+    %(<rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path></svg></button>) #: String
+
   def test_index_lists_recently_updated_contacts
     with_contacts({"ada" => ADA}) do
       get "/"
@@ -1022,7 +1046,12 @@ class AdminContactsPagesTest < Minitest::Test
       refute_includes body, '<span>birthday</span>'
       assert_includes body,
         '<label x-show="!added.includes(\'birthday\')"><input type="radio" name="add-type" value="birthday" x-model="type">birthday</label>'
-      refute_includes body, "icon-button"
+      # The remove control by its own label, not by the class it
+      # shares: the add dialog's birthday template carries a picker
+      # wearing the same one, inert inside its <template> but present
+      # in the bytes, so "icon-button" stopped meaning "a control
+      # that deletes something."
+      refute_includes body, 'aria-label="Remove birthday"'
     end
   end
 
@@ -1519,7 +1548,10 @@ class AdminContactsPagesTest < Minitest::Test
   # prefill is Contact#birthday, three controls on one line — a month
   # select (names, constrained by construction) and ranged number
   # inputs — in the value column, month-day-year matching the prose
-  # the details page renders.
+  # the details page renders. The picker follows them and is not a
+  # fourth field: it carries no name, so the three boxes are still
+  # the whole of what a save reads
+  # (docs/plans/2026-09-15-a-picker-beside-the-birthday.md).
   def test_the_edit_screen_renders_the_birthday_row
     with_contacts({"ada" => ADA}) do
       get "/contacts/ada/edit"
@@ -1532,7 +1564,8 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes body,
         '<input type="number" name="birthday[day]" value="10" min="1" max="31" placeholder="day" aria-label="day">'
       assert_includes body,
-        '<input type="number" name="birthday[year]" value="1985" min="1" max="9999" placeholder="year" aria-label="year">'
+        '<input type="number" name="birthday[year]" value="1985" min="1" max="9999" placeholder="year" aria-label="year">' +
+        BIRTHDAY_PICKER
       # The remove control: one click that speaks the three-blank
       # rule, over a held birthday only — Gloss's IconButton, so the
       # glyph carries the label.
@@ -1765,19 +1798,22 @@ class AdminContactsPagesTest < Minitest::Test
         '<input type="text" :name="`new_address[${i}][postal_code]`" placeholder="postal code" aria-label="postal code">' \
         '<input type="text" :name="`new_address[${i}][country]`" placeholder="country" aria-label="country">' \
         '</div></template>'
-      # The birthday kind: the standing row's own three controls with
+      # The birthday kind: the standing row's own controls with
       # nothing prefilled, naming the model's birthday[] group — no
       # digest, a contact holding at most one, and no removal state,
-      # the added rows' exemption. Asserted in two contiguous pieces:
-      # the month names sit between the empty option and December.
+      # the added rows' exemption. The picker comes along, an added
+      # birthday being as pickable as a standing one; the remove
+      # control does not, there being nothing yet to remove.
+      # Asserted in two contiguous pieces: the month names sit
+      # between the empty option and December.
       assert_includes body,
         '<template x-if="kind === \'birthday\'"><div class="date-row">' \
         '<select name="birthday[month]" aria-label="month" x-init="$el.focus()"><option value="" selected>month</option>'
       assert_includes body,
         '<option value="12">December</option></select>' \
         '<input type="number" name="birthday[day]" min="1" max="31" placeholder="day" aria-label="day">' \
-        '<input type="number" name="birthday[year]" min="1" max="9999" placeholder="year" aria-label="year">' \
-        '</div></template></div></template>'
+        '<input type="number" name="birthday[year]" min="1" max="9999" placeholder="year" aria-label="year">' +
+        BIRTHDAY_PICKER + "</div></template></div></template>"
       # The template is inside the edit form, so one Save writes every
       # row it made along with everything else. Indexed from the
       # form's start, the header's search form closing before both.

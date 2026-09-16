@@ -141,38 +141,63 @@
 .card-body form.field-stack .field > .date-row {
   display: flex;
   gap: var(--gl-space-2xs);
+  position: relative;
 }
 .card-body form.field-stack .field > .date-row > select {
   flex: 1 1 auto;
   padding-block: var(--gl-space-3xs);
 }
-.card-body form.field-stack .field > .date-row > input {
+/* The two digit boxes by their type, not by being inputs: the row
+   also holds the picker's date input, which is not a box anyone
+   sizes (below). */
+.card-body form.field-stack .field > .date-row > input[type="number"] {
   flex: 1 1 auto;
   width: calc(7ch + 2 * var(--gl-space-s) + 2px);
   padding-block: var(--gl-space-3xs);
 }
-/* The birthday row's remove control (Admin::ContactsEdit): Gloss's
+/* The picker's date input (Admin::ContactsEdit#birthday_picker),
+   which the row never shows: out of flow so it takes no flex item
+   and no grid cell in either of the narrow shapes below, at zero
+   width in the corner the native picker should hang from. Not
+   `display: none` — showPicker() is only promised on an element
+   that is rendered — and not `visibility: hidden` either, which
+   the same doubt covers. */
+.card-body form.field-stack .field > .date-row > input[type="date"] {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  width: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+/* The birthday row's two icon controls (Admin::ContactsEdit): Gloss's
    IconButton is already square, flex-none, and quiet — the one thing
-   this layer adds is centering it on the date line, whose children
+   this layer adds is centering them on the date line, whose children
    stretch, and the removal register the card UI claims for itself
    (docs/DESIGN.md): danger only on hover, the icon's stroke
-   inheriting it. */
+   inheriting it. The hover color is the remove control's alone; the
+   picker is not destructive and keeps the quiet register. Their order
+   is their identity — the picker renders in both the standing row and
+   the added one, the remove only in the standing row, so the picker
+   is the first button either way. */
 .card-body form.field-stack .field > .date-row > .icon-button {
   align-self: center;
 }
-.card-body form.field-stack .field > .date-row > .icon-button:hover {
+.card-body form.field-stack .field > .date-row > button:nth-of-type(2):hover {
   color: var(--gl-color-danger);
 }
 
 /* The date line breaks in two when its row cannot hold a whole
-   date: a month name, two year boxes, and the remove button need
+   date: a month name, two year boxes, and the two icon buttons need
    ~20rem side by side, and on a phone the value column has a
    fraction of that — three controls squeezed into it rendered each
-   a stub. The narrow shape is two lines with the button in a
-   column of its own: the month over the day and year, the month
+   a stub. The narrow shape is two lines with the buttons in a
+   column of their own: the month over the day and year, the month
    name being the wide value and the two digit boxes pairing, and
-   the button beside the month, where desktop's line has it. The
-   digit boxes shed their desktop width to fill their half-tracks,
+   the buttons stacked beside them, where desktop's line has them.
+   The digit boxes shed their desktop width to fill their half-tracks,
    the address row's stacked fields the same reading. A second
    break, at 21rem, gives each field its own line — the digit pair
    wants its desktop width a box, and a half-track that cannot
@@ -201,15 +226,24 @@
   .card-body form.field-stack .field > .date-row > select {
     grid-area: 1 / 1 / 2 / 3;
   }
-  .card-body form.field-stack .field > .date-row > input {
+  .card-body form.field-stack .field > .date-row > input[type="number"] {
     grid-area: 2 / 1;
     width: auto;
   }
-  .card-body form.field-stack .field > .date-row > input:last-of-type {
+  /* The year box by the box it follows, not by :last-of-type — the
+     row's last input child is the picker's date input, which shares
+     the tag that selector counts. */
+  .card-body form.field-stack .field > .date-row > input[type="number"] + input[type="number"] {
     grid-area: 2 / 2;
   }
-  .card-body form.field-stack .field > .date-row > .icon-button {
+  /* The picker beside the month, the remove beside the digits — each
+     button on the line whose value it acts on, and neither of them
+     auto-placed into a track a field wants. */
+  .card-body form.field-stack .field > .date-row > button:nth-of-type(1) {
     grid-area: 1 / 3;
+  }
+  .card-body form.field-stack .field > .date-row > button:nth-of-type(2) {
+    grid-area: 2 / 3;
   }
 }
 /* The second break: two columns — field and button — one row per
@@ -223,14 +257,17 @@
   .card-body form.field-stack .field > .date-row > select {
     grid-area: 1 / 1;
   }
-  .card-body form.field-stack .field > .date-row > input {
+  .card-body form.field-stack .field > .date-row > input[type="number"] {
     grid-area: 2 / 1;
   }
-  .card-body form.field-stack .field > .date-row > input:last-of-type {
+  .card-body form.field-stack .field > .date-row > input[type="number"] + input[type="number"] {
     grid-area: 3 / 1;
   }
-  .card-body form.field-stack .field > .date-row > .icon-button {
+  .card-body form.field-stack .field > .date-row > button:nth-of-type(1) {
     grid-area: 1 / 2;
+  }
+  .card-body form.field-stack .field > .date-row > button:nth-of-type(2) {
+    grid-area: 2 / 2;
   }
 }
 /* A multiline control has no single line to align a caption to, and
@@ -262,7 +299,10 @@
    each selector naming its row's own removal condition — an
    address only blank throughout its components, a partial blank
    keeping the line, and the birthday only with the month's own
-   empty option picked, both the save's rules. The boxes keep
+   empty option picked, both the save's rules. The birthday's asks
+   after its digit boxes by type: the picker's date input supports
+   no placeholder, so :placeholder-shown never matches it and a
+   bare `input` there would read the row as filled forever. The boxes keep
    their neutral borders: Gloss's danger border is the
    aria-invalid contract, and a blank row is a valid save, not a
    refused one. One gap, noted rather than scripted: a
@@ -271,7 +311,7 @@
 .field[data-blank-removes]:has(> input:placeholder-shown) > span,
 .field[data-blank-removes]:has(> textarea:placeholder-shown) > span,
 .field[data-blank-removes]:has(> .field-stack):not(:has(input:not(:placeholder-shown))) > span,
-.field[data-blank-removes]:has(> .date-row):has(option[value=""]:checked):not(:has(input:not(:placeholder-shown))) > span {
+.field[data-blank-removes]:has(> .date-row):has(option[value=""]:checked):not(:has(input[type="number"]:not(:placeholder-shown))) > span {
   text-decoration: line-through;
   color: var(--gl-color-danger);
 }

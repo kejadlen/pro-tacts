@@ -10,17 +10,31 @@ module ProTacts
     # cannot cross an <img>: the stroke has to inherit from the
     # element that carries the glyph, Gloss's IconButton included. A
     # new glyph lands the same way this one did — named in the
-    # registry, its paths verbatim, this comment's version moved with
+    # registry, its shapes verbatim, this comment's version moved with
     # it.
     class Icon < Phlex::SVG
       # @rbs @name: Symbol
       # @rbs @size: Integer
 
-      # One glyph's path data, verbatim from the lucide-static SVG's
-      # own path elements — x, the remove control's two strokes.
-      PATHS = {
-        x: ["M18 6 6 18", "m6 6 12 12"],
-      } #: Hash[Symbol, Array[String]]
+      # One glyph's shapes, each an element name and its attributes,
+      # verbatim from the lucide-static SVG's own children: x, the
+      # remove control's two strokes, and calendar, the birthday row's
+      # picker. A tag per shape rather than a bare list of path data,
+      # because calendar's frame is a rect and redrawing it as a path
+      # would be this file copying something other than what Lucide
+      # ships.
+      GLYPHS = {
+        x: [
+          [:path, {d: "M18 6 6 18"}],
+          [:path, {d: "m6 6 12 12"}],
+        ],
+        calendar: [
+          [:path, {d: "M8 2v4"}],
+          [:path, {d: "M16 2v4"}],
+          [:rect, {width: 18, height: 18, x: 3, y: 4, rx: 2}],
+          [:path, {d: "M3 10h18"}],
+        ],
+      } #: Hash[Symbol, Array[[Symbol, Hash[Symbol, untyped]]]]
 
       #: (Symbol name, ?size: Integer) -> void
       def initialize(name, size: 16)
@@ -35,8 +49,8 @@ module ProTacts
         svg(viewBox: "0 0 24 24", width: @size, height: @size, fill: :none,
             stroke: "currentColor", stroke_width: 2, stroke_linecap: "round",
             stroke_linejoin: "round", aria_hidden: true) do
-          PATHS.fetch(@name).each do
-            path(d: it)
+          GLYPHS.fetch(@name).each do |tag, attributes|
+            public_send(tag, **attributes)
           end
         end
       end
