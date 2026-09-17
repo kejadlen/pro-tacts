@@ -66,6 +66,14 @@ class ConfigTest < Minitest::Test
     assert_equal "pro-tacts (dev)", ProTacts::Config.new("PRO_TACTS_INSTANCE_NAME" => "pro-tacts (dev)").instance_name
   end
 
+  def test_accent_is_nil_when_unset
+    assert_nil ProTacts::Config.new({}).accent
+  end
+
+  def test_accent_is_passed_through
+    assert_equal "ink-blue", ProTacts::Config.new("PRO_TACTS_ACCENT" => "ink-blue").accent
+  end
+
   def test_favicon_is_nil_when_unset
     assert_nil ProTacts::Config.new({}).favicon
   end

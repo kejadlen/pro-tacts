@@ -41,11 +41,11 @@ module ProTacts
 
       def view_template
         doctype
-        # A run with no release behind it, the footer's "dev server",
-        # marks the root, and admin.css repaints the accent and the
-        # chrome for it: a working copy should not pass for the
-        # deployment at a glance (docs/DESIGN.md).
-        html(lang: "en", **(ProTacts.config.version ? {} : {data: {server: "dev"}})) do
+        # A configured accent marks the root, and admin.css repaints the
+        # accent and the chrome for it: `rake dev` names one so a working
+        # copy cannot pass for the deployment at a glance (docs/DESIGN.md).
+        accent = ProTacts.config.accent
+        html(lang: "en", **(accent ? {data: {accent:}} : {})) do
           head do
             meta(charset: "utf-8")
             meta(name: "viewport", content: "width=device-width, initial-scale=1")

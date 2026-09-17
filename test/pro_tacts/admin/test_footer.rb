@@ -71,16 +71,16 @@ class AdminFooterTest < Minitest::Test
     refute_includes last_response.body, "+debug"
   end
 
-  def test_an_unversioned_run_marks_the_page_for_the_dev_theme
-    with_env({})
+  def test_a_configured_accent_marks_the_page
+    with_env("PRO_TACTS_ACCENT" => "ink-blue")
 
-    assert_includes last_response.body, %(<html lang="en" data-server="dev">)
+    assert_includes last_response.body, %(<html lang="en" data-accent="ink-blue">)
   end
 
-  def test_a_release_leaves_the_page_unmarked
-    with_env("VERSION" => "20260904-1822-a1b2c3d")
+  def test_no_accent_leaves_the_page_unmarked
+    with_env({})
 
-    refute_includes last_response.body, "data-server"
+    assert_includes last_response.body, %(<html lang="en">)
   end
 
   def test_the_tab_carries_the_configured_favicon

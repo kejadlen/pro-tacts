@@ -30,6 +30,7 @@ task :dev do
   ENV["PRO_TACTS_EXCHANGE_LOG"] ||= "log/dev.log"
   ENV["PRO_TACTS_INSTANCE_NAME"] ||= "pro-tacts (dev)"
   ENV["PRO_TACTS_FAVICON"] ||= "/favicon-dev.svg"
+  ENV["PRO_TACTS_ACCENT"] ||= "ink-blue"
   File.truncate("log/dev.log", 0) if File.exist?("log/dev.log")
 
   Dir.mktmpdir("pro-tacts-dev") do |dir|

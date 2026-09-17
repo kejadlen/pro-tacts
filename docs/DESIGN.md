@@ -52,8 +52,8 @@ What that inheritance actually means:
   `_components/<name>.md` rather than guessing from a sibling.
 - **One accent, held constant.** Pro-tacts sets `--gl-color-accent` once and
   never shows two accents in a view. `-ink` and `-soft` re-derive themselves.
-  The one swap is by run, not by view: a dev server repoints it to ink blue on
-  every screen (see the footer, below).
+  The one swap is by run, not by view: `PRO_TACTS_ACCENT` repoints it on every
+  screen, and `rake dev` uses it to wear ink blue (see the footer, below).
 - `--gl-color-success` and `--gl-color-danger` are **fixed** — they mean
   confirmed and destructive, never decoration, never emphasis.
 - Surface contrast does the elevation work: a bounded surface reads by
@@ -105,9 +105,9 @@ Under every screen sits the footer, the header's counterpart, holding what no
 search can turn up because none of it is a record: the version answering,
 whether debug logging is recording, and a link to device setup. A run with no
 release behind it says "dev server" in the version's place, since a working
-copy dressed as the deployment is the confusion the line exists to end. The
-same run fills the header and footer with its accent, so the difference shows
-before a word of either is read. Debug
+copy dressed as the deployment is the confusion the line exists to end. A run
+with its own accent fills the header and footer with it, so the difference
+shows before a word of either is read. Debug
 logging appears only while it is on, written `+debug` — a flag on the build,
 not a sentence beside it — and a quiet log has nothing to say.
 

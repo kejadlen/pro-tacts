@@ -400,28 +400,30 @@ textarea:focus {
   margin-left: auto;
 }
 
-/* A run with no release behind it (Layout marks the root; the footer
-   names it "dev server") wears Gloss's ink blue instead of the default
-   accent, and the chrome bars fill with it, so a working copy cannot
-   pass for the deployment at a glance. The whole root repoints rather
-   than the bars alone, so a view still shows one accent. Clay was
-   passed over for sitting too near danger. The fill is the accent
-   under accent-fg, the pairing Gloss's primary button uses;
+/* A run with an accent configured (PRO_TACTS_ACCENT; Layout marks the
+   root) wears that Gloss accent instead of the default, and the chrome
+   bars fill with it, so a working copy cannot pass for the deployment
+   at a glance — `rake dev` picks ink blue. The whole root repoints
+   rather than the bars alone, so a view still shows one accent. Clay
+   was passed over for dev for sitting too near danger. The fill is the
+   accent under accent-fg, the pairing Gloss's primary button uses;
    accent-soft would be a pale band in dark mode, where tokens.css
    never derives it again. */
-:root[data-server="dev"] {
-  --gl-color-accent: var(--gl-accent-ink-blue);
-}
-:root[data-server="dev"] :is(.admin-header, .admin-footer) {
+:root[data-accent="teal"] { --gl-color-accent: var(--gl-accent-teal); }
+:root[data-accent="clay"] { --gl-color-accent: var(--gl-accent-clay); }
+:root[data-accent="ink-blue"] { --gl-color-accent: var(--gl-accent-ink-blue); }
+:root[data-accent="ochre"] { --gl-color-accent: var(--gl-accent-ochre); }
+:root[data-accent="plum"] { --gl-color-accent: var(--gl-accent-plum); }
+:root[data-accent] :is(.admin-header, .admin-footer) {
   background: var(--gl-color-accent);
   border-color: var(--gl-color-accent);
 }
-:root[data-server="dev"] :is(.admin-header a, .admin-footer .type-label) {
+:root[data-accent] :is(.admin-header a, .admin-footer .type-label) {
   color: var(--gl-color-accent-fg);
 }
 /* The one focus ring is drawn in the accent, which vanishes against a
    bar filled with it. */
-:root[data-server="dev"] :is(.admin-header, .admin-footer) :focus-visible {
+:root[data-accent] :is(.admin-header, .admin-footer) :focus-visible {
   outline-color: var(--gl-color-accent-fg);
 }
 
