@@ -857,7 +857,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
       id = last_response["Location"].delete_prefix("/contacts/")
-      assert_match(/\A[\w-]+\z/, id)
+      assert_match(/\A[k-z]{12}\z/, id)
 
       follow_redirect!
       assert_equal 200, last_response.status
