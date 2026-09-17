@@ -133,6 +133,7 @@ module ProTacts
 end
 
 # The branches reopen Web, so they load once the plugins they call are in.
+require "pro_tacts/web/api"
 require "pro_tacts/web/contacts"
 require "pro_tacts/web/dav"
 require "pro_tacts/web/groups"

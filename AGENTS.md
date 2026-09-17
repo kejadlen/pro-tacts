@@ -49,6 +49,7 @@ lib/pro_tacts/
 ├── web/contacts.rb # The card browser and its editor
 ├── web/groups.rb   # The group screens and their editor
 ├── web/setup.rb    # The device setup screen and its profile
+├── web/api.rb      # JSON for scripts: the group list
 ├── admin/          # The Phlex views those screens render, plus
 │                   # card_form.rb, which reads a form back into a card
 ├── store.rb        # Sequel over SQLite: cards, change log, derived index

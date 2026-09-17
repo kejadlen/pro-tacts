@@ -196,7 +196,7 @@ class WebTest < Minitest::Test
   def test_a_refusal_covers_every_path
     header "Remote-User", ""
 
-    %w[/ /.well-known/carddav /dav/ /dav/principal/ /dav/addressbook/ /contacts /groups /setup /admin.css].each do |path|
+    %w[/ /.well-known/carddav /dav/ /dav/principal/ /dav/addressbook/ /contacts /groups /api/groups /setup /admin.css].each do |path|
       get path
 
       assert_equal 401, last_response.status, path
