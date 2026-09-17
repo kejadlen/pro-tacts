@@ -67,7 +67,7 @@ namespace :import do
           plan, client: ProTacts::Import::HttpClient.new(http), mac: ProTacts::Import::Macos::Mac
         )
       end
-      result.kept.each { |id, why| puts "kept #{id}: #{why}" }
+      result.kept.each { |name, why| puts "kept #{name}: #{why}" }
       puts "#{result.removed} contacts removed from this Mac"
     end
   end

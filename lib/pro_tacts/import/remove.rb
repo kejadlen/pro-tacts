@@ -15,7 +15,9 @@ module ProTacts
       class Failed < StandardError; end
 
       # What a run did: how many contacts it took off the Mac, and the
-      # ones it left there, each with why. Signed in
+      # ones it left there, each named as its card names it and said why.
+      # A name rather than an id, since the person reading is the one who
+      # will go and look at the contact. Signed in
       # sig/pro_tacts/import.rbs, being a Data class.
       # @rbs skip
       Result = Data.define(:removed, :kept)
@@ -44,7 +46,7 @@ module ProTacts
         kept = [] #: Array[[String, String]]
         going = still_there.select { |contact|
           why = keep(contact, records.fetch(contact.source_id))
-          kept << [contact.id, why] if why
+          kept << [name(contact.id), why] if why
           why.nil?
         }
         # One delete for the batch, since each one starts the script
@@ -67,7 +69,7 @@ module ProTacts
         backup = @plan.backup(contact.id)
         note = (backup / "note.txt").then { it.file? ? it.read : nil }
         if !on_host?(contact.id)
-          "its card is not on #{@plan.host}"
+          "its card is no longer on #{@plan.host}"
         elsif record.fetch("vcard") != (backup / "original.vcf").read
           "it has changed on this Mac since the plan"
         elsif record.fetch("note") != note
@@ -75,13 +77,26 @@ module ProTacts
         end
       end
 
+      # The contact as its card file names it, which is what a person
+      # reading this run looks for in Contacts.
+      #: (String id) -> String
+      def name(id)
+        card = @plan.card(id)
+        [card.first, card.last].reject(&:empty?).join(" ")
+      end
+
+      # Asked of the card browser rather than of `/dav/addressbook`,
+      # which serves the asking user's book alone: a card in no `sync:`
+      # group is on the host and outside every book, and the question
+      # here is whether the host still has it at all
+      # (docs/plans/2026-09-12-per-user-books.md).
       #: (String id) -> bool
       def on_host?(id)
-        response = @client.call("GET", "/dav/addressbook/#{id}.vcf")
+        response = @client.call("GET", "/contacts/#{id}")
         case response.status
         when 200 then true
         when 404 then false
-        else raise Failed, "GET of #{id} answered #{response.status}"
+        else raise Failed, "GET of /contacts/#{id} answered #{response.status}: #{response.body}"
         end
       end
     end

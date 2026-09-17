@@ -198,7 +198,10 @@ editor writes it.
 the oldest landed plan imported, and `PLAN=dir` names another. The host
 is the one that plan recorded rather than a `HOST`, the contacts to take
 off this Mac being the ones already carried somewhere. For each one it
-first GETs the card from that host, then reads the contact again through
+first asks that host's card browser, `GET /contacts/<id>`, whether it
+still has the card — the DAV collection serves the asking user's book
+alone, and a card in no `sync:` group is on the host and in no book —
+then reads the contact again through
 `macos-contacts.swift show` and compares it to its backup, note
 included, and keeps it, printing why, if either check
 fails. A contact edited on the Mac since the plan is kept, and so

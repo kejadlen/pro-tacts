@@ -47,7 +47,7 @@ class ImportRemoveTest < Minitest::Test
   end
 
   # A plan already landed on the host, since that is what remove works on.
-  def with_landed_plan(notes: {})
+  def with_landed_plan(notes: {}, edit: nil)
     Dir.mktmpdir do |tmp|
       dir = Pathname.new(tmp) / "plan"
       entries = IDS.map { |id|
@@ -57,6 +57,7 @@ class ImportRemoveTest < Minitest::Test
         Plan::Entry.new(id:, source_id: source_id(id), card:, backup:)
       }
       Plan.write(dir, source: "macos", created_at: Time.utc(2026, 9, 16, 18, 4, 12), entries:)
+      IDS.each { (dir / "cards/#{it}.yml").write(edit.call((dir / "cards/#{it}.yml").read)) } if edit
       with_contacts({}) do |store|
         client = ImportExecuteTest::RackClient.new
         plan = Plan.read(dir)
@@ -87,7 +88,7 @@ class ImportRemoveTest < Minitest::Test
 
       result = Remove.call(plan, client:, mac:)
 
-      assert_equal [[IDS.first, "it has changed on this Mac since the plan"]], result.kept
+      assert_equal [["Contact #{IDS.first}", "it has changed on this Mac since the plan"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
       assert_equal ["imported", "removed"], Plan.read(plan.dir).contacts.map(&:status)
     end
@@ -101,7 +102,7 @@ class ImportRemoveTest < Minitest::Test
 
       result = Remove.call(plan, client:, mac:)
 
-      assert_equal [[IDS.first, "its note has changed on this Mac since the plan"]], result.kept
+      assert_equal [["Contact #{IDS.first}", "its note has changed on this Mac since the plan"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
     end
   end
@@ -113,8 +114,22 @@ class ImportRemoveTest < Minitest::Test
 
       result = Remove.call(plan, client:, mac:)
 
-      assert_equal [[IDS.first, "its card is not on #{HOST}"]], result.kept
+      assert_equal [["Contact #{IDS.first}", "its card is no longer on #{HOST}"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
+    end
+  end
+
+  # The card browser shows every card; /dav/addressbook serves the asking
+  # user's book, which a card in no `sync:` group is outside of.
+  def test_a_contact_whose_card_is_in_no_book_still_leaves_the_mac
+    with_landed_plan(edit: ->(yaml) { yaml.sub("- sync:*\n", "") }) do |plan, store, client|
+      refute_includes store.book("test@example.com"), IDS.first
+      mac = Mac.new(IDS.to_h { [source_id(it), record(it)] })
+
+      result = Remove.call(plan, client:, mac:)
+
+      assert_empty result.kept
+      assert_equal IDS.map { source_id(it) }, mac.deleted
     end
   end
 
