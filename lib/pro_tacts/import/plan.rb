@@ -1,7 +1,9 @@
 require "fileutils"
-require "json"
 require "pathname"
 require "time"
+require "yaml"
+
+require "pro_tacts/import/card"
 
 module ProTacts
   module Import
@@ -12,9 +14,9 @@ module ProTacts
       # @rbs @dir: Pathname
       # @rbs @manifest: Hash[String, untyped]
 
-      # What a builder hands over for one contact: the card execute PUTs
-      # and the original's files, by name. Signed in
-      # sig/pro_tacts/import.rbs, being a Data class.
+      # What a builder hands over for one contact: its card, which the
+      # plan's own groups are added to, and the original's files, by
+      # name. Signed in sig/pro_tacts/import.rbs, being a Data class.
       # @rbs skip
       Entry = Data.define(:id, :source_id, :card, :backup)
 
@@ -25,6 +27,9 @@ module ProTacts
 
       FORMAT = 1 #: Integer
 
+      # Store::EVERYONE, spelled out so a plan loads no database.
+      EVERYONE = "sync:*" #: String
+
       #: (Pathname dir, source: String, created_at: Time, entries: Array[Entry]) -> Plan
       def self.write(dir, source:, created_at:, entries:)
         FileUtils.mkdir_p(dir.dirname)
@@ -32,9 +37,12 @@ module ProTacts
         # another.
         Dir.mkdir(dir)
 
+        group = "import-#{created_at.utc.strftime("%Y%m%dT%H%M%SZ")}"
         entries.each do |entry|
           (dir / "cards").mkpath
-          (dir / "cards/#{entry.id}.vcf").binwrite(entry.card)
+          card = entry.card
+          card = Card.new(first: card.first, last: card.last, phones: card.phones, groups: [EVERYONE, group, *card.groups])
+          (dir / "cards/#{entry.id}.yml").write(YAML.dump(card.document))
           backup = dir / "backups" / entry.id
           backup.mkpath
           entry.backup.each { |name, bytes| (backup / name).binwrite(bytes) }
@@ -44,9 +52,8 @@ module ProTacts
           "format" => FORMAT,
           "source" => source,
           "created_at" => created_at.utc.iso8601,
-          "group" => "import-#{created_at.utc.strftime("%Y%m%dT%H%M%SZ")}",
+          "group" => group,
           "host" => nil,
-          "group_id" => nil,
           "contacts" => entries.map { {"id" => it.id, "source_id" => it.source_id, "status" => nil} }
         })
         plan.save
@@ -55,7 +62,7 @@ module ProTacts
 
       #: (Pathname dir) -> Plan
       def self.read(dir)
-        new(dir, JSON.parse((dir / "plan.json").read))
+        new(dir, YAML.safe_load_file(dir / "plan.yml"))
       end
 
       attr_reader :dir #: Pathname
@@ -88,15 +95,6 @@ module ProTacts
         save
       end
 
-      #: () -> String?
-      def group_id = @manifest.fetch("group_id")
-
-      #: (String id) -> void
-      def group_id=(id)
-        @manifest["group_id"] = id
-        save
-      end
-
       #: () -> Array[Contact]
       def contacts
         @manifest.fetch("contacts").map { Contact.new(id: it.fetch("id"), source_id: it.fetch("source_id"), status: it.fetch("status")) }
@@ -108,21 +106,22 @@ module ProTacts
         save
       end
 
-      #: (String id) -> String
+      # The card as its file now reads, edits included.
+      #: (String id) -> Card
       def card(id)
-        (dir / "cards/#{id}.vcf").binread
+        Card.read(dir / "cards/#{id}.yml")
       end
 
       # Every step is saved as it is taken, and replaced whole by a rename
       # so a run that dies mid-write leaves the plan as it was before.
       #: () -> void
       def save
-        written = dir / "plan.json.tmp"
+        written = dir / "plan.yml.tmp"
         written.open("w") do |file|
-          file.write(JSON.pretty_generate(@manifest))
+          file.write(YAML.dump(@manifest))
           file.fsync
         end
-        written.rename(dir / "plan.json")
+        written.rename(dir / "plan.yml")
       end
     end
   end

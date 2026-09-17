@@ -13,15 +13,15 @@ holds every contact in full:
 
 | Path | Holds |
 |---|---|
-| `plan.json` | The source, when it was built, the group, and each contact's minted id beside its source id; then the host, the group's id, and each contact's status |
-| `cards/<id>.vcf` | The bytes `execute` PUTs, byte for byte |
+| `plan.yml` | The source, when it was built, the group, and each contact's minted id beside its source id; then the host and each contact's status |
+| `cards/<id>.yml` | The contact's fields and the groups it belongs to, for a person to edit before `execute` |
 | `backups/<id>/` | The original, in whatever files the source reads it as |
 
-The builder writes the cards and backups once and nothing rewrites them.
-A plan has no open questions in it: every card is final when the plan is
-written, so `execute` runs it rather than finishing it.
+The builder writes the cards and backups once, and no code rewrites
+them. A person can: a card file is the plan's one open question, read as
+it stands when `execute` carries it.
 
-`plan.json` also records how far `execute` and `remove` have carried the
+`plan.yml` also records how far `execute` and `remove` have carried the
 plan, saved after every step. A contact's status goes from none to
 `landed`, `joined`, and `removed`. Each save writes a new file and renames
 it over the old one, so a run that dies mid-save leaves the plan as the
@@ -52,12 +52,17 @@ original.
 
 ## Execute is the same for every source
 
-`rake import:execute PLAN=dir HOST=host` does the following, recording
+`rake import:execute HOST=host` lands the newest plan in `data/imports`,
+the one just planned, and `PLAN=dir` names another. It does the
+following, recording
 each step in the plan:
 
-1. PUT each card to `/dav/addressbook/<id>.vcf` with `If-None-Match: *`.
-2. Create the plan's group, `import-<timestamp>`, through `POST /groups`.
-3. Join each card to it through `POST /contacts/<id>/groups`.
+1. Read every card not yet joined, and stop before any write if one
+   will not read.
+2. PUT each card to `/dav/addressbook/<id>.vcf` with `If-None-Match: *`.
+3. Put each card in the groups its file names through
+   `POST /contacts/<id>/groups`, creating any that are missing through
+   `POST /groups`.
 
 A rerun skips every step the plan records. The plan alone is not
 enough, because a run can die after a write lands and before the plan
@@ -69,10 +74,43 @@ first keeps a rerun from collecting refusals, each of which warns Sentry
 - A bare 412 to the PUT is `If-None-Match` failing, and at 48 bits a
   minted id is taken only by this plan's own earlier PUT, so the card
   counts as landed. A 412 with a body is the card refused.
-- The group is looked up by name in `GET /api/groups`, every group's id
-  and name as JSON, before it is created. A name that is already there
-  is this plan's, since it carries the plan's timestamp.
+- A group is looked up by name in `GET /api/groups`, every group's id
+  and name as JSON, before it is created, so a rerun reuses the group an
+  earlier run made.
 - Joining a group twice is joining once (`Store#add_member`).
+- A PUT that creates a card makes it a member of `sync:*`
+  (`2026-09-15-client-creates-join-everyone.md`). The request that sets
+  a card's groups therefore lists `sync:*` among the groups it was
+  already in, so a card whose file does not name `sync:*` is taken back
+  out of it.
+
+## A card is a form filled in
+
+A card file holds what the web editor would: a first and last name and
+a list of phone numbers, plus the names of the groups it belongs to. The plan
+writes `sync:*` and its own `import-<timestamp>` group into every card,
+ahead of any the builder chose.
+
+```yaml
+first: Ada
+last: Lovelace
+phones:
+- "+12532189075"
+groups:
+- sync:*
+- import-20260916T180412Z
+```
+
+`Import::Card` turns the fields into a contact through the web's own
+code: `CardForm.new_card`, then `CardForm.contact_card` with each phone
+as an add row. A phone's types do not survive, because the form has no
+field for them, so a number lands as a bare `TEL`.
+
+A file that will not read as a card is refused, naming the file: a
+missing or unknown key, a name with neither half, or a value YAML reads
+as something other than text. An unquoted `no` is false and an unquoted
+`+12532189075` is a number, and either would otherwise import as
+something no one typed.
 
 `HOST` is a base URL, such as `https://contacts` or the dev server's
 `http://localhost:9292`.
@@ -124,14 +162,16 @@ with image data in base64, and the AppleScript note.
 
 ## The builder knows only what it was taught
 
-The macOS builder turns each line into a card line through a `case` on
-the property name, whose `else` records the line as unknown. The envelope
-is not carried but written around the lines, so the minted `UID` goes
-inside it; a `VERSION` other than 3.0 is unknown. The note and the image
+The macOS builder decides each line through a `case` on the property
+name, whose `else` records the line as unknown, then fills the card's
+fields from the lines it kept. The envelope is dropped, since the web's
+create writes its own; a `VERSION` other than 3.0 is unknown. An Apple `PRODID` is
+dropped, since Contacts writes its own on every save. The note and the image
 data, which the vCard leaves out, are unknown until a branch takes them
 too. Each branch
-names the parameters it accepts, and a parameter outside that list is
-unknown too. Once every contact in the batch is read, any unknown fails
+names the forms it accepts, a form being the group, name, and parameters
+spelled exactly as the source wrote them, and a line in any other form is
+unknown under that form. Once every contact in the batch is read, any unknown fails
 the build with every unknown name, its count, and a few distinct values
 it held, each beside its source id and cut short when long, and
 no plan is written. A small batch needs only the branches its own
@@ -140,8 +180,15 @@ contacts use.
 The `case` starts empty. A property earns a branch when a build refuses
 it, and the branch is written with that property in view, so nothing is
 imported on the strength of a guess about what it holds. Parameter
-values such as `TYPE=IPHONE` are not checked: the server passes `TYPE`
-through, and Apple wrote them.
+values are part of the form, so `TYPE=IPHONE` is refused until a branch
+names it. A property whose value has a shape can check it too: `TEL`
+takes only a `+` and digits.
+
+A field holds less than a line can, so a line that would lose something
+on the way into one is unknown too. The name comes from the one `N`,
+and is refused when `N` holds more than a family and given name, or when
+the one `FN` is not those two joined with a space, the way the web
+editor writes it.
 
 ## Removing the originals
 

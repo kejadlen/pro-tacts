@@ -37,25 +37,49 @@ class ImportExecuteTest < Minitest::Test
     end
   end
 
-  def with_plan(cards = IDS.to_h { [it, card(it, "Contact #{it}")] })
+  # A client whose host refuses every PUT with a precondition body.
+  class RefusingClient < RackClient
+    def call(method, path, headers: {}, body: nil)
+      return Execute::Response.new(status: 412, headers: {}, body: "<error/>") if method == "PUT"
+
+      super
+    end
+  end
+
+  def with_plan(groups: [])
     Dir.mktmpdir do |tmp|
       dir = Pathname.new(tmp) / "plan"
-      entries = cards.map { |id, card| Plan::Entry.new(id:, source_id: "#{id}:ABPerson", card:, backup: {}) }
+      entries = IDS.map { |id|
+        card = ProTacts::Import::Card.new(first: "Contact", last: id, phones: [], groups:)
+        Plan::Entry.new(id:, source_id: "#{id}:ABPerson", card:, backup: {})
+      }
       Plan.write(dir, source: "macos", created_at: Time.utc(2026, 9, 16, 18, 4, 12), entries:)
       with_contacts({}) { |store| yield Plan.read(dir), store, RackClient.new }
     end
   end
 
-  def imported_group(store)
-    store.all_groups.find { it.name == "import-20260916T180412Z" }
+  def imported_group(store) = group_named(store, "import-20260916T180412Z")
+
+  def everyone(store) = group_named(store, "sync:*")
+
+  def group_named(store, name)
+    store.all_groups.find { it.name == name }
+  end
+
+  def edit_cards(plan)
+    IDS.each do |id|
+      path = plan.dir / "cards/#{id}.yml"
+      path.write(yield(path.read))
+    end
   end
 
   def test_every_card_lands_in_the_plans_group
     with_plan do |plan, store, client|
       Execute.call(plan, host: HOST, client:)
 
-      IDS.each { assert store.contact(it), it }
+      IDS.each { assert_equal "Contact #{it}", store.contact(it).name }
       assert_equal IDS.sort, imported_group(store).members.sort
+      assert_equal IDS.sort, everyone(store).members.sort
       assert_equal %w[joined joined], Plan.read(plan.dir).contacts.map(&:status)
     end
   end
@@ -77,7 +101,7 @@ class ImportExecuteTest < Minitest::Test
   # A run that died between a write and the plan recording it.
   def test_a_card_already_on_the_host_counts_as_landed
     with_plan do |plan, store, client|
-      client.call("PUT", "/dav/addressbook/#{IDS.first}.vcf", headers: {"Content-Type" => "text/vcard"}, body: plan.card(IDS.first))
+      client.call("PUT", "/dav/addressbook/#{IDS.first}.vcf", headers: {"Content-Type" => "text/vcard"}, body: plan.card(IDS.first).contact(IDS.first).vcard.to_s)
 
       Execute.call(plan, host: HOST, client:)
 
@@ -106,12 +130,45 @@ class ImportExecuteTest < Minitest::Test
   end
 
   def test_a_refused_card_stops_the_run_and_is_not_recorded
-    with_plan({"kmnuqmzxylru" => card("someone-else", "Mismatched UID")}) do |plan, store, client|
-      error = assert_raises(Execute::Failed) { Execute.call(plan, host: HOST, client:) }
+    with_plan do |plan, _store, _client|
+      error = assert_raises(Execute::Failed) { Execute.call(plan, host: HOST, client: RefusingClient.new) }
 
-      assert_includes error.message, "kmnuqmzxylru"
+      assert_includes error.message, IDS.first
       assert_includes error.message, "412"
-      assert_equal [nil], Plan.read(plan.dir).contacts.map(&:status)
+      assert_equal [nil, nil], Plan.read(plan.dir).contacts.map(&:status)
+    end
+  end
+
+  def test_a_card_joins_the_groups_its_file_names_making_those_missing
+    with_plan(groups: ["family"]) do |plan, store, client|
+      Execute.call(plan, host: HOST, client:)
+
+      assert_equal IDS.sort, group_named(store, "family").members.sort
+      assert_equal 1, store.all_groups.count { it.name == "family" }
+    end
+  end
+
+  def test_a_card_whose_file_leaves_out_everyone_is_taken_out_of_it
+    with_plan do |plan, store, client|
+      edit_cards(plan) { it.sub("- sync:*\n", "") }
+
+      Execute.call(plan, host: HOST, client:)
+
+      assert_empty everyone(store).members
+      assert_equal IDS.sort, imported_group(store).members.sort
+    end
+  end
+
+  def test_a_card_that_will_not_read_stops_the_run_before_anything_lands
+    with_plan do |plan, store, client|
+      path = plan.dir / "cards/#{IDS.last}.yml"
+      path.write(path.read.sub("last: #{IDS.last}", "last: no"))
+
+      assert_raises(ProTacts::Import::Card::Invalid) { Execute.call(plan, host: HOST, client:) }
+
+      assert_empty client.requests
+      assert_nil Plan.read(plan.dir).host
+      assert_empty store.changes
     end
   end
 end

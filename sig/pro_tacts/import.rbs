@@ -1,18 +1,27 @@
-# Import::Plan::Entry, ::Contact, and Import::Execute::Response are Data
+# Import::Card, Import::Plan::Entry, ::Contact, and Import::Execute::Response are Data
 # classes, whose members the inline parser cannot read (see
 # sig/pro_tacts/contact.rbs). Each is marked `@rbs skip` where it is
 # defined and signed here. _Client is an interface, which inline syntax
 # has no way to declare.
 module ProTacts
   module Import
+    class Card
+      attr_reader first: String
+      attr_reader last: String
+      attr_reader phones: Array[String]
+      attr_reader groups: Array[String]
+
+      def self.new: (first: String, last: String, phones: Array[String], groups: Array[String]) -> instance
+    end
+
     class Plan
       class Entry
         attr_reader id: String
         attr_reader source_id: String
-        attr_reader card: String
+        attr_reader card: Card
         attr_reader backup: Hash[String, String]
 
-        def self.new: (id: String, source_id: String, card: String, backup: Hash[String, String]) -> instance
+        def self.new: (id: String, source_id: String, card: Card, backup: Hash[String, String]) -> instance
       end
 
       class Contact

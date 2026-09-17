@@ -1,6 +1,5 @@
 require_relative "../../test_helper"
 
-require "json"
 require "pathname"
 require "tmpdir"
 
@@ -13,8 +12,10 @@ class ImportPlanTest < Minitest::Test
 
   CREATED_AT = Time.utc(2026, 9, 16, 18, 4, 12)
 
-  def entry(id, source_id: "#{id}:ABPerson", backup: {"original.vcf" => "BEGIN:VCARD\r\n"})
-    Plan::Entry.new(id:, source_id:, card: card(id, "Ada Lovelace"), backup:)
+  ADA = ProTacts::Import::Card.new(first: "Ada", last: "Lovelace", phones: ["+12532189075"], groups: [])
+
+  def entry(id, source_id: "#{id}:ABPerson", card: ADA, backup: {"original.vcf" => "BEGIN:VCARD\r\n"})
+    Plan::Entry.new(id:, source_id:, card:, backup:)
   end
 
   def in_tmpdir
@@ -30,9 +31,7 @@ class ImportPlanTest < Minitest::Test
       assert_equal "macos", plan.source
       assert_equal "2026-09-16T18:04:12Z", plan.created_at
       assert_equal [Plan::Contact.new(id: "kmnuqmzxylru", source_id: "kmnuqmzxylru:ABPerson", status: nil), Plan::Contact.new(id: "vmnlryyvktux", source_id: "vmnlryyvktux:ABPerson", status: nil)], plan.contacts
-      assert_equal card("kmnuqmzxylru", "Ada Lovelace"), plan.card("kmnuqmzxylru")
       assert_nil plan.host
-      assert_nil plan.group_id
     end
   end
 
@@ -41,6 +40,35 @@ class ImportPlanTest < Minitest::Test
       Plan.write(dir, source: "macos", created_at: CREATED_AT, entries: [])
 
       assert_equal "import-20260916T180412Z", Plan.read(dir).group
+    end
+  end
+
+  def test_a_card_joins_everyone_and_the_plans_group_after_its_own
+    in_tmpdir do |dir|
+      card = ProTacts::Import::Card.new(first: "Ada", last: "Lovelace", phones: ["+12532189075"], groups: ["family"])
+      Plan.write(dir, source: "macos", created_at: CREATED_AT, entries: [entry("kmnuqmzxylru", card:)])
+
+      assert_equal <<~YAML, (dir / "cards/kmnuqmzxylru.yml").read
+        ---
+        first: Ada
+        last: Lovelace
+        phones:
+        - "+12532189075"
+        groups:
+        - sync:*
+        - import-20260916T180412Z
+        - family
+      YAML
+    end
+  end
+
+  def test_a_card_reads_back_with_its_edits
+    in_tmpdir do |dir|
+      plan = Plan.write(dir, source: "macos", created_at: CREATED_AT, entries: [entry("kmnuqmzxylru")])
+      path = dir / "cards/kmnuqmzxylru.yml"
+      path.write(path.read.sub("first: Ada", "first: Augusta Ada"))
+
+      assert_equal "Augusta Ada", plan.card("kmnuqmzxylru").first
     end
   end
 
@@ -69,13 +97,11 @@ class ImportPlanTest < Minitest::Test
 
       plan.host = "https://contacts"
       plan.record("kmnuqmzxylru", "landed")
-      plan.group_id = "kxsv"
 
       read = Plan.read(dir)
       assert_equal "https://contacts", read.host
-      assert_equal "kxsv", read.group_id
       assert_equal ["landed", nil], read.contacts.map(&:status)
-      assert_equal ["plan.json"], dir.children.map { it.basename.to_s }.grep(/plan/)
+      assert_equal ["plan.yml"], dir.children.map { it.basename.to_s }.grep(/plan/)
     end
   end
 end

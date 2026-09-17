@@ -26,8 +26,8 @@ rake dev              # Dev server, seeded from test/fixtures/cards into a
                       # (needs fd and entr)
 rake import:macos:plan # Plan importing this Mac's iCloud contacts
                       # (LIMIT=n; reads Contacts, so leave it to the user)
-rake import:execute   # Land an import plan on a host
-                      # (PLAN=dir HOST=https://contacts)
+rake import:execute   # Land the newest plan in data/imports on a host
+                      # (HOST=https://contacts; PLAN=dir for another)
 rake profile:install  # Download carddav.mobileconfig from the app and
                       # stage it for approval
 ```

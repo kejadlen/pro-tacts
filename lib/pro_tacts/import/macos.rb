@@ -3,6 +3,7 @@ require "open3"
 require "pathname"
 
 require "pro_tacts/change_id"
+require "pro_tacts/import/card"
 require "pro_tacts/import/plan"
 require "pro_tacts/vcard/parser"
 
@@ -89,7 +90,9 @@ module ProTacts
         note = record.fetch("note") #: String?
         contact = record.fetch("contact") #: Hash[String, untyped]
 
-        body = VCard::Parser.lines(vcard).filter_map { line(it, source_id, unknown) }
+        carried = VCard::Parser.lines(vcard).select { carried?(it, source_id, unknown) }
+        first, last = name(carried, source_id, unknown)
+        phones = carried.filter_map { it.property&.then { |property| property.text if property.name.casecmp?("TEL") } }
         # Beyond the vCard: what the serializer leaves out.
         unknown.add("note", source_id, note) if note
         image = contact.fetch("imageData") #: String?
@@ -98,38 +101,95 @@ module ProTacts
         backup = {"original.vcf" => vcard, "contact.json" => JSON.pretty_generate(contact)}
         backup["note.txt"] = note if note
 
-        Plan::Entry.new(
-          id:, source_id:,
-          card: "BEGIN:VCARD\r\nVERSION:3.0\r\n#{body.join}UID:#{id}\r\nEND:VCARD\r\n",
-          backup:
-        )
+        Plan::Entry.new(id:, source_id:, card: Card.new(first:, last:, phones:, groups: []), backup:)
       end
 
-      # A line of the source card as a line of the imported one, or nil for
-      # one it does not carry. The envelope is written around the lines
-      # rather than carried, so the card's UID can go inside it.
-      #: (VCard::Parser::Line line, String source_id, Unknown unknown) -> String?
-      def self.line(line, source_id, unknown)
+      # Whether a line of the source card is carried into the card's
+      # fields; one that is not is recorded unknown or, for the envelope
+      # and PRODID, dropped.
+      #: (VCard::Parser::Line line, String source_id, Unknown unknown) -> bool
+      def self.carried?(line, source_id, unknown)
         property = line.property
-        example = VCard::Parser.unfold(line.verbatim).chomp
+        example = example(line)
         if property.nil?
           unknown.add("unreadable line", source_id, example) unless example.strip.empty?
-          return
+          return false
         end
 
-        case property.name.upcase
+        name = property.name.upcase
+        case name
         when "BEGIN", "END"
-          nil
+          false
         when "VERSION"
           unknown.add("VERSION:#{property.value}", source_id, example) unless property.value == "3.0"
-          nil
+          false
+        when "PRODID"
+          # Contacts writes its own on every save; the source's stays in the backup.
+          form = form(property, example)
+          unknown.add(form, source_id, example) unless form == "PRODID"
+          unknown.add("PRODID value", source_id, example) unless property.value.start_with?("-//Apple Inc.//")
+          false
+        when "FN", "N", "TEL"
+          refused = [] #: Array[String]
+          form = form(property, example)
+          refused << form unless FORMS.fetch(name).include?(form)
+          refused << "TEL value" if name == "TEL" && !property.value.match?(PHONE)
+          refused.each { unknown.add(it, source_id, example) }
+          refused.empty?
         else
-          unknown.add(property.name.upcase, source_id, example)
-          nil
+          unknown.add(name, source_id, example)
+          false
         end
       end
 
-      private_class_method :entry, :line
+      # The first and last name, from the one N, when the one FN is those
+      # two joined as the web editor joins them: a card holding more of a
+      # name than that would lose it.
+      #: (Array[VCard::Parser::Line] lines, String source_id, Unknown unknown) -> [String, String]
+      def self.name(lines, source_id, unknown)
+        ns = lines.select { it.names?("N") }
+        fns = lines.select { it.names?("FN") }
+        unknown.add("N lines: #{ns.size}", source_id, ns.map { example(it) }.join(" / ")) unless ns.size == 1
+        unknown.add("FN lines: #{fns.size}", source_id, fns.map { example(it) }.join(" / ")) unless fns.size == 1
+
+        n = ns.first
+        family, given, *rest = n&.property&.components || []
+        first = given.to_s
+        last = family.to_s
+        unknown.add("N beyond first and last", source_id, example(n)) if n && rest.any? { !it.empty? }
+        unknown.add("no name", source_id, n ? example(n) : "") if n && first.empty? && last.empty?
+
+        fn = fns.first
+        if fn && fn.property&.text != [first, last].reject(&:empty?).join(" ")
+          unknown.add("FN other than first and last", source_id, example(fn))
+        end
+
+        [first, last]
+      end
+
+      # The spellings each carried property is taken in, group and
+      # parameters included, exactly as the source wrote them.
+      FORMS = {
+        "FN" => ["FN"],
+        "N" => ["N"],
+        "TEL" => ["TEL;type=CELL;type=VOICE;type=pref"]
+      }.freeze #: Hash[String, Array[String]]
+
+      PHONE = /\A\+[0-9]+\z/ #: Regexp
+
+      # A line unfolded, without its terminator.
+      #: (VCard::Parser::Line line) -> String
+      def self.example(line)
+        VCard::Parser.unfold(line.verbatim).chomp
+      end
+
+      # A line as the source spelled it, less its value.
+      #: (VCard::Parser::Property property, String example) -> String
+      def self.form(property, example)
+        example.delete_suffix(":#{property.value}")
+      end
+
+      private_class_method :entry, :carried?, :name, :example, :form
     end
   end
 end

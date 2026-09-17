@@ -13,6 +13,7 @@ module ProTacts
       # @rbs @plan: Plan
       # @rbs @host: String
       # @rbs @client: _Client
+      # @rbs @group_ids: Hash[String, String]
 
       class Failed < StandardError; end
 
@@ -31,6 +32,7 @@ module ProTacts
         @plan = plan
         @host = host
         @client = client
+        @group_ids = {}
       end
 
       #: () -> void
@@ -39,13 +41,17 @@ module ProTacts
         if landed_on && landed_on != @host
           raise Failed, "#{@plan.dir} is landing on #{landed_on}; refusing to land it on #{@host} too"
         end
+        # Every card still to carry is read before the first write, so an
+        # edit that will not read stops the run with nothing landed.
+        cards = @plan.contacts.reject { it.status == "joined" }.to_h {
+          [it.id, @plan.card(it.id)] #: [String, Card]
+        }
         # Before the first write, so a run that dies after one still ties
         # the plan to this host.
         @plan.host = @host unless landed_on
 
-        @plan.contacts.each { land(it.id) if it.status.nil? }
-        group_id = @plan.group_id || make_group
-        @plan.contacts.each { join(it.id, group_id) if it.status == "landed" }
+        @plan.contacts.each { land(it.id, cards.fetch(it.id)) if it.status.nil? }
+        @plan.contacts.each { join(it.id, cards.fetch(it.id)) if it.status == "landed" }
       end
 
       private
@@ -54,12 +60,12 @@ module ProTacts
       # the card is on the host already: an earlier run's PUT landed and
       # died before the plan recorded it. A 412 with a body is the card
       # refused.
-      #: (String id) -> void
-      def land(id)
+      #: (String id, Card card) -> void
+      def land(id, card)
         response = @client.call(
           "PUT", "/dav/addressbook/#{id}.vcf",
           headers: {"Content-Type" => "text/vcard; charset=utf-8", "If-None-Match" => "*"},
-          body: @plan.card(id)
+          body: card.contact(id).vcard.to_s
         )
         unless [201, 204].include?(response.status) || response.status == 412 && response.body.empty?
           raise Failed, "PUT of #{id} answered #{response.status}: #{response.body}"
@@ -68,37 +74,40 @@ module ProTacts
         @plan.record(id, "landed")
       end
 
-      # Looked up before it is made, so a run that died after making it
-      # joins the one it made.
-      #: () -> String
-      def make_group
-        id = listed_group_id
-        unless id
-          response = post("/groups", [["name", @plan.group]])
-          raise Failed, "creating group #{@plan.group} answered #{response.status}" unless response.status == 303
+      # The card's groups, and out of `sync:*` unless it is one of them:
+      # the PUT that created the card put it there.
+      #: (String id, Card card) -> void
+      def join(id, card)
+        form = card.groups.uniq.map { ["groups[]", group_id(it)] } #: Array[[String, String]]
+        form << ["was[]", group_id(Plan::EVERYONE)]
+        response = post("/contacts/#{id}/groups", form)
+        raise Failed, "joining #{id} to #{card.groups.join(", ")} answered #{response.status}" unless response.status == 303
 
-          id = listed_group_id or raise Failed, "group #{@plan.group} was created and is not listed"
-        end
-
-        @plan.group_id = id
-        id
+        @plan.record(id, "joined")
       end
 
-      #: () -> String?
-      def listed_group_id
+      # Looked up before it is made, so a run that died after making it
+      # joins the one it made.
+      #: (String name) -> String
+      def group_id(name)
+        @group_ids[name] ||= listed_group_id(name) || make_group(name)
+      end
+
+      #: (String name) -> String
+      def make_group(name)
+        response = post("/groups", [["name", name]])
+        raise Failed, "creating group #{name} answered #{response.status}" unless response.status == 303
+
+        listed_group_id(name) or raise Failed, "group #{name} was created and is not listed"
+      end
+
+      #: (String name) -> String?
+      def listed_group_id(name)
         response = @client.call("GET", "/api/groups")
         raise Failed, "listing groups answered #{response.status}" unless response.status == 200
 
         groups = JSON.parse(response.body) #: Array[Hash[String, String?]]
-        groups.find { it.fetch("name") == @plan.group }&.fetch("id")
-      end
-
-      #: (String id, String group_id) -> void
-      def join(id, group_id)
-        response = post("/contacts/#{id}/groups", [["groups[]", group_id]])
-        raise Failed, "joining #{id} to #{@plan.group} answered #{response.status}" unless response.status == 303
-
-        @plan.record(id, "joined")
+        groups.find { it.fetch("name") == name }&.fetch("id")
       end
 
       #: (String path, Array[[String, String]] form) -> Response
