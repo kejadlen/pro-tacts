@@ -24,6 +24,8 @@ rake db:dump          # Write the cards, birthdays, and groups to data/dump
 rake dev              # Dev server, seeded from test/fixtures/cards into a
                       # throwaway tmpdir on every start, reloading on change
                       # (needs fd and entr)
+rake import:macos:plan # Plan importing this Mac's iCloud contacts
+                      # (LIMIT=n; reads Contacts, so leave it to the user)
 rake import:execute   # Land an import plan on a host
                       # (PLAN=dir HOST=https://contacts)
 rake profile:install  # Download carddav.mobileconfig from the app and

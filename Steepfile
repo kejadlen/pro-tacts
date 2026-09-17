@@ -26,5 +26,5 @@ target :lib do
   ].map { "lib/pro_tacts/admin/#{it}.rb" }, inline: true)
   signature "sig"
 
-  library "date", "digest", "fileutils", "json", "logger", "net-http", "pathname", "securerandom", "strscan", "time", "uri", "yaml"
+  library "date", "digest", "fileutils", "json", "logger", "net-http", "open3", "pathname", "securerandom", "strscan", "time", "uri", "yaml"
 end

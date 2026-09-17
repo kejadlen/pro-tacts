@@ -87,7 +87,20 @@ usually a different one.
 ## Reading the Mac
 
 `script/macos-contacts.swift` reads through Contacts.framework, and TCC
-grants access to whatever terminal runs it. It serializes each contact
+grants access to whatever terminal runs it.
+
+It reads the iCloud account alone, card by card. This Mac's Contacts
+holds four accounts: iCloud (443 cards), Monica (1,679), and two
+pro-tacts accounts, the deployment and the dev server. By default the
+framework merges cards linked across accounts into one contact under an
+identifier no card has; 344 of the 1,801 contacts it returned were
+merges. AppleScript knows no such identifier, so a merge's note cannot
+be read, and a delete could not name it. Reading the iCloud container
+with `unifyResults` off gives each card under the identifier AppleScript
+uses, and keeps Monica's cards for the Monica importer and pro-tacts
+from importing itself. The reader still fails on any card AppleScript
+does not list.
+ It serializes each contact
 with `CNContactVCardSerialization`, which leaves out three things on this
 Mac with no error for any of them (measured 2026-09-16 over 1,799
 contacts, macOS 26):
@@ -112,7 +125,11 @@ with image data in base64, and the AppleScript note.
 ## The builder knows only what it was taught
 
 The macOS builder turns each line into a card line through a `case` on
-the property name, whose `else` records the line as unknown. Each branch
+the property name, whose `else` records the line as unknown. The envelope
+is not carried but written around the lines, so the minted `UID` goes
+inside it; a `VERSION` other than 3.0 is unknown. The note and the image
+data, which the vCard leaves out, are unknown until a branch takes them
+too. Each branch
 names the parameters it accepts, and a parameter outside that list is
 unknown too. Once every contact in the batch is read, any unknown fails
 the build with every unknown name, its count, and a few source ids, and
