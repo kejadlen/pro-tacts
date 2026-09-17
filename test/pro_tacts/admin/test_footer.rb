@@ -45,15 +45,15 @@ class AdminFooterTest < Minitest::Test
   # Blank is what an image built by hand says (see Config#version): the
   # Dockerfile sets the variable from a build arg that was never passed,
   # so it arrives empty rather than absent. Either way there is no
-  # release behind the screen, which is the thing to say.
-  def test_an_unversioned_run_says_it_is_the_dev_server
+  # version to name, and the footer does not invent one.
+  def test_an_unversioned_run_names_no_version
     with_env("VERSION" => "")
 
-    assert_includes last_response.body, "dev server"
+    assert_includes last_response.body, %(<footer class="admin-footer"><a href="/setup")
 
     with_env({})
 
-    assert_includes last_response.body, "dev server"
+    assert_includes last_response.body, %(<footer class="admin-footer"><a href="/setup")
   end
 
   # The label is a standing notice, not a status: the log is recording

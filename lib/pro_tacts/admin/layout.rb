@@ -101,11 +101,9 @@ module ProTacts
             # The version is the image's tag and the release's name at
             # once, so it stands alone: the commit and the build time
             # are spelled inside it, and a second label repeating either
-            # would be the same fact twice. Nothing built by the release
-            # job carries one, and that absence is its own fact worth
-            # stating — a screen that looks like the deployment but
-            # answers out of a working copy is exactly the confusion the
-            # footer exists to end.
+            # would be the same fact twice. `rake dev` stamps the jj
+            # change it runs from instead; a run with neither says
+            # nothing rather than guessing what it is.
             #
             # Debug logging says so while it is on because it dumps
             # every sync whole, contact data included (see ExchangeLog),
@@ -121,7 +119,8 @@ module ProTacts
             # header link would put it beside the search on every
             # screen, at the weight the app's own name has.
             footer(class: "admin-footer") do
-              span(class: "type-label") { ProTacts.config.version || "dev server" }
+              version = ProTacts.config.version
+              span(class: "type-label") { version } if version
               span(class: "type-label") { "+debug" } if ProTacts.config.debug?
               a(href: "/setup", class: "type-label") { "device setup" }
             end

@@ -103,9 +103,9 @@ single reading column.
 
 Under every screen sits the footer, the header's counterpart, holding what no
 search can turn up because none of it is a record: the version answering,
-whether debug logging is recording, and a link to device setup. A run with no
-release behind it says "dev server" in the version's place, since a working
-copy dressed as the deployment is the confusion the line exists to end. A run
+whether debug logging is recording, and a link to device setup. `rake dev`
+names its version after the jj change it runs from, since a working copy
+dressed as the deployment is the confusion the line exists to end. A run
 with its own accent fills the header and footer with it, so the difference
 shows before a word of either is read. Debug
 logging appears only while it is on, written `+debug` — a flag on the build,
