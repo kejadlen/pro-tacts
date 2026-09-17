@@ -132,7 +132,8 @@ data, which the vCard leaves out, are unknown until a branch takes them
 too. Each branch
 names the parameters it accepts, and a parameter outside that list is
 unknown too. Once every contact in the batch is read, any unknown fails
-the build with every unknown name, its count, and a few source ids, and
+the build with every unknown name, its count, and a few distinct values
+it held, each beside its source id and cut short when long, and
 no plan is written. A small batch needs only the branches its own
 contacts use.
 

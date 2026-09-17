@@ -58,11 +58,39 @@ class ImportMacosTest < Minitest::Test
 
       error = assert_raises(Macos::Unknown) { Macos.plan(dir, records, created_at: CREATED_AT) }
 
-      assert_includes error.message, "FN: 2, e.g. A:ABPerson, B:ABPerson"
-      assert_includes error.message, "N: 1, e.g. A:ABPerson"
-      assert_includes error.message, "note: 1, e.g. A:ABPerson"
-      assert_includes error.message, "imageData: 1, e.g. B:ABPerson"
+      assert_equal <<~MESSAGE.chomp, error.message
+        no branch handles these fields, so no plan was written:
+          FN: 2
+            A:ABPerson: "FN:Ada Lovelace"
+            B:ABPerson: "FN:Mary Boole"
+          N: 1
+            A:ABPerson: "N:Lovelace;Ada;;;"
+          imageData: 1
+            B:ABPerson: "/9j/"
+          note: 1
+            A:ABPerson: "Analyst."
+      MESSAGE
       refute dir.exist?
+    end
+  end
+
+  def test_examples_are_distinct_unfolded_and_cut_short
+    in_tmpdir do |dir|
+      records = %w[A B C D].map { record("#{it}:ABPerson", lines: ["PHOTO;ENCODING=b:#{"A" * 60}\r\n #{"A" * 60}"]) }
+      records << record("E:ABPerson", lines: ["NOTE:one\\ntwo"], note: "one\ntwo")
+      records << record("F:ABPerson", lines: ["NOTE:one\\ntwo"])
+
+      error = assert_raises(Macos::Unknown) { Macos.plan(dir, records, created_at: CREATED_AT) }
+
+      assert_equal <<~MESSAGE.chomp, error.message
+        no branch handles these fields, so no plan was written:
+          NOTE: 2
+            E:ABPerson: "NOTE:one\\\\ntwo"
+          PHOTO: 4
+            A:ABPerson: "PHOTO;ENCODING=b:#{"A" * 83}… (137 characters)"
+          note: 1
+            E:ABPerson: "one\\ntwo"
+      MESSAGE
     end
   end
 

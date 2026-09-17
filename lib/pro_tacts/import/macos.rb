@@ -19,9 +19,12 @@ module ProTacts
       # Every field no branch handles, across every contact read, so one
       # build names all of them.
       class Unknown < StandardError
-        # @rbs @seen: Hash[String, Array[String]]
+        # @rbs @seen: Hash[String, Array[[String, String]]]
 
         EXAMPLES = 3 #: Integer
+
+        # Long enough for a line's parameters, short of a photo's payload.
+        EXAMPLE_LENGTH = 100 #: Integer
 
         #: () -> void
         def initialize
@@ -29,9 +32,9 @@ module ProTacts
           super
         end
 
-        #: (String field, String source_id) -> void
-        def add(field, source_id)
-          @seen[field] << source_id
+        #: (String field, String source_id, String example) -> void
+        def add(field, source_id, example)
+          @seen[field] << [source_id, example]
         end
 
         #: () -> bool
@@ -39,10 +42,22 @@ module ProTacts
 
         #: () -> String
         def message
-          lines = @seen.sort.map do |field, source_ids|
-            "  #{field}: #{source_ids.size}, e.g. #{source_ids.uniq.first(EXAMPLES).join(", ")}"
+          lines = @seen.sort.flat_map do |field, seen|
+            examples = seen.uniq(&:last).first(EXAMPLES).map do |source_id, example|
+              "    #{source_id}: #{truncate(example).inspect}"
+            end
+            ["  #{field}: #{seen.size}", *examples]
           end
           "no branch handles these fields, so no plan was written:\n#{lines.join("\n")}"
+        end
+
+        private
+
+        #: (String example) -> String
+        def truncate(example)
+          return example if example.length <= EXAMPLE_LENGTH
+
+          "#{example[0, EXAMPLE_LENGTH]}… (#{example.length} characters)"
         end
       end
 
@@ -76,8 +91,9 @@ module ProTacts
 
         body = VCard::Parser.lines(vcard).filter_map { line(it, source_id, unknown) }
         # Beyond the vCard: what the serializer leaves out.
-        unknown.add("note", source_id) if note
-        unknown.add("imageData", source_id) if contact.fetch("imageData")
+        unknown.add("note", source_id, note) if note
+        image = contact.fetch("imageData") #: String?
+        unknown.add("imageData", source_id, image) if image
 
         backup = {"original.vcf" => vcard, "contact.json" => JSON.pretty_generate(contact)}
         backup["note.txt"] = note if note
@@ -95,8 +111,9 @@ module ProTacts
       #: (VCard::Parser::Line line, String source_id, Unknown unknown) -> String?
       def self.line(line, source_id, unknown)
         property = line.property
+        example = VCard::Parser.unfold(line.verbatim).chomp
         if property.nil?
-          unknown.add("unreadable line", source_id) unless line.verbatim.strip.empty?
+          unknown.add("unreadable line", source_id, example) unless example.strip.empty?
           return
         end
 
@@ -104,10 +121,10 @@ module ProTacts
         when "BEGIN", "END"
           nil
         when "VERSION"
-          unknown.add("VERSION:#{property.value}", source_id) unless property.value == "3.0"
+          unknown.add("VERSION:#{property.value}", source_id, example) unless property.value == "3.0"
           nil
         else
-          unknown.add(property.name.upcase, source_id)
+          unknown.add(property.name.upcase, source_id, example)
           nil
         end
       end
