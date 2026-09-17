@@ -41,8 +41,12 @@ module ProTacts
     # down, on a group named after them.
     #: (Rack::env env) -> String?
     def self.login(env)
-      login = env[ENV_KEY].to_s.dup.force_encoding(Encoding::UTF_8).strip
-      login if login.valid_encoding? && !login.empty?
+      login = env[ENV_KEY].to_s.dup.force_encoding(Encoding::UTF_8)
+      # Checked before strip, which raises on invalid bytes.
+      return unless login.valid_encoding?
+
+      login = login.strip
+      login unless login.empty?
     end
   end
 end
