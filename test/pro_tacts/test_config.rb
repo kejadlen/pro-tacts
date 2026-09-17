@@ -58,12 +58,11 @@ class ConfigTest < Minitest::Test
     assert_equal Pathname.new("stderr"), ProTacts::Config.new("PRO_TACTS_EXCHANGE_LOG" => "stderr").exchange_log_path
   end
 
-  # nil rather than a default, so the fallback stays Profile's alone.
-  def test_profile_name_is_nil_when_unset
-    assert_nil ProTacts::Config.new({}).profile_name
+  def test_instance_name_defaults_to_pro_tacts
+    assert_equal "pro-tacts", ProTacts::Config.new({}).instance_name
   end
 
-  def test_profile_name_is_passed_through
-    assert_equal "pro-tacts (dev)", ProTacts::Config.new("PRO_TACTS_PROFILE_NAME" => "pro-tacts (dev)").profile_name
+  def test_instance_name_is_overridable
+    assert_equal "pro-tacts (dev)", ProTacts::Config.new("PRO_TACTS_INSTANCE_NAME" => "pro-tacts (dev)").instance_name
   end
 end

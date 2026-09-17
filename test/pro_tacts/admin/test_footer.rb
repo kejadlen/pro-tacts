@@ -82,4 +82,14 @@ class AdminFooterTest < Minitest::Test
 
     refute_includes last_response.body, "data-server"
   end
+
+  def test_the_title_names_the_instance
+    with_env({})
+
+    assert_includes last_response.body, "<title>pro-tacts — Device setup</title>"
+
+    with_env("PRO_TACTS_INSTANCE_NAME" => "pro-tacts (dev)")
+
+    assert_includes last_response.body, "<title>pro-tacts (dev) — Device setup</title>"
+  end
 end

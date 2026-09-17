@@ -49,7 +49,9 @@ module ProTacts
           head do
             meta(charset: "utf-8")
             meta(name: "viewport", content: "width=device-width, initial-scale=1")
-            title { "pro-tacts — #{@title}" }
+            # The instance's name, so a tab says which server it is
+            # (`rake dev` names its own).
+            title { "#{ProTacts.config.instance_name} — #{@title}" }
             # No webfont (docs/DESIGN.md), so there is no font link
             # among these. What was here before was a remote Google
             # Fonts stylesheet, and the self-hosted woff2s meant to

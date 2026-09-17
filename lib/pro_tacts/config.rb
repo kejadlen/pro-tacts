@@ -62,15 +62,13 @@ module ProTacts
       Pathname.new(@env.fetch("PRO_TACTS_EXCHANGE_LOG", data_dir / "log/exchange.log"))
     end
 
-    # The CardDAV account's display name, PRO_TACTS_PROFILE_NAME — what
-    # a device labels the account it installs, and the one way to tell
-    # two pro-tacts accounts apart on the same phone. nil when unset
-    # rather than a default: the name belongs to the profile, so
-    # ProTacts::Profile::DEFAULT_NAME is the fallback and this reports
-    # only the override.
-    #: () -> String?
-    def profile_name
-      @env.fetch("PRO_TACTS_PROFILE_NAME", nil)
+    # What this running server calls itself, PRO_TACTS_INSTANCE_NAME:
+    # the CardDAV account a device installs and the browser tab both
+    # carry it, so two pro-tacts servers can be told apart on the same
+    # phone or in the same window.
+    #: () -> String
+    def instance_name
+      @env.fetch("PRO_TACTS_INSTANCE_NAME", "pro-tacts")
     end
 
     # The running image's version, baked in as a build arg (see

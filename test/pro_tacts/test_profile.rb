@@ -45,7 +45,7 @@ class ProfileTest < Minitest::Test
   end
 
   def test_name_can_be_overridden
-    with_config("PRO_TACTS_PROFILE_NAME" => "pro-tacts (dev)") do
+    with_config("PRO_TACTS_INSTANCE_NAME" => "pro-tacts (dev)") do
       xml = render
 
       assert_match(%r{<key>CardDAVAccountDescription</key>\s*<string>pro-tacts \(dev\)</string>}, xml)

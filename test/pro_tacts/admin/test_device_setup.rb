@@ -39,7 +39,7 @@ class AdminDeviceSetupTest < Minitest::Test
       assert_equal 200, last_response.status
       assert_equal "text/html; charset=utf-8", last_response["Content-Type"]
       assert_includes last_response.body, "box.example.ts.net"
-      assert_includes last_response.body, ProTacts::Profile::DEFAULT_NAME
+      assert_includes last_response.body, %(<dd class="type-body-sm">pro-tacts</dd>)
       assert_includes last_response.body, "/setup/carddav.mobileconfig"
     end
   end
@@ -48,7 +48,7 @@ class AdminDeviceSetupTest < Minitest::Test
   # reaching only one of the two would put a name on the screen that the
   # installed account does not have.
   def test_the_configured_name_reaches_the_screen_and_the_document
-    with_config("PRO_TACTS_PROFILE_NAME" => "pro-tacts (dev)") do
+    with_config("PRO_TACTS_INSTANCE_NAME" => "pro-tacts (dev)") do
       get "/setup"
 
       assert_includes last_response.body, %(<dd class="type-body-sm">pro-tacts (dev)</dd>)

@@ -32,20 +32,6 @@ module ProTacts
   class Profile
     IDENTIFIER_PREFIX = "dev.kejadlen.pro-tacts.carddav"
 
-    # The account name when the environment names none. A constant
-    # because the install screen states the name the download is about
-    # to carry and must not restate it as a second literal.
-    DEFAULT_NAME = "pro-tacts"
-
-    # The name every render and the install screen state. A method
-    # rather than a render parameter because there is only one source
-    # for it: a caller passing a name of its own would be labelling an
-    # account no device installs.
-    #: () -> String
-    def self.account_name
-      ProTacts.config.profile_name || DEFAULT_NAME
-    end
-
     # The server ignores the username and password: identity comes from
     # the header the proxy in front of it writes (see
     # ProTacts::ProxyAuth). /setup passes the requester's login anyway,
@@ -54,7 +40,9 @@ module ProTacts
     # and dropping it is untested.
     #: (hostname: String, username: String) -> String
     def self.render(hostname:, username:)
-      name = account_name
+      # The instance's name rather than a render parameter: a caller
+      # passing its own would label an account no device installs.
+      name = ProTacts.config.instance_name
       identifier = "#{IDENTIFIER_PREFIX}.#{host_digest(hostname)}.#{unique_hex}"
 
       builder = Nokogiri::XML::Builder.new(encoding: "UTF-8") do |x|

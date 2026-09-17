@@ -28,6 +28,7 @@ task :dev do
   # log/exchange.log stays the deployment default. An exported
   # PRO_TACTS_EXCHANGE_LOG (e.g. stderr) wins over both.
   ENV["PRO_TACTS_EXCHANGE_LOG"] ||= "log/dev.log"
+  ENV["PRO_TACTS_INSTANCE_NAME"] ||= "pro-tacts (dev)"
   File.truncate("log/dev.log", 0) if File.exist?("log/dev.log")
 
   Dir.mktmpdir("pro-tacts-dev") do |dir|
