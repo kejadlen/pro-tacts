@@ -65,10 +65,31 @@ module ProTacts
       # The reader's output, one parsed object per contact.
       #: (limit: Integer?) -> Array[Hash[String, untyped]]
       def self.read(limit:)
-        command = ["swift", SCRIPT.to_s, "read"]
-        command << limit.to_s if limit
-        output, status = Open3.capture2(*command)
-        raise "#{SCRIPT.basename} exited #{status.exitstatus}" unless status.success?
+        run("read", *[limit&.to_s].compact)
+      end
+
+      # This Mac as `Remove` speaks to it: the contacts it still has, by
+      # source id, and the delete that takes them off it.
+      module Mac
+        #: (Array[String] source_ids) -> Hash[String, untyped]
+        def self.show(source_ids)
+          return {} if source_ids.empty?
+
+          Macos.run("show", *source_ids).to_h {
+            [it.fetch("identifier"), it] #: [String, untyped]
+          }
+        end
+
+        #: (Array[String] source_ids) -> void
+        def self.delete(source_ids)
+          Macos.run("delete", *source_ids) unless source_ids.empty?
+        end
+      end
+
+      #: (*String arguments) -> Array[Hash[String, untyped]]
+      def self.run(*arguments)
+        output, status = Open3.capture2("swift", SCRIPT.to_s, *arguments)
+        raise "#{SCRIPT.basename} #{arguments.first} exited #{status.exitstatus}" unless status.success?
 
         output.each_line.map { JSON.parse(it) }
       end

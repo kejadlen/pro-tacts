@@ -91,6 +91,22 @@ class ImportPlanTest < Minitest::Test
     end
   end
 
+  def test_plans_read_back_oldest_first_with_what_each_is_waiting_for
+    Dir.mktmpdir do |tmp|
+      imports = Pathname.new(tmp)
+      %w[20260916T180412Z 20260915T090000Z].each do |stamp|
+        Plan.write(imports / "macos-#{stamp}", source: "macos", created_at: CREATED_AT, entries: [entry("kmnuqmzxylru")])
+      end
+      Plan.read(imports / "macos-20260915T090000Z").record("kmnuqmzxylru", "imported")
+
+      plans = Plan.all(imports)
+
+      assert_equal ["macos-20260915T090000Z", "macos-20260916T180412Z"], plans.map { it.dir.basename.to_s }
+      assert_equal [[], ["kmnuqmzxylru"]], plans.map { it.with_status(nil).map(&:id) }
+      assert_equal [["kmnuqmzxylru"], []], plans.map { it.with_status("imported").map(&:id) }
+    end
+  end
+
   def test_progress_is_saved_into_the_plan_as_it_is_recorded
     in_tmpdir do |dir|
       plan = Plan.write(dir, source: "macos", created_at: CREATED_AT, entries: [entry("kmnuqmzxylru"), entry("vmnlryyvktux")])

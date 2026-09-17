@@ -33,6 +33,15 @@ module ProTacts
       end
     end
 
+    class Remove
+      class Result
+        attr_reader removed: Integer
+        attr_reader kept: Array[[String, String]]
+
+        def self.new: (removed: Integer, kept: Array[[String, String]]) -> instance
+      end
+    end
+
     class Execute
       class Response
         attr_reader status: Integer
@@ -47,6 +56,13 @@ module ProTacts
     # under test.
     interface _Client
       def call: (String method, String path, ?headers: Hash[String, String], ?body: String?) -> Execute::Response
+    end
+
+    # The Mac a plan was read from: Import::Macos::Mac, or a test's stand-in.
+    interface _Mac
+      def show: (Array[String] source_ids) -> Hash[String, untyped]
+
+      def delete: (Array[String] source_ids) -> void
     end
   end
 end

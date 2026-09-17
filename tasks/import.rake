@@ -1,15 +1,39 @@
 # Importing an address book from another source
 # (docs/plans/2026-09-16-importing-from-macos.md).
 
+require "pathname"
+
+# The plan a task carries further. A module rather than task-file methods,
+# which rake redefines noisily when a file is loaded twice.
+module ImportTasks
+  DIR = Pathname.new("data/imports")
+
+  # The plan PLAN names, or the oldest one still waiting for this step:
+  # plans are carried in the order they were built, so the next one to
+  # take further is the oldest that has not been. A PLAN that is not a
+  # directory is read as a plan's name under DIR, the way the directories
+  # there are named.
+  def self.plan(waiting, step)
+    named = ENV.fetch("PLAN", nil)&.then { Pathname.new(it) }
+    named = DIR / named if named && !named.directory?
+    if named
+      abort "#{named} holds no plan.yml" unless (named / "plan.yml").file?
+      return ProTacts::Import::Plan.read(named)
+    end
+
+    ProTacts::Import::Plan.all(DIR).find(&waiting) ||
+      abort("no plan in #{DIR} is waiting #{step}: run rake import:macos:plan, or name one in PLAN")
+  end
+end
+
 namespace :import do
   namespace :macos do
     desc "Plan importing this Mac's iCloud contacts into data/imports (LIMIT=n for the first n)"
     task :plan do
-      require "pathname"
       require "pro_tacts/import/macos"
 
       created_at = Time.now.utc
-      dir = Pathname.new("data/imports/macos-#{created_at.strftime("%Y%m%dT%H%M%SZ")}")
+      dir = ImportTasks::DIR / "macos-#{created_at.strftime("%Y%m%dT%H%M%SZ")}"
       limit = ENV.fetch("LIMIT", nil)&.then { Integer(it) }
 
       records = ProTacts::Import::Macos.read(limit:)
@@ -23,36 +47,47 @@ namespace :import do
     rescue ProTacts::Import::Macos::Unknown => error
       abort error.message
     end
+
+    desc "Delete from this Mac the contacts the oldest landed plan imported (PLAN=dir for another)"
+    task :remove do
+      require "net/http"
+      require "uri"
+      require "pro_tacts/import/http_client"
+      require "pro_tacts/import/macos"
+      require "pro_tacts/import/remove"
+
+      plan = ImportTasks.plan(->(it) { it.with_status("imported").any? }, "to leave this Mac")
+      host = plan.host or abort("#{plan.dir} has not landed on a host")
+      uri = URI.parse(host)
+      puts "removing the contacts #{plan.dir} landed on #{host}"
+
+      result = nil #: ProTacts::Import::Remove::Result?
+      Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
+        result = ProTacts::Import::Remove.call(
+          plan, client: ProTacts::Import::HttpClient.new(http), mac: ProTacts::Import::Macos::Mac
+        )
+      end
+      result.kept.each { |id, why| puts "kept #{id}: #{why}" }
+      puts "#{result.removed} contacts removed from this Mac"
+    end
   end
 
-  desc "Land the newest plan in data/imports, or the one in PLAN, on the pro-tacts at HOST, a base URL such as https://contacts"
+  desc "Land the oldest plan in data/imports still to land, or the one in PLAN, on the pro-tacts at HOST, a base URL such as https://contacts"
   task :execute do
     require "net/http"
-    require "pathname"
     require "uri"
     require "pro_tacts/import/execute"
     require "pro_tacts/import/http_client"
     require "pro_tacts/import/plan"
 
-    # The plan task writes under data/imports, and names each plan for the
-    # minute it was built, so the newest is the one just planned. A PLAN
-    # that is not a directory is read as a plan's name under there, the
-    # way the directories there are named.
-    named = ENV.fetch("PLAN", nil)&.then { Pathname.new(it) }
-    named = Pathname.new("data/imports") / named if named && !named.directory?
-    dir = named ||
-      Pathname.glob("data/imports/*/plan.yml").map(&:dirname).max_by { it.basename.to_s } ||
-      abort("no plan in data/imports: run rake import:macos:plan, or name one in PLAN")
-    abort("#{dir} holds no plan.yml") unless (dir / "plan.yml").file?
-
-    plan = ProTacts::Import::Plan.read(dir)
+    plan = ImportTasks.plan(->(it) { it.with_status(nil).any? || it.with_status("landed").any? }, "to land")
     # A bare hostname is the base URL of a server that serves HTTPS, which
     # every deployment does; the scheme is spelled out here so the host
     # the plan records is the one a second run is compared against.
     uri = URI.parse(ENV.fetch("HOST"))
     uri = URI.parse("https://#{uri}") if uri.scheme.nil?
     host = uri.to_s
-    puts "landing #{dir} on #{host}"
+    puts "landing #{plan.dir} on #{host}"
 
     Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
       ProTacts::Import::Execute.call(plan, host:, client: ProTacts::Import::HttpClient.new(http))

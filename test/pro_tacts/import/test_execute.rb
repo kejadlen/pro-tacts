@@ -80,7 +80,7 @@ class ImportExecuteTest < Minitest::Test
       IDS.each { assert_equal "Contact #{it}", store.contact(it).name }
       assert_equal IDS.sort, imported_group(store).members.sort
       assert_equal IDS.sort, everyone(store).members.sort
-      assert_equal %w[joined joined], Plan.read(plan.dir).contacts.map(&:status)
+      assert_equal %w[imported imported], Plan.read(plan.dir).contacts.map(&:status)
     end
   end
 

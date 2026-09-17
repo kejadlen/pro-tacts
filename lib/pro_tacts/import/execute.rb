@@ -43,7 +43,7 @@ module ProTacts
         end
         # Every card still to carry is read before the first write, so an
         # edit that will not read stops the run with nothing landed.
-        cards = @plan.contacts.reject { it.status == "joined" }.to_h {
+        cards = @plan.contacts.reject { it.status == "imported" }.to_h {
           [it.id, @plan.card(it.id)] #: [String, Card]
         }
         # Before the first write, so a run that dies after one still ties
@@ -51,7 +51,7 @@ module ProTacts
         @plan.host = @host unless landed_on
 
         @plan.contacts.each { land(it.id, cards.fetch(it.id)) if it.status.nil? }
-        @plan.contacts.each { join(it.id, cards.fetch(it.id)) if it.status == "landed" }
+        @plan.contacts.each { add_to_groups(it.id, cards.fetch(it.id)) if it.status == "landed" }
       end
 
       private
@@ -77,17 +77,17 @@ module ProTacts
       # The card's groups, and out of `sync:*` unless it is one of them:
       # the PUT that created the card put it there.
       #: (String id, Card card) -> void
-      def join(id, card)
+      def add_to_groups(id, card)
         form = card.groups.uniq.map { ["groups[]", group_id(it)] } #: Array[[String, String]]
         form << ["was[]", group_id(Plan::EVERYONE)]
         response = post("/contacts/#{id}/groups", form)
-        raise Failed, "joining #{id} to #{card.groups.join(", ")} answered #{response.status}" unless response.status == 303
+        raise Failed, "adding #{id} to #{card.groups.join(", ")} answered #{response.status}" unless response.status == 303
 
-        @plan.record(id, "joined")
+        @plan.record(id, "imported")
       end
 
       # Looked up before it is made, so a run that died after making it
-      # joins the one it made.
+      # reuses the one it made.
       #: (String name) -> String
       def group_id(name)
         @group_ids[name] ||= listed_group_id(name) || make_group(name)

@@ -21,7 +21,7 @@ module ProTacts
       Entry = Data.define(:id, :source_id, :card, :backup)
 
       # A contact as the plan lists it, with the last step it reached:
-      # nil, then landed, joined, and removed, in that order.
+      # nil, then landed, imported, and removed, in that order.
       # @rbs skip
       Contact = Data.define(:id, :source_id, :status)
 
@@ -58,6 +58,13 @@ module ProTacts
         })
         plan.save
         plan
+      end
+
+      # Every plan under dir, oldest first: a plan's directory is named
+      # for the minute it was built, so the names sort as the plans do.
+      #: (Pathname dir) -> Array[Plan]
+      def self.all(dir)
+        Pathname.glob("#{dir}/*/plan.yml").sort_by { it.dirname.basename.to_s }.map { read(it.dirname) }
       end
 
       #: (Pathname dir) -> Plan
@@ -105,6 +112,15 @@ module ProTacts
         @manifest.fetch("contacts").find { it.fetch("id") == id }.store("status", status)
         save
       end
+
+      # The contacts this far along, for a task picking a plan to carry
+      # further: none for a plan every step has finished.
+      #: (String? status) -> Array[Contact]
+      def with_status(status) = contacts.select { it.status == status }
+
+      # Where a source's own files for one contact were written.
+      #: (String id) -> Pathname
+      def backup(id) = dir / "backups" / id
 
       # The card as its file now reads, edits included.
       #: (String id) -> Card

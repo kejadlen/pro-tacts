@@ -23,7 +23,7 @@ it stands when `execute` carries it.
 
 `plan.yml` also records how far `execute` and `remove` have carried the
 plan, saved after every step. A contact's status goes from none to
-`landed`, `joined`, and `removed`. Each save writes a new file and renames
+`landed`, `imported`, and `removed`. Each save writes a new file and renames
 it over the old one, so a run that dies mid-save leaves the plan as the
 step before left it. `execute` records the host before its first write
 and refuses a `HOST` other than the one recorded, so one plan cannot
@@ -52,12 +52,14 @@ original.
 
 ## Execute is the same for every source
 
-`rake import:execute HOST=host` lands the newest plan in `data/imports`,
-the one just planned, and `PLAN=dir` names another. It does the
-following, recording
-each step in the plan:
+`rake import:execute HOST=host` lands the oldest plan in `data/imports`
+with a contact still to land or still to be put in its groups, and
+`PLAN=dir` names another. Plans are carried in the order they were
+built, so the one to take further is the oldest not taken there yet —
+the rule `remove` picks by too. It does the following, recording each
+step in the plan:
 
-1. Read every card not yet joined, and stop before any write if one
+1. Read every card not yet imported, and stop before any write if one
    will not read.
 2. PUT each card to `/dav/addressbook/<id>.vcf` with `If-None-Match: *`.
 3. Put each card in the groups its file names through
@@ -192,15 +194,21 @@ editor writes it.
 
 ## Removing the originals
 
-`rake import:macos:remove PLAN=dir` deletes, through `CNSaveRequest`, the
-contacts this plan landed. For each one it first GETs the card from the
-host the plan names, then reads the contact again and compares it to its
-backup, note included, and skips it, printing why, if either check
+`rake import:macos:remove` deletes, through `CNSaveRequest`, the contacts
+the oldest landed plan imported, and `PLAN=dir` names another. The host
+is the one that plan recorded rather than a `HOST`, the contacts to take
+off this Mac being the ones already carried somewhere. For each one it
+first GETs the card from that host, then reads the contact again through
+`macos-contacts.swift show` and compares it to its backup, note
+included, and keeps it, printing why, if either check
 fails. A contact edited on the Mac since the plan is kept, and so
 is one whose card is no longer on the host. A contact already gone from
 the Mac counts as removed, so a rerun is safe for the same reason
-`execute`'s is.
+`execute`'s is. The deletes go in one `CNSaveRequest`, since each one
+starts the script again, and the statuses are recorded after it: a run
+that dies between the two finds those contacts gone next time and
+records them then.
 
 The comparison is exact because CNContact exposes no modification date.
-A contact Contacts.app touched on its own will be skipped, which is the
+A contact Contacts.app touched on its own will be kept, which is the
 safe direction to be wrong in.

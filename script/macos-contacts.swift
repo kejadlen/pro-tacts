@@ -1,13 +1,20 @@
-// Reads this Mac's Contacts for an import plan
-// (docs/plans/2026-09-16-importing-from-macos.md, "Reading the Mac").
+// Reads and deletes this Mac's Contacts for an import plan
+// (docs/plans/2026-09-16-importing-from-macos.md, "Reading the Mac" and
+// "Removing the originals").
 //
 //   swift script/macos-contacts.swift read [limit]
+//   swift script/macos-contacts.swift show <identifier>...
+//   swift script/macos-contacts.swift delete <identifier>...
 //
-// prints one JSON object per person in the iCloud account, companies
+// read prints one JSON object per person in the iCloud account, companies
 // skipped, in Contacts.app's own order: the identifier, the framework's
 // vCard, every fetched key, and the note, which only AppleScript will give
 // up. Cards are read unmerged, so a contact linked to a card in another
 // account (Monica, or pro-tacts itself) is this account's card alone.
+//
+// show prints those same objects for the identifiers it is given, leaving
+// out the ones this Mac no longer has; delete deletes them, and an
+// identifier it no longer has is already deleted.
 
 import Contacts
 import Foundation
@@ -96,12 +103,19 @@ func notes() -> (ids: Set<String>, notes: [String: String]) {
   return (known, byId)
 }
 
-let arguments = CommandLine.arguments.dropFirst()
-guard arguments.first == "read" else { fail("usage: macos-contacts.swift read [limit]") }
+let arguments = Array(CommandLine.arguments.dropFirst())
+let usage = "usage: macos-contacts.swift read [limit] | show <identifier>... | delete <identifier>..."
+guard let command = arguments.first, ["read", "show", "delete"].contains(command) else { fail(usage) }
+let rest = Array(arguments.dropFirst())
+
 var limit: Int? = nil
-if arguments.count > 1 {
-  guard let n = Int(arguments[arguments.startIndex + 1]), n > 0 else { fail("a limit is a positive number") }
-  limit = n
+if command == "read" {
+  if let first = rest.first {
+    guard let n = Int(first), n > 0 else { fail("a limit is a positive number") }
+    limit = n
+  }
+} else {
+  guard !rest.isEmpty else { fail(usage) }
 }
 
 let store = CNContactStore()
@@ -115,7 +129,12 @@ guard icloud.count == 1 else { fail("found \(icloud.count) accounts named iCloud
 
 let request = CNContactFetchRequest(
   keysToFetch: keys.map { $0 as NSString } + [CNContactVCardSerialization.descriptorForRequiredKeys()])
-request.predicate = CNContact.predicateForContactsInContainer(withIdentifier: icloud[0].identifier)
+request.predicate =
+  command == "read"
+  ? CNContact.predicateForContactsInContainer(withIdentifier: icloud[0].identifier)
+  // An identifier names one card, and the named ones were read out of
+  // iCloud by an earlier run of this script.
+  : CNContact.predicateForContacts(withIdentifiers: rest)
 // Merged contacts carry identifiers no card has, which AppleScript cannot
 // find and a delete could not name.
 request.unifyResults = false
@@ -130,6 +149,25 @@ do {
   }
 } catch {
   fail("reading contacts: \(error)")
+}
+
+if command == "delete" {
+  // One save request for the batch: a delete of a contact this Mac no
+  // longer has is a delete that already happened, so the identifiers that
+  // matched nothing are left alone.
+  let request = CNSaveRequest()
+  for contact in people {
+    guard let mutable = contact.mutableCopy() as? CNMutableContact else { fail("\(contact.identifier) will not copy") }
+    request.delete(mutable)
+  }
+  if !people.isEmpty {
+    do {
+      try store.execute(request)
+    } catch {
+      fail("deleting \(people.count) contacts: \(error)")
+    }
+  }
+  exit(0)
 }
 
 let (noted, noteById) = notes()
