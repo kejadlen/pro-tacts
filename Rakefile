@@ -28,14 +28,6 @@ task :dev do
   # log/exchange.log stays the deployment default. An exported
   # PRO_TACTS_EXCHANGE_LOG (e.g. stderr) wins over both.
   ENV["PRO_TACTS_EXCHANGE_LOG"] ||= "log/dev.log"
-  ENV["PRO_TACTS_INSTANCE_NAME"] ||= "pro-tacts (dev)"
-  ENV["PRO_TACTS_FAVICON"] ||= "/favicon-dev.svg"
-  ENV["PRO_TACTS_ACCENT"] ||= "ink-blue"
-  # The change being worked on names a dev build, the way a release's tag
-  # names an image; a change id holds still while its content is edited.
-  change = `jj log --no-graph -r @ -T 'change_id.short()'`
-  fail "jj could not name the working-copy change" unless $?.success?
-  ENV["VERSION"] ||= change
   File.truncate("log/dev.log", 0) if File.exist?("log/dev.log")
 
   Dir.mktmpdir("pro-tacts-dev") do |dir|
