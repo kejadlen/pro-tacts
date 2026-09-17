@@ -65,4 +65,12 @@ class ConfigTest < Minitest::Test
   def test_instance_name_is_overridable
     assert_equal "pro-tacts (dev)", ProTacts::Config.new("PRO_TACTS_INSTANCE_NAME" => "pro-tacts (dev)").instance_name
   end
+
+  def test_favicon_is_nil_when_unset
+    assert_nil ProTacts::Config.new({}).favicon
+  end
+
+  def test_favicon_is_passed_through
+    assert_equal "/favicon-dev.svg", ProTacts::Config.new("PRO_TACTS_FAVICON" => "/favicon-dev.svg").favicon
+  end
 end

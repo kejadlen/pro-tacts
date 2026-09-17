@@ -83,6 +83,18 @@ class AdminFooterTest < Minitest::Test
     refute_includes last_response.body, "data-server"
   end
 
+  def test_the_tab_carries_the_configured_favicon
+    with_env("PRO_TACTS_FAVICON" => "/favicon-dev.svg")
+
+    assert_includes last_response.body, %(<link rel="icon" href="/favicon-dev.svg">)
+  end
+
+  def test_no_favicon_leaves_the_tab_bare
+    with_env({})
+
+    refute_includes last_response.body, %(rel="icon")
+  end
+
   def test_the_title_names_the_instance
     with_env({})
 

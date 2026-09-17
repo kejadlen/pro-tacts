@@ -71,6 +71,14 @@ module ProTacts
       @env.fetch("PRO_TACTS_INSTANCE_NAME", "pro-tacts")
     end
 
+    # The tab's icon, PRO_TACTS_FAVICON, as an href; nil leaves the page
+    # without one, which is the deployment's "no brand mark"
+    # (docs/DESIGN.md).
+    #: () -> String?
+    def favicon
+      @env.fetch("PRO_TACTS_FAVICON", nil)
+    end
+
     # The running image's version, baked in as a build arg (see
     # Dockerfile and the release job in ci.yml): the image tag, which is
     # the GitHub release's name too — `YYYYMMDD-HHmm-<short sha>`. One

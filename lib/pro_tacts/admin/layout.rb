@@ -52,6 +52,8 @@ module ProTacts
             # The instance's name, so a tab says which server it is
             # (`rake dev` names its own).
             title { "#{ProTacts.config.instance_name} — #{@title}" }
+            favicon = ProTacts.config.favicon
+            link(rel: "icon", href: favicon) if favicon
             # No webfont (docs/DESIGN.md), so there is no font link
             # among these. What was here before was a remote Google
             # Fonts stylesheet, and the self-hosted woff2s meant to
