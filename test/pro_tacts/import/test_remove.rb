@@ -51,10 +51,9 @@ class ImportRemoveTest < Minitest::Test
     Dir.mktmpdir do |tmp|
       dir = Pathname.new(tmp) / "plan"
       entries = IDS.map { |id|
-        backup = {"original.vcf" => vcard(id)}
-        backup["note.txt"] = notes.fetch(id) if notes.key?(id)
-        card = Card.new(first: "Contact", last: id, phones: [], groups: [])
-        Plan::Entry.new(id:, source_id: source_id(id), card:, backup:)
+        source = {"identifier" => source_id(id), "vcard" => vcard(id), "note" => notes[id], "contact" => {}}
+        card = Card.new(first: "Contact", last: id, nickname: nil, birthday: nil, phones: [], emails: [], addresses: [], note: nil, photo: false, groups: [], source:)
+        Plan::Entry.new(id:, source_id: source_id(id), card:)
       }
       Plan.write(dir, source: "macos", created_at: Time.utc(2026, 9, 16, 18, 4, 12), entries:)
       IDS.each { (dir / "cards/#{it}.yml").write(edit.call((dir / "cards/#{it}.yml").read)) } if edit
@@ -67,7 +66,7 @@ class ImportRemoveTest < Minitest::Test
     end
   end
 
-  def test_a_contact_that_matches_its_backup_leaves_the_mac
+  def test_a_contact_that_matches_its_source_leaves_the_mac
     with_landed_plan do |plan, _store, client|
       mac = Mac.new(IDS.to_h { [source_id(it), record(it)] })
 

@@ -14,11 +14,9 @@ holds every contact in full:
 | Path | Holds |
 |---|---|
 | `plan.yml` | The source, when it was built, the group, and each contact's minted id beside its source id; then the host and each contact's status |
-| `cards/<id>.yml` | The contact's fields and the groups it belongs to, for a person to edit before `execute` |
-| `backups/<id>/` | The original, in whatever files the source reads it as |
+| `cards/<id>.yml` | The contact's fields, the groups it belongs to, and the source it was read from, for a person to edit before `execute` |
 
-The builder writes the cards and backups once, and no code rewrites
-them. A person can: a card file is the plan's one open question, read as
+The builder writes the cards once, and no code rewrites them. A person can: a card file is the plan's one open question, read as
 it stands when `execute` carries it.
 
 `plan.yml` also records how far `execute` and `remove` have carried the
@@ -88,25 +86,59 @@ first keeps a rerun from collecting refusals, each of which warns Sentry
 
 ## A card is a form filled in
 
-A card file holds what the web editor would: a first and last name and
-a list of phone numbers, plus the names of the groups it belongs to. The plan
-writes `sync:*` and its own `import-<timestamp>` group into every card,
-ahead of any the builder chose.
+A card file holds what the web editor would: a first and last name, a
+nickname, a birthday, phone numbers, email addresses, addresses, a note,
+and whether to carry the picture, plus the names of the groups it
+belongs to. Under `source` it also holds what the reader gave — the
+identifier, the vCard, the note, and every fetched key — so the fields
+and the original are read together, and `remove` compares the Mac's
+contact against the same file. The plan writes `sync:*` and its own
+`import-<timestamp>` group into every card, ahead of any the builder
+chose.
 
 ```yaml
 first: Ada
 last: Lovelace
+birthday: '1815-12-10'
 phones:
 - "+12532189075"
+emails:
+- ada@example.com
+addresses:
+- street: 12 Marylebone Rd
+  locality: London
+  postal_code: NW1 5LS
+note: An analyst.
+photo: true
 groups:
 - sync:*
 - import-20260916T180412Z
+source:
+  identifier: A:ABPerson
+  vcard: "BEGIN:VCARD\r\n…"
+  note: An analyst.
+  contact:
+    imageData: /9j/…
 ```
 
 `Import::Card` turns the fields into a contact through the web's own
-code: `CardForm.new_card`, then `CardForm.contact_card` with each phone
-as an add row. A phone's types do not survive, because the form has no
-field for them, so a number lands as a bare `TEL`.
+code: `CardForm.new_card`, then `CardForm.contact_card` with each phone,
+email, and address as an add row. Types do not survive, because the form
+has no field for them, so a number lands as a bare `TEL` and a home
+address as a bare `ADR`. The birthday rides beside the card rather than
+in it, which is where the store keeps one
+(`2026-09-11-every-birthday-in-the-model.md`); `Contact` composes the
+`BDAY` line back in, and the PUT hands it to the store, which takes it
+out again.
+
+The picture is the one field with no value of its own: `photo` says
+whether to carry what `source` holds, and the line is written from
+`imageData` with the TYPE its magic bytes name, the way Contact#photo
+reads one back. A `photo: true` the source cannot supply is refused.
+
+An address holds the editor's own parts — extended, street, locality,
+region, postal code, country — and no post office box, which no screen
+shows either.
 
 A file that will not read as a card is refused, naming the file: a
 missing or unknown key, a name with neither half, or a value YAML reads
@@ -159,8 +191,8 @@ The reader asks for an explicit list of keys and fails if any comes back
 unavailable, so the next silent strip stops the read rather than a
 contact losing a field.
 
-A contact's backup is the serialized vCard, every fetched key as JSON
-with image data in base64, and the AppleScript note.
+What a card keeps of its source is the serialized vCard, every fetched
+key with image data in base64, and the AppleScript note.
 
 ## The builder knows only what it was taught
 
@@ -183,8 +215,28 @@ The `case` starts empty. A property earns a branch when a build refuses
 it, and the branch is written with that property in view, so nothing is
 imported on the strength of a guess about what it holds. Parameter
 values are part of the form, so `TYPE=IPHONE` is refused until a branch
-names it. A property whose value has a shape can check it too: `TEL`
-takes only a `+` and digits.
+names it. Two spellings are read as one: `item1.` and `item2.`, since
+the number counts a card's groups rather than saying anything about the
+line, and a trailing `type=pref`, which ranks a line rather than naming
+a kind — `Contact#types_of` drops it for that reason, and a form is
+listed without it.
+
+Some properties are read and dropped rather than refused, this address
+book having no field for any of them: `IMPP`, `URL`, `X-SOCIALPROFILE`,
+`X-APPLE-SUBADMINISTRATIVEAREA`, and `X-AIM`. `X-ABLabel` is dropped for
+a related reason — it labels whichever line shares its `item` group, and
+every line that takes one is itself dropped or reads the label. A card's
+`source` still holds every one of their lines.
+
+`X-ABRELATEDNAMES` has no field either and is not dropped: each related
+name is written under the note as "<label>: <name>", the label being the
+`X-ABLabel` of its group, unwrapped from Apple's `_$!<Spouse>!$_`. A
+spouse's name is worth more in the note than nowhere.
+
+A property whose value has a shape is checked against it: `TEL` takes a
+`+` and digits, `BDAY` a whole date, `EMAIL` an address with an `@`, and
+`ADR` the seven components RFC 2426 section 3.2.1 gives it, with the post
+office box empty.
 
 A field holds less than a line can, so a line that would lose something
 on the way into one is unknown too. The name comes from the one `N`,
@@ -202,7 +254,7 @@ first asks that host's card browser, `GET /contacts/<id>`, whether it
 still has the card — the DAV collection serves the asking user's book
 alone, and a card in no `sync:` group is on the host and in no book —
 then reads the contact again through
-`macos-contacts.swift show` and compares it to its backup, note
+`macos-contacts.swift show` and compares it to the card's `source`, note
 included, and keeps it, printing why, if either check
 fails. A contact edited on the Mac since the plan is kept, and so
 is one whose card is no longer on the host. A contact already gone from

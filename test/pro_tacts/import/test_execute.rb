@@ -50,8 +50,9 @@ class ImportExecuteTest < Minitest::Test
     Dir.mktmpdir do |tmp|
       dir = Pathname.new(tmp) / "plan"
       entries = IDS.map { |id|
-        card = ProTacts::Import::Card.new(first: "Contact", last: id, phones: [], groups:)
-        Plan::Entry.new(id:, source_id: "#{id}:ABPerson", card:, backup: {})
+        source = {"identifier" => "#{id}:ABPerson", "vcard" => "BEGIN:VCARD\r\nEND:VCARD\r\n", "note" => nil, "contact" => {}}
+        card = ProTacts::Import::Card.new(first: "Contact", last: id, nickname: nil, birthday: nil, phones: [], emails: [], addresses: [], note: nil, photo: false, groups:, source:)
+        Plan::Entry.new(id:, source_id: "#{id}:ABPerson", card:)
       }
       Plan.write(dir, source: "macos", created_at: Time.utc(2026, 9, 16, 18, 4, 12), entries:)
       with_contacts({}) { |store| yield Plan.read(dir), store, RackClient.new }

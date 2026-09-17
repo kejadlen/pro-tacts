@@ -37,19 +37,23 @@ class ImportMacosTest < Minitest::Test
       contact = plan.contacts.first
       assert_match(/\A[k-z]{12}\z/, contact.id)
       assert_equal "A:ABPerson", contact.source_id
-      assert_equal Card.new(first: "Ada", last: "Lovelace", phones: [], groups: GROUPS), plan.card(contact.id)
+      card = plan.card(contact.id)
+      assert_equal ["Ada", "Lovelace", nil, nil, [], [], [], GROUPS],
+        [card.first, card.last, card.nickname, card.birthday, card.phones, card.emails, card.addresses, card.groups]
     end
   end
 
-  def test_the_backup_holds_the_vcard_and_the_keys
+  def test_the_card_holds_the_source_it_was_read_from
     in_tmpdir do |dir|
-      source = record("A:ABPerson")
-      plan = Macos.plan(dir, [source], created_at: CREATED_AT)
+      read = record("A:ABPerson")
+      read["contact"] = read.fetch("contact").merge("givenName" => "Ada")
+      plan = Macos.plan(dir, [read], created_at: CREATED_AT)
 
-      backup = dir / "backups" / plan.contacts.first.id
-      assert_equal source.fetch("vcard"), (backup / "original.vcf").read
-      assert_equal source.fetch("contact"), JSON.parse((backup / "contact.json").read)
-      refute (backup / "note.txt").exist?
+      source = plan.card(plan.contacts.first.id).source
+      assert_equal read.fetch("vcard"), source.fetch("vcard")
+      assert_equal "A:ABPerson", source.fetch("identifier")
+      assert_nil source.fetch("note")
+      assert_equal read.fetch("contact"), source.fetch("contact")
     end
   end
 
@@ -69,10 +73,6 @@ class ImportMacosTest < Minitest::Test
             B:ABPerson: "EMAIL:mary@example.com"
           ORG: 1
             A:ABPerson: "ORG:Analytical Engines;"
-          imageData: 1
-            B:ABPerson: "/9j/"
-          note: 1
-            A:ABPerson: "Analyst."
       MESSAGE
       refute dir.exist?
     end
@@ -92,8 +92,6 @@ class ImportMacosTest < Minitest::Test
             E:ABPerson: "NOTE:one\\\\ntwo"
           PHOTO: 4
             A:ABPerson: "PHOTO;ENCODING=b:#{"A" * 83}… (137 characters)"
-          note: 1
-            E:ABPerson: "one\\ntwo"
       MESSAGE
     end
   end
@@ -112,6 +110,166 @@ class ImportMacosTest < Minitest::Test
       plan = Macos.plan(dir, [record("A:ABPerson", name: ["N:O\\,Brien;Ada;;;", "FN:Ada O\\,Brien"])], created_at: CREATED_AT)
 
       assert_equal "O,Brien", plan.card(plan.contacts.first.id).last
+    end
+  end
+
+  def test_an_address_a_birthday_and_the_emails_are_fields
+    in_tmpdir do |dir|
+      lines = [
+        "item1.ADR;type=HOME;type=pref:;;12 Marylebone Rd;London;;NW1 5LS;England",
+        "BDAY:1815-12-10",
+        "EMAIL;type=INTERNET;type=HOME:ada@example.com",
+        "EMAIL;type=INTERNET;type=WORK;type=pref:ada@analytical.example",
+        "EMAIL;type=INTERNET:ada@lovelace.example"
+      ]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      card = plan.card(plan.contacts.first.id)
+      assert_equal "1815-12-10", card.birthday
+      assert_equal ["ada@example.com", "ada@analytical.example", "ada@lovelace.example"], card.emails
+      assert_equal [{"street" => "12 Marylebone Rd", "locality" => "London", "postal_code" => "NW1 5LS", "country" => "England"}], card.addresses
+    end
+  end
+
+  def test_a_second_address_under_another_item_number_is_one_form
+    in_tmpdir do |dir|
+      lines = [
+        "item1.ADR;type=HOME;type=pref:;;12 Marylebone Rd;London;;;",
+        "item2.ADR;type=HOME:;;Ockham Park;Surrey;;;"
+      ]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      assert_equal ["12 Marylebone Rd", "Ockham Park"], plan.card(plan.contacts.first.id).addresses.map { it.fetch("street") }
+    end
+  end
+
+  def test_every_kind_of_number_is_a_phone_and_an_empty_row_is_not
+    in_tmpdir do |dir|
+      lines = [
+        "TEL;type=pref:+1 203-536-3941",
+        "TEL;type=HOME;type=VOICE;type=pref:(206) 651-4359",
+        "TEL;type=IPHONE;type=CELL;type=VOICE:",
+        "TEL;type=CELL;type=VOICE:+12532189075"
+      ]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      assert_equal ["+1 203-536-3941", "(206) 651-4359", "+12532189075"], plan.card(plan.contacts.first.id).phones
+    end
+  end
+
+  def test_a_nickname_is_a_field_and_an_instant_message_address_is_dropped
+    in_tmpdir do |dir|
+      lines = ["NICKNAME:The Countess", "IMPP;X-SERVICE-TYPE=Skype;type=HOME;type=pref:skype:ada"]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      assert_equal "The Countess", plan.card(plan.contacts.first.id).nickname
+    end
+  end
+
+  def test_the_note_and_the_picture_are_fields
+    in_tmpdir do |dir|
+      jpeg = ["\xFF\xD8\xFFhello".b].pack("m0")
+      plan = Macos.plan(dir, [record("A:ABPerson", note: "Analyst.", image: jpeg)], created_at: CREATED_AT)
+
+      card = plan.card(plan.contacts.first.id)
+      assert_equal "Analyst.", card.note
+      assert card.photo
+      assert_equal "image/jpeg", card.contact(plan.contacts.first.id).photo.mime_type
+    end
+  end
+
+  def test_the_fields_this_address_book_does_not_have_are_dropped
+    in_tmpdir do |dir|
+      lines = [
+        "IMPP;X-SERVICE-TYPE=Skype;type=HOME;type=pref:skype:ada",
+        "X-SOCIALPROFILE;type=twitter:https://twitter.com/ada",
+        "item1.X-APPLE-SUBADMINISTRATIVEAREA:Middlesex",
+        "X-AIM;type=HOME;type=pref:ada",
+        "item2.URL;type=pref:https://example.com",
+        "item2.X-ABLabel:_$!<HomePage>!$_",
+        "item2.X-ABADR:us"
+      ]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      assert_equal "Ada Lovelace", plan.card(plan.contacts.first.id).contact("kmnuqmzxylru").name
+    end
+  end
+
+  def test_a_related_name_is_written_under_the_note
+    in_tmpdir do |dir|
+      lines = [
+        "item2.X-ABRELATEDNAMES;type=pref:Sylvia Lovelace",
+        "item2.X-ABLabel:_$!<Spouse>!$_",
+        "item3.X-ABRELATEDNAMES:Byron",
+        "item3.X-ABLabel:the poet",
+        "item4.URL;type=pref:https://example.com",
+        "item4.X-ABLabel:_$!<HomePage>!$_"
+      ]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:, note: "Analyst.")], created_at: CREATED_AT)
+
+      assert_equal "Analyst.\n\nSpouse: Sylvia Lovelace\nthe poet: Byron", plan.card(plan.contacts.first.id).note
+    end
+  end
+
+  def test_a_related_name_is_the_whole_note_of_a_contact_with_none
+    in_tmpdir do |dir|
+      lines = ["item2.X-ABRELATEDNAMES;type=pref:Sylvia", "item2.X-ABLabel:_$!<Spouse>!$_"]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      assert_equal "Spouse: Sylvia", plan.card(plan.contacts.first.id).note
+    end
+  end
+
+  def test_an_annotation_with_no_line_to_annotate_is_refused
+    in_tmpdir do |dir|
+      records = [record("A:ABPerson", lines: ["item5.X-ABADR:us", "X-ABLabel:_$!<Spouse>!$_"])]
+
+      error = assert_raises(Macos::Unknown) { Macos.plan(dir, records, created_at: CREATED_AT) }
+
+      assert_equal <<~MESSAGE.chomp, error.message
+        no branch handles these fields, so no plan was written:
+          X-ABADR: 1
+            A:ABPerson: "item5.X-ABADR:us"
+          X-ABLABEL: 1
+            A:ABPerson: "X-ABLabel:_$!<Spouse>!$_"
+      MESSAGE
+    end
+  end
+
+  def test_a_second_nickname_is_refused
+    in_tmpdir do |dir|
+      records = [record("A:ABPerson", lines: ["NICKNAME:The Countess", "NICKNAME:Ada"])]
+
+      error = assert_raises(Macos::Unknown) { Macos.plan(dir, records, created_at: CREATED_AT) }
+
+      assert_includes error.message, "NICKNAME lines: 2: 1"
+    end
+  end
+
+  def test_a_value_no_field_can_hold_is_refused
+    in_tmpdir do |dir|
+      records = [
+        record("A:ABPerson", lines: ["BDAY:--12-10"]),
+        record("B:ABPerson", lines: ["EMAIL;type=INTERNET:ada"]),
+        record("C:ABPerson", lines: ["item1.ADR;type=HOME:P.O. Box 4;;;London;;;"]),
+        record("D:ABPerson", lines: ["item1.ADR;type=HOME:;;Ockham Park;Surrey"]),
+        record("E:ABPerson", lines: ["BDAY:1815-12-10", "BDAY:1815-12-11"])
+      ]
+
+      error = assert_raises(Macos::Unknown) { Macos.plan(dir, records, created_at: CREATED_AT) }
+
+      assert_equal <<~MESSAGE.chomp, error.message
+        no branch handles these fields, so no plan was written:
+          ADR value: 2
+            C:ABPerson: "item1.ADR;type=HOME:P.O. Box 4;;;London;;;"
+            D:ABPerson: "item1.ADR;type=HOME:;;Ockham Park;Surrey"
+          BDAY lines: 2: 1
+            E:ABPerson: "BDAY:1815-12-10 / BDAY:1815-12-11"
+          BDAY value: 1
+            A:ABPerson: "BDAY:--12-10"
+          EMAIL value: 1
+            B:ABPerson: "EMAIL;type=INTERNET:ada"
+      MESSAGE
     end
   end
 
@@ -145,7 +303,8 @@ class ImportMacosTest < Minitest::Test
     in_tmpdir do |dir|
       plan = Macos.plan(dir, [record("A:ABPerson", lines: ["PRODID:-//Apple Inc.//macOS 26.0//EN"])], created_at: CREATED_AT)
 
-      assert_equal Card.new(first: "Ada", last: "Lovelace", phones: [], groups: GROUPS), plan.card(plan.contacts.first.id)
+      card = plan.card(plan.contacts.first.id)
+      assert_equal [[], [], []], [card.phones, card.emails, card.addresses]
     end
   end
 
@@ -171,10 +330,10 @@ class ImportMacosTest < Minitest::Test
   def test_a_line_in_any_other_form_is_refused_under_that_form
     in_tmpdir do |dir|
       records = [
-        record("A:ABPerson", lines: ["TEL;type=HOME;type=VOICE:+12532189075"]),
-        record("B:ABPerson", lines: ["TEL;type=CELL;type=VOICE:+12532189075"]),
+        record("A:ABPerson", lines: ["TEL;type=MAIN:+12532189075"]),
+        record("B:ABPerson", lines: ["TEL;type=WORK;type=VOICE:+12532189075"]),
         record("C:ABPerson", lines: ["item1.TEL;type=CELL;type=VOICE;type=pref:+12532189075"]),
-        record("D:ABPerson", lines: ["TEL;type=CELL;type=VOICE;type=pref:(253) 218-9075"]),
+        record("D:ABPerson", lines: ["TEL;type=CELL;type=VOICE;type=pref:ext. 4"]),
         record("E:ABPerson", name: ["N:Lovelace;Ada;;;", "FN;CHARSET=utf-8:Ada Lovelace"])
       ]
 
@@ -187,12 +346,12 @@ class ImportMacosTest < Minitest::Test
           FN;CHARSET=utf-8: 1
             E:ABPerson: "FN;CHARSET=utf-8:Ada Lovelace"
           TEL value: 1
-            D:ABPerson: "TEL;type=CELL;type=VOICE;type=pref:(253) 218-9075"
-          TEL;type=CELL;type=VOICE: 1
-            B:ABPerson: "TEL;type=CELL;type=VOICE:+12532189075"
-          TEL;type=HOME;type=VOICE: 1
-            A:ABPerson: "TEL;type=HOME;type=VOICE:+12532189075"
-          item1.TEL;type=CELL;type=VOICE;type=pref: 1
+            D:ABPerson: "TEL;type=CELL;type=VOICE;type=pref:ext. 4"
+          TEL;type=MAIN: 1
+            A:ABPerson: "TEL;type=MAIN:+12532189075"
+          TEL;type=WORK;type=VOICE: 1
+            B:ABPerson: "TEL;type=WORK;type=VOICE:+12532189075"
+          item#.TEL;type=CELL;type=VOICE: 1
             C:ABPerson: "item1.TEL;type=CELL;type=VOICE;type=pref:+12532189075"
       MESSAGE
     end

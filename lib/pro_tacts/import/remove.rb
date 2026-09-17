@@ -66,13 +66,12 @@ module ProTacts
       # the safe direction to be wrong in.
       #: (Plan::Contact contact, Hash[String, untyped] record) -> String?
       def keep(contact, record)
-        backup = @plan.backup(contact.id)
-        note = (backup / "note.txt").then { it.file? ? it.read : nil }
+        source = @plan.card(contact.id).source
         if !on_host?(contact.id)
           "its card is no longer on #{@plan.host}"
-        elsif record.fetch("vcard") != (backup / "original.vcf").read
+        elsif record.fetch("vcard") != source.fetch("vcard")
           "it has changed on this Mac since the plan"
-        elsif record.fetch("note") != note
+        elsif record.fetch("note") != source.fetch("note")
           "its note has changed on this Mac since the plan"
         end
       end

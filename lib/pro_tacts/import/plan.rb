@@ -15,10 +15,11 @@ module ProTacts
       # @rbs @manifest: Hash[String, untyped]
 
       # What a builder hands over for one contact: its card, which the
-      # plan's own groups are added to, and the original's files, by
-      # name. Signed in sig/pro_tacts/import.rbs, being a Data class.
+      # plan's own groups are added to. The original rides inside the
+      # card (Card::SOURCE_KEYS). Signed in sig/pro_tacts/import.rbs,
+      # being a Data class.
       # @rbs skip
-      Entry = Data.define(:id, :source_id, :card, :backup)
+      Entry = Data.define(:id, :source_id, :card)
 
       # A contact as the plan lists it, with the last step it reached:
       # nil, then landed, imported, and removed, in that order.
@@ -38,14 +39,11 @@ module ProTacts
         Dir.mkdir(dir)
 
         group = "import-#{created_at.utc.strftime("%Y%m%dT%H%M%SZ")}"
+        (dir / "cards").mkpath
         entries.each do |entry|
-          (dir / "cards").mkpath
           card = entry.card
-          card = Card.new(first: card.first, last: card.last, phones: card.phones, groups: [EVERYONE, group, *card.groups])
+          card = card.with(groups: [EVERYONE, group, *card.groups])
           (dir / "cards/#{entry.id}.yml").write(YAML.dump(card.document))
-          backup = dir / "backups" / entry.id
-          backup.mkpath
-          entry.backup.each { |name, bytes| (backup / name).binwrite(bytes) }
         end
 
         plan = new(dir, {
@@ -117,10 +115,6 @@ module ProTacts
       # further: none for a plan every step has finished.
       #: (String? status) -> Array[Contact]
       def with_status(status) = contacts.select { it.status == status }
-
-      # Where a source's own files for one contact were written.
-      #: (String id) -> Pathname
-      def backup(id) = dir / "backups" / id
 
       # The card as its file now reads, edits included.
       #: (String id) -> Card

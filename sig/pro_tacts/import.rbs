@@ -8,10 +8,20 @@ module ProTacts
     class Card
       attr_reader first: String
       attr_reader last: String
+      attr_reader nickname: String?
+      attr_reader birthday: String?
       attr_reader phones: Array[String]
+      attr_reader emails: Array[String]
+      attr_reader addresses: Array[Hash[String, String]]
+      attr_reader note: String?
+      attr_reader photo: bool
       attr_reader groups: Array[String]
+      attr_reader source: Hash[String, untyped]
 
-      def self.new: (first: String, last: String, phones: Array[String], groups: Array[String]) -> instance
+      def self.new: (first: String, last: String, nickname: String?, birthday: String?, phones: Array[String], emails: Array[String], addresses: Array[Hash[String, String]], note: String?, photo: bool, groups: Array[String], source: Hash[String, untyped]) -> instance
+
+      # Data#with, for the one member a plan fills in itself.
+      def with: (groups: Array[String]) -> Card
     end
 
     class Plan
@@ -19,9 +29,8 @@ module ProTacts
         attr_reader id: String
         attr_reader source_id: String
         attr_reader card: Card
-        attr_reader backup: Hash[String, String]
 
-        def self.new: (id: String, source_id: String, card: Card, backup: Hash[String, String]) -> instance
+        def self.new: (id: String, source_id: String, card: Card) -> instance
       end
 
       class Contact

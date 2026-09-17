@@ -12,10 +12,11 @@ class ImportPlanTest < Minitest::Test
 
   CREATED_AT = Time.utc(2026, 9, 16, 18, 4, 12)
 
-  ADA = ProTacts::Import::Card.new(first: "Ada", last: "Lovelace", phones: ["+12532189075"], groups: [])
+  SOURCE = {"identifier" => "A:ABPerson", "vcard" => "BEGIN:VCARD\r\nEND:VCARD\r\n", "note" => nil, "contact" => {}}
+  ADA = ProTacts::Import::Card.new(first: "Ada", last: "Lovelace", nickname: nil, birthday: nil, phones: ["+12532189075"], emails: [], addresses: [], note: nil, photo: false, groups: [], source: SOURCE)
 
-  def entry(id, source_id: "#{id}:ABPerson", card: ADA, backup: {"original.vcf" => "BEGIN:VCARD\r\n"})
-    Plan::Entry.new(id:, source_id:, card:, backup:)
+  def entry(id, source_id: "#{id}:ABPerson", card: ADA)
+    Plan::Entry.new(id:, source_id:, card:)
   end
 
   def in_tmpdir
@@ -45,19 +46,30 @@ class ImportPlanTest < Minitest::Test
 
   def test_a_card_joins_everyone_and_the_plans_group_after_its_own
     in_tmpdir do |dir|
-      card = ProTacts::Import::Card.new(first: "Ada", last: "Lovelace", phones: ["+12532189075"], groups: ["family"])
+      card = ADA.with(groups: ["family"])
       Plan.write(dir, source: "macos", created_at: CREATED_AT, entries: [entry("kmnuqmzxylru", card:)])
 
       assert_equal <<~YAML, (dir / "cards/kmnuqmzxylru.yml").read
         ---
         first: Ada
         last: Lovelace
+        nickname:
+        birthday:
         phones:
         - "+12532189075"
+        emails: []
+        addresses: []
+        note:
+        photo: false
         groups:
         - sync:*
         - import-20260916T180412Z
         - family
+        source:
+          identifier: A:ABPerson
+          vcard: "BEGIN:VCARD\\r\\nEND:VCARD\\r\\n"
+          note:
+          contact: {}
       YAML
     end
   end
@@ -69,16 +81,6 @@ class ImportPlanTest < Minitest::Test
       path.write(path.read.sub("first: Ada", "first: Augusta Ada"))
 
       assert_equal "Augusta Ada", plan.card("kmnuqmzxylru").first
-    end
-  end
-
-  def test_the_backup_is_written_as_given
-    in_tmpdir do |dir|
-      photo = "\xFF\xD8\xFF".b
-      Plan.write(dir, source: "macos", created_at: CREATED_AT, entries: [entry("kmnuqmzxylru", backup: {"original.vcf" => "BEGIN:VCARD\r\n", "photo.jpg" => photo})])
-
-      assert_equal "BEGIN:VCARD\r\n", (dir / "backups/kmnuqmzxylru/original.vcf").read
-      assert_equal photo, (dir / "backups/kmnuqmzxylru/photo.jpg").binread
     end
   end
 
