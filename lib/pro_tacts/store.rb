@@ -1,12 +1,12 @@
 require "date"
 require "pathname"
-require "securerandom"
 require "sequel"
 require "sentry-ruby"
 
 require "pro_tacts/birthday"
 require "pro_tacts/birthday_line"
 require "pro_tacts/card_diff"
+require "pro_tacts/change_id"
 require "pro_tacts/contact"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
@@ -133,12 +133,6 @@ module ProTacts
     # better off waiting than raising: two requests saving at once is
     # ordinary, and SQLITE_BUSY straight back to the client is not.
     BUSY_TIMEOUT = 5_000 #: Integer
-
-    # Hex in the letters jj renders a change id with: 0 is z, f is k,
-    # and every digit lands in k-z, so an id is never a hash and never
-    # a word its author meant. `tr` maps the alphabets in one pass, in
-    # the order this pair is written.
-    REVERSE_HEX = "zyxwvutsrqponmlk" #: String
 
     # How many ids a create draws before giving up. Four letters is one
     # of 65,536 and an address book holds groups by the dozen, so a
@@ -588,7 +582,7 @@ module ProTacts
     #: (?name: String?) -> String
     def create_group(name: nil)
       GROUP_ID_ATTEMPTS.times do
-        id = next_group_id
+        id = ChangeId.mint(4)
         begin
           groups.insert(id:, name:)
           return id
@@ -796,15 +790,6 @@ module ProTacts
     #: () -> Sequel::Dataset
     def group_properties
       @database[:group_properties]
-    end
-
-    # Four hex digits spelled in REVERSE_HEX. SecureRandom rather than
-    # rand: the draws have to be independent of anything a caller can
-    # observe or seed, and two bytes of it is exactly the four digits
-    # the id is wide.
-    #: () -> String
-    def next_group_id
-      SecureRandom.hex(2).tr("0-9a-f", REVERSE_HEX)
     end
 
     # The diff comes in already computed rather than being taken here
