@@ -6,26 +6,28 @@ host, and remove the originals from the Mac. Monica gets an importer of
 its own later, and the two share everything but the first and last
 steps.
 
-## A plan is what will happen
+## A plan is what will happen, and how far it got
 
 A plan is a directory under `data/imports/`, which is ignored, since it
 holds every contact in full:
 
 | Path | Holds |
 |---|---|
-| `plan.json` | The source, when it was built, the group, and each contact's minted id beside its source id |
+| `plan.json` | The source, when it was built, the group, and each contact's minted id beside its source id; then the host, the group's id, and each contact's status |
 | `cards/<id>.vcf` | The bytes `execute` PUTs, byte for byte |
 | `backups/<id>/` | The original, in whatever files the source reads it as |
-| `log.jsonl` | What `execute` and `remove` did, one event per line |
 
-The builder writes the first three once and nothing rewrites them. A plan
-has no open questions in it: every card is final when the plan is
+The builder writes the cards and backups once and nothing rewrites them.
+A plan has no open questions in it: every card is final when the plan is
 written, so `execute` runs it rather than finishing it.
 
-The log is appended rather than rewritten, so a run that dies partway
-leaves an accurate record of what landed. Every event names the host,
-and `execute` refuses a `HOST` other than the one the log already names,
-so one plan cannot land on two servers.
+`plan.json` also records how far `execute` and `remove` have carried the
+plan, saved after every step. A contact's status goes from none to
+`landed`, `joined`, and `removed`. Each save writes a new file and renames
+it over the old one, so a run that dies mid-save leaves the plan as the
+step before left it. `execute` records the host before its first write
+and refuses a `HOST` other than the one recorded, so one plan cannot
+land on two servers.
 
 Companies are not imported. A contact whose `contactType` is
 `organization` is left out of the plan, so `remove` never touches it
@@ -36,8 +38,9 @@ contacts at a time: `rake import:macos:plan LIMIT=n` plans the first n
 people, companies skipped. First means Contacts.app's own list order,
 `CNContactSortOrderUserDefault`; the fetch request's default is
 `CNContactSortOrderNone`, which promises no order at all
-(`CNContactFetchRequest.h`). Plans keep no record of one another. The next plan's first n are new because `remove` took
-the last batch off the Mac, so a contact that landed and was not removed
+(`CNContactFetchRequest.h`). Plans keep no record of one another. The
+next plan's first n are new because `remove` took the last batch off the
+Mac, so a contact that landed and was not removed
 lands again, as a second card, from the next plan that includes it. Each
 plan is its own group.
 
@@ -49,25 +52,30 @@ original.
 
 ## Execute is the same for every source
 
-`rake import:execute PLAN=dir HOST=host` does the following, logging
-each step:
+`rake import:execute PLAN=dir HOST=host` does the following, recording
+each step in the plan:
 
 1. PUT each card to `/dav/addressbook/<id>.vcf` with `If-None-Match: *`.
 2. Create the plan's group, `import-<timestamp>`, through `POST /groups`.
 3. Join each card to it through `POST /contacts/<id>/groups`.
 
-Execute is idempotent against the host, not against its own log: a run
-can die after a write lands and before the log records it, so a rerun
-repeats every step and each step accepts its own earlier success.
+A rerun skips every step the plan records. The plan alone is not
+enough, because a run can die after a write lands and before the plan
+records it, so each step also accepts its own earlier success from the
+host. Skipping
+first keeps a rerun from collecting refusals, each of which warns Sentry
+(`RefusalAlerts`).
 
-- A PUT answered 412 means the id is already taken, and at 48 bits a
+- A bare 412 to the PUT is `If-None-Match` failing, and at 48 bits a
   minted id is taken only by this plan's own earlier PUT, so the card
-  counts as landed.
-- A group name the host refuses as taken is this plan's, since the name
-  carries the plan's timestamp. Its id comes from `GET /api/groups`,
-  every group's id and name as JSON, since the refusal does not name
-  the group that holds the name.
+  counts as landed. A 412 with a body is the card refused.
+- The group is looked up by name in `GET /api/groups`, every group's id
+  and name as JSON, before it is created. A name that is already there
+  is this plan's, since it carries the plan's timestamp.
 - Joining a group twice is joining once (`Store#add_member`).
+
+`HOST` is a base URL, such as `https://contacts` or the dev server's
+`http://localhost:9292`.
 
 These are the routes a client and the admin UI already use, so the
 server gains nothing for this. The host's proxy supplies the identity,
@@ -121,9 +129,9 @@ through, and Apple wrote them.
 
 `rake import:macos:remove PLAN=dir` deletes, through `CNSaveRequest`, the
 contacts this plan landed. For each one it first GETs the card from the
-host the log names, then reads the contact again and compares it to its
-backup, note included, and skips it with a logged reason if either
-check fails. A contact edited on the Mac since the plan is kept, and so
+host the plan names, then reads the contact again and compares it to its
+backup, note included, and skips it, printing why, if either check
+fails. A contact edited on the Mac since the plan is kept, and so
 is one whose card is no longer on the host. A contact already gone from
 the Mac counts as removed, so a rerun is safe for the same reason
 `execute`'s is.

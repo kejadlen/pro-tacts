@@ -24,6 +24,8 @@ rake db:dump          # Write the cards, birthdays, and groups to data/dump
 rake dev              # Dev server, seeded from test/fixtures/cards into a
                       # throwaway tmpdir on every start, reloading on change
                       # (needs fd and entr)
+rake import:execute   # Land an import plan on a host
+                      # (PLAN=dir HOST=https://contacts)
 rake profile:install  # Download carddav.mobileconfig from the app and
                       # stage it for approval
 ```
@@ -50,6 +52,7 @@ lib/pro_tacts/
 ├── web/groups.rb   # The group screens and their editor
 ├── web/setup.rb    # The device setup screen and its profile
 ├── web/api.rb      # JSON for scripts: the group list
+├── import/         # Import plans, and landing them on a host
 ├── admin/          # The Phlex views those screens render, plus
 │                   # card_form.rb, which reads a form back into a card
 ├── store.rb        # Sequel over SQLite: cards, change log, derived index
