@@ -1,9 +1,15 @@
 # Pro-tacts — Design Notes
 
-Pro-tacts is a single-user admin for a personal contact store: the place where
-one person curates the contacts and groups that get synced out to their own
-devices. It is a tool, not a product. Nobody is being onboarded, nothing is
-being sold, and there is no second user to design around.
+Pro-tacts is an unscoped admin for a family contact store: the place where
+the contacts and groups that get synced out are curated. It is a tool, not a
+product. Nobody is being onboarded and nothing is being sold.
+
+Unscoped is the design decision, not an omission. Which cards a device syncs
+is per-login — the `sync:` groups of
+`docs/plans/2026-09-12-per-user-books.md` — but every screen here shows the
+whole store to whoever is looking, because the two or three people on the
+tailnet are curating one book together. A new screen scoped to its viewer
+would be the first, and would need an argument.
 
 This document describes the system the interface is built on — the rules that
 should hold as screens get added or reworked. It deliberately says nothing

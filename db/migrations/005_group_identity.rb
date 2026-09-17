@@ -9,9 +9,9 @@
 # fallback into the read).
 #
 # Which makes the id something a person reads, so it is minted rather
-# than chosen: four reverse-hex letters, k through z, the alphabet jj
-# renders a change id in so that an id can never be mistaken for a hash
-# (Store#next_group_id). GLOB rather than LIKE, because GLOB takes the
+# than chosen: four letters from k to z, the alphabet jj renders a
+# change id in so that an id can never be mistaken for a hash
+# (ProTacts::ChangeId). GLOB rather than LIKE, because GLOB takes the
 # character ranges this shape is written as and because its case
 # sensitivity is its own rather than a per-connection pragma's — 004
 # records the second reason at length. `glob(X, Y)` is `Y GLOB X`:

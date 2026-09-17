@@ -33,8 +33,9 @@ class BirthdayTest < Minitest::Test
   # The shape pattern matches by range, and a range admits any
   # Comparable within its bounds — so a String component is refused as a
   # shape problem. A non-Integer numeric would pass; no producer can
-  # make one (SQLite integer columns and #to_i are Integers), which the
-  # constructor's comment records as the boundary of the check.
+  # make one (SQLite integer columns and String#to_i are Integers),
+  # which the constructor's comment records as the boundary of the
+  # check.
   def test_components_that_are_not_integers_are_refused
     assert_raises(ArgumentError) { ProTacts::Birthday.new(year: "1985", month: 4, day: 12) }
     assert_raises(ArgumentError) { ProTacts::Birthday.new(year: 1985, month: "4", day: 12) }

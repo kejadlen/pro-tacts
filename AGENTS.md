@@ -49,16 +49,25 @@ lib/pro_tacts/
 ├── web/contacts.rb # The card browser and its editor
 ├── web/groups.rb   # The group screens and their editor
 ├── web/setup.rb    # The device setup screen and its profile
+├── admin/          # The Phlex views those screens render, plus
+│                   # card_form.rb, which reads a form back into a card
 ├── store.rb        # Sequel over SQLite: cards, change log, derived index
 ├── contact.rb      # the one model of a contact: id, vCard, etag,
 │                   # and the structured accessors over the card
-├── vcard.rb        # vCard 3.0 escaping and folding, and what a card is
+├── birthday.rb     # A partial date, the one fact no card can hold
+├── birthday_line.rb # What a submitted BDAY line is, for Store#put
+├── card_diff.rb    # The lines a write added and removed
+├── vcard.rb        # vCard 3.0 escaping, and what a card is
 ├── vcard/parser.rb # One card's bytes into lines
+├── proxy_auth.rb   # The login, off the header the proxy writes
+├── dev_login.rb    # That header, filled in for `rake dev` (dev.ru only)
+├── change_id.rb    # Ids in the letters jj spells a change id with
 ├── config.rb       # Every environment read in the app
 ├── profile.rb      # carddav.mobileconfig generation
 ├── exchange_log.rb # Failed DAV exchanges, whole, under an id Sentry
 │                   # carries
-└── refusal_alerts.rb # DAV refusals as Sentry warnings, one per route
+├── refusal_alerts.rb # DAV refusals as Sentry warnings, one per route
+└── warnings.rb     # $VERBOSE off for a block, for the phlex requires
 lib/roda/plugins/dav_verbs.rb     # PROPFIND and REPORT routing verbs
 lib/sequel/extensions/sole.rb     # `first`, minus the ambiguity
 db/migrations/      # Sequel migrations, run on every store open

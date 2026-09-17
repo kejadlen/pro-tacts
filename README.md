@@ -9,14 +9,9 @@ A CardDAV server for my family.
 - Apple devices only (it might happen to work on other CardDAV clients, but
   only accidentally)
 
-## Features it is being built for
-
-None of these exist yet; they are what the design is shaped around. What
-does work is under Status below.
-
-- Groups with attributes (e.g., an address shared by all members)
-- Selective sync (choose which contacts to sync rather than all-or-nothing)
-- A readable dump of the database, for history kept in version control (`rake db:dump`)
+The three features the design was shaped around — groups with shared
+attributes, selective sync, and a readable dump for version control —
+are all serving now; Status covers each.
 
 ## Status
 
@@ -46,6 +41,14 @@ that again from the stored cards alone. `rake db:dump` writes the
 cards, birthdays, and groups out as plain files, into `data/dump`
 unless `DUMP` names another directory
 (`docs/plans/2026-09-12-database-dump.md`).
+
+A group holds attributes its members' cards carry: an address or a note
+written once and composed into every member's card on the way out, with
+membership never exposed to the client. A member editing a shared line
+in Contacts writes it back for everyone, and a member deleting one takes
+the row away — which is why the lines a group may hold are only the two
+a household actually shares (`docs/plans/2026-08-24-vcard-storage-and-groups.md`,
+`docs/plans/2026-09-09-group-edits-propagate.md`).
 
 macOS Contacts displays them over Tailscale serve as of 2026-08-14, so
 later work has a known-good baseline to change. See

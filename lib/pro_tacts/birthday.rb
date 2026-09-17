@@ -59,10 +59,11 @@ module ProTacts
     # The only constructor, so no birthday exists in a shape the grammar
     # rejects: one `in` clause per shape RFC 6350 section 4.3.1 admits,
     # each component's range standing where the component stands. A range
-    # admits any Comparable in its bounds, but the two producers — SQLite's
-    # integer columns and #to_i — only yield Integers, and a String misses
-    # to the else. Components are not calendar-validated: a nonsense but
-    # well-shaped date round-trips rather than 500s a write.
+    # admits any Comparable in its bounds, but the two producers —
+    # SQLite's integer columns and String#to_i — only yield Integers,
+    # and a String misses to the else. Components are not
+    # calendar-validated: a nonsense but well-shaped date round-trips
+    # rather than 500s a write.
     def self.new(year: nil, month: nil, day: nil)
       case [year, month, day]
       in [0..9999, 1..12, 1..31]

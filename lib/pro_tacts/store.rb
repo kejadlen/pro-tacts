@@ -134,11 +134,11 @@ module ProTacts
     # ordinary, and SQLITE_BUSY straight back to the client is not.
     BUSY_TIMEOUT = 5_000 #: Integer
 
-    # How many ids a create draws before giving up. Four letters is one
-    # of 65,536 and an address book holds groups by the dozen, so a
-    # first collision is already unlucky and a run of eight is a broken
-    # generator rather than a run of bad draws — better to say so than
-    # to spin.
+    # How many ids a create draws before giving up. The four letters
+    # #create_group asks ChangeId for are one of 65,536, and an address
+    # book holds groups by the dozen, so a first collision is already
+    # unlucky and a run of eight is a broken generator rather than a run
+    # of bad draws — better to say so than to spin.
     GROUP_ID_ATTEMPTS = 8 #: Integer
 
     # The property names whose value is structured rather than free
