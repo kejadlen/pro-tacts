@@ -22,6 +22,11 @@ ENV VERSION=${VERSION}
 ENV RACK_ENV=production
 # Set TZ at runtime — Date.today drives the birthday list's rollover.
 
+# git, for the dump `rake console` commits before its prompt
+# (tasks/console.rake): a mistake at the prompt is then a revert in
+# the dump's repository rather than a restore from backup.
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY --from=build /usr/local/bundle /usr/local/bundle

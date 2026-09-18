@@ -1,6 +1,7 @@
 source "https://rubygems.org"
 
 gem "base64"
+gem "irb"
 gem "logger"
 gem "nokogiri"
 gem "phlex"
@@ -14,7 +15,6 @@ gem "sqlite3"
 
 group :development do
   gem "hegeltest"
-  gem "irb"
   gem "minitest"
   gem "rack-test"
   gem "ruby-lsp"
