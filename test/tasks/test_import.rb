@@ -28,12 +28,11 @@ class ImportStatusTaskTest < Minitest::Test
 
       out, = run_task(root)
 
-      assert_includes out, "macos-20260901T000000Z  macos  on https://contacts.example"
-      assert_includes out, "  2 contacts: 1 imported, 1 removed"
-      assert_includes out, "macos-20260916T180412Z  macos  not yet on a host"
-      assert_includes out, "  1 contact: 1 to land"
-      assert_includes out, "next: import:execute would land macos-20260916T180412Z"
-      assert_includes out, "next: import:macos:remove would clear macos-20260901T000000Z"
+      assert_match(%r{plan\s+host\s+contacts\s+planned\s+landed\s+imported\s+removed}, out)
+      assert_match(/macos-20260901T000000Z\s+https:\/\/contacts\.example\s+2\s+0\s+0\s+1\s+1/, out)
+      assert_match(/macos-20260916T180412Z\s+—\s+1\s+1\s+0\s+0\s+0/, out)
+      assert_includes out, "next: import:execute would land macos-20260916T180412Z\n"
+      assert_includes out, "next: import:macos:remove would clear macos-20260901T000000Z\n"
     end
   end
 

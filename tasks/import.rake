@@ -87,22 +87,24 @@ namespace :import do
       next
     end
 
-    # The statuses in their order through an import, so the line reads
-    # as where the plan has got to rather than an alphabetical jumble.
-    plans.each do
-      host = it.host ? "on #{it.host}" : "not yet on a host"
-      puts "#{it.dir.basename}  #{it.source}  #{host}"
-      counts = it.contacts.group_by(&:status).transform_values(&:length)
-      summary = [
-        ["to land", counts.fetch(nil, 0)],
-        ["landed", counts.fetch("landed", 0)],
-        ["imported", counts.fetch("imported", 0)],
-        ["removed", counts.fetch("removed", 0)],
-      ].reject { |_, count| count.zero? }.map { |label, count| "#{count} #{label}" }.join(", ")
-      word = it.contacts.size == 1 ? "contact" : "contacts"
-      puts summary.empty? ? "  #{it.contacts.size} #{word}" : "  #{it.contacts.size} #{word}: #{summary}"
-    end
+    # One aligned row per plan, the statuses as columns in their order
+    # through an import, so where a plan has got to is read off the
+    # row rather than parsed out of a sentence. The plan names are the
+    # directories', copy-pasteable into PLAN=.
+    headers = ["plan", "host", "contacts", "planned", "landed", "imported", "removed"]
+    rows = plans.map { |plan|
+      counts = plan.contacts.group_by(&:status).transform_values(&:length)
+      [plan.dir.basename.to_s, plan.host || "—", plan.contacts.size.to_s,
+       counts.fetch(nil, 0).to_s, counts.fetch("landed", 0).to_s,
+       counts.fetch("imported", 0).to_s, counts.fetch("removed", 0).to_s]
+    }
+    widths = headers.each_index.map { |i| [headers[i].length, *rows.map { it[i].length }].max }
+    table = rows.unshift(headers).map { |row|
+      row.each_with_index.map { |cell, i| cell.public_send(i < 2 ? :ljust : :rjust, widths[i]) }.join("  ")
+    }
+    puts table
 
+    puts ""
     landing = plans.find(&ImportTasks::TO_LAND)
     leaving = plans.find(&ImportTasks::TO_LEAVE)
     puts "next: import:execute would land #{landing.dir.basename}" if landing
