@@ -14,8 +14,12 @@ module ProTacts
       def self.call: (contact: Contact, ?notice: String?) -> String
     end
 
-    class ContactsIndex
+    class Dashboard
       def self.call: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, groups: Array[Store::Group], ?notice: String?) -> String
+    end
+
+    class ContactsIndex
+      def self.call: (contacts: Array[Contact]) -> String
     end
 
     class GroupsIndex
@@ -34,7 +38,7 @@ module ProTacts
       def self.call: (hostname: String, name: String) -> String
     end
 
-    # Rendered by ContactsIndex, not called from checked code; only
+    # Rendered by Dashboard, not called from checked code; only
     # its LIMIT is read in web.rb.
     class UpcomingBirthdays
       LIMIT: Integer

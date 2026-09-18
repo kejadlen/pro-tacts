@@ -77,8 +77,11 @@ module ProTacts
               # The groups list rides beside the name because it is
               # where a group is created, and creating one is a thing
               # to reach from anywhere; search still finds one by name.
+              # The contacts list is the browse surface (docs/DESIGN.md,
+              # "The core idea").
               nav do
                 a(href: "/") { "pro-tacts" }
+                a(href: "/contacts") { "contacts" }
                 a(href: "/groups") { "groups" }
               end
               # Every screen's chrome, not the dashboard's alone: the

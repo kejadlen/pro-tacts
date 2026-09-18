@@ -71,11 +71,17 @@ What that inheritance actually means:
 - No gradients, no blur, no translucency, no photography, no brand mark —
   "Pro-tacts" is rendered in type wherever a mark would go.
 
-## The core idea: search first, no browsing
+## The core idea: search first
 
-Contacts and groups are both **found**, not browsed. A list of everything is
-not useful past a hundred records and becomes actively hostile past a
-thousand, so no screen exists to scroll the whole set.
+Contacts and groups are both **found**, not browsed — with one
+exception. `GET /contacts` lists every contact in one scrolling list,
+sorted by last name, because the book this serves is a family's: small
+enough that scanning it beats typing into a search box. That is the same
+bet `/groups` makes with its whole set, and it is a bet against growth —
+a list of everything is not useful past a hundred records and becomes
+actively hostile past a thousand. If the book ever gets there, the
+listing goes and the shapes below, which work at any size, are what's
+left.
 
 Every collection screen is the same shape:
 
@@ -95,8 +101,9 @@ by name, by any of its values, and by the groups it belongs to.
 The root screen is a dashboard of two columns. The primary column is the
 shape above. The ambient column beside it is a standing answer to "what's
 coming?": the next ten or so birthdays in arrival order, each row opening
-the contact's card. It is the one list that browses, because its question is
-not "where is X?", and it stands whether or not there is a query. The
+the contact's card. It is a list that browses, like the whole-set listing,
+because its question is not "where is X?", and it stands whether or not
+there is a query. The
 columns are equal and fluid, collapsing to one — birthdays under contacts —
 when the viewport cannot hold two side by side. Every other screen keeps a
 single reading column.

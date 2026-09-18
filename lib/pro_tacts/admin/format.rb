@@ -7,6 +7,21 @@ module ProTacts
     # Small display helpers shared by the admin views. Presentation, not
     # structure: these read a Contact but decide only how it looks.
     module Format
+      # The name a listing row shows: "Nickname (Name)" when the card
+      # carries a NICKNAME — the name someone is known by, the formal
+      # one kept beside it — and the plain name otherwise. The
+      # composition is the listing screens', not Contact's: the card
+      # holds the two facts independently, and other screens (the
+      # detail card, the birthdays column) show the plain name.
+      #: (Contact contact) -> String
+      def self.name_label(contact)
+        nickname = contact.nickname
+        name = contact.name
+        return "#{nickname} (#{name})" if nickname && name
+
+        nickname || name || contact.id
+      end
+
       # A contact's initials. N's given and family names (RFC 2426
       # section 3.1.2) are structured data and the real answer to "what
       # are this contact's initials" — falling back, when the card

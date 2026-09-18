@@ -3,6 +3,7 @@ require "pro_tacts/admin/contact_dialog"
 require "pro_tacts/admin/contacts_edit"
 require "pro_tacts/admin/contacts_index"
 require "pro_tacts/admin/contacts_show"
+require "pro_tacts/admin/dashboard"
 require "pro_tacts/change_id"
 
 module ProTacts
@@ -14,22 +15,29 @@ module ProTacts
     # trusted" is the whole access model this app has, see README's
     # simplifying assumptions.
     hash_branch("contacts") do |r|
-      # The browser's create, from the dashboard's dialog: POST is
-      # the one method the admin UI adds to the DAV set (see
-      # config/puma.rb, whose list Puma replaces rather than
-      # extends), and the collection is the resource a create
-      # names. Stored through Store#put like any client write, so
-      # the change log a sync token counts on lands with the card.
-      # A nameless create is a dashboard re-render with a toast: the
-      # browser cannot produce one (the dialog requires one name box
-      # or the other, Admin::NamePair), so this is the backstop, and
-      # a popover cannot be declared open in markup — the toast is
-      # the refusal the
-      # re-rendered page can actually show. `r.is` because a bare
-      # verb block matches any remaining path in Roda — without it,
-      # the collection's create would swallow the record's apply,
-      # POST /contacts/:id below.
+      # `r.is` because a bare verb block matches any remaining path in
+      # Roda — without it, the collection's create would swallow the
+      # record's apply, POST /contacts/:id below.
       r.is do
+        # The whole-set listing, the one screen that browses the
+        # contacts (docs/DESIGN.md, "The core idea").
+        r.get do
+          response["Content-Type"] = "text/html; charset=utf-8"
+          Admin::ContactsIndex.call(contacts: store.contacts)
+        end
+
+        # The browser's create, from the dashboard's dialog: POST is
+        # the one method the admin UI adds to the DAV set (see
+        # config/puma.rb, whose list Puma replaces rather than
+        # extends), and the collection is the resource a create
+        # names. Stored through Store#put like any client write, so
+        # the change log a sync token counts on lands with the card.
+        # A nameless create is a dashboard re-render with a toast: the
+        # browser cannot produce one (the dialog requires one name box
+        # or the other, Admin::NamePair), so this is the backstop, and
+        # a popover cannot be declared open in markup — the toast is
+        # the refusal the
+        # re-rendered page can actually show.
         r.post do
           first = r.params["first"].to_s.strip
           middle = r.params["middle"].to_s.strip
@@ -114,7 +122,7 @@ module ProTacts
     #: (query: String?, ?notice: String?) -> String
     def dashboard(query:, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::ContactsIndex.call(
+      Admin::Dashboard.call(
         recent: store.contacts_by_recency,
         upcoming: store.upcoming_birthdays(Admin::UpcomingBirthdays::LIMIT),
         query:,

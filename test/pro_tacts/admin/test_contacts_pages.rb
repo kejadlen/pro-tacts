@@ -88,6 +88,57 @@ class AdminContactsPagesTest < Minitest::Test
     assert_includes last_response.body, "No contacts yet."
   end
 
+  ## The whole-set listing (GET /contacts)
+
+  # Sorted by N's family name whatever its case, and a card with no N
+  # under its FN — the fallback chain the avatar's initials walk too
+  # (Format.initials). Seeded out of order to prove the sort.
+  def test_contacts_lists_every_contact_sorted_by_last_name
+    boole = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:George Boole\r\nN:Boole;George;;;\r\nUID:boole\r\nEND:VCARD\r\n"
+    shelley = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Mary Shelley\r\nN:shelley;Mary;;;\r\nUID:shelley\r\nEND:VCARD\r\n"
+    zed = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Zed Aileron\r\nUID:zed\r\nEND:VCARD\r\n"
+
+    with_contacts({"shelley" => shelley, "zed" => zed, "boole" => boole}) do
+      get "/contacts"
+
+      assert_equal 200, last_response.status
+      assert_equal "text/html; charset=utf-8", last_response["Content-Type"]
+      assert_includes last_response.body, "<title>pro-tacts — Contacts</title>"
+      assert_includes last_response.body, %(<a href="/contacts/boole">)
+      body = last_response.body
+      assert body.index("George Boole") < body.index("Mary Shelley")
+      assert body.index("Mary Shelley") < body.index("Zed Aileron")
+    end
+  end
+
+  # The row shows the same composition the dashboard's rows do
+  # (Format.name_label).
+  def test_contacts_lists_a_nicknamed_contact_as_nickname_and_name
+    red = ADA.sub("FN:Ada Lovelace", "FN:Sarah\r\nNICKNAME:Red").sub("UID:ada", "UID:red")
+
+    with_contacts({"red" => red}) do
+      get "/contacts"
+
+      assert_includes last_response.body, "Red (Sarah)"
+    end
+  end
+
+  def test_contacts_lists_a_nameless_card_under_its_id
+    nameless = "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:nameless\r\nEND:VCARD\r\n"
+
+    with_contacts({"nameless" => nameless}) do
+      get "/contacts"
+
+      assert_includes last_response.body, "nameless"
+    end
+  end
+
+  def test_contacts_with_no_contacts_says_so
+    with_contacts({}) { get "/contacts" }
+
+    assert_includes last_response.body, "No contacts yet."
+  end
+
   # A contact born on `date`'s month and day in 2000, so the
   # birthdays column's ordering and labels are deterministic against
   # the real clock.
