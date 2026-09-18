@@ -90,13 +90,13 @@ namespace :import do
     # One line per plan, as far along as it is: the fraction counts
     # everything past “planned”, because from “landed” on the card is
     # on the host — which is the state a glance wants. The marker is
-    # ✅ once nothing is left for import:execute to carry — every
-    # contact imported or beyond — and ⏳ until then, so it can never
-    # disagree with the next lines below. The plan names are the
-    # directories', copy-pasteable into PLAN=.
+    # ✅ only once every contact is off the Mac — removed, the last
+    # status — and ⏳ until then, so it can never disagree with the
+    # next lines below. The plan names are the directories',
+    # copy-pasteable into PLAN=.
     plans.each do |plan|
       done = plan.contacts.size - plan.with_status(nil).size
-      marker = ImportTasks::TO_LAND.call(plan) ? "⏳" : "✅"
+      marker = ImportTasks::TO_LAND.call(plan) || ImportTasks::TO_LEAVE.call(plan) ? "⏳" : "✅"
       puts "#{marker} #{plan.dir.basename}  #{done}/#{plan.contacts.size} contacts"
     end
 

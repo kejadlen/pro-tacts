@@ -18,8 +18,11 @@ class ImportStatusTaskTest < Minitest::Test
     Dir.mktmpdir do |root|
       root = Pathname.new(root)
       imports = root / "data" / "imports"
-      # A plan mid-flight — one contact through to the Mac-cleanup step,
-      # one past it — and one freshly built with everything still to do.
+      # A plan carried all the way off the Mac, one mid-flight — one
+      # contact through to the Mac-cleanup step, one past it — and one
+      # freshly built with everything still to do.
+      through = Plan.write(imports / "macos-20260831T000000Z", source: "macos", created_at: Time.utc(2026, 8, 31), entries: [entry("qxqmqmqmqmqm"), entry("zzzzzzzzzzzz")])
+      through.contacts.each { it.status or through.record(it.id, "removed") }
       underway = Plan.write(imports / "macos-20260901T000000Z", source: "macos", created_at: Time.utc(2026, 9, 1), entries: [entry("kmnuqmzxylru"), entry("vmnlryyvktux")])
       underway.record("kmnuqmzxylru", "imported")
       underway.record("vmnlryyvktux", "removed")
@@ -27,7 +30,8 @@ class ImportStatusTaskTest < Minitest::Test
 
       out, = run_task(root)
 
-      assert_includes out, "✅ macos-20260901T000000Z  2/2 contacts\n"
+      assert_includes out, "✅ macos-20260831T000000Z  2/2 contacts\n"
+      assert_includes out, "⏳ macos-20260901T000000Z  2/2 contacts\n"
       assert_includes out, "⏳ macos-20260916T180412Z  0/1 contacts\n"
       assert_includes out, "next: import:execute would land macos-20260916T180412Z\n"
       assert_includes out, "next: import:macos:remove would clear macos-20260901T000000Z\n"
