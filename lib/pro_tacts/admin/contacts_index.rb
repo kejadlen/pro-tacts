@@ -3,6 +3,7 @@ require "pro_tacts/admin/phlex"
 require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/layout"
+require "pro_tacts/admin/list_item"
 
 module ProTacts
   module Admin
@@ -51,12 +52,10 @@ module ProTacts
 
       #: (Contact contact) -> void
       def render_row(contact)
-        li do
-          a(href: "/contacts/#{contact.id}") do
-            render Avatar.new(contact:, size: "lg")
-            div(style: "flex: 1; min-width: 0; font-weight: 550;") { Format.name_label(contact) }
-          end
-        end
+        render ListItem.new(
+          href: "/contacts/#{contact.id}",
+          avatar: Avatar.new(contact:, size: "lg"),
+        ) { Format.name_label(contact) }
       end
     end
   end

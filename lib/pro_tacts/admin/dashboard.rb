@@ -4,6 +4,7 @@ require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/contact_dialog"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/group_label"
+require "pro_tacts/admin/list_item"
 require "pro_tacts/admin/layout"
 require "pro_tacts/admin/upcoming_birthdays"
 
@@ -101,24 +102,18 @@ module ProTacts
         end
         ul(class: "card") do
           @groups.each do |group|
-            li do
-              a(href: "/groups/#{group.id}") do
-                div(style: "flex: 1; min-width: 0; font-weight: 550;") { render GroupLabel.new(group:) }
-              end
-            end
+            render ListItem.new(href: "/groups/#{group.id}") { render GroupLabel.new(group:) }
           end
         end
       end
 
       #: (Store::RecentContact row) -> void
       def render_row(row)
-        li do
-          a(href: "/contacts/#{row.contact.id}") do
-            render Avatar.new(contact: row.contact, size: "lg")
-            div(style: "flex: 1; min-width: 0; font-weight: 550;") { Format.name_label(row.contact) }
-            span(class: "type-label") { Format.time_ago(row.updated_at) }
-          end
-        end
+        render ListItem.new(
+          href: "/contacts/#{row.contact.id}",
+          avatar: Avatar.new(contact: row.contact, size: "lg"),
+          trailing: Format.time_ago(row.updated_at),
+        ) { Format.name_label(row.contact) }
       end
     end
   end

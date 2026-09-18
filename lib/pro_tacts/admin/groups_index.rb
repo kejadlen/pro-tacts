@@ -2,6 +2,7 @@ require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
+require "pro_tacts/admin/list_item"
 
 module ProTacts
   module Admin
@@ -34,12 +35,10 @@ module ProTacts
             else
               ul(class: "card") do
                 @groups.each do |group|
-                  li do
-                    a(href: "/groups/#{group.id}") do
-                      div(style: "flex: 1; min-width: 0; font-weight: 550;") { render GroupLabel.new(group:) }
-                      span(class: "type-label") { members_label(group) }
-                    end
-                  end
+                  render ListItem.new(
+                    href: "/groups/#{group.id}",
+                    trailing: members_label(group),
+                  ) { render GroupLabel.new(group:) }
                 end
               end
             end
