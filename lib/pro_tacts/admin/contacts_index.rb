@@ -24,7 +24,7 @@ module ProTacts
         render Layout.new(title: "Contacts") do
           section do
             div(class: "section-head") do
-              h2(class: "type-label") { "contacts" }
+              h2(class: "type-label") { "contacts (#{@rows.length})" }
             end
             if @rows.empty?
               p(class: "type-body-sm") { "No contacts yet." }

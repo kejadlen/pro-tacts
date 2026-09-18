@@ -104,6 +104,7 @@ class AdminContactsPagesTest < Minitest::Test
       assert_equal 200, last_response.status
       assert_equal "text/html; charset=utf-8", last_response["Content-Type"]
       assert_includes last_response.body, "<title>pro-tacts — Contacts</title>"
+      assert_includes last_response.body, "contacts (3)"
       assert_includes last_response.body, %(<a href="/contacts/boole">)
       body = last_response.body
       assert body.index("George Boole") < body.index("Mary Shelley")
@@ -136,6 +137,7 @@ class AdminContactsPagesTest < Minitest::Test
   def test_contacts_with_no_contacts_says_so
     with_contacts({}) { get "/contacts" }
 
+    assert_includes last_response.body, "contacts (0)"
     assert_includes last_response.body, "No contacts yet."
   end
 
