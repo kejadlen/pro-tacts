@@ -254,7 +254,7 @@ module ProTacts
           refused << form unless FORMS.fetch(name).include?(form)
           refused << "#{name} value" unless value?(name, property)
           refused.each { unknown.add(it, source_id, example) }
-          refused.empty?
+          refused.empty? && !dropped_value?(name, property)
         else
           unknown.add(name, source_id, example)
           false
@@ -301,7 +301,9 @@ module ProTacts
           "TEL",
           "TEL;type=CELL;type=VOICE",
           "TEL;type=HOME;type=VOICE",
-          "TEL;type=IPHONE;type=CELL;type=VOICE"
+          "TEL;type=IPHONE;type=CELL;type=VOICE",
+          "TEL;type=WORK;type=VOICE",
+          "item#.TEL"
         ],
         "EMAIL" => [
           "EMAIL;type=INTERNET",
@@ -309,7 +311,7 @@ module ProTacts
           "EMAIL;type=INTERNET;type=WORK",
           "item#.EMAIL;type=INTERNET"
         ],
-        "ADR" => ["item#.ADR;type=HOME"],
+        "ADR" => ["ADR;type=HOME", "item#.ADR;type=HOME"],
         "X-ABRELATEDNAMES" => ["item#.X-ABRELATEDNAMES"]
       }.freeze #: Hash[String, Array[String]]
 
@@ -318,10 +320,16 @@ module ProTacts
       # empty value is a row with no number in it at all.
       PHONE = /\A[0-9 +().-]*\z/ #: Regexp
 
+      # A number with the extension a person wrote after it, "+1 (425)
+      # 707-1712 X71712" as one line. Digits have to come first: a value
+      # that is an extension and nothing else ("ext. 4") labels a row
+      # rather than filling it, and stays refused.
+      EXTENSION = /\A[0-9 +().-]*[0-9][0-9 +().-]*(?:x|ext)\.?\s*[0-9]+\z/i #: Regexp
+
       # Properties read and thrown away, whatever form they take: this
       # address book has no field for any of them, and a card's `source`
       # still holds the line.
-      DROPPED = %w[IMPP URL X-SOCIALPROFILE X-APPLE-SUBADMINISTRATIVEAREA X-AIM].freeze #: Array[String]
+      DROPPED = %w[IMPP ORG TITLE URL X-SOCIALPROFILE X-APPLE-SUBADMINISTRATIVEAREA X-AIM].freeze #: Array[String]
 
       # Properties that say something about the line sharing their group
       # rather than about the contact: a label, and the country code
@@ -329,18 +337,32 @@ module ProTacts
       ANNOTATIONS = %w[X-ABLABEL X-ABADR].freeze #: Array[String]
 
       # Whether a value is one its field can hold: a phone is a `+` and
-      # digits, a birthday a whole date, an address the seven components
-      # RFC 2426 section 3.2.1 gives it with no post office box, since no
-      # field carries one. A name is any text.
+      # digits, with or without an extension, a birthday a whole date,
+      # an address the seven components RFC 2426 section 3.2.1 gives it
+      # with no post office box, since no field carries one. A name is
+      # any text, and an email is asked nothing here — see
+      # #dropped_value?.
       #: (String name, VCard::Parser::Property property) -> bool
       def self.value?(name, property)
         case name
-        when "TEL" then property.value.match?(PHONE)
+        when "TEL" then property.value.match?(PHONE) || property.value.match?(EXTENSION)
         when "BDAY" then property.value.match?(Card::BIRTHDAY)
-        when "EMAIL" then property.value.include?("@")
         when "ADR" then property.components.size == 7 && property.components.fetch(0).empty?
         else true
         end
+      end
+
+      # A value its field has no use for, dropped rather than refused.
+      # An EMAIL without an `@` is not an address at all — Exchange
+      # writes a directory name into one
+      # (`/O=microsoft/OU=.../cn=algersha`) — so it is not a spelling to
+      # learn but a row this address book has no field for, and it goes
+      # the way the DROPPED properties go, the source keeping the line.
+      # The form is still checked around this, so a value like it in a
+      # spelling nobody has seen is reported like any other.
+      #: (String name, VCard::Parser::Property property) -> bool
+      def self.dropped_value?(name, property)
+        name == "EMAIL" && !property.value.include?("@")
       end
 
       # A line unfolded, without its terminator.
@@ -355,7 +377,7 @@ module ProTacts
         example.delete_suffix(":#{property.value}").sub(/\Aitem\d+\./, "item#.").delete_suffix(";type=pref")
       end
 
-      private_class_method :entry, :grouped, :carried?, :name, :noted, :related_names, :only, :properties, :values, :address, :value?, :example, :form
+      private_class_method :entry, :grouped, :carried?, :name, :noted, :related_names, :only, :properties, :values, :address, :value?, :dropped_value?, :example, :form
     end
   end
 end

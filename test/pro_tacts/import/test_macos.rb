@@ -60,7 +60,7 @@ class ImportMacosTest < Minitest::Test
   def test_every_unknown_field_is_named_and_no_plan_is_written
     in_tmpdir do |dir|
       records = [
-        record("A:ABPerson", lines: ["ORG:Analytical Engines;", "EMAIL:ada@example.com"], note: "Analyst."),
+        record("A:ABPerson", lines: ["ROLE:Analyst", "EMAIL:ada@example.com"], note: "Analyst."),
         record("B:ABPerson", lines: ["EMAIL:mary@example.com"], image: "/9j/")
       ]
 
@@ -71,8 +71,8 @@ class ImportMacosTest < Minitest::Test
           EMAIL: 2
             A:ABPerson: "EMAIL:ada@example.com"
             B:ABPerson: "EMAIL:mary@example.com"
-          ORG: 1
-            A:ABPerson: "ORG:Analytical Engines;"
+          ROLE: 1
+            A:ABPerson: "ROLE:Analyst"
       MESSAGE
       refute dir.exist?
     end
@@ -144,6 +144,47 @@ class ImportMacosTest < Minitest::Test
       plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
 
       assert_equal ["ada@example.com"], plan.card(plan.contacts.first.id).emails
+    end
+  end
+
+  # Contacts writes an address ungrouped when nothing labels it, and
+  # grouped when something does; both are the one field.
+  def test_an_ungrouped_address_is_an_address
+    in_tmpdir do |dir|
+      lines = ["ADR;type=HOME:;;12 Marylebone Rd;London;;NW1 5LS;England"]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      assert_equal [{"street" => "12 Marylebone Rd", "locality" => "London", "postal_code" => "NW1 5LS", "country" => "England"}],
+        plan.card(plan.contacts.first.id).addresses
+    end
+  end
+
+  # A work number is a number, and one Contacts labelled is too — the
+  # label going where a labelled email's and address's go.
+  def test_a_work_number_and_a_labelled_one_are_phones
+    in_tmpdir do |dir|
+      lines = [
+        "TEL;type=WORK;type=VOICE:+1 203-536-3941",
+        "item1.TEL;type=pref:(206) 651-4359",
+        "item1.X-ABLabel:school"
+      ]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      assert_equal ["+1 203-536-3941", "(206) 651-4359"], plan.card(plan.contacts.first.id).phones
+    end
+  end
+
+  # Where someone works has no field in this address book; the source
+  # keeps the lines the card drops.
+  def test_a_job_title_and_an_organization_are_dropped
+    in_tmpdir do |dir|
+      lines = ["TITLE:Countess of Lovelace", "ORG:Analytical Engine Co.;"]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      card = plan.card(plan.contacts.first.id)
+      assert_equal [[], [], []], [card.phones, card.emails, card.addresses]
+      assert_includes card.source.fetch("vcard"), "TITLE:Countess of Lovelace"
+      assert_includes card.source.fetch("vcard"), "ORG:Analytical Engine Co.;"
     end
   end
 
@@ -266,7 +307,6 @@ class ImportMacosTest < Minitest::Test
     in_tmpdir do |dir|
       records = [
         record("A:ABPerson", lines: ["BDAY:--12-10"]),
-        record("B:ABPerson", lines: ["EMAIL;type=INTERNET:ada"]),
         record("C:ABPerson", lines: ["item1.ADR;type=HOME:P.O. Box 4;;;London;;;"]),
         record("D:ABPerson", lines: ["item1.ADR;type=HOME:;;Ockham Park;Surrey"]),
         record("E:ABPerson", lines: ["BDAY:1815-12-10", "BDAY:1815-12-11"])
@@ -283,9 +323,34 @@ class ImportMacosTest < Minitest::Test
             E:ABPerson: "BDAY:1815-12-10 / BDAY:1815-12-11"
           BDAY value: 1
             A:ABPerson: "BDAY:--12-10"
-          EMAIL value: 1
-            B:ABPerson: "EMAIL;type=INTERNET:ada"
       MESSAGE
+    end
+  end
+
+  # An address book has no field for a directory name, and Exchange
+  # writes one into an EMAIL. It leaves with the IMPPs rather than
+  # stopping the plan, and the source keeps the line.
+  def test_an_email_that_is_not_an_address_is_dropped
+    in_tmpdir do |dir|
+      lines = [
+        "item2.EMAIL;type=INTERNET:/O=microsoft/OU=northamerica/cn=Recipients/cn=algersha",
+        "EMAIL;type=INTERNET:ada@example.com"
+      ]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      card = plan.card(plan.contacts.first.id)
+      assert_equal ["ada@example.com"], card.emails
+      assert_includes card.source.fetch("vcard"), "cn=algersha"
+    end
+  end
+
+  # An extension is part of the number as a person typed it.
+  def test_a_number_carries_the_extension_written_after_it
+    in_tmpdir do |dir|
+      lines = ["TEL;type=WORK;type=VOICE:+1 (425) 707-1712 X71712"]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      assert_equal ["+1 (425) 707-1712 X71712"], plan.card(plan.contacts.first.id).phones
     end
   end
 
@@ -347,7 +412,6 @@ class ImportMacosTest < Minitest::Test
     in_tmpdir do |dir|
       records = [
         record("A:ABPerson", lines: ["TEL;type=MAIN:+12532189075"]),
-        record("B:ABPerson", lines: ["TEL;type=WORK;type=VOICE:+12532189075"]),
         record("C:ABPerson", lines: ["item1.TEL;type=CELL;type=VOICE;type=pref:+12532189075"]),
         record("D:ABPerson", lines: ["TEL;type=CELL;type=VOICE;type=pref:ext. 4"]),
         record("E:ABPerson", name: ["N:Lovelace;Ada;;;", "FN;CHARSET=utf-8:Ada Lovelace"])
@@ -365,8 +429,6 @@ class ImportMacosTest < Minitest::Test
             D:ABPerson: "TEL;type=CELL;type=VOICE;type=pref:ext. 4"
           TEL;type=MAIN: 1
             A:ABPerson: "TEL;type=MAIN:+12532189075"
-          TEL;type=WORK;type=VOICE: 1
-            B:ABPerson: "TEL;type=WORK;type=VOICE:+12532189075"
           item#.TEL;type=CELL;type=VOICE: 1
             C:ABPerson: "item1.TEL;type=CELL;type=VOICE;type=pref:+12532189075"
       MESSAGE
