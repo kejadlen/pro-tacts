@@ -72,7 +72,7 @@ module ProTacts
             # Spans rather than the record page's linked tags, because
             # the row is a link and an anchor cannot hold one; the
             # weight reset keeps the chips from inheriting the name's.
-            div(class: "tag-set", style: "margin-top: var(--gl-space-2xs); font-weight: 400;") do
+            div(class: "tag-set", style: "margin-top: var(--gl-space-3xs); font-weight: 400;") do
               groups.each { |group| span(class: "tag") { render GroupLabel.new(group:) } }
             end
           end
