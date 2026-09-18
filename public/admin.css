@@ -556,6 +556,17 @@ img.avatar {
   object-fit: cover;
 }
 
+/* The rows' avatar, a touch past Gloss's lg — every list surface
+   (the dashboard's rows, /contacts, the birthdays) sizes its avatar
+   lg, and the anchor of a row wants slightly more presence than the
+   default 2.25rem gives it. The initials ride one type step up with
+   the box, to keep the share of the circle the default sizes give
+   them — the same pairing the xl rule below makes at its scale. */
+.avatar[data-size="lg"] {
+  --_size: 2.5rem;
+  font-size: var(--gl-step--1);
+}
+
 /* The detail header's avatar, one step past Gloss's scale — its lg is
    the dashboard rows' size, and the header's picture should anchor the
    card the way a contacts app's does: bigger than the name beside it,
