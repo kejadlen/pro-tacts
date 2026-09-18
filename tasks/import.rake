@@ -8,6 +8,12 @@ require "pathname"
 module ImportTasks
   DIR = Pathname.new("data/imports")
 
+  # What each carrying task waits on — a contact still to carry through
+  # that step — named so a status read can say what those tasks would
+  # pick next without restating their choice.
+  TO_LAND = ->(plan) { plan.with_status(nil).any? || plan.with_status("landed").any? }
+  TO_LEAVE = ->(plan) { plan.with_status("imported").any? }
+
   # The plan PLAN names, or the oldest one still waiting for this step:
   # plans are carried in the order they were built, so the next one to
   # take further is the oldest that has not been. A PLAN that is not a
@@ -55,7 +61,7 @@ namespace :import do
       require "pro_tacts/import/macos"
       require "pro_tacts/import/remove"
 
-      plan = ImportTasks.plan(->(it) { it.with_status("imported").any? }, "to leave this Mac")
+      plan = ImportTasks.plan(ImportTasks::TO_LEAVE, "to leave this Mac")
       host = plan.host or abort("#{plan.dir} has not landed on a host")
       uri = URI.parse(host)
       puts "removing the contacts #{plan.dir} landed on #{host}"
@@ -71,6 +77,38 @@ namespace :import do
     end
   end
 
+  desc "Summarize the imports in data/imports and what execute and remove would carry next"
+  task :status do
+    require "pro_tacts/import/plan"
+
+    plans = ProTacts::Import::Plan.all(ImportTasks::DIR)
+    if plans.empty?
+      puts "no plans in #{ImportTasks::DIR} yet; run rake import:macos:plan"
+      next
+    end
+
+    # The statuses in their order through an import, so the line reads
+    # as where the plan has got to rather than an alphabetical jumble.
+    plans.each do
+      host = it.host ? "on #{it.host}" : "not yet on a host"
+      puts "#{it.dir.basename}  #{it.source}  #{host}"
+      counts = it.contacts.group_by(&:status).transform_values(&:length)
+      summary = [
+        ["to land", counts.fetch(nil, 0)],
+        ["landed", counts.fetch("landed", 0)],
+        ["imported", counts.fetch("imported", 0)],
+        ["removed", counts.fetch("removed", 0)],
+      ].reject { |_, count| count.zero? }.map { |label, count| "#{count} #{label}" }.join(", ")
+      word = it.contacts.size == 1 ? "contact" : "contacts"
+      puts summary.empty? ? "  #{it.contacts.size} #{word}" : "  #{it.contacts.size} #{word}: #{summary}"
+    end
+
+    landing = plans.find(&ImportTasks::TO_LAND)
+    leaving = plans.find(&ImportTasks::TO_LEAVE)
+    puts "next: import:execute would land #{landing.dir.basename}" if landing
+    puts "next: import:macos:remove would clear #{leaving.dir.basename}" if leaving
+  end
+
   desc "Land the oldest plan in data/imports still to land, or the one in PLAN, on the pro-tacts at HOST, a base URL such as https://contacts"
   task :execute do
     require "net/http"
@@ -79,7 +117,7 @@ namespace :import do
     require "pro_tacts/import/http_client"
     require "pro_tacts/import/plan"
 
-    plan = ImportTasks.plan(->(it) { it.with_status(nil).any? || it.with_status("landed").any? }, "to land")
+    plan = ImportTasks.plan(ImportTasks::TO_LAND, "to land")
     # A bare hostname is the base URL of a server that serves HTTPS, which
     # every deployment does; the scheme is spelled out here so the host
     # the plan records is the one a second run is compared against.
