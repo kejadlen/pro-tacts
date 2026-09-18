@@ -24,6 +24,8 @@ rake db:dump          # Write the cards, birthdays, and groups to data/dump
 rake dev              # Dev server, seeded from test/fixtures/cards into a
                       # throwaway tmpdir on every start, reloading on change
                       # (needs fd and entr)
+rake console          # irb with the store open on the configured database
+                      # (console.rb loads it; the operations no screen has)
 rake import:macos:plan # Plan importing this Mac's iCloud contacts
                       # (LIMIT=n; reads Contacts, so leave it to the user)
 rake import:macos:remove # Delete from this Mac the contacts the oldest
