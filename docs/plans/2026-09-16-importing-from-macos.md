@@ -259,10 +259,21 @@ included, and keeps it, printing why, if either check
 fails. A contact edited on the Mac since the plan is kept, and so
 is one whose card is no longer on the host. A contact already gone from
 the Mac counts as removed, so a rerun is safe for the same reason
-`execute`'s is. The deletes go in one `CNSaveRequest`, since each one
-starts the script again, and the statuses are recorded after it: a run
-that dies between the two finds those contacts gone next time and
-records them then.
+`execute`'s is. The deletes go in one run of the script, since each one
+starts it again, but in one `CNSaveRequest` each: the save is all or
+nothing, and the store refuses some contacts it will hand over quite
+happily, so a batch would lose every other delete to that one. The
+script prints per identifier whether the delete took, a refused one is
+kept and printed like any other kept contact, and the statuses are
+recorded after: a run that dies between the two finds those contacts
+gone next time and records them then.
+
+A refusal is `NSCocoaErrorDomain` 134092 out of `store.execute`, with
+`CoreData: error: Unhandled error occurred during faulting` on stderr,
+and no key set avoids it — identifier alone fails the same way the full
+fetch does. What makes a contact refusable is not known; the one that
+turned this up was the only one of its plan carrying both a photo and
+`X-ABRELATEDNAMES`. Deleting it in Contacts.app is the way out.
 
 The comparison is exact because CNContact exposes no modification date.
 A contact Contacts.app touched on its own will be kept, which is the

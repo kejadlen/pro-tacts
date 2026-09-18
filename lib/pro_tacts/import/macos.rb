@@ -80,9 +80,15 @@ module ProTacts
           }
         end
 
-        #: (Array[String] source_ids) -> void
+        # The contacts this Mac would not delete, each to what it said;
+        # empty when every one of them left.
+        #: (Array[String] source_ids) -> Hash[String, String]
         def self.delete(source_ids)
-          Macos.run("delete", *source_ids) unless source_ids.empty?
+          return {} if source_ids.empty?
+
+          Macos.run("delete", *source_ids).reject { it.fetch("deleted") }.to_h {
+            [it.fetch("identifier"), it.fetch("error")] #: [String, String]
+          }
         end
       end
 

@@ -40,8 +40,7 @@ namespace :import do
       plan = ProTacts::Import::Macos.plan(dir, records, created_at:)
       plan.contacts.each do |contact|
         card = plan.card(contact.id)
-        name = [card.first, card.last].reject(&:empty?).join(" ")
-        puts "#{contact.id}  #{name}#{card.phones.map { "  #{it}" }.join}"
+        puts "#{contact.id}  #{contact.name}#{card.phones.map { "  #{it}" }.join}"
       end
       puts "#{plan.contacts.size} contacts planned in #{dir}"
     rescue ProTacts::Import::Macos::Unknown => error
@@ -67,7 +66,7 @@ namespace :import do
           plan, client: ProTacts::Import::HttpClient.new(http), mac: ProTacts::Import::Macos::Mac
         )
       end
-      result.kept.each { |name, why| puts "kept #{name}: #{why}" }
+      result.kept.each { |id, name, why| puts "kept #{id} #{name}: #{why}" }
       puts "#{result.removed} contacts removed from this Mac"
     end
   end

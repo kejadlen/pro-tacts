@@ -13,8 +13,10 @@
 // account (Monica, or pro-tacts itself) is this account's card alone.
 //
 // show prints those same objects for the identifiers it is given, leaving
-// out the ones this Mac no longer has; delete deletes them, and an
-// identifier it no longer has is already deleted.
+// out the ones this Mac no longer has; delete deletes them one at a time
+// and prints, per identifier it still has, whether the delete took and the
+// error if it did not. An identifier this Mac no longer has is already
+// deleted, and prints nothing.
 
 import Contacts
 import Foundation
@@ -152,20 +154,25 @@ do {
 }
 
 if command == "delete" {
-  // One save request for the batch: a delete of a contact this Mac no
-  // longer has is a delete that already happened, so the identifiers that
-  // matched nothing are left alone.
-  let request = CNSaveRequest()
+  // One save request per contact, because CNSaveRequest is all or nothing
+  // and the store refuses some contacts it will hand over quite happily:
+  // batched, one of those takes every other delete down with it. An
+  // identifier that matched nothing prints no line, a delete of a contact
+  // this Mac no longer has being a delete that already happened.
   for contact in people {
     guard let mutable = contact.mutableCopy() as? CNMutableContact else { fail("\(contact.identifier) will not copy") }
+    let request = CNSaveRequest()
     request.delete(mutable)
-  }
-  if !people.isEmpty {
+    var result: [String: Any] = ["identifier": contact.identifier]
     do {
       try store.execute(request)
+      result["deleted"] = true
     } catch {
-      fail("deleting \(people.count) contacts: \(error)")
+      result["deleted"] = false
+      result["error"] = "\(error)"
     }
+    let line = try! JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
+    FileHandle.standardOutput.write(line + Data("\n".utf8))
   }
   exit(0)
 }

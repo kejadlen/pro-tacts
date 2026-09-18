@@ -21,20 +21,26 @@ class ImportRemoveTest < Minitest::Test
   IDS = %w[kmnuqmzxylru vmnlryyvktux].freeze
 
   # This Mac, as the contacts it still has: the reader's objects by source
-  # id, and a delete that takes them out of this hash.
+  # id, and a delete that takes them out of this hash. A source id in
+  # `refuses` is one the store will not delete, which is a real thing a Mac
+  # does (docs/plans/2026-09-16-importing-from-macos.md, "Removing the
+  # originals").
   class Mac
     attr_reader :deleted
 
-    def initialize(records)
+    def initialize(records, refuses: {})
       @records = records
+      @refuses = refuses
       @deleted = []
     end
 
     def show(source_ids) = @records.slice(*source_ids)
 
     def delete(source_ids)
-      @deleted.concat(source_ids)
-      @records = @records.except(*source_ids)
+      going = source_ids - @refuses.keys
+      @deleted.concat(going)
+      @records = @records.except(*going)
+      @refuses.slice(*source_ids)
     end
   end
 
@@ -87,7 +93,7 @@ class ImportRemoveTest < Minitest::Test
 
       result = Remove.call(plan, client:, mac:)
 
-      assert_equal [["Contact #{IDS.first}", "it has changed on this Mac since the plan"]], result.kept
+      assert_equal [[IDS.first, "Contact #{IDS.first}", "it has changed on this Mac since the plan"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
       assert_equal ["imported", "removed"], Plan.read(plan.dir).contacts.map(&:status)
     end
@@ -101,7 +107,7 @@ class ImportRemoveTest < Minitest::Test
 
       result = Remove.call(plan, client:, mac:)
 
-      assert_equal [["Contact #{IDS.first}", "its note has changed on this Mac since the plan"]], result.kept
+      assert_equal [[IDS.first, "Contact #{IDS.first}", "its note has changed on this Mac since the plan"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
     end
   end
@@ -113,7 +119,7 @@ class ImportRemoveTest < Minitest::Test
 
       result = Remove.call(plan, client:, mac:)
 
-      assert_equal [["Contact #{IDS.first}", "its card is no longer on #{HOST}"]], result.kept
+      assert_equal [[IDS.first, "Contact #{IDS.first}", "its card is no longer on #{HOST}"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
     end
   end
@@ -141,6 +147,22 @@ class ImportRemoveTest < Minitest::Test
       assert_equal 2, result.removed
       assert_equal [source_id(IDS.last)], mac.deleted
       assert_equal %w[removed removed], Plan.read(plan.dir).contacts.map(&:status)
+    end
+  end
+
+  # The store refuses some contacts it will hand over quite happily, so a
+  # refusal keeps its own contact and no other: the rest still leave, and
+  # the plan records them.
+  def test_a_contact_the_mac_will_not_delete_is_kept_alone
+    with_landed_plan do |plan, _store, client|
+      mac = Mac.new(IDS.to_h { [source_id(it), record(it)] }, refuses: {source_id(IDS.first) => "faulting, 134092"})
+
+      result = Remove.call(plan, client:, mac:)
+
+      assert_equal 1, result.removed
+      assert_equal [[IDS.first, "Contact #{IDS.first}", "this Mac would not delete #{source_id(IDS.first)}: faulting, 134092"]], result.kept
+      assert_equal [source_id(IDS.last)], mac.deleted
+      assert_equal ["imported", "removed"], Plan.read(plan.dir).contacts.map(&:status)
     end
   end
 

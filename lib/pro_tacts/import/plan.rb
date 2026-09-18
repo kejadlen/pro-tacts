@@ -22,11 +22,14 @@ module ProTacts
       Entry = Data.define(:id, :source_id, :card)
 
       # A contact as the plan lists it, with the last step it reached:
-      # nil, then landed, imported, and removed, in that order.
+      # nil, then landed, imported, and removed, in that order. The name is
+      # the card's when the plan was built, written down so a person
+      # reading plan.yml can tell which line is whose without opening a
+      # card; nothing reads it back to decide anything.
       # @rbs skip
-      Contact = Data.define(:id, :source_id, :status)
+      Contact = Data.define(:id, :source_id, :name, :status)
 
-      FORMAT = 1 #: Integer
+      FORMAT = 2 #: Integer
 
       # Store::EVERYONE, spelled out so a plan loads no database.
       EVERYONE = "sync:*" #: String
@@ -52,7 +55,11 @@ module ProTacts
           "created_at" => created_at.utc.iso8601,
           "group" => group,
           "host" => nil,
-          "contacts" => entries.map { {"id" => it.id, "source_id" => it.source_id, "status" => nil} }
+          "contacts" => entries.map {
+            # A card may hold only one of the two names.
+            person = [it.card.first, it.card.last].reject(&:empty?).join(" ")
+            {"id" => it.id, "source_id" => it.source_id, "name" => person, "status" => nil}
+          }
         })
         plan.save
         plan
@@ -102,7 +109,9 @@ module ProTacts
 
       #: () -> Array[Contact]
       def contacts
-        @manifest.fetch("contacts").map { Contact.new(id: it.fetch("id"), source_id: it.fetch("source_id"), status: it.fetch("status")) }
+        @manifest.fetch("contacts").map {
+          Contact.new(id: it.fetch("id"), source_id: it.fetch("source_id"), name: it.fetch("name"), status: it.fetch("status"))
+        }
       end
 
       #: (String id, String status) -> void

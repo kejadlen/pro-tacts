@@ -31,8 +31,18 @@ class ImportPlanTest < Minitest::Test
 
       assert_equal "macos", plan.source
       assert_equal "2026-09-16T18:04:12Z", plan.created_at
-      assert_equal [Plan::Contact.new(id: "kmnuqmzxylru", source_id: "kmnuqmzxylru:ABPerson", status: nil), Plan::Contact.new(id: "vmnlryyvktux", source_id: "vmnlryyvktux:ABPerson", status: nil)], plan.contacts
+      assert_equal [Plan::Contact.new(id: "kmnuqmzxylru", source_id: "kmnuqmzxylru:ABPerson", name: "Ada Lovelace", status: nil), Plan::Contact.new(id: "vmnlryyvktux", source_id: "vmnlryyvktux:ABPerson", name: "Ada Lovelace", status: nil)], plan.contacts
       assert_nil plan.host
+    end
+  end
+
+  def test_a_contact_with_one_name_is_listed_under_it
+    in_tmpdir do |dir|
+      card = ProTacts::Import::Card.new(first: "Mitch", last: "", nickname: nil, birthday: nil, phones: [], emails: [], addresses: [], note: nil, photo: false, groups: [], source: SOURCE)
+
+      Plan.write(dir, source: "macos", created_at: CREATED_AT, entries: [entry("kmnuqmzxylru", card:)])
+
+      assert_equal ["Mitch"], Plan.read(dir).contacts.map(&:name)
     end
   end
 

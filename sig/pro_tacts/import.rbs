@@ -36,18 +36,19 @@ module ProTacts
       class Contact
         attr_reader id: String
         attr_reader source_id: String
+        attr_reader name: String
         attr_reader status: String?
 
-        def self.new: (id: String, source_id: String, status: String?) -> instance
+        def self.new: (id: String, source_id: String, name: String, status: String?) -> instance
       end
     end
 
     class Remove
       class Result
         attr_reader removed: Integer
-        attr_reader kept: Array[[String, String]]
+        attr_reader kept: Array[[String, String, String]]
 
-        def self.new: (removed: Integer, kept: Array[[String, String]]) -> instance
+        def self.new: (removed: Integer, kept: Array[[String, String, String]]) -> instance
       end
     end
 
@@ -71,7 +72,7 @@ module ProTacts
     interface _Mac
       def show: (Array[String] source_ids) -> Hash[String, untyped]
 
-      def delete: (Array[String] source_ids) -> void
+      def delete: (Array[String] source_ids) -> Hash[String, String]
     end
   end
 end

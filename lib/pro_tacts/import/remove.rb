@@ -15,9 +15,9 @@ module ProTacts
       class Failed < StandardError; end
 
       # What a run did: how many contacts it took off the Mac, and the
-      # ones it left there, each named as its card names it and said why.
-      # A name rather than an id, since the person reading is the one who
-      # will go and look at the contact. Signed in
+      # ones it left there, each as its plan id, the name the plan recorded
+      # and why it stayed. Both, since the person reading has a contact to
+      # find in Contacts and a line to find in plan.yml. Signed in
       # sig/pro_tacts/import.rbs, being a Data class.
       # @rbs skip
       Result = Data.define(:removed, :kept)
@@ -43,19 +43,24 @@ module ProTacts
         # what a rerun of an interrupted run sees.
         gone.each { @plan.record(it.id, "removed") }
 
-        kept = [] #: Array[[String, String]]
+        kept = [] #: Array[[String, String, String]]
         going = still_there.select { |contact|
           why = keep(contact, records.fetch(contact.source_id))
-          kept << [name(contact.id), why] if why
+          kept << [contact.id, contact.name, why] if why
           why.nil?
         }
-        # One delete for the batch, since each one starts the script
-        # again; a run that dies before the plan records them finds them
-        # gone next time.
-        @mac.delete(going.map(&:source_id))
-        going.each { @plan.record(it.id, "removed") }
+        # One call for the batch, since each one starts the script again,
+        # and one save request per contact inside it, so a contact the
+        # store refuses is the only one that stays. A run that dies before
+        # the plan records the rest finds them gone next time.
+        refused = @mac.delete(going.map(&:source_id))
+        removed, stuck = going.partition { !refused.key?(it.source_id) }
+        removed.each { @plan.record(it.id, "removed") }
+        stuck.each {
+          kept << [it.id, it.name, "this Mac would not delete #{it.source_id}: #{refused.fetch(it.source_id)}"]
+        }
 
-        Result.new(removed: gone.size + going.size, kept:)
+        Result.new(removed: gone.size + removed.size, kept:)
       end
 
       private
@@ -74,14 +79,6 @@ module ProTacts
         elsif record.fetch("note") != source.fetch("note")
           "its note has changed on this Mac since the plan"
         end
-      end
-
-      # The contact as its card file names it, which is what a person
-      # reading this run looks for in Contacts.
-      #: (String id) -> String
-      def name(id)
-        card = @plan.card(id)
-        [card.first, card.last].reject(&:empty?).join(" ")
       end
 
       # Asked of the card browser rather than of `/dav/addressbook`,
