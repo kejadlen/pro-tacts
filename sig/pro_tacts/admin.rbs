@@ -19,7 +19,7 @@ module ProTacts
     end
 
     class ContactsIndex
-      def self.call: (contacts: Array[Contact]) -> String
+      def self.call: (contacts: Array[Contact], groups: Array[Store::Group]) -> String
     end
 
     class GroupsIndex

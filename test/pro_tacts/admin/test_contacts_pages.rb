@@ -124,6 +124,25 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # The row says what the contact belongs to, as chips under the name
+  # — spans rather than the record page's linked tags, because the row
+  # is already a link and an anchor cannot hold one.
+  def test_contacts_chips_each_row_with_its_groups
+    with_contacts({"ada" => ADA}) do |store|
+      FixtureData.seed_group(store, name: "Booles", members: ["ada"])
+
+      get "/contacts"
+
+      assert_includes last_response.body, %(<span class="tag">Booles</span>)
+    end
+  end
+
+  def test_contacts_rows_without_groups_carry_no_chips
+    with_contacts({"ada" => ADA}) { get "/contacts" }
+
+    refute_includes last_response.body, %(class="tag-set")
+  end
+
   def test_contacts_lists_a_nameless_card_under_its_id
     nameless = "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:nameless\r\nEND:VCARD\r\n"
 
