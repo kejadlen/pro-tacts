@@ -1179,6 +1179,16 @@ class StoreTest < Minitest::Test
   # spelled the name. Everything else is refused — a phone or an email
   # reaches a person rather than a household, and a grouped ADR is half
   # of a labeled property whose other half no group may hold.
+  def test_a_group_inspects_to_its_label_and_member_count
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      id = FixtureData.seed_group(store, name: "Household", members: %w[znorth aiden])
+      nameless = store.create_group
+
+      assert_equal %(#<ProTacts::Store::Group id="#{id}" label="Household" members=2>), store.group(id).inspect
+      assert_equal %(#<ProTacts::Store::Group id="#{nameless}" label="#{nameless}" members=0>), store.group(nameless).inspect
+    end
+  end
+
   def test_a_group_holds_only_addresses_and_notes
     with_store({"aiden" => AIDEN}) do |store|
       properties = database(store)[:group_properties]

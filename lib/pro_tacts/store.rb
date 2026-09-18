@@ -121,6 +121,14 @@ module ProTacts
       def version
         Digest::SHA256.hexdigest([name, lines, members].to_json)
       end
+
+      # What a console session sees for one (console.rb): the Data
+      # class's own inspect would carry every lent line and every
+      # member id, and a listing of groups is unreadable at a prompt.
+      #: () -> String
+      def inspect
+        "#<#{self.class.name} id=#{id.inspect} label=#{label.inspect} members=#{members.length}>"
+      end
     end
 
     # SQLite has no ON UPDATE, so the column default stamps a row on

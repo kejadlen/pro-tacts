@@ -188,6 +188,18 @@ module ProTacts
       @etag = self.class.etag_for(vcard)
     end
 
+    # What a console session sees for one (console.rb): the default
+    # would carry the stored card's whole bytes through @stored, which
+    # makes a listing of contacts unreadable at a prompt. #name
+    # composes and parses the card; no app path inspects a contact,
+    # so the parse is a session's price alone.
+    #: () -> String
+    def inspect
+      parts = ["id=#{id.inspect}"]
+      parts << "name=#{name.inspect}" if name
+      "#<#{self.class.name} #{parts.join(" ")}>"
+    end
+
     # The image formats a decoded PHOTO is recognized by, prefix to
     # mime type. A picture's type is read off the decoded bytes rather
     # than the TYPE parameter because magic bytes cannot mislabel what

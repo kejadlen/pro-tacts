@@ -95,6 +95,16 @@ class ContactTest < Minitest::Test
     assert_equal "Ada Lovelace", contact(STRUCTURED).name
   end
 
+  def test_inspect_shows_the_id_and_name_and_not_the_card
+    assert_equal %(#<ProTacts::Contact id="aiden" name="Aiden">), contact.inspect
+  end
+
+  def test_inspect_without_a_name_shows_only_the_id
+    bare = "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:none\r\nEND:VCARD\r\n"
+
+    assert_equal %(#<ProTacts::Contact id="aiden">), contact(bare).inspect
+  end
+
   def test_reads_the_name_components
     assert_equal ["Lovelace", "Ada", nil, nil, nil], contact(STRUCTURED).name_components
   end
