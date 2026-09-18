@@ -133,6 +133,28 @@ class ContactTest < Minitest::Test
     assert_equal %w[work fax], contact(apple).phones.fetch(1).types
   end
 
+  # The label is the `X-ABLabel` sharing the phone's property group — a
+  # different line than the row it describes — and the types are a
+  # different fact: a row can carry both
+  # (docs/plans/2026-09-18-phone-labels.md).
+  def test_reads_a_phones_label_off_the_line_sharing_its_group
+    labeled = STRUCTURED.sub(
+      "TEL;TYPE=work:+1-555-0199\r\n",
+      "item1.TEL;TYPE=work:+1-555-0199\r\nitem1.X-ABLabel:Google Voice\r\n",
+    )
+
+    phones = contact(labeled).phones
+    assert_nil phones.fetch(0).label
+    assert_equal "Google Voice", phones.fetch(1).label
+    assert_equal %w[work], phones.fetch(1).types
+  end
+
+  def test_a_phone_in_a_group_with_no_labeling_line_reads_no_label
+    grouped = STRUCTURED.sub("TEL;TYPE=work:", "item2.TEL;TYPE=work:")
+
+    assert_equal [nil, nil], contact(grouped).phones.map(&:label)
+  end
+
   # Each phone carries the line it was read from — the address a save
   # names the row by, and the bytes a value-only edit spares. The digest
   # is over the served card's line; composition only inserts the BDAY

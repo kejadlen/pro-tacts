@@ -65,10 +65,15 @@ module ProTacts
         ].compact.reject { it.empty? }
       end
 
-      # A row's types as its key, or the kind of value when it has
-      # none, so no row renders unlabeled in the grid.
-      #: (Array[String] types, String kind) -> String
-      def self.type_label(types, kind)
+      # A row's key: the label it carries, else its types, else the
+      # kind of value, so no row renders unlabeled in the grid. Where
+      # a row has both a label and types the label wins, which is what
+      # Contacts itself shows (docs/plans/2026-09-18-phone-labels.md,
+      # "Reading"); a row with no label of its own passes nil.
+      #: (String? label, Array[String] types, String kind) -> String
+      def self.type_label(label, types, kind)
+        return label if label
+
         types.empty? ? kind : types.join(", ")
       end
 

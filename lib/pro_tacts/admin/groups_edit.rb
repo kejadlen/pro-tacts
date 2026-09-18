@@ -90,7 +90,7 @@ module ProTacts
       #: (Contact::Address address) -> void
       def address_row(address)
         div(class: "field", data: {blank_removes: address.po_box.nil?}) do
-          span { Format.type_label(address.types, "address") }
+          span { Format.type_label(nil, address.types, "address") }
           div(class: "field-stack") do
             ContactsEdit::ADDRESS_FIELDS.each do |component, label|
               input(type: "text", name: "address[#{address.line.digest}][#{component}]",

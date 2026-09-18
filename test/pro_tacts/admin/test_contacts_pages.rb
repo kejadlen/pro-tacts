@@ -587,6 +587,21 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # A phone's label wins its row's key where the row carries types
+  # too — which is what Contacts itself shows
+  # (docs/plans/2026-09-18-phone-labels.md).
+  def test_show_labels_a_labeled_phone_with_its_label
+    labeled = ADA.sub("TEL;TYPE=mobile:+1-555-0100\r\n",
+      "item1.TEL;type=CELL:+1-555-0100\r\nitem1.X-ABLabel:Google Voice\r\n")
+
+    with_contacts({"ada" => labeled}) do
+      get "/contacts/ada"
+
+      assert_includes last_response.body, '<dt class="type-label">Google Voice</dt>'
+      refute_includes last_response.body, '<dt class="type-label">cell</dt>'
+    end
+  end
+
   # Empty attributes do not render (docs/DESIGN.md) — a bare card shows
   # only the header, not a scaffold of blank rows.
   def test_show_hides_attributes_the_contact_has_no_data_for
@@ -1420,6 +1435,23 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # The edit screen's phone row captions render a label the same way
+  # the show screen's keys do — both render that span through
+  # Format.type_label — while the field keeps editing the number alone.
+  def test_the_edit_screen_captions_a_labeled_phone_with_its_label
+    labeled = ADA.sub("TEL;TYPE=mobile:+1-555-0100\r\n",
+      "item1.TEL;type=CELL:+1-555-0100\r\nitem1.X-ABLabel:Google Voice\r\n")
+
+    with_contacts({"ada" => labeled}) do |store|
+      get "/contacts/ada/edit"
+
+      digest = store.contact("ada").phones.first.line.digest
+      assert_includes last_response.body,
+        '<label class="field" data-blank-removes><span>Google Voice</span>' \
+        '<input type="tel" name="phone[' + digest + ']" value="+1-555-0100" placeholder="removed on save"></label>'
+    end
+  end
+
   ## Editing emails
 
   # The email rows: the phone row's own shape over EMAIL — one value
@@ -2015,6 +2047,27 @@ class AdminContactsPagesTest < Minitest::Test
 
       follow_redirect!
       assert_includes last_response.body, "+1-555-0150"
+    end
+  end
+
+  # A labeled phone's value edit swaps the number under the line's own
+  # header — group prefix included — so the X-ABLabel stays bound to
+  # the row it names. Removing the row is the editor's own unsolved
+  # rule, and waits for it
+  # (docs/plans/2026-09-18-phone-labels.md, "What this leaves").
+  def test_saving_a_changed_labeled_phone_keeps_its_label_bound
+    labeled = ADA.sub("TEL;TYPE=mobile:+1-555-0100\r\n",
+      "item1.TEL;type=CELL:+1-555-0100\r\nitem1.X-ABLabel:Google Voice\r\n")
+
+    with_contacts({"ada" => labeled}) do |store|
+      digest = store.contact("ada").phones.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+                               phone: {digest => "+1-555-0150"}
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "item1.TEL;type=CELL:+1-555-0150\r\n"
+      assert_includes card, "item1.X-ABLabel:Google Voice\r\n"
     end
   end
 

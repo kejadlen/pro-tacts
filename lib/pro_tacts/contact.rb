@@ -66,6 +66,10 @@ module ProTacts
     # ADR's seven components (section 3.2.1: post office box, extended
     # address, street, locality, region, postal code, country — nil
     # where the card left the position blank or stopped short of it).
+    # A phone also carries a `label`, the `X-ABLabel` sharing its
+    # property group — macOS's spelling of a custom label, a different
+    # fact from the types and carried beside them
+    # (docs/plans/2026-09-18-phone-labels.md, "Reading").
     # Each also carries `line`, the parsed line the value was read
     # from: the address a save names that row by
     # (docs/plans/2026-09-05-web-card-editor.md) — the accessors fold
@@ -74,7 +78,7 @@ module ProTacts
     # Data classes, whose members the inline syntax cannot read; the
     # signatures live in sig/pro_tacts/contact.rbs.
     # @rbs skip
-    Phone = Data.define(:value, :types, :line)
+    Phone = Data.define(:value, :label, :types, :line)
     # @rbs skip
     Email = Data.define(:value, :types, :line)
     # @rbs skip
@@ -287,11 +291,18 @@ module ProTacts
 
     #: () -> Array[Phone]
     def phones
+      labels = labels_by_group
       rows("TEL") { |property, line|
         value = text_of(property)
+        group = property.group
         # RFC 2426 section 3.3.1: `voice` is the type every number has
         # by default, so it names none.
-        Phone.new(value:, types: types_of(property, except: %w[voice]), line:) if value
+        Phone.new(
+          value:,
+          label: group && labels[group],
+          types: types_of(property, except: %w[voice]),
+          line:,
+        ) if value
       }
     end
 
@@ -354,6 +365,27 @@ module ProTacts
       @groups_by_line = @inherited.to_h {
         [it.line.chomp, it.group] #: [String, Store::Group]
       }
+    end
+
+    # A property group to the `X-ABLabel` text anchoring it — the
+    # label a group's lines carry, on a different line than the row it
+    # describes. Read off the composed card: a group lends only bare
+    # `ADR` and `NOTE` (db/migrations/004_groups.rb), so an inherited
+    # line can never collide with a member's own `item` numbering
+    # (docs/plans/2026-09-18-phone-labels.md, "Reading").
+    #: () -> Hash[String, String]
+    def labels_by_group
+      properties
+        .filter_map { |property|
+          group = property.group
+          next if group.nil? || !property.name.casecmp?("X-ABLabel")
+
+          text = text_of(property)
+          next if text.nil?
+
+          [group, text] #: [String, String]
+        }
+        .to_h
     end
 
     # The rows a repeatable property reads as: each line naming it

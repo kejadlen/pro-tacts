@@ -8,10 +8,11 @@ module ProTacts
   class Contact
     class Phone
       attr_reader value: String
+      attr_reader label: String?
       attr_reader types: Array[String]
       attr_reader line: VCard::Parser::Line
 
-      def self.new: (value: String, types: Array[String], line: VCard::Parser::Line) -> instance
+      def self.new: (value: String, label: String?, types: Array[String], line: VCard::Parser::Line) -> instance
     end
 
     class Email

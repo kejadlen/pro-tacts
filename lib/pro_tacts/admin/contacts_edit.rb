@@ -187,7 +187,7 @@ module ProTacts
                   # one, saving, then editing the other.
                   @own.phones.each do |phone|
                     label(class: "field", data: {blank_removes: true}) do
-                      span { Format.type_label(phone.types, "phone") }
+                      span { Format.type_label(phone.label, phone.types, "phone") }
                       input(type: "tel", name: "phone[#{phone.line.digest}]",
                             value: phone.value, placeholder: "removed on save")
                     end
@@ -195,7 +195,7 @@ module ProTacts
                   # An email row, the phone row's own shape over EMAIL.
                   @own.emails.each do |email|
                     label(class: "field", data: {blank_removes: true}) do
-                      span { Format.type_label(email.types, "email") }
+                      span { Format.type_label(nil, email.types, "email") }
                       input(type: "email", name: "email[#{email.line.digest}]",
                             value: email.value, placeholder: "removed on save")
                     end
@@ -431,7 +431,7 @@ module ProTacts
       #: (Contact::Address address) -> void
       def address_row(address)
         div(class: "field", data: {blank_removes: address.po_box.nil?}) do
-          span { Format.type_label(address.types, "address") }
+          span { Format.type_label(nil, address.types, "address") }
           div(class: "field-stack") do
             ADDRESS_FIELDS.each do |component, label|
               input(type: "text", name: "address[#{address.line.digest}][#{component}]",
