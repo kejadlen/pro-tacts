@@ -694,6 +694,33 @@ module ProTacts
       end
     end
 
+    # A group goes, and its members stop serving what it lent them: the
+    # row's delete cascades the memberships and the lent lines away
+    # with it (db/migrations/004_groups.rb). Members are logged as
+    # leavers are (#remove_member's reason) — a `sync:` group's
+    # whatever their bytes did, a book's deletion taking its cards out
+    # of it. Everyone's book is refused, #name_book's reason: every
+    # card a client created joined it, so deleting it would tell every
+    # client to drop every card it ever synced. A group nobody has is
+    # the ordinary miss, #delete's shape.
+    #: (String id) -> bool
+    def delete_group(id)
+      name = groups.where(id:).sole.fetch(:name).to_s
+      # Refused before the transaction, #name_book's reason for the
+      # same refusal: Sequel wraps what a rollback raises.
+      raise EveryonesBookName, "#{EVERYONE} is everyone's book, not a group to delete" if name == EVERYONE
+
+      @database.transaction do
+        members = member_ids([id])
+        fan_out(members, moved: sync_name?(name) ? members : []) {
+          groups.where(id:).delete
+        }
+        true
+      end
+    rescue Sequel::NoMatchingRow
+      false
+    end
+
     # A card's side of #edit_group: one transaction, leavers first and
     # joiners last for that method's reason. A name creates a group to
     # join inside the same transaction, so a taken name (#create_group)

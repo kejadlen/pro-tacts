@@ -1315,6 +1315,60 @@ class StoreTest < Minitest::Test
     end
   end
 
+  def test_a_deleted_group_takes_its_membership_and_lent_lines_away
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      id = FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
+
+      assert store.delete_group(id)
+
+      assert_nil store.group(id)
+      %w[aiden znorth].each do |member|
+        assert_equal [], store.groups_of(member).map(&:id)
+        change = store.changes_of(member).first
+        assert_equal "group", change.action
+        assert_equal store.contact(member).etag, change.etag
+        assert_equal [HOUSEHOLD_ADDRESS], change.diff.removed
+      end
+    end
+  end
+
+  def test_deleting_a_sync_group_logs_its_members_whatever_their_bytes
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, name: "sync:Alpha Chen", members: ["aiden"])
+
+      store.delete_group(id)
+
+      assert_equal %w[group put], store.changes_of("aiden").map(&:action)
+    end
+  end
+
+  def test_deleting_a_group_that_lends_nothing_logs_no_member
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, members: ["aiden"])
+
+      store.delete_group(id)
+
+      assert_equal %w[put], store.changes_of("aiden").map(&:action)
+    end
+  end
+
+  def test_everyones_book_is_not_a_group_to_delete
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, name: ProTacts::Store::EVERYONE, members: ["aiden"])
+
+      assert_raises(ProTacts::Store::EveryonesBookName) { store.delete_group(id) }
+
+      assert_equal [id], store.groups_of("aiden").map(&:id)
+      assert_equal %w[put], store.changes_of("aiden").map(&:action)
+    end
+  end
+
+  def test_deleting_a_group_nobody_has_is_no_delete
+    with_store({"aiden" => AIDEN}) do |store|
+      refute store.delete_group("nobody")
+    end
+  end
+
   def test_a_regroup_leaves_and_joins
     with_store({"aiden" => AIDEN}) do |store|
       left = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
