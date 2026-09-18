@@ -27,8 +27,8 @@ class ImportStatusTaskTest < Minitest::Test
 
       out, = run_task(root)
 
-      assert_includes out, "macos-20260901T000000Z  2/2 contacts\n"
-      assert_includes out, "macos-20260916T180412Z  0/1 contacts\n"
+      assert_includes out, "✅ macos-20260901T000000Z  2/2 contacts\n"
+      assert_includes out, "⏳ macos-20260916T180412Z  0/1 contacts\n"
       assert_includes out, "next: import:execute would land macos-20260916T180412Z\n"
       assert_includes out, "next: import:macos:remove would clear macos-20260901T000000Z\n"
     end
