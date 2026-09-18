@@ -302,6 +302,7 @@ module ProTacts
           "TEL;type=CELL;type=VOICE",
           "TEL;type=HOME;type=VOICE",
           "TEL;type=IPHONE;type=CELL;type=VOICE",
+          "TEL;type=MAIN",
           "TEL;type=WORK;type=VOICE",
           "item#.TEL"
         ],
@@ -329,7 +330,10 @@ module ProTacts
       # Properties read and thrown away, whatever form they take: this
       # address book has no field for any of them, and a card's `source`
       # still holds the line.
-      DROPPED = %w[IMPP ORG TITLE URL X-SOCIALPROFILE X-APPLE-SUBADMINISTRATIVEAREA X-AIM].freeze #: Array[String]
+      DROPPED = %w[
+        IMPP ORG TITLE URL X-SOCIALPROFILE
+        X-APPLE-SUBADMINISTRATIVEAREA X-APPLE-SUBLOCALITY X-AIM
+      ].freeze #: Array[String]
 
       # Properties that say something about the line sharing their group
       # rather than about the contact: a label, and the country code

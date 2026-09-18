@@ -174,6 +174,22 @@ class ImportMacosTest < Minitest::Test
     end
   end
 
+  # The main number, with the rank Contacts gives it: `type=pref` names
+  # no kind and comes off the form, so the allowlist holds the spelling
+  # without it and both arrive under the one entry.
+  def test_a_main_number_is_a_phone_ranked_or_not
+    in_tmpdir do |dir|
+      records = [
+        record("A:ABPerson", lines: ["TEL;type=MAIN;type=pref:+12532189075"]),
+        record("B:ABPerson", lines: ["TEL;type=MAIN:(206) 651-4359"])
+      ]
+      plan = Macos.plan(dir, records, created_at: CREATED_AT)
+
+      assert_equal [["+12532189075"], ["(206) 651-4359"]],
+        plan.contacts.map { plan.card(it.id).phones }
+    end
+  end
+
   # Where someone works has no field in this address book; the source
   # keeps the lines the card drops.
   def test_a_job_title_and_an_organization_are_dropped
@@ -241,6 +257,7 @@ class ImportMacosTest < Minitest::Test
         "IMPP;X-SERVICE-TYPE=Skype;type=HOME;type=pref:skype:ada",
         "X-SOCIALPROFILE;type=twitter:https://twitter.com/ada",
         "item1.X-APPLE-SUBADMINISTRATIVEAREA:Middlesex",
+        "item1.X-APPLE-SUBLOCALITY:Marylebone",
         "X-AIM;type=HOME;type=pref:ada",
         "item2.URL;type=pref:https://example.com",
         "item2.X-ABLabel:_$!<HomePage>!$_",
@@ -411,7 +428,6 @@ class ImportMacosTest < Minitest::Test
   def test_a_line_in_any_other_form_is_refused_under_that_form
     in_tmpdir do |dir|
       records = [
-        record("A:ABPerson", lines: ["TEL;type=MAIN:+12532189075"]),
         record("C:ABPerson", lines: ["item1.TEL;type=CELL;type=VOICE;type=pref:+12532189075"]),
         record("D:ABPerson", lines: ["TEL;type=CELL;type=VOICE;type=pref:ext. 4"]),
         record("E:ABPerson", name: ["N:Lovelace;Ada;;;", "FN;CHARSET=utf-8:Ada Lovelace"])
@@ -427,8 +443,6 @@ class ImportMacosTest < Minitest::Test
             E:ABPerson: "FN;CHARSET=utf-8:Ada Lovelace"
           TEL value: 1
             D:ABPerson: "TEL;type=CELL;type=VOICE;type=pref:ext. 4"
-          TEL;type=MAIN: 1
-            A:ABPerson: "TEL;type=MAIN:+12532189075"
           item#.TEL;type=CELL;type=VOICE: 1
             C:ABPerson: "item1.TEL;type=CELL;type=VOICE;type=pref:+12532189075"
       MESSAGE
