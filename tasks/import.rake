@@ -87,22 +87,15 @@ namespace :import do
       next
     end
 
-    # One aligned row per plan, the statuses as columns in their order
-    # through an import, so where a plan has got to is read off the
-    # row rather than parsed out of a sentence. The plan names are the
-    # directories', copy-pasteable into PLAN=.
-    headers = ["plan", "host", "contacts", "planned", "landed", "imported", "removed"]
-    rows = plans.map { |plan|
-      counts = plan.contacts.group_by(&:status).transform_values(&:length)
-      [plan.dir.basename.to_s, plan.host || "—", plan.contacts.size.to_s,
-       counts.fetch(nil, 0).to_s, counts.fetch("landed", 0).to_s,
-       counts.fetch("imported", 0).to_s, counts.fetch("removed", 0).to_s]
-    }
-    widths = headers.each_index.map { |i| [headers[i].length, *rows.map { it[i].length }].max }
-    table = rows.unshift(headers).map { |row|
-      row.each_with_index.map { |cell, i| cell.public_send(i < 2 ? :ljust : :rjust, widths[i]) }.join("  ")
-    }
-    puts table
+    # One line per plan, as far along as it is: the fraction counts
+    # everything past “planned”, because from “landed” on the card is
+    # on the host — which is the state a glance wants. The rest of the
+    # state is what the next lines say acts on it. The plan names are
+    # the directories', copy-pasteable into PLAN=.
+    plans.each do |plan|
+      done = plan.contacts.size - plan.with_status(nil).size
+      puts "#{plan.dir.basename}  #{done}/#{plan.contacts.size} contacts"
+    end
 
     puts ""
     landing = plans.find(&ImportTasks::TO_LAND)

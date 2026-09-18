@@ -21,16 +21,14 @@ class ImportStatusTaskTest < Minitest::Test
       # A plan mid-flight — one contact through to the Mac-cleanup step,
       # one past it — and one freshly built with everything still to do.
       underway = Plan.write(imports / "macos-20260901T000000Z", source: "macos", created_at: Time.utc(2026, 9, 1), entries: [entry("kmnuqmzxylru"), entry("vmnlryyvktux")])
-      underway.host = "https://contacts.example"
       underway.record("kmnuqmzxylru", "imported")
       underway.record("vmnlryyvktux", "removed")
       Plan.write(imports / "macos-20260916T180412Z", source: "macos", created_at: Time.utc(2026, 9, 16, 18, 4, 12), entries: [entry("aaaaaaaaaaaa")])
 
       out, = run_task(root)
 
-      assert_match(%r{plan\s+host\s+contacts\s+planned\s+landed\s+imported\s+removed}, out)
-      assert_match(/macos-20260901T000000Z\s+https:\/\/contacts\.example\s+2\s+0\s+0\s+1\s+1/, out)
-      assert_match(/macos-20260916T180412Z\s+—\s+1\s+1\s+0\s+0\s+0/, out)
+      assert_includes out, "macos-20260901T000000Z  2/2 contacts\n"
+      assert_includes out, "macos-20260916T180412Z  0/1 contacts\n"
       assert_includes out, "next: import:execute would land macos-20260916T180412Z\n"
       assert_includes out, "next: import:macos:remove would clear macos-20260901T000000Z\n"
     end
