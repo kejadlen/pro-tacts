@@ -7,9 +7,9 @@ module ProTacts
     # Small display helpers shared by the admin views. Presentation, not
     # structure: these read a Contact but decide only how it looks.
     module Format
-      # The name a listing row shows: "Nickname (Name)" when the card
-      # carries a NICKNAME — the name someone is known by, the formal
-      # one kept beside it — and the plain name otherwise. The
+      # The name a listing row shows: "Name (Nickname)" when the card
+      # carries a NICKNAME — the formal name, the one someone is
+      # known by kept beside it — and the plain name otherwise. The
       # composition is the listing screens', not Contact's: the card
       # holds the two facts independently, and other screens (the
       # detail card, the birthdays column) show the plain name.
@@ -17,7 +17,7 @@ module ProTacts
       def self.name_label(contact)
         nickname = contact.nickname
         name = contact.name
-        return "#{nickname} (#{name})" if nickname && name
+        return "#{name} (#{nickname})" if nickname && name
 
         nickname || name || contact.id
       end

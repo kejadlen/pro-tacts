@@ -77,8 +77,8 @@ module ProTacts
       private
 
       # Match generously (docs/DESIGN.md): a contact is findable by
-      # name — the nickname too, being the name it lists under — any
-      # of its values, or the groups it belongs to.
+      # name or nickname, any of its values, or the groups it
+      # belongs to.
       #: (Store::RecentContact row, String query) -> bool
       def matches?(row, query)
         q = query.downcase

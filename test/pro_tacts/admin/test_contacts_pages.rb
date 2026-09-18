@@ -69,16 +69,16 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # A card with a NICKNAME lists as "Nickname (Name)" — the name
-  # someone is known by, the formal one kept beside it. The plain-name
+  # A card with a NICKNAME lists as "Name (Nickname)" — the formal
+  # name with the one someone is known by beside it. The plain-name
   # row is what every other index test already shows.
-  def test_index_lists_a_nicknamed_contact_as_nickname_and_name
+  def test_index_lists_a_nicknamed_contact_as_name_and_nickname
     red = ADA.sub("FN:Ada Lovelace", "FN:Sarah\r\nNICKNAME:Red").sub("UID:ada", "UID:red")
 
     with_contacts({"red" => red}) do
       get "/"
 
-      assert_includes last_response.body, "Red (Sarah)"
+      assert_includes last_response.body, "Sarah (Red)"
     end
   end
 
@@ -113,13 +113,13 @@ class AdminContactsPagesTest < Minitest::Test
 
   # The row shows the same composition the dashboard's rows do
   # (Format.name_label).
-  def test_contacts_lists_a_nicknamed_contact_as_nickname_and_name
+  def test_contacts_lists_a_nicknamed_contact_as_name_and_nickname
     red = ADA.sub("FN:Ada Lovelace", "FN:Sarah\r\nNICKNAME:Red").sub("UID:ada", "UID:red")
 
     with_contacts({"red" => red}) do
       get "/contacts"
 
-      assert_includes last_response.body, "Red (Sarah)"
+      assert_includes last_response.body, "Sarah (Red)"
     end
   end
 
@@ -327,7 +327,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"red" => red}) do
       get "/", q: "red"
 
-      assert_includes last_response.body, "Red (Sarah)"
+      assert_includes last_response.body, "Sarah (Red)"
     end
   end
 
