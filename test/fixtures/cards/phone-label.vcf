@@ -1,0 +1,10 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Hopper;Grace;;;
+FN:Grace Hopper
+item1.TEL;type=CELL:+1-555-0177
+item1.X-ABLabel:Google Voice
+TEL;TYPE=home:+1-555-0101
+EMAIL:grace@example.com
+UID:phone-label
+END:VCARD

@@ -157,6 +157,15 @@ Content-Type: text/xml
     </d:propstat>
   </d:response>
   <d:response>
+    <d:href>/dav/addressbook/phone-label.vcf</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"255b9ca1ae879c7bc8d2d201d20b451f81934360fd5fc739b7af37c87e2c692f"</d:getetag>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
     <d:href>/dav/addressbook/photo.vcf</d:href>
     <d:propstat>
       <d:prop>
