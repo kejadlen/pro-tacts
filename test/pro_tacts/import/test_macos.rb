@@ -131,6 +131,22 @@ class ImportMacosTest < Minitest::Test
     end
   end
 
+  # An address is carried under its group already; an email labelled in
+  # Contacts is the same shape, and its label goes where an address's
+  # does. Nothing is lost that an unlabelled row would have kept: an
+  # imported EMAIL line carries no type either (Admin::CardForm).
+  def test_a_labelled_email_is_carried_and_its_label_dropped
+    in_tmpdir do |dir|
+      lines = [
+        "item1.EMAIL;type=INTERNET;type=pref:ada@example.com",
+        "item1.X-ABLabel:_$!<Home>!$_"
+      ]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      assert_equal ["ada@example.com"], plan.card(plan.contacts.first.id).emails
+    end
+  end
+
   def test_a_second_address_under_another_item_number_is_one_form
     in_tmpdir do |dir|
       lines = [

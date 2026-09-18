@@ -303,7 +303,12 @@ module ProTacts
           "TEL;type=HOME;type=VOICE",
           "TEL;type=IPHONE;type=CELL;type=VOICE"
         ],
-        "EMAIL" => ["EMAIL;type=INTERNET", "EMAIL;type=INTERNET;type=HOME", "EMAIL;type=INTERNET;type=WORK"],
+        "EMAIL" => [
+          "EMAIL;type=INTERNET",
+          "EMAIL;type=INTERNET;type=HOME",
+          "EMAIL;type=INTERNET;type=WORK",
+          "item#.EMAIL;type=INTERNET"
+        ],
         "ADR" => ["item#.ADR;type=HOME"],
         "X-ABRELATEDNAMES" => ["item#.X-ABRELATEDNAMES"]
       }.freeze #: Hash[String, Array[String]]
