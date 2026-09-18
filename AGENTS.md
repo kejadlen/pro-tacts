@@ -34,6 +34,8 @@ rake import:macos:remove # Delete from this Mac the contacts the oldest
                       # writes Contacts, so leave it to the user)
 rake import:execute   # Land the oldest plan still to land on a host
                       # (HOST=https://contacts; PLAN=dir for another)
+rake import:status    # Summarize the imports in data/imports and what
+                      # execute and remove would carry next
 rake profile:install  # Download carddav.mobileconfig from the app and
                       # stage it for approval
 ```
