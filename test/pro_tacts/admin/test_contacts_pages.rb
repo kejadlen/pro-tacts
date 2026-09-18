@@ -837,6 +837,7 @@ class AdminContactsPagesTest < Minitest::Test
       # assertion keeps a regression from rendering a silent label).
       assert_includes body, '<label class="field">First<input type="text" name="first" required ' \
                             ':required="lastBlank" @input="firstBlank = !$el.value.trim()" autofocus></label>'
+      assert_includes body, '<label class="field">Middle<input type="text" name="middle"></label>'
       assert_includes body, '<label class="field">Last<input type="text" name="last" required ' \
                             ':required="firstBlank" @input="lastBlank = !$el.value.trim()"></label>'
       assert_includes body, 'popovertargetaction="hide"'
@@ -865,6 +866,32 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes card, "FN:Grace Hopper"
       assert_includes card, "UID:#{id}"
       assert(store.changes.any? { it.action == "put" && it.card_id == id })
+    end
+  end
+
+  # The middle box writes N's additional component (RFC 2426 section
+  # 3.1.2) and joins the display name the other two make.
+  def test_creating_a_contact_with_a_middle_name
+    with_contacts({}) do |store|
+      post "/contacts", first: "Ada", middle: "Byron", last: "Lovelace"
+
+      assert_equal 303, last_response.status
+      id = last_response["Location"].delete_prefix("/contacts/")
+      card = store.contact(id).vcard.to_s
+      assert_includes card, "N:Lovelace;Ada;Byron;;"
+      assert_includes card, "FN:Ada Byron Lovelace"
+    end
+  end
+
+  # A middle name is not one of the halves a contact is named by, so a
+  # create carrying nothing else is the nameless one, refused.
+  def test_a_create_with_only_a_middle_name_is_refused
+    with_contacts({}) do |store|
+      post "/contacts", first: "", middle: "Byron", last: ""
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "A contact needs a name."
+      assert_empty store.contacts
     end
   end
 
@@ -928,6 +955,7 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes body, '<button type="submit" form="contact-form" data-variant="primary">Save</button>'
       assert_includes body, '<input type="text" name="first" value="Ada" ' \
                             ':required="lastBlank" @input="firstBlank = !$el.value.trim()" autofocus>'
+      assert_includes body, '<span>Middle</span><input type="text" name="middle">'
       assert_includes body, '<input type="text" name="last" value="Lovelace" ' \
                             ':required="firstBlank" @input="lastBlank = !$el.value.trim()">'
       assert_includes body,
@@ -937,6 +965,19 @@ class AdminContactsPagesTest < Minitest::Test
         "<textarea name=\"note\" rows=\"4\" placeholder=\"removed on save\">Countess of Lovelace.</textarea>"
       # The etag carries its quotes, HTML-escaped in the attribute.
       assert_includes body, %(<input type="hidden" name="etag" value="&quot;#{store.contact("red").etag.delete('"')}&quot;">)
+    end
+  end
+
+  # The middle box prefills from N's additional component, unescaped
+  # like every other reading the form starts from.
+  def test_the_edit_screen_prefills_the_middle_name
+    byron = ADA.sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;Byron\\, the poet;;")
+
+    with_contacts({"ada" => byron}) do
+      get "/contacts/ada/edit"
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, '<input type="text" name="middle" value="Byron, the poet">'
     end
   end
 
@@ -1109,7 +1150,7 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # FN is the card's own display name, not a rendering of N: a save
-  # that left both name fields alone must not rebuild it from them,
+  # that left every name field alone must not rebuild it from them,
   # or a card spelling the name in full loses every part the form has
   # no field for — the parts N itself keeps.
   def test_a_save_that_moves_no_name_field_keeps_the_cards_own_display_name
@@ -1118,7 +1159,8 @@ class AdminContactsPagesTest < Minitest::Test
 
     with_contacts({"ada" => formal}) do |store|
       digest = store.contact("ada").phones.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
+      post "/contacts/ada", first: "Ada", middle: "B.", last: "Lovelace",
+                               note: "Countess of Lovelace.",
                                etag: store.contact("ada").etag, phone: {digest => "+1-555-0199"}
 
       assert_equal 303, last_response.status
@@ -1130,7 +1172,7 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # A moved name field is the one time the old display name is stale,
-  # and then FN is the form's reading — N's other three components
+  # and then FN is the form's reading — N's prefixes and suffixes
   # staying where they were, this being an edit of the name and not of
   # the card's spelling of it.
   def test_a_moved_name_field_rewrites_the_display_name
@@ -1138,12 +1180,44 @@ class AdminContactsPagesTest < Minitest::Test
                 .sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;B.;Dr.;Jr.")
 
     with_contacts({"ada" => formal}) do |store|
-      post "/contacts/ada", first: "Ada", last: "King", etag: store.contact("ada").etag
+      post "/contacts/ada", first: "Ada", middle: "B.", last: "King", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
-      assert_includes card, "FN:Ada King\r\n"
+      assert_includes card, "FN:Ada B. King\r\n"
       assert_includes card, "N:King;Ada;B.;Dr.;Jr.\r\n"
+    end
+  end
+
+  # The middle box is a name field like the two beside it: moving it
+  # alone is what makes the old display name stale.
+  def test_a_moved_middle_name_rewrites_the_display_name
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", middle: "Byron", last: "Lovelace",
+                               etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "N:Lovelace;Ada;Byron;;\r\n"
+      assert_includes card, "FN:Ada Byron Lovelace\r\n"
+    end
+  end
+
+  # Blank equals absent in the name row too: emptying the middle box
+  # clears N's additional component and drops it from the display
+  # name. The line stays — N is mandatory (RFC 2426 section 4) and a
+  # component is not a property.
+  def test_a_blank_middle_name_clears_the_additional_component
+    byron = ADA.sub("FN:Ada Lovelace", "FN:Ada Byron Lovelace")
+               .sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;Byron;;")
+
+    with_contacts({"ada" => byron}) do |store|
+      post "/contacts/ada", first: "Ada", middle: "", last: "Lovelace", etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "N:Lovelace;Ada;;;\r\n"
+      assert_includes card, "FN:Ada Lovelace\r\n"
     end
   end
 
@@ -1176,20 +1250,37 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # N's unedited components — additional, prefixes, suffixes — splice
-  # through byte for byte, the still-escaped value never rounding
-  # through unescape and re-escape. The escaped semicolon inside the
-  # additional component is the one an unescaped split would break on;
+  # N's unedited components — the prefixes and suffixes no box shows —
+  # splice through byte for byte, the still-escaped value never
+  # rounding through unescape and re-escape. The escaped semicolon
+  # inside the prefixes is the one an unescaped split would break on;
   # the seed's four components leave the fifth to the padding rule.
   def test_the_names_unedited_components_are_preserved_byte_for_byte
-    honorific = ADA.sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;Byron\\; Countess;Countess of Lovelace")
+    honorific = ADA.sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;;Countess\\; Dr.")
 
     with_contacts({"ada" => honorific}) do |store|
-      post "/contacts/ada", first: "Ada", last: "King", etag: store.contact("ada").etag
+      post "/contacts/ada", first: "Ada", middle: "", last: "King", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
-      assert_includes store.contact("ada").vcard.to_s,
-        "N:King;Ada;Byron\\; Countess;Countess of Lovelace;\r\n"
+      assert_includes store.contact("ada").vcard.to_s, "N:King;Ada;;Countess\\; Dr.;\r\n"
+    end
+  end
+
+  # A name box that submits what it was rendered from keeps its
+  # component's own bytes, rather than rounding through unescape and
+  # re-escape — which is not byte-stable: `\x` is no escape the
+  # reader knows, so it survives the read and the writer would
+  # double its backslash. The rule address_line already writes under
+  # (CardForm.n_line), at the name's grain.
+  def test_a_name_component_returned_unchanged_keeps_its_own_bytes
+    odd = ADA.sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;Byron\\x;;")
+
+    with_contacts({"ada" => odd}) do |store|
+      post "/contacts/ada", first: "Ada", middle: "Byron\\x", last: "King",
+                               etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s, "N:King;Ada;Byron\\x;;\r\n"
     end
   end
 

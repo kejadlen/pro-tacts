@@ -9,6 +9,10 @@ module ProTacts
     # they change. The server's refusal of a save blank throughout
     # (Web's contacts routes) is the backstop behind it.
     #
+    # The middle box the same forms carry is not one of the halves and
+    # is not here: nobody is known by a middle name alone, so it is
+    # never required and has no state to share.
+    #
     # Not a view, so the Steepfile checks it.
     module NamePair
       # The Alpine state the two boxes share, as properties for the

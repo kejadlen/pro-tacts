@@ -99,10 +99,13 @@ module ProTacts
       # make of these fields. The birthday rides beside the card as the
       # store keeps it, and Contact composes the line back in
       # (docs/plans/2026-09-11-every-birthday-in-the-model.md).
+      # No middle name: a plan's card holds first and last, and a source
+      # N carrying anything past them is refused rather than imported
+      # (Macos.name), so there is none here to write.
       #: (String id) -> Contact
       def contact(id)
-        created = Contact.new(id:, stored: Admin::CardForm.new_card(id, first, last), birthday: nil, inherited: [])
-        stored = Admin::CardForm.contact_card(created, first, last, {
+        created = Contact.new(id:, stored: Admin::CardForm.new_card(id, first, "", last), birthday: nil, inherited: [])
+        stored = Admin::CardForm.contact_card(created, first, "", last, {
           "nickname" => nickname.to_s, "note" => note.to_s,
           "new_phone" => phones, "new_email" => emails, "new_address" => addresses
         })

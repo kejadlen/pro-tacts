@@ -27,9 +27,11 @@ module ProTacts
     # a contact carries arrives by editing the record — which belongs
     # on the details page, where the surgical mutator will live. N and
     # FN both written because RFC 2426 section 4 requires them of every
-    # card; the two name fields are N's first two components
-    # (family;given), and FN is derived from them in the western order
-    # the fixture sessions show macOS writing.
+    # card; the three name fields are N's first three components
+    # (family;given;additional), and FN is derived from them in the
+    # western order the fixture sessions show macOS writing. The middle
+    # box stands outside the required pair — it is never the name a
+    # contact is made by — so it carries no rule of NamePair's.
     #
     # A popover cannot be declared open in markup, so the empty-name
     # refusal is not a re-opened dialog: each name box is `required`
@@ -55,6 +57,10 @@ module ProTacts
             label(class: "field") do
               plain "First"
               input(**NamePair.first(nil, nil), autofocus: true)
+            end
+            label(class: "field") do
+              plain "Middle"
+              input(type: "text", name: "middle")
             end
             label(class: "field") do
               plain "Last"

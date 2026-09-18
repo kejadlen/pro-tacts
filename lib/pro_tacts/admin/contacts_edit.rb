@@ -87,6 +87,7 @@ module ProTacts
       # @rbs @own: Contact
       # @rbs @notice: String?
       # @rbs @first: String?
+      # @rbs @middle: String?
       # @rbs @last: String?
 
       #: (contact: Contact, ?notice: String?) -> void
@@ -98,12 +99,14 @@ module ProTacts
         # composed contact's, the one a save is guarded against.
         @own = contact.own
         @notice = notice
-        # N's first two components (RFC 2426 section 3.1.2: family;
-        # given) — the two fields the create dialog also asks for. The
-        # remaining three are preserved byte-for-byte by the save's
-        # raw splice (CardForm.n_line), never rendered here.
-        family, given = contact.name_components || []
+        # N's first three components (RFC 2426 section 3.1.2: family;
+        # given; additional) — the three fields the create dialog also
+        # asks for. The prefixes and suffixes after them are preserved
+        # byte-for-byte by the save's raw splice (CardForm.n_line),
+        # never rendered here.
+        family, given, additional = contact.name_components || []
         @first = given
+        @middle = additional
         @last = family
       end
 
@@ -142,6 +145,15 @@ module ProTacts
                   label(class: "field") do
                     span { "First" }
                     input(**NamePair.first(@first, @last), autofocus: true)
+                  end
+                  # Outside the required pair, and outside its removal
+                  # state with it: a blanked middle name rewrites N's
+                  # additional component like any other name box, and
+                  # the row it would strike through is the name row,
+                  # which no save can remove.
+                  label(class: "field") do
+                    span { "Middle" }
+                    input(type: "text", name: "middle", value: @middle)
                   end
                   label(class: "field") do
                     span { "Last" }

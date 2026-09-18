@@ -36,20 +36,20 @@ module ProTacts
       # record later. The names escape, because a name is text — a
       # comma or semicolon in one must not read as structure (RFC 2426
       # section 2.4.2).
-      #: (String id, String first, String last) -> VCard
-      def self.new_card(id, first, last)
+      #: (String id, String first, String middle, String last) -> VCard
+      def self.new_card(id, first, middle, last)
         VCard.new(
           "BEGIN:VCARD\r\nVERSION:3.0\r\n" \
-            "N:#{VCard.escape(last)};#{VCard.escape(first)};;;\r\n" \
-            "FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n" \
+            "N:#{VCard.escape(last)};#{VCard.escape(first)};#{VCard.escape(middle)};;\r\n" \
+            "FN:#{VCard.escape(display_name(first, middle, last))}\r\n" \
             "UID:#{id}\r\n" \
             "END:VCARD\r\n",
         )
       end
 
       # The contact editor's save, spliced into the stored card.
-      #: (Contact contact, String first, String last, Hash[String, untyped] params) -> VCard
-      def self.contact_card(contact, first, last, params)
+      #: (Contact contact, String first, String middle, String last, Hash[String, untyped] params) -> VCard
+      def self.contact_card(contact, first, middle, last, params)
         nickname = params["nickname"].to_s.strip
         note = params["note"].to_s.strip
 
@@ -61,8 +61,8 @@ module ProTacts
         own = contact.own
 
         vcard = contact.stored
-        vcard = vcard.replace("N", [n_line(vcard, first, last)])
-        vcard = edited_fn(contact, vcard, first, last)
+        vcard = vcard.replace("N", [n_line(vcard, first, middle, last)])
+        vcard = edited_fn(contact, vcard, first, middle, last)
         vcard = vcard.replace("NICKNAME", text_lines("NICKNAME", nickname))
         vcard = vcard.replace("NOTE", text_lines("NOTE", note))
         vcard = edited_phones(own, vcard, params)
@@ -284,36 +284,57 @@ module ProTacts
       # name is stale. A card carrying no FN is the other case: the
       # property is mandatory (section 4), so a save fills it in rather
       # than leaving the absence it found.
-      #: (Contact contact, VCard vcard, String first, String last) -> VCard
-      def self.edited_fn(contact, vcard, first, last)
-        family, given = contact.name_components || []
+      #: (Contact contact, VCard vcard, String first, String middle, String last) -> VCard
+      def self.edited_fn(contact, vcard, first, middle, last)
+        family, given, additional = contact.name_components || []
         named = vcard.properties.any? { it.name.casecmp?("FN") }
-        return vcard if named && first == given.to_s && last == family.to_s
+        return vcard if named && first == given.to_s && middle == additional.to_s && last == family.to_s
 
-        vcard.replace("FN", ["FN:#{VCard.escape([first, last].reject(&:empty?).join(" "))}\r\n"])
+        vcard.replace("FN", ["FN:#{VCard.escape(display_name(first, middle, last))}\r\n"])
       end
 
-      # N's replacement line. The first two components are the form's;
-      # the remaining three — additional, prefixes, suffixes (RFC 2426
-      # section 3.1.2) — rejoin byte for byte, which is what the splice
-      # over the still-escaped value buys
-      # (docs/plans/2026-09-05-web-card-editor.md). A card with no N a
-      # form can read splices into a bare five-component value; one
-      # short of five is padded, the same empties a whole-N writer
-      # would leave.
-      #: (VCard vcard, String first, String last) -> String
-      def self.n_line(vcard, first, last)
+      # FN's text, from the boxes that make it: the western order the
+      # create dialog has always written (Admin::ContactDialog), each
+      # blank box left out rather than spacing the line.
+      #: (String first, String middle, String last) -> String
+      def self.display_name(first, middle, last)
+        [first, middle, last].reject(&:empty?).join(" ")
+      end
+
+      # N's replacement line. The first three components are the form's
+      # — family, given, additional (RFC 2426 section 3.1.2) — and the
+      # prefixes and suffixes after them rejoin byte for byte, which is
+      # what the splice over the still-escaped value buys
+      # (docs/plans/2026-09-05-web-card-editor.md). A component that
+      # submits its current reading keeps its own bytes too, the rule
+      # address_line already writes under: unescape-then-re-escape is
+      # not byte-stable (VCard.split_raw_components), so a save that
+      # moved a phone number must not rewrite the name it left alone. A
+      # card with no N a form can read splices into a bare
+      # five-component value; one short of five is padded, the same
+      # empties a whole-N writer would leave.
+      #: (VCard vcard, String first, String middle, String last) -> String
+      def self.n_line(vcard, first, middle, last)
         property = vcard.properties.find { it.name.casecmp?("N") }
         components = [] #: Array[String]
-        components.replace(VCard.split_raw_components(property.value)) if property
+        readings = [] #: Array[String]
+        if property
+          components.replace(VCard.split_raw_components(property.value))
+          readings.replace(property.components)
+        end
         components << "" while components.length < 5
-        components[0] = VCard.escape(last)
-        components[1] = VCard.escape(first)
+        # The form's three, in the value's own order: family, given,
+        # additional.
+        [last, first, middle].each_with_index do |value, position|
+          current = readings[position].to_s
+          components[position] = value == current ? components.fetch(position) : VCard.escape(value)
+        end
         "N:#{components.join(";")}\r\n"
       end
 
       private_class_method :edited_phones, :edited_emails, :edited_addresses, :address_unchanged?,
-                           :address_line, :birthday_component, :text_lines, :edited_fn, :n_line
+                           :address_line, :birthday_component, :text_lines, :edited_fn, :display_name,
+                           :n_line
     end
   end
 end

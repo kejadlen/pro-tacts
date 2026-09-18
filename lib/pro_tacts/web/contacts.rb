@@ -32,14 +32,19 @@ module ProTacts
       r.is do
         r.post do
           first = r.params["first"].to_s.strip
+          middle = r.params["middle"].to_s.strip
           last = r.params["last"].to_s.strip
+          # A middle name is not one of the halves that make a name: the
+          # form asks for it beside a pair it stands outside of
+          # (Admin::NamePair), and nobody is known by their middle name
+          # alone.
           if first.empty? && last.empty?
             dashboard(query: r.params["q"], notice: "A contact needs a name.")
           else
             # Store#put overwrites, so the width has to make a collision
             # unthinkable rather than caught: 48 bits, for a family's book.
             id = ChangeId.mint(12)
-            store.put(id, Admin::CardForm.new_card(id, first, last))
+            store.put(id, Admin::CardForm.new_card(id, first, middle, last))
             r.redirect "/contacts/#{id}", 303
           end
         end
@@ -132,6 +137,7 @@ module ProTacts
       # name pair (Admin::NamePair) being the browser's own refusal of
       # the same.
       first = r.params["first"].to_s.strip
+      middle = r.params["middle"].to_s.strip
       last = r.params["last"].to_s.strip
       return edit_screen(contact, notice: "A contact needs a name.") if first.empty? && last.empty?
 
@@ -170,7 +176,7 @@ module ProTacts
         return edit_screen(contact, notice: "This contact's card carries its own birthday spelling; nothing was saved.")
       end
 
-      store.rewrite(id, Admin::CardForm.contact_card(contact, first, last, r.params), birthday:)
+      store.rewrite(id, Admin::CardForm.contact_card(contact, first, middle, last, r.params), birthday:)
       r.redirect "/contacts/#{id}", 303
     end
 
