@@ -364,13 +364,18 @@ textarea:focus {
   color: var(--gl-color-text-primary);
   text-decoration: none;
 }
-/* The name and the groups link as one group on the left, so the
-   header's space-between still splits two things. The link after the
-   name steps down a shade: it is a destination, not the app's name. */
+/* The name and the destinations as one group on the left, so the
+   header's space-between still splits two things. The name sits a
+   tier above the links after it — one type step, the identity
+   rendered in type (docs/DESIGN.md) — while they step down a shade:
+   destinations, not the name. */
 .admin-header nav {
   display: flex;
   align-items: baseline;
   gap: var(--gl-space-s);
+}
+.admin-header nav a:first-child {
+  font-size: var(--gl-step-0);
 }
 .admin-header nav a + a {
   color: var(--gl-color-text-secondary);
@@ -425,6 +430,16 @@ textarea:focus {
    bar filled with it. */
 :root[data-accent] :is(.admin-header, .admin-footer) :focus-visible {
   outline-color: var(--gl-color-accent-fg);
+}
+
+/* The row hover Gloss gives is surface-fill — which the page repoint
+   at the top of this file made the page's own color, so a hovered
+   row filled with the page reads as a hole in the card rather than a
+   highlight. The gesture survives one step deeper: fill-2, against
+   both the card it sits on and the page it must not become. */
+.card > li > a:only-child:hover,
+.card > li > button:only-child:hover {
+  background: var(--gl-color-surface-fill-2);
 }
 
 /* The viewport-tall column the footer's `margin-top: auto` measures
