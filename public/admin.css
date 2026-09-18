@@ -561,10 +561,14 @@ img.avatar {
    lg, and the anchor of a row wants slightly more presence than the
    default 2.25rem gives it. The initials ride one type step up with
    the box, to keep the share of the circle the default sizes give
-   them — the same pairing the xl rule below makes at its scale. */
+   them — the same pairing the xl rule below makes at its scale.
+   line-height 1, because the base sheet's 1.55 is inherited here and
+   flex centers the line box it grows, not the glyphs; initials are
+   the only text an avatar holds, at this the only size they render. */
 .avatar[data-size="lg"] {
   --_size: 2.5rem;
   font-size: var(--gl-step--1);
+  line-height: 1;
 }
 
 /* The detail header's avatar, one step past Gloss's scale — its lg is
