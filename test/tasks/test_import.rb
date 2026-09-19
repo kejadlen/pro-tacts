@@ -6,7 +6,7 @@ require "tmpdir"
 
 require "pro_tacts/import/plan"
 
-class ImportStatusTaskTest < Minitest::Test
+class ImportTasksTest < Minitest::Test
   Plan = ProTacts::Import::Plan
 
   SOURCE = {"identifier" => "A:ABPerson", "vcard" => "BEGIN:VCARD\r\nEND:VCARD\r\n", "note" => nil, "contact" => {}}
@@ -29,7 +29,7 @@ class ImportStatusTaskTest < Minitest::Test
       underway.record("vmnlryyvktux", Plan::DONE)
       Plan.write(plans / "macos-20260916T180412Z", source: "macos", created_at: Time.utc(2026, 9, 16, 18, 4, 12), entries: [entry("aaaaaaaaaaaa")])
 
-      out, = run_task(root)
+      out, = run_status(root)
 
       assert_includes out, "macos-20260901T000000Z  2/2 contacts\n"
       assert_includes out, "macos-20260916T180412Z  0/1 contacts\n"
@@ -43,22 +43,52 @@ class ImportStatusTaskTest < Minitest::Test
 
   def test_status_with_no_plans_says_how_to_build_one
     Dir.mktmpdir do |root|
-      out, = run_task(Pathname.new(root))
+      out, = run_status(Pathname.new(root))
 
       assert_includes out, "no plans in data/import/active; run rake import:macos:plan"
     end
   end
 
+  def test_the_host_comes_from_the_config_and_a_bare_hostname_gains_a_scheme
+    Dir.mktmpdir do |root|
+      root = Pathname.new(root)
+      write_config(root, "host: contacts\n")
+
+      with_import_tasks(root) do
+        assert_equal "https://contacts", ImportTasks.host
+      end
+    end
+  end
+
+  def test_no_host_in_the_config_aborts_naming_it
+    Dir.mktmpdir do |root|
+      with_import_tasks(Pathname.new(root)) do
+        _, err = capture_io { assert_raises(SystemExit) { ImportTasks.host } }
+
+        assert_equal "no host to land on: write host: under data/import/config.yml\n", err
+      end
+    end
+  end
+
   private
 
-  # Runs import:status in a Rake application of its own, from root as
-  # the working directory: the task reads data/import relative to
+  def write_config(root, content)
+    (root / "data" / "import").mkpath
+    (root / "data" / "import" / "config.yml").write(content)
+  end
+
+  def run_status(root)
+    with_import_tasks(root) { capture_io { Rake.application["import:status"].invoke } }
+  end
+
+  # Loads tasks/import.rake in a Rake application of its own, from root
+  # as the working directory: the tasks read data/import relative to
   # where rake runs, not through ProTacts.config.
-  def run_task(root)
+  def with_import_tasks(root)
     application = Rake.application
     Rake.application = Rake::Application.new
     load (Pathname.new(__dir__).parent.parent / "tasks" / "import.rake").to_s
-    Dir.chdir(root) { capture_io { Rake.application["import:status"].invoke } }
+    Dir.chdir(root) { yield }
   ensure
     Rake.application = application
   end

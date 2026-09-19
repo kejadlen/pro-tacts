@@ -12,6 +12,11 @@ data/import/
 └── done/        # plans filed away, every contact off this Mac
 ```
 
+The config's first key is `host`: the base URL `import:execute`
+lands on, and the only place a host is named — command line included —
+so a plan cannot be aimed at another server by accident. Finalize
+takes no host at all, reading the one its plan recorded.
+
 Before, plans lived in `data/imports` beside nothing. Everything the
 tasks keep now sits under the one directory, plans in flight under
 `active/` and finished under `done/` — the two states a plan's

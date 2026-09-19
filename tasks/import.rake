@@ -5,6 +5,9 @@
 
 require "fileutils"
 require "pathname"
+require "uri"
+
+require "pro_tacts/import/config"
 
 # The plan a task carries further. A module rather than task-file methods,
 # which rake redefines noisily when a file is loaded twice.
@@ -50,6 +53,21 @@ module ImportTasks
     FileUtils.mkdir_p(DONE)
     FileUtils.mv(plan.dir, DONE / plan.dir.basename)
   end
+
+  # The host to land a plan on: the standing `host` under CONFIG, the
+  # one place a host is named. A bare hostname is the base URL of a
+  # server that serves HTTPS, which every deployment does; the scheme
+  # is spelled out here so the host a plan records is the one a second
+  # run is compared against.
+  #: () -> String
+  def self.host
+    named = ProTacts::Import::Config.read(CONFIG).fetch("host", nil)
+    abort "no host to land on: write host: under #{CONFIG}" if named.nil?
+
+    uri = URI.parse(named)
+    uri = URI.parse("https://#{uri}") if uri.scheme.nil?
+    uri.to_s
+  end
 end
 
 namespace :import do
@@ -77,7 +95,6 @@ namespace :import do
     desc "Finalize the contacts the oldest landed plan imported, taking them off this Mac and filing the plan away done (PLAN=dir for another)"
     task :finalize do
       require "net/http"
-      require "uri"
       require "pro_tacts/import/http_client"
       require "pro_tacts/import/macos"
       require "pro_tacts/import/finalize"
@@ -135,21 +152,16 @@ namespace :import do
     puts "next: import:macos:finalize would finish #{finalizing.dir.basename}" if finalizing
   end
 
-  desc "Land the oldest plan in data/import/active still to land, or the one in PLAN, on the pro-tacts at HOST, a base URL such as https://contacts"
+  desc "Land the oldest plan in data/import/active still to land, or the one in PLAN, on the pro-tacts at the host in data/import/config.yml, a base URL such as https://contacts"
   task :execute do
     require "net/http"
-    require "uri"
     require "pro_tacts/import/execute"
     require "pro_tacts/import/http_client"
     require "pro_tacts/import/plan"
 
     plan = ImportTasks.plan(ImportTasks::TO_LAND, "to land")
-    # A bare hostname is the base URL of a server that serves HTTPS, which
-    # every deployment does; the scheme is spelled out here so the host
-    # the plan records is the one a second run is compared against.
-    uri = URI.parse(ENV.fetch("HOST"))
-    uri = URI.parse("https://#{uri}") if uri.scheme.nil?
-    host = uri.to_s
+    host = ImportTasks.host
+    uri = URI.parse(host)
     puts "landing #{plan.dir} on #{host}"
 
     Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
