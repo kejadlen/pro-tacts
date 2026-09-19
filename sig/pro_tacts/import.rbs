@@ -43,6 +43,14 @@ module ProTacts
       end
     end
 
+    class Config
+      attr_reader host: String
+
+      def self.members: () -> Array[Symbol]
+      def self.new: (host: String) -> instance
+      def self.read: (Pathname path) -> instance
+    end
+
     class Finalize
       class Result
         attr_reader done: Integer

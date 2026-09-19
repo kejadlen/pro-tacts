@@ -55,16 +55,13 @@ module ImportTasks
   end
 
   # The host to land a plan on: the standing `host` under CONFIG, the
-  # one place a host is named. A bare hostname is the base URL of a
-  # server that serves HTTPS, which every deployment does; the scheme
-  # is spelled out here so the host a plan records is the one a second
-  # run is compared against.
+  # one place a host is named, and required at the read. A bare
+  # hostname is the base URL of a server that serves HTTPS, which
+  # every deployment does; the scheme is spelled out here so the host
+  # a plan records is the one a second run is compared against.
   #: () -> String
   def self.host
-    named = ProTacts::Import::Config.read(CONFIG).fetch("host", nil)
-    abort "no host to land on: write host: under #{CONFIG}" if named.nil?
-
-    uri = URI.parse(named)
+    uri = URI.parse(ProTacts::Import::Config.read(CONFIG).host)
     uri = URI.parse("https://#{uri}") if uri.scheme.nil?
     uri.to_s
   end

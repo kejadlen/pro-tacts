@@ -60,12 +60,12 @@ class ImportTasksTest < Minitest::Test
     end
   end
 
-  def test_no_host_in_the_config_aborts_naming_it
+  def test_a_config_without_a_host_fails_the_read
     Dir.mktmpdir do |root|
       with_import_tasks(Pathname.new(root)) do
-        _, err = capture_io { assert_raises(SystemExit) { ImportTasks.host } }
+        error = assert_raises(ArgumentError) { ImportTasks.host }
 
-        assert_equal "no host to land on: write host: under data/import/config.yml\n", err
+        assert_equal "data/import/config.yml: does not exist", error.message
       end
     end
   end
