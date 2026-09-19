@@ -88,10 +88,10 @@ module ProTacts
     GroupEdit = Data.define(:group_id, :position, :line)
 
     # Everything the store cannot rebuild, read at one moment: the
-    # stored cards by id, the birthdays by card id, and the groups.
-    # What `rake db:dump` writes (tasks/db.rake).
+    # stored cards by id, the birthdays by card id, the groups, and the
+    # book names by login. What `rake db:dump` writes (tasks/db.rake).
     # @rbs skip
-    Snapshot = Data.define(:cards, :birthdays, :groups)
+    Snapshot = Data.define(:cards, :birthdays, :groups, :book_names)
 
     # A group as the admin screens read one: its own row, the lines it
     # lends in the order it lends them, and its members' card ids. The
@@ -268,6 +268,7 @@ module ProTacts
           },
           birthdays: birthdays_by_id,
           groups: all_groups,
+          book_names: all_book_names,
         )
       end
     end
@@ -1448,6 +1449,18 @@ module ProTacts
       else
         birthdays.where(card_id: id).delete
       end
+    end
+
+    # Every book name, keyed by login, for the dump — the one read that
+    # wants them all (docs/plans/2026-09-19-book-names-in-the-dump.md).
+    # Ordered here rather than by the caller, the birthdays' arrangement
+    # reversed: nothing else reads this, so the order a dumped file
+    # needs belongs with the read.
+    #: () -> Hash[String, String]
+    def all_book_names
+      book_names.order(:login).all.to_h {
+        [it.fetch(:login).to_s, it.fetch(:name).to_s] #: [String, String]
+      }
     end
 
     # Every birthday, keyed by card, for the listing reads that compose

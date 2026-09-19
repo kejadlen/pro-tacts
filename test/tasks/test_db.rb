@@ -12,15 +12,17 @@ require "pro_tacts/vcard"
 class DbTasksTest < Minitest::Test
   AIDEN = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
 
-  # The stored card as its bytes, and the two things beside it that no
-  # card carries: the birthday, in a shape no client is sent, and the
-  # group with what it lends and who it lends to.
+  # The stored card as its bytes, and the three things beside it that no
+  # card carries: the birthday, in a shape no client is sent, the group
+  # with what it lends and who it lends to, and the name a login's book
+  # goes by.
   def test_the_dump_writes_what_the_store_cannot_rebuild
     with_store do |store, root|
       store.put("aiden", vcard(AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04\r\nEND:VCARD\r\n")))
       group = store.create_group(name: "Booles")
       store.set_group_lines(group, ["NOTE:a household"])
       store.add_member(group, "aiden")
+      store.name_book("alpha@example.com", "Alpha Chen")
 
       dump(root)
 
@@ -28,6 +30,19 @@ class DbTasksTest < Minitest::Test
       assert_equal({"aiden" => {"year" => 1985, "month" => 4}}, YAML.safe_load((root / "dump" / "birthdays.yml").read))
       assert_equal({"name" => "Booles", "lines" => ["NOTE:a household"], "members" => ["aiden"]},
         YAML.safe_load((root / "dump" / "groups" / "#{group}.yml").read))
+      assert_equal({"alpha@example.com" => "Alpha Chen"}, YAML.safe_load((root / "dump" / "book_names.yml").read))
+    end
+  end
+
+  # A deployment that has named no book still gets the file, so the
+  # dump says there are none rather than leaving it to a missing file.
+  def test_a_store_that_has_named_no_book_dumps_the_file_anyway
+    with_store do |store, root|
+      store.put("aiden", vcard(AIDEN))
+
+      dump(root)
+
+      assert_equal({}, YAML.safe_load((root / "dump" / "book_names.yml").read))
     end
   end
 

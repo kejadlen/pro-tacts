@@ -2130,12 +2130,14 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN_BORN}) do |store|
       group = store.create_group(name: "Booles")
       store.add_member(group, "aiden")
+      store.name_book("alpha@example.com", "Alpha Chen")
 
       snapshot = store.snapshot
 
       assert_equal({"aiden" => AIDEN}, snapshot.cards)
       assert_equal({"aiden" => ProTacts::Birthday.new(year: 1985, month: 4, day: 12)}, snapshot.birthdays)
       assert_equal [["Booles", ["aiden"]]], snapshot.groups.map { [it.name, it.members] }
+      assert_equal({"alpha@example.com" => "Alpha Chen"}, snapshot.book_names)
     end
   end
 

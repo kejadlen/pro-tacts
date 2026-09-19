@@ -50,8 +50,9 @@ module ProTacts
       attr_reader cards: Hash[String, String]
       attr_reader birthdays: Hash[String, Birthday]
       attr_reader groups: Array[Group]
+      attr_reader book_names: Hash[String, String]
 
-      def self.new: (cards: Hash[String, String], birthdays: Hash[String, Birthday], groups: Array[Group]) -> instance
+      def self.new: (cards: Hash[String, String], birthdays: Hash[String, Birthday], groups: Array[Group], book_names: Hash[String, String]) -> instance
     end
 
     class GroupEdit

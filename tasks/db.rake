@@ -1,6 +1,7 @@
 # A readable copy of what the store cannot rebuild: each stored card as
-# its bytes, the birthdays, and the groups, split the way the store
-# splits them (docs/plans/2026-09-12-database-dump.md). cards/ and
+# its bytes, the birthdays, the groups, and the book names, split the
+# way the store splits them (docs/plans/2026-09-12-database-dump.md,
+# docs/plans/2026-09-19-book-names-in-the-dump.md). cards/ and
 # groups/ are made to hold exactly what the store holds, so a dump kept
 # in version control shows deletions too; anything else in the
 # directory is left alone.
@@ -23,7 +24,7 @@ directory cards.to_s
 directory groups.to_s
 
 namespace :db do
-  desc "Dump the cards, birthdays, and groups into #{dump} and commit them there (DUMP=path to move it)"
+  desc "Dump the cards, birthdays, groups, and book names into #{dump} and commit them there (DUMP=path to move it)"
   task dump: [cards.to_s, groups.to_s] do
     require "yaml"
     require "pro_tacts/store"
@@ -42,6 +43,8 @@ namespace :db do
       dump_directory(groups, snapshot.groups.to_h { |group|
         ["#{group.id}.yml", YAML.dump({"name" => group.name, "lines" => group.lines, "members" => group.members})]
       })
+
+      dump_file(dump / "book_names.yml", YAML.dump(snapshot.book_names))
     end
     commit_dump(dump)
     puts "dumped #{database} into #{dump}"

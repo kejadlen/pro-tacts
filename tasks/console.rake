@@ -6,7 +6,7 @@
 #
 # Before the prompt, the dump is taken, and taking it is committing it
 # (tasks/db.rake), so a session starts from a recorded snapshot of the
-# three things the store cannot rebuild and a mistake at the prompt is
+# four things the store cannot rebuild and a mistake at the prompt is
 # a revert in the dump's repository rather than a restore from backup.
 # db:dump raising is what keeps the console from opening on a session
 # its safety net never armed.
