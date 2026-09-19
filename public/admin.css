@@ -564,14 +564,20 @@ img.avatar {
    them — the same pairing the xl rule below makes at its scale.
    line-height 1, because the base sheet's 1.55 is inherited here and
    flex centers the line box it grows, not the glyphs; initials are
-   the only text an avatar holds, at this the only size they render.
-   And a hair of left padding, because the centering is exact against
-   the text's advance width — whose trailing side bearing reads as
-   blank — so the ink sits a touch left of the circle's middle. */
+   the only text an avatar holds, at this the only size they render. */
 .avatar[data-size="lg"] {
   --_size: 2.5rem;
   font-size: var(--gl-step--1);
   line-height: 1;
+}
+
+/* The initials' optical nudge, split out of the rule above because a
+   picture shares the class: a hair of left padding moves the image's
+   content box off the middle of the circle object-fit means to fill,
+   and only the text needs it — the centering is exact against the
+   text's advance width, whose trailing side bearing reads as blank,
+   so the ink sits a touch left of the circle's middle without it. */
+span.avatar[data-size="lg"] {
   padding-left: 0.125rem;
 }
 
