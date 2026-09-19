@@ -42,6 +42,16 @@ module ProTacts
       text.gsub(/\\[\\;,n]/) { it == "\\n" ? "\n" : it[1..].to_s }
     end
 
+    # Takes Apple's own label wrapping back off: the vocabulary Contacts
+    # owns arrives as `_$!<Spouse>!$_`, and a person's own label as they
+    # typed it, which passes through untouched. Not vCard's syntax but
+    # a label's reading, so it lives beside the escapes both its
+    # callers reach it through.
+    #: (String text) -> String
+    def self.unwrap(text)
+      text.sub(/\A_\$!<(.*)>!\$_\z/, "\\1")
+    end
+
     # Splits a structured value's ";"-delimited components (RFC 2426
     # section 3.2.1, e.g. ADR and N) without breaking on an escaped
     # "\;" — the writer's half of the split, over the still-escaped

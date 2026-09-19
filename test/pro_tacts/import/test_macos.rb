@@ -101,7 +101,7 @@ class ImportMacosTest < Minitest::Test
       lines = ["TEL;type=CELL;type=VOICE;type=pref:+12532189075", "TEL;type=CELL;type=VOICE;type=pref:+12532189076"]
       plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
 
-      assert_equal ["+12532189075", "+12532189076"], plan.card(plan.contacts.first.id).phones
+      assert_equal [{"number" => "+12532189075"}, {"number" => "+12532189076"}], plan.card(plan.contacts.first.id).phones
     end
   end
 
@@ -160,7 +160,9 @@ class ImportMacosTest < Minitest::Test
   end
 
   # A work number is a number, and one Contacts labelled is too — the
-  # label going where a labelled email's and address's go.
+  # label riding the annotation rail to the row it names, where a
+  # labelled email's and address's are still dropped
+  # (docs/plans/2026-09-18-phone-labels.md).
   def test_a_work_number_and_a_labelled_one_are_phones
     in_tmpdir do |dir|
       lines = [
@@ -170,7 +172,22 @@ class ImportMacosTest < Minitest::Test
       ]
       plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
 
-      assert_equal ["+1 203-536-3941", "(206) 651-4359"], plan.card(plan.contacts.first.id).phones
+      assert_equal [{"number" => "+1 203-536-3941"}, {"number" => "(206) 651-4359", "label" => "school"}],
+        plan.card(plan.contacts.first.id).phones
+    end
+  end
+
+  # Apple's own label vocabulary arrives wrapped, and a phone's label
+  # unwraps the way a related name's does.
+  def test_a_phone_with_an_apple_label_unwraps_it
+    in_tmpdir do |dir|
+      lines = [
+        "item1.TEL;type=pref:+12532189075",
+        "item1.X-ABLabel:_$!<Other>!$_"
+      ]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      assert_equal [{"number" => "+12532189075", "label" => "Other"}], plan.card(plan.contacts.first.id).phones
     end
   end
 
@@ -185,7 +202,7 @@ class ImportMacosTest < Minitest::Test
       ]
       plan = Macos.plan(dir, records, created_at: CREATED_AT)
 
-      assert_equal [["+12532189075"], ["(206) 651-4359"]],
+      assert_equal [[{"number" => "+12532189075"}], [{"number" => "(206) 651-4359"}]],
         plan.contacts.map { plan.card(it.id).phones }
     end
   end
@@ -226,7 +243,7 @@ class ImportMacosTest < Minitest::Test
       ]
       plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
 
-      assert_equal ["+1 203-536-3941", "(206) 651-4359", "+12532189075"], plan.card(plan.contacts.first.id).phones
+      assert_equal [{"number" => "+1 203-536-3941"}, {"number" => "(206) 651-4359"}, {"number" => "+12532189075"}], plan.card(plan.contacts.first.id).phones
     end
   end
 
@@ -367,7 +384,7 @@ class ImportMacosTest < Minitest::Test
       lines = ["TEL;type=WORK;type=VOICE:+1 (425) 707-1712 X71712"]
       plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
 
-      assert_equal ["+1 (425) 707-1712 X71712"], plan.card(plan.contacts.first.id).phones
+      assert_equal [{"number" => "+1 (425) 707-1712 X71712"}], plan.card(plan.contacts.first.id).phones
     end
   end
 

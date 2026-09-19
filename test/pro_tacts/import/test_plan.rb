@@ -13,7 +13,7 @@ class ImportPlanTest < Minitest::Test
   CREATED_AT = Time.utc(2026, 9, 16, 18, 4, 12)
 
   SOURCE = {"identifier" => "A:ABPerson", "vcard" => "BEGIN:VCARD\r\nEND:VCARD\r\n", "note" => nil, "contact" => {}}
-  ADA = ProTacts::Import::Card.new(first: "Ada", last: "Lovelace", nickname: nil, birthday: nil, phones: ["+12532189075"], emails: [], addresses: [], note: nil, photo: false, groups: [], source: SOURCE)
+  ADA = ProTacts::Import::Card.new(first: "Ada", last: "Lovelace", nickname: nil, birthday: nil, phones: [{"number" => "+12532189075"}], emails: [], addresses: [], note: nil, photo: false, groups: [], source: SOURCE)
 
   def entry(id, source_id: "#{id}:ABPerson", card: ADA)
     Plan::Entry.new(id:, source_id:, card:)
@@ -66,7 +66,7 @@ class ImportPlanTest < Minitest::Test
         nickname:
         birthday:
         phones:
-        - "+12532189075"
+        - number: "+12532189075"
         emails: []
         addresses: []
         note:

@@ -35,6 +35,14 @@ class VCardTest < Minitest::Test
     assert_equal "a\nb\nc", ProTacts::VCard.unescape("a\\nb\\nc")
   end
 
+  # Apple wraps its own label vocabulary and nobody else's does; a
+  # person's own label passes through untouched.
+  def test_unwrap_takes_apples_own_label_wrapping_off
+    assert_equal "Spouse", ProTacts::VCard.unwrap("_$!<Spouse>!$_")
+    assert_equal "Google Voice", ProTacts::VCard.unwrap("Google Voice")
+    assert_equal "_$!<Spouse", ProTacts::VCard.unwrap("_$!<Spouse")
+  end
+
   def test_escape_and_unescape_round_trip
     Hegel.test do |tc|
       value = tc.draw(text(max_size: 300))

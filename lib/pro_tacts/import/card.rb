@@ -4,6 +4,7 @@ require "yaml"
 require "pro_tacts/admin/card_form"
 require "pro_tacts/birthday"
 require "pro_tacts/contact"
+require "pro_tacts/vcard"
 
 module ProTacts
   module Import
@@ -32,6 +33,12 @@ module ProTacts
       # No post office box: no screen shows one either.
       ADDRESS_KEYS = %w[extended street locality region postal_code country].freeze #: Array[String]
 
+      # A phone's parts: a number, and the label the source card's
+      # X-ABLabel gave the row, left out rather than written empty
+      # (docs/plans/2026-09-18-phone-labels.md, "The plan card carries
+      # one").
+      PHONE_KEYS = %w[number label].freeze #: Array[String]
+
       BIRTHDAY = /\A(\d{4})-(\d{2})-(\d{2})\z/ #: Regexp
 
       # A picture's format as `PHOTO`'s TYPE names it, read off the
@@ -59,7 +66,7 @@ module ProTacts
         invalid.("needs a first or last name") if first.strip.empty? && last.strip.empty?
         invalid.("nickname must be text, or blank") unless nickname.nil? || nickname.is_a?(String)
         invalid.("birthday must be a quoted YYYY-MM-DD, or blank") unless birthday.nil? || birthday.is_a?(String) && birthday.match?(BIRTHDAY)
-        invalid.("phones must be a list of quoted numbers") unless texts?(phones)
+        invalid.("phones must be a list, each with a quoted number and an optional label") unless phones.is_a?(Array) && phones.all? { phone?(it) }
         invalid.("emails must be a list of addresses") unless texts?(emails)
         addresses.is_a?(Array) && addresses.all? { address?(it) } or
           invalid.("addresses must be a list, each with any of #{ADDRESS_KEYS.join(", ")}")
@@ -86,6 +93,16 @@ module ProTacts
           value.values.all?(String) && value.values.any? { !it.strip.empty? }
       end
 
+      # The shape Macos.entry writes and no other: a number is the one
+      # fact a phone cannot lack, and a label written at all cannot be
+      # blank — the builder leaves it out rather than writing it empty.
+      #: (untyped value) -> bool
+      def self.phone?(value)
+        value.is_a?(Hash) && (value.keys - PHONE_KEYS).empty? && value.values.all?(String) &&
+          !value.fetch("number", "").strip.empty? &&
+          (value["label"].nil? || !value["label"].strip.empty?)
+      end
+
       #: (untyped value) -> bool
       def self.source?(value)
         value.is_a?(Hash) && value.keys.sort == SOURCE_KEYS.sort &&
@@ -93,7 +110,7 @@ module ProTacts
           [NilClass, String].include?(value.fetch("note").class) && value.fetch("contact").is_a?(Hash)
       end
 
-      private_class_method :texts?, :address?, :source?
+      private_class_method :texts?, :address?, :phone?, :source?
 
       # The contact the web create and then the editor's add rows would
       # make of these fields. The birthday rides beside the card as the
@@ -107,12 +124,29 @@ module ProTacts
         created = Contact.new(id:, stored: Admin::CardForm.new_card(id, first, "", last), birthday: nil, inherited: [])
         stored = Admin::CardForm.contact_card(created, first, "", last, {
           "nickname" => nickname.to_s, "note" => note.to_s,
-          "new_phone" => phones, "new_email" => emails, "new_address" => addresses
+          "new_phone" => phones.filter_map { it["label"] ? nil : it.fetch("number") },
+          "new_email" => emails, "new_address" => addresses
         })
-        # The picture has no field on any form, the editor showing one
-        # rather than taking one, so its line is written here.
-        stored = stored.insert([picture].compact)
+        # The picture and a labeled phone are written here for the same
+        # reason: no form has a field for either. A label is two lines
+        # under one property group, the shape macOS keeps
+        # (docs/plans/2026-09-18-phone-labels.md, "The plan card carries
+        # one"), the numbers counting up from one on a card built from
+        # nothing — finding a free number in a card that already has
+        # groups is the editor's problem, and waits for it.
+        stored = stored.insert([picture, *labeled_phone_lines].compact)
         Contact.new(id:, stored:, birthday: born_on, inherited: [])
+      end
+
+      # The labeled phones as their grouped lines: the number and its
+      # X-ABLabel under one `item` prefix each, escaped as text is.
+      #: () -> Array[String]
+      def labeled_phone_lines
+        phones.select { it["label"] }.each.with_index(1).flat_map { |phone, index|
+          group = "item#{index}"
+          ["#{group}.TEL:#{VCard.escape(phone.fetch("number"))}\r\n",
+           "#{group}.X-ABLabel:#{VCard.escape(phone.fetch("label"))}\r\n"]
+        }
       end
 
       # The source's picture as a PHOTO line, or nil for a card that

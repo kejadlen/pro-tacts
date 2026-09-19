@@ -14,7 +14,9 @@ class ImportCardTest < Minitest::Test
     nickname: The Countess
     birthday: '1815-12-10'
     phones:
-    - "+12532189075"
+    - number: "+12532189075"
+    - number: "+17863533882"
+      label: Google Voice
     emails:
     - ada@example.com
     addresses:
@@ -48,7 +50,7 @@ class ImportCardTest < Minitest::Test
   end
 
   def test_a_card_reads_its_fields
-    assert_equal Card.new(first: "Ada", last: "Lovelace", nickname: "The Countess", birthday: "1815-12-10", phones: ["+12532189075"], emails: ["ada@example.com"], addresses: [{"street" => "12 Marylebone", "locality" => "London"}], note: "An analyst.", photo: false, groups: ["sync:*", "import-20260916T180412Z"], source: SOURCE), read(ADA)
+    assert_equal Card.new(first: "Ada", last: "Lovelace", nickname: "The Countess", birthday: "1815-12-10", phones: [{"number" => "+12532189075"}, {"number" => "+17863533882", "label" => "Google Voice"}], emails: ["ada@example.com"], addresses: [{"street" => "12 Marylebone", "locality" => "London"}], note: "An analyst.", photo: false, groups: ["sync:*", "import-20260916T180412Z"], source: SOURCE), read(ADA)
   end
 
   def test_a_card_is_the_contact_the_web_create_and_add_rows_make
@@ -66,6 +68,8 @@ class ImportCardTest < Minitest::Test
       TEL:+12532189075
       EMAIL:ada@example.com
       ADR:;;12 Marylebone;London;;;
+      item1.TEL:+17863533882
+      item1.X-ABLabel:Google Voice
       BDAY:1815-12-10
       END:VCARD
     CARD
@@ -84,7 +88,7 @@ class ImportCardTest < Minitest::Test
   end
 
   def test_a_missing_field_is_refused
-    assert_invalid ADA.sub("phones:\n- \"+12532189075\"\n", ""), "has no phones"
+    assert_invalid ADA.sub("phones:\n- number: \"+12532189075\"\n- number: \"+17863533882\"\n  label: Google Voice\n", ""), "has no phones"
   end
 
   def test_a_field_no_card_takes_is_refused
@@ -92,7 +96,34 @@ class ImportCardTest < Minitest::Test
   end
 
   def test_an_unquoted_number_is_refused
-    assert_invalid ADA.sub('"+12532189075"', "+12532189075"), "phones must be a list of quoted numbers"
+    assert_invalid ADA.sub('number: "+12532189075"', "number: +12532189075"), "phones must be a list, each with a quoted number and an optional label"
+  end
+
+  # The shape a plan built before labels carried, refused rather than
+  # read leniently: no plan is re-read, but a stale one a person lands
+  # by hand is news, not a silent loss of every number
+  # (docs/plans/2026-09-18-phone-labels.md, "The plan card carries
+  # one").
+  def test_a_bare_string_phone_is_refused
+    assert_invalid ADA.sub("phones:\n- number: \"+12532189075\"\n- number: \"+17863533882\"\n  label: Google Voice\n", "phones:\n- \"+12532189075\"\n"), "phones must be a list, each with a quoted number and an optional label"
+  end
+
+  def test_a_phone_with_no_number_is_refused
+    assert_invalid ADA.sub("- number: \"+17863533882\"\n  label: Google Voice", "- number: ''\n  label: Google Voice"), "phones must be a list"
+  end
+
+  # The label the builder leaves out rather than writes empty, an edit
+  # putting back as one.
+  def test_a_blank_label_is_refused
+    assert_invalid ADA.sub("label: Google Voice", "label: ''"), "phones must be a list"
+  end
+
+  # A label is text, escaped as text is: a comma in one must not read
+  # as structure when the card is read back.
+  def test_a_label_is_escaped_into_its_line
+    labeled = ADA.sub("label: Google Voice", "label: Work, mobile")
+
+    assert_includes read(labeled).contact("kmnuqmzxylru").vcard.to_s, "item1.X-ABLabel:Work\\, mobile\r\n"
   end
 
   def test_a_name_yaml_reads_as_something_else_is_refused

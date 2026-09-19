@@ -123,10 +123,17 @@ module ProTacts
         first, last = name(carried, source_id, unknown)
         nickname = only(carried, "NICKNAME", source_id, unknown)
         birthday = only(carried, "BDAY", source_id, unknown)
-        # A number the card left empty is a row Contacts kept the label
-        # of and nothing else, and an empty add row inserts nothing
-        # (Admin::CardForm).
-        phones = values(carried, "TEL").reject(&:empty?)
+        labels = labels_by_group(lines)
+        phones = properties(carried, "TEL").filter_map { |property|
+          number = property.text
+          # A number the card left empty is a row Contacts kept the
+          # label of and nothing else, and an empty add row inserts
+          # nothing (Admin::CardForm).
+          next if number.empty?
+
+          label = labels[property.group]
+          label ? {"number" => number, "label" => label} : {"number" => number} #: Hash[String, String]
+        }
         emails = values(carried, "EMAIL")
         addresses = properties(carried, "ADR").map { address(it) }
         source = {"identifier" => source_id, "vcard" => vcard, "note" => note, "contact" => contact}
@@ -158,12 +165,21 @@ module ProTacts
       # a label being dropped with the group it annotates.
       #: (Array[VCard::Parser::Line] lines, Array[VCard::Parser::Line] carried) -> Array[String]
       def self.related_names(lines, carried)
-        labels = properties(lines, "X-ABLabel").to_h {
-          [it.group, VCard.unescape(it.value).sub(/\A_\$!<(.*)>!\$_\z/, "\\1")] #: [String?, String]
-        }
+        labels = labels_by_group(lines)
         properties(carried, "X-ABRELATEDNAMES").map {
           label = labels[it.group]
           label ? "#{label}: #{it.text}" : it.text
+        }
+      end
+
+      # Each `item` group to the label its X-ABLabel gives it, unescaped
+      # and unwrapped of Apple's own vocabulary. The map both label
+      # readers walk — a carried TEL's label and a related name's —
+      # read off every line, an X-ABLabel never being carried itself.
+      #: (Array[VCard::Parser::Line] lines) -> Hash[String?, String]
+      def self.labels_by_group(lines)
+        properties(lines, "X-ABLabel").to_h {
+          [it.group, VCard.unwrap(VCard.unescape(it.value))] #: [String?, String]
         }
       end
 
@@ -381,7 +397,7 @@ module ProTacts
         example.delete_suffix(":#{property.value}").sub(/\Aitem\d+\./, "item#.").delete_suffix(";type=pref")
       end
 
-      private_class_method :entry, :grouped, :carried?, :name, :noted, :related_names, :only, :properties, :values, :address, :value?, :dropped_value?, :example, :form
+      private_class_method :entry, :grouped, :carried?, :name, :noted, :related_names, :labels_by_group, :only, :properties, :values, :address, :value?, :dropped_value?, :example, :form
     end
   end
 end

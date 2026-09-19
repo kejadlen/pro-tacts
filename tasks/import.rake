@@ -44,9 +44,10 @@ namespace :import do
 
       records = ProTacts::Import::Macos.read(limit:)
       plan = ProTacts::Import::Macos.plan(dir, records, created_at:)
+      phone = ->(row) { [row.fetch("number"), row["label"]].compact.join(" ") }
       plan.contacts.each do |contact|
         card = plan.card(contact.id)
-        puts "#{contact.id}  #{contact.name}#{card.phones.map { "  #{it}" }.join}"
+        puts "#{contact.id}  #{contact.name}#{card.phones.map { "  #{phone.call(it)}" }.join}"
       end
       puts "#{plan.contacts.size} contacts planned in #{dir}"
     rescue ProTacts::Import::Macos::Unknown => error
