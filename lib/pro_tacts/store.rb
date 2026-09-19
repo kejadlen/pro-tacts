@@ -149,6 +149,12 @@ module ProTacts
     # of bad draws — better to say so than to spin.
     GROUP_ID_ATTEMPTS = 8 #: Integer
 
+    # How many ids a re-id draws before giving up. Twelve letters are
+    # one of 2^48, so GROUP_ID_ATTEMPTS' reasoning arrives intact at a
+    # wider alphabet: a first collision is a broken generator rather
+    # than a run of bad draws.
+    CONTACT_ID_ATTEMPTS = 8 #: Integer
+
     # The property names whose value is structured rather than free
     # text (RFC 2426 section 3.2.1), among the two a group may lend:
     # ADR is components, NOTE is text (db/migrations/004_groups.rb).
@@ -574,6 +580,69 @@ module ProTacts
         record(id, "delete", nil, CardDiff.between(before&.vcard, nil)) if deleted
         deleted
       end
+    end
+
+    # Gives a contact the id this server would have minted for it, and
+    # hands the new id back. Every row that names the card moves with
+    # it — the birthday, the memberships, the index, and the change
+    # log's history, because the contact is the same contact and its
+    # page keeps its record. The stored card's UID is rewritten to
+    # match: a PUT must carry the id as its UID (Web#write_card), so a
+    # card still spelling the old id could never be written again. A
+    # card with no UID, or several, comes out with the one line — the
+    # shape every write through #put already leaves.
+    #
+    # What a syncing client hears is written new rather than moved:
+    # the old href's delete beside the new one's put, one transaction,
+    # because a token silently skips whatever the log missed (see
+    # #put). Without the pair, a client holding an older token would
+    # keep serving the dead href out of its cache forever.
+    #: (String id) -> String
+    def reid(id)
+      # `sole` rather than #contact's nil-for-404: a read whose filter
+      # means one row, and no row here is the caller's mistake to hear
+      # about as Sequel::NoMatchingRow, not a request to answer.
+      before = contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
+
+      CONTACT_ID_ATTEMPTS.times do
+        new_id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
+        # A card with no UID line gains one here, and several collapse
+        # to it: #insert lands it before END:VCARD, the envelope's own
+        # last word, where every card this server writes leaves it.
+        _, rest = before.stored.extract("UID")
+        stored = rest.insert(["UID:#{new_id}\r\n"])
+        begin
+          @database.transaction do
+            # Deferred rather than ordered: every child row names the id
+            # the cards row is leaving, so no sequence of plain updates
+            # satisfies a foreign key that checks per row — the children
+            # cannot move before the parent does, and the parent cannot
+            # move while the children remain. `defer_foreign_keys` is
+            # the one FK pragma that works inside a transaction (it
+            # resets at commit); `foreign_keys` itself is a no-op there
+            # (db/migrations/005_group_identity.rb records the reason).
+            @database.run("PRAGMA defer_foreign_keys = ON")
+            cards.where(id:).update(id: new_id, vcard: stored.to_s, updated_at: NOW)
+            birthdays.where(card_id: id).update(card_id: new_id)
+            group_members.where(card_id: id).update(card_id: new_id)
+            change_log.where(card_id: id).update(card_id: new_id)
+            # The index is a projection, dropped and re-derived below
+            # rather than moved — the deal #reindex always gives it. The
+            # parameters follow their properties away on the cascade.
+            card_properties.where(card_id: id).delete
+            after = contact_from(cards.where(id: new_id).sole, birthday_of(new_id), inherited_of(new_id))
+            record(id, "delete", nil, CardDiff.between(before.vcard, nil))
+            record(new_id, "put", after.etag, CardDiff.between(before.vcard, after.vcard))
+            reindex(new_id, stored)
+          end
+          return new_id
+        rescue Sequel::UniqueConstraintViolation
+          # The minted id collided with a card already holding it; the
+          # only unique constraint this write can hit.
+          next
+        end
+      end
+      raise "no free contact id in #{CONTACT_ID_ATTEMPTS} draws"
     end
 
     # Creates a group and hands back the id it was given. The name is

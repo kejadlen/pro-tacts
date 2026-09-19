@@ -49,9 +49,7 @@ module ProTacts
           if first.empty? && last.empty?
             dashboard(query: r.params["q"], notice: "A contact needs a name.")
           else
-            # Store#put overwrites, so the width has to make a collision
-            # unthinkable rather than caught: 48 bits, for a family's book.
-            id = ChangeId.mint(12)
+            id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
             store.put(id, Admin::CardForm.new_card(id, first, middle, last))
             r.redirect "/contacts/#{id}", 303
           end

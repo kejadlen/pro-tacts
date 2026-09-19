@@ -20,6 +20,9 @@ class StoreTest < Minitest::Test
   # UTC ISO 8601 to the millisecond, which is what SQLite is asked for.
   TIMESTAMP = /\A\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z\z/
   ZED = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Zed\r\nUID:znorth\r\nEND:VCARD\r\n"
+  # The id a macOS create mints into both the URI and the card's UID.
+  UUID = "AB12C345-6789-0DEF-1234-567890ABCDEF" #: String
+  UUID_CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:#{UUID}\r\nEND:VCARD\r\n" #: String
 
   # A store on disk rather than in memory: WAL, the busy timeout, and
   # reopening a database are all part of what is under test.
@@ -442,6 +445,65 @@ class StoreTest < Minitest::Test
       store.delete("aiden")
 
       assert_equal %w[delete put], store.changes_of("aiden").map { it.action }
+    end
+  end
+
+  ## Re-id
+
+  def test_a_reid_moves_the_contact_onto_a_minted_id
+    with_store({UUID => UUID_CARD}) do |store|
+      new_id = store.reid(UUID)
+
+      assert ProTacts::ChangeId.minted?(new_id)
+      assert_nil store.contact(UUID)
+      assert_equal "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:#{new_id}\r\nEND:VCARD\r\n",
+                   store.contact(new_id).vcard.to_s
+    end
+  end
+
+  def test_a_reid_moves_the_birthday_the_memberships_and_the_index
+    with_store({UUID => "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:#{UUID}\r\nBDAY:1985-04-12\r\nEND:VCARD\r\n"}) do |store|
+      group = store.create_group(name: "Booles")
+      store.add_member(group, UUID)
+
+      new_id = store.reid(UUID)
+
+      assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), store.contact(new_id).birthday
+      assert_equal [new_id], store.group(group).members
+      assert_equal new_id, store.card_id_with_uid(new_id)
+      assert database(store)[:card_properties].where(card_id: UUID).empty?
+    end
+  end
+
+  def test_a_reid_tells_the_log_what_a_syncing_client_must_hear
+    with_store({UUID => UUID_CARD}) do |store|
+      new_id = store.reid(UUID)
+
+      # The original put now names the new id, and the delete beside
+      # the new put is the pair that moves a client off the old href.
+      assert_equal [[new_id, "put"], [UUID, "delete"], [new_id, "put"]],
+                   store.changes.map { [it.card_id, it.action] }
+      # An old token's delta: both hrefs, the old one to hear it is gone.
+      assert_equal [new_id, UUID], store.changes(after: 0).map { it.card_id }.uniq
+
+      assert_equal store.contact(new_id).etag, store.changes.last.etag
+      delete = store.changes.fetch(1)
+      assert_equal UUID_CARD.lines.map(&:chomp), delete.diff.removed
+      assert_equal %w[put put], store.changes_of(new_id).map { it.action }
+    end
+  end
+
+  def test_a_reid_gives_a_card_with_no_uid_line_one
+    with_store({"aiden" => "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nEND:VCARD\r\n"}) do |store|
+      new_id = store.reid("aiden")
+
+      assert_equal "UID:#{new_id}", store.contact(new_id).vcard.to_s.lines.fetch(-2).chomp
+    end
+  end
+
+  def test_reiding_an_unknown_contact_raises
+    with_store({}) do |store|
+      assert_raises(Sequel::NoMatchingRow) { store.reid("nope") }
     end
   end
 
