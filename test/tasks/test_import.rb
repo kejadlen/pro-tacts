@@ -35,9 +35,22 @@ class ImportTasksTest < Minitest::Test
       assert_includes out, "macos-20260916T180412Z  0/1 contacts\n"
       assert_includes out, "next: import:execute would land macos-20260916T180412Z\n"
       assert_includes out, "next: import:macos:finalize would finish macos-20260901T000000Z\n"
+      assert_includes out, "done:\nmacos-20260831T000000Z  2 contacts\n"
       assert (root / "data/import/done/macos-20260831T000000Z/plan.yml").file?
       refute (plans / "macos-20260831T000000Z").directory?
-      refute_includes out, "macos-20260831T000000Z  "
+      refute_includes out, "macos-20260831T000000Z  2/2 contacts"
+    end
+  end
+
+  def test_status_with_only_done_plans_reports_them_alone
+    Dir.mktmpdir do |root|
+      root = Pathname.new(root)
+      plan = Plan.write(root / "data/import/done/macos-20260831T000000Z", source: "macos", created_at: Time.utc(2026, 8, 31), entries: [entry("qxqmqmqmqmqm")])
+      plan.contacts.each { it.status or plan.record(it.id, Plan::DONE) }
+
+      out, = run_status(root)
+
+      assert_equal "done:\nmacos-20260831T000000Z  1 contacts\n", out
     end
   end
 

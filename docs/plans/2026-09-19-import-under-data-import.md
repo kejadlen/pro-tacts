@@ -48,6 +48,6 @@ still finishes and files away; nothing is rewritten on disk.
 A plan whose every contact is done is finished (`Plan#done?`). The
 finalize task files one away into `done/` as its last step, and the
 status read sweeps any a dead run left in `active/` before listing —
-so what status lists is what still has work, and the finished plans
-are out of the way but kept, with their cards and sources, for as
-long as `data/` is.
+so its in-flight list is what still has work, and the finished plans
+appear under a `done:` section below, kept with their cards and
+sources for as long as `data/` is.

@@ -39,8 +39,9 @@ rake import:macos:finalize # Finalize the contacts the oldest
 rake import:execute   # Land the oldest plan still to land on a host
                       # (host in data/import/config.yml; PLAN=dir for
                       # another)
-rake import:status    # Summarize the plans in data/import and what
-                      # execute and finalize would carry next
+rake import:status    # Summarize the plans in data/import — in
+                      # flight and filed away done — and what execute
+                      # and finalize would carry next
 rake profile:install  # Download carddav.mobileconfig from the app and
                       # stage it for approval
 ```

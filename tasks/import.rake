@@ -95,37 +95,51 @@ namespace :import do
     end
   end
 
-  desc "Summarize the plans in data/import and what execute and finalize would carry next"
+  desc "Summarize the plans in data/import — in flight and filed away done — and what execute and finalize would carry next"
   task :status do
     require "pro_tacts/import/plan"
 
     # A finished plan files away; this sweeps any a dead run left in
-    # active/, so what is listed is what still has work — which is also
-    # why nothing here is ever finished: the sweep took it.
+    # active/, so the in-flight list below is what still has work —
+    # which is also why nothing in it is ever finished: the sweep took
+    # it.
     ProTacts::Import::Plan.all(ImportTasks::Config::ACTIVE).each do |plan|
       ImportTasks.file_away(plan) if plan.done?
     end
 
     plans = ProTacts::Import::Plan.all(ImportTasks::Config::ACTIVE)
-    if plans.empty?
+    filed = ProTacts::Import::Plan.all(ImportTasks::Config::DONE)
+    if plans.empty? && filed.empty?
       puts "no plans in #{ImportTasks::Config::ACTIVE}; run rake import:macos:plan"
       next
     end
 
-    # One line per plan, as far along as it is: the fraction counts
-    # everything past “planned”, because from “landed” on the card is
-    # on the host — which is the state a glance wants. The plan names
-    # are the directories', copy-pasteable into PLAN=.
-    plans.each do |plan|
-      done = plan.contacts.size - plan.with_status(nil).size
-      puts "#{plan.dir.basename}  #{done}/#{plan.contacts.size} contacts"
-    end
+    # One line per plan in flight, as far along as it is: the fraction
+    # counts everything past “planned”, because from “landed” on the
+    # card is on the host — which is the state a glance wants. The
+    # plan names are the directories', copy-pasteable into PLAN=.
+    in_flight = plans.map {
+      carried = it.contacts.size - it.with_status(nil).size
+      "#{it.dir.basename}  #{carried}/#{it.contacts.size} contacts"
+    }
 
-    puts ""
     landing = plans.find(&ImportTasks::TO_LAND)
     finalizing = plans.find(&ImportTasks::TO_FINALIZE)
-    puts "next: import:execute would land #{landing.dir.basename}" if landing
-    puts "next: import:macos:finalize would finish #{finalizing.dir.basename}" if finalizing
+    next_up = [
+      ("next: import:execute would land #{landing.dir.basename}" if landing),
+      ("next: import:macos:finalize would finish #{finalizing.dir.basename}" if finalizing),
+    ].compact
+
+    # What was carried through, whole counts because every contact
+    # reached the final state — the fraction above can never appear
+    # here.
+    done = filed.map { "#{it.dir.basename}  #{it.contacts.size} contacts" }
+
+    # Sections separated by a blank line only where one follows
+    # another, so a status with no plans in flight says nothing of
+    # next steps and still reports its history.
+    sections = [in_flight, next_up, done.empty? ? [] : ["done:", *done]].reject(&:empty?)
+    puts sections.map { it.join("\n") }.join("\n\n")
   end
 
   desc "Land the oldest plan in data/import/active still to land, or the one in PLAN, on the pro-tacts at the host in data/import/config.yml, a base URL such as https://contacts"
