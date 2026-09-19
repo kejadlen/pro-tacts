@@ -90,7 +90,7 @@ namespace :import do
       puts "#{result.done} contacts finalized"
       if plan.done?
         ImportTasks.file_away(plan)
-        puts "filed #{plan.dir.basename} away in #{ImportTasks::DONE}"
+        puts "filed #{plan.dir.basename} away in #{ImportTasks::Config::DONE}"
       end
     end
   end
