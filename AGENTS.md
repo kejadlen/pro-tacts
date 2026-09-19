@@ -31,13 +31,14 @@ rake console          # irb with the store open on the configured database
                       # safety net for what the session might do there
 rake import:macos:plan # Plan importing this Mac's iCloud contacts
                       # (LIMIT=n; reads Contacts, so leave it to the user)
-rake import:macos:remove # Delete from this Mac the contacts the oldest
-                      # landed plan imported (PLAN=dir for another;
-                      # writes Contacts, so leave it to the user)
+rake import:macos:clear # Clear this Mac of the contacts the oldest
+                      # landed plan imported, filing the plan away
+                      # (PLAN=dir for another; writes Contacts, so
+                      # leave it to the user)
 rake import:execute   # Land the oldest plan still to land on a host
                       # (HOST=https://contacts; PLAN=dir for another)
-rake import:status    # Summarize the imports in data/imports and what
-                      # execute and remove would carry next
+rake import:status    # Summarize the plans in data/import and what
+                      # execute and clear would carry next
 rake profile:install  # Download carddav.mobileconfig from the app and
                       # stage it for approval
 ```

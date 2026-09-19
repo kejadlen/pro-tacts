@@ -8,7 +8,7 @@ require "pro_tacts/import/card"
 module ProTacts
   module Import
     # One import, as a directory: what a source builder decided, and how
-    # far execute and remove have carried it
+    # far execute and clear have carried it
     # (docs/plans/2026-09-16-importing-from-macos.md).
     class Plan
       # @rbs @dir: Pathname
@@ -22,7 +22,7 @@ module ProTacts
       Entry = Data.define(:id, :source_id, :card)
 
       # A contact as the plan lists it, with the last step it reached:
-      # nil, then landed, imported, and removed, in that order. The name is
+      # nil, then landed, imported, and cleared, in that order. The name is
       # the card's when the plan was built, written down so a person
       # reading plan.yml can tell which line is whose without opening a
       # card; nothing reads it back to decide anything.
@@ -33,6 +33,23 @@ module ProTacts
 
       # Store::EVERYONE, spelled out so a plan loads no database.
       EVERYONE = "sync:*" #: String
+
+      # A contact's final state: on the host, in its groups, and off
+      # this Mac. A plan whose every contact has reached it is done and
+      # files away under done/ (tasks/import.rake).
+      CLEARED = "cleared" #: String
+
+      # The spelling of CLEARED plans recorded before the state was
+      # named for what it is; read as it so a plan built then files
+      # away now.
+      REMOVED = "removed" #: String
+
+      # Whether the plan has carried every contact through: nothing
+      # left for execute or clear to do.
+      #: () -> bool
+      def done?
+        contacts.all? { [CLEARED, REMOVED].include?(it.status) }
+      end
 
       #: (Pathname dir, source: String, created_at: Time, entries: Array[Entry]) -> Plan
       def self.write(dir, source:, created_at:, entries:)

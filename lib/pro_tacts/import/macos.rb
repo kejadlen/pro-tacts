@@ -68,7 +68,7 @@ module ProTacts
         run("read", *[limit&.to_s].compact)
       end
 
-      # This Mac as `Remove` speaks to it: the contacts it still has, by
+      # This Mac as `Clear` speaks to it: the contacts it still has, by
       # source id, and the delete that takes them off it.
       module Mac
         #: (Array[String] source_ids) -> Hash[String, untyped]

@@ -14,27 +14,30 @@ class ImportStatusTaskTest < Minitest::Test
 
   def entry(id) = Plan::Entry.new(id:, source_id: "#{id}:ABPerson", card: ADA)
 
-  def test_status_counts_each_plans_contacts_and_names_what_comes_next
+  def test_status_counts_each_plans_contacts_and_files_finished_plans_away
     Dir.mktmpdir do |root|
       root = Pathname.new(root)
-      imports = root / "data" / "imports"
-      # A plan carried all the way off the Mac, one mid-flight — one
-      # contact through to the Mac-cleanup step, one past it — and one
-      # freshly built with everything still to do.
-      through = Plan.write(imports / "macos-20260831T000000Z", source: "macos", created_at: Time.utc(2026, 8, 31), entries: [entry("qxqmqmqmqmqm"), entry("zzzzzzzzzzzz")])
-      through.contacts.each { it.status or through.record(it.id, "removed") }
-      underway = Plan.write(imports / "macos-20260901T000000Z", source: "macos", created_at: Time.utc(2026, 9, 1), entries: [entry("kmnuqmzxylru"), entry("vmnlryyvktux")])
+      plans = root / "data" / "import" / "plans"
+      # A plan carried all the way off the Mac — done, so swept into
+      # done/ rather than listed — one mid-flight with a contact through
+      # to the Mac-clearing step and one past it, and one freshly built
+      # with everything to do.
+      through = Plan.write(plans / "macos-20260831T000000Z", source: "macos", created_at: Time.utc(2026, 8, 31), entries: [entry("qxqmqmqmqmqm"), entry("zzzzzzzzzzzz")])
+      through.contacts.each { it.status or through.record(it.id, Plan::CLEARED) }
+      underway = Plan.write(plans / "macos-20260901T000000Z", source: "macos", created_at: Time.utc(2026, 9, 1), entries: [entry("kmnuqmzxylru"), entry("vmnlryyvktux")])
       underway.record("kmnuqmzxylru", "imported")
-      underway.record("vmnlryyvktux", "removed")
-      Plan.write(imports / "macos-20260916T180412Z", source: "macos", created_at: Time.utc(2026, 9, 16, 18, 4, 12), entries: [entry("aaaaaaaaaaaa")])
+      underway.record("vmnlryyvktux", Plan::CLEARED)
+      Plan.write(plans / "macos-20260916T180412Z", source: "macos", created_at: Time.utc(2026, 9, 16, 18, 4, 12), entries: [entry("aaaaaaaaaaaa")])
 
       out, = run_task(root)
 
-      assert_includes out, "✅ macos-20260831T000000Z  2/2 contacts\n"
-      assert_includes out, "⏳ macos-20260901T000000Z  2/2 contacts\n"
-      assert_includes out, "⏳ macos-20260916T180412Z  0/1 contacts\n"
+      assert_includes out, "macos-20260901T000000Z  2/2 contacts\n"
+      assert_includes out, "macos-20260916T180412Z  0/1 contacts\n"
       assert_includes out, "next: import:execute would land macos-20260916T180412Z\n"
-      assert_includes out, "next: import:macos:remove would clear macos-20260901T000000Z\n"
+      assert_includes out, "next: import:macos:clear would finish macos-20260901T000000Z\n"
+      assert (root / "data/import/done/macos-20260831T000000Z/plan.yml").file?
+      refute (plans / "macos-20260831T000000Z").directory?
+      refute_includes out, "macos-20260831T000000Z  "
     end
   end
 
@@ -42,14 +45,14 @@ class ImportStatusTaskTest < Minitest::Test
     Dir.mktmpdir do |root|
       out, = run_task(Pathname.new(root))
 
-      assert_includes out, "no plans in data/imports yet"
+      assert_includes out, "no plans in data/import/plans; run rake import:macos:plan"
     end
   end
 
   private
 
   # Runs import:status in a Rake application of its own, from root as
-  # the working directory: the task reads data/imports relative to
+  # the working directory: the task reads data/import relative to
   # where rake runs, not through ProTacts.config.
   def run_task(root)
     application = Rake.application

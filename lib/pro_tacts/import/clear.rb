@@ -2,12 +2,12 @@ require "pro_tacts/import/plan"
 
 module ProTacts
   module Import
-    # Takes the originals off the Mac, once a plan has carried them to a
-    # host (docs/plans/2026-09-16-importing-from-macos.md, "Removing the
-    # originals"). Every check is a reason to keep a contact rather than
-    # to delete one, because a wrong keep costs a second look and a wrong
-    # delete costs the contact.
-    class Remove
+    # Clears this Mac of a plan's originals, once they have landed on
+    # a host (docs/plans/2026-09-16-importing-from-macos.md, "Removing
+    # the originals"). Every check is a reason to keep a contact rather
+    # than to delete one, because a wrong keep costs a second look and a
+    # wrong delete costs the contact.
+    class Clear
       # @rbs @plan: Plan
       # @rbs @client: _Client
       # @rbs @mac: _Mac
@@ -20,7 +20,7 @@ module ProTacts
       # find in Contacts and a line to find in plan.yml. Signed in
       # sig/pro_tacts/import.rbs, being a Data class.
       # @rbs skip
-      Result = Data.define(:removed, :kept)
+      Result = Data.define(:cleared, :kept)
 
       #: (Plan plan, client: _Client, mac: _Mac) -> Result
       def self.call(plan, client:, mac:)
@@ -39,9 +39,9 @@ module ProTacts
         imported = @plan.with_status("imported")
         records = @mac.show(imported.map(&:source_id))
         gone, still_there = imported.partition { !records.key?(it.source_id) }
-        # A contact this Mac no longer has is a contact removed, which is
+        # A contact this Mac no longer has is a contact cleared, which is
         # what a rerun of an interrupted run sees.
-        gone.each { @plan.record(it.id, "removed") }
+        gone.each { @plan.record(it.id, Plan::CLEARED) }
 
         kept = [] #: Array[[String, String, String]]
         going = still_there.select { |contact|
@@ -54,13 +54,13 @@ module ProTacts
         # store refuses is the only one that stays. A run that dies before
         # the plan records the rest finds them gone next time.
         refused = @mac.delete(going.map(&:source_id))
-        removed, stuck = going.partition { !refused.key?(it.source_id) }
-        removed.each { @plan.record(it.id, "removed") }
+        deleted, stuck = going.partition { !refused.key?(it.source_id) }
+        deleted.each { @plan.record(it.id, Plan::CLEARED) }
         stuck.each {
           kept << [it.id, it.name, "this Mac would not delete #{it.source_id}: #{refused.fetch(it.source_id)}"]
         }
 
-        Result.new(removed: gone.size + removed.size, kept:)
+        Result.new(cleared: gone.size + deleted.size, kept:)
       end
 
       private

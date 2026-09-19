@@ -6,16 +6,16 @@ require "tmpdir"
 
 require "pro_tacts/import/execute"
 require "pro_tacts/import/plan"
-require "pro_tacts/import/remove"
+require "pro_tacts/import/clear"
 require "pro_tacts/web"
 
-class ImportRemoveTest < Minitest::Test
+class ImportClearTest < Minitest::Test
   include ThrowawayContacts
 
   Card = ProTacts::Import::Card
   Plan = ProTacts::Import::Plan
   Execute = ProTacts::Import::Execute
-  Remove = ProTacts::Import::Remove
+  Clear = ProTacts::Import::Clear
 
   HOST = "https://contacts"
   IDS = %w[kmnuqmzxylru vmnlryyvktux].freeze
@@ -52,7 +52,7 @@ class ImportRemoveTest < Minitest::Test
     {"identifier" => source_id(id), "vcard" => vcard(id), "note" => note}
   end
 
-  # A plan already landed on the host, since that is what remove works on.
+  # A plan already landed on the host, since that is what clear works on.
   def with_landed_plan(notes: {}, edit: nil)
     Dir.mktmpdir do |tmp|
       dir = Pathname.new(tmp) / "plan"
@@ -76,12 +76,12 @@ class ImportRemoveTest < Minitest::Test
     with_landed_plan do |plan, _store, client|
       mac = Mac.new(IDS.to_h { [source_id(it), record(it)] })
 
-      result = Remove.call(plan, client:, mac:)
+      result = Clear.call(plan, client:, mac:)
 
-      assert_equal 2, result.removed
+      assert_equal 2, result.cleared
       assert_empty result.kept
       assert_equal IDS.map { source_id(it) }, mac.deleted
-      assert_equal %w[removed removed], Plan.read(plan.dir).contacts.map(&:status)
+      assert_equal %w[cleared cleared], Plan.read(plan.dir).contacts.map(&:status)
     end
   end
 
@@ -91,11 +91,11 @@ class ImportRemoveTest < Minitest::Test
       records[source_id(IDS.first)]["vcard"] = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Renamed\r\nEND:VCARD\r\n"
       mac = Mac.new(records)
 
-      result = Remove.call(plan, client:, mac:)
+      result = Clear.call(plan, client:, mac:)
 
       assert_equal [[IDS.first, "Contact #{IDS.first}", "it has changed on this Mac since the plan"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
-      assert_equal ["imported", "removed"], Plan.read(plan.dir).contacts.map(&:status)
+      assert_equal ["imported", "cleared"], Plan.read(plan.dir).contacts.map(&:status)
     end
   end
 
@@ -105,7 +105,7 @@ class ImportRemoveTest < Minitest::Test
       records[source_id(IDS.first)]["note"] = "Analyst. Also a countess."
       mac = Mac.new(records)
 
-      result = Remove.call(plan, client:, mac:)
+      result = Clear.call(plan, client:, mac:)
 
       assert_equal [[IDS.first, "Contact #{IDS.first}", "its note has changed on this Mac since the plan"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
@@ -117,7 +117,7 @@ class ImportRemoveTest < Minitest::Test
       store.delete(IDS.first)
       mac = Mac.new(IDS.to_h { [source_id(it), record(it)] })
 
-      result = Remove.call(plan, client:, mac:)
+      result = Clear.call(plan, client:, mac:)
 
       assert_equal [[IDS.first, "Contact #{IDS.first}", "its card is no longer on #{HOST}"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
@@ -131,22 +131,22 @@ class ImportRemoveTest < Minitest::Test
       refute_includes store.book("test@example.com"), IDS.first
       mac = Mac.new(IDS.to_h { [source_id(it), record(it)] })
 
-      result = Remove.call(plan, client:, mac:)
+      result = Clear.call(plan, client:, mac:)
 
       assert_empty result.kept
       assert_equal IDS.map { source_id(it) }, mac.deleted
     end
   end
 
-  def test_a_contact_already_off_the_mac_counts_as_removed
+  def test_a_contact_already_off_the_mac_counts_as_cleared
     with_landed_plan do |plan, _store, client|
       mac = Mac.new({source_id(IDS.last) => record(IDS.last)})
 
-      result = Remove.call(plan, client:, mac:)
+      result = Clear.call(plan, client:, mac:)
 
-      assert_equal 2, result.removed
+      assert_equal 2, result.cleared
       assert_equal [source_id(IDS.last)], mac.deleted
-      assert_equal %w[removed removed], Plan.read(plan.dir).contacts.map(&:status)
+      assert_equal %w[cleared cleared], Plan.read(plan.dir).contacts.map(&:status)
     end
   end
 
@@ -157,23 +157,23 @@ class ImportRemoveTest < Minitest::Test
     with_landed_plan do |plan, _store, client|
       mac = Mac.new(IDS.to_h { [source_id(it), record(it)] }, refuses: {source_id(IDS.first) => "faulting, 134092"})
 
-      result = Remove.call(plan, client:, mac:)
+      result = Clear.call(plan, client:, mac:)
 
-      assert_equal 1, result.removed
+      assert_equal 1, result.cleared
       assert_equal [[IDS.first, "Contact #{IDS.first}", "this Mac would not delete #{source_id(IDS.first)}: faulting, 134092"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
-      assert_equal ["imported", "removed"], Plan.read(plan.dir).contacts.map(&:status)
+      assert_equal ["imported", "cleared"], Plan.read(plan.dir).contacts.map(&:status)
     end
   end
 
-  def test_a_rerun_removes_nothing_again
+  def test_a_rerun_clears_nothing_again
     with_landed_plan do |plan, _store, client|
       mac = Mac.new(IDS.to_h { [source_id(it), record(it)] })
-      Remove.call(plan, client:, mac:)
+      Clear.call(plan, client:, mac:)
 
-      result = Remove.call(Plan.read(plan.dir), client:, mac:)
+      result = Clear.call(Plan.read(plan.dir), client:, mac:)
 
-      assert_equal 0, result.removed
+      assert_equal 0, result.cleared
       assert_equal IDS.map { source_id(it) }, mac.deleted
     end
   end

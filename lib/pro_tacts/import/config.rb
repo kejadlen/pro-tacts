@@ -3,10 +3,11 @@ require "yaml"
 module ProTacts
   module Import
     # The standing data the import tasks keep between plans, as a YAML
-    # mapping: data/import/config.yml, beside the plans under
-    # data/imports. Not committed — /data is ignored — because it holds
-    # this deployment's own host and choices. The keys are the tasks'
-    # to grow as they take standing data off the command line.
+    # mapping: data/import/config.yml, at the root of the import
+    # collateral under data/import. Not committed — /data is ignored —
+    # because it holds this deployment's own host and choices. The keys
+    # are the tasks' to grow as they take standing data off the command
+    # line.
     class Config
       # A missing file is no configuration and an empty one is none
       # either; a file whose top level is not a mapping is refused

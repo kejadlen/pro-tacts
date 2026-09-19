@@ -132,4 +132,25 @@ class ImportPlanTest < Minitest::Test
       assert_equal ["plan.yml"], dir.children.map { it.basename.to_s }.grep(/plan/)
     end
   end
+
+  def test_a_plan_is_done_once_every_contact_is_cleared
+    in_tmpdir do |dir|
+      plan = Plan.write(dir, source: "macos", created_at: CREATED_AT, entries: [entry("kmnuqmzxylru"), entry("vmnlryyvktux")])
+
+      refute plan.done?
+      plan.record("kmnuqmzxylru", Plan::CLEARED)
+      refute plan.done?
+      plan.record("vmnlryyvktux", Plan::CLEARED)
+      assert plan.done?
+    end
+  end
+
+  def test_a_plan_recorded_under_the_old_vocabulary_finishes_too
+    in_tmpdir do |dir|
+      plan = Plan.write(dir, source: "macos", created_at: CREATED_AT, entries: [entry("kmnuqmzxylru")])
+      plan.record("kmnuqmzxylru", "removed")
+
+      assert plan.done?
+    end
+  end
 end
