@@ -333,7 +333,7 @@ module ProTacts
           "EMAIL;type=INTERNET;type=WORK",
           "item#.EMAIL;type=INTERNET"
         ],
-        "ADR" => ["ADR;type=HOME", "item#.ADR;type=HOME"],
+        "ADR" => ["ADR;type=HOME", "item#.ADR;type=HOME", "ADR;type=WORK", "item#.ADR;type=WORK"],
         "X-ABRELATEDNAMES" => ["item#.X-ABRELATEDNAMES"],
         "X-MAIDENNAME" => ["X-MAIDENNAME"]
       }.freeze #: Hash[String, Array[String]]
@@ -384,11 +384,18 @@ module ProTacts
       # (`/O=microsoft/OU=.../cn=algersha`) — so it is not a spelling to
       # learn but a row this address book has no field for, and it goes
       # the way the DROPPED properties go, the source keeping the line.
-      # The form is still checked around this, so a value like it in a
-      # spelling nobody has seen is reported like any other.
+      # A work address goes the same way for the opposite reason: the
+      # editor's address rows carry no type, so a work address would
+      # land as an unmarked second one beside the home, and the one
+      # address the fields can hold without lying is the home — the
+      # work stays in the source. The form is still checked around
+      # this, so a value like it in a spelling nobody has seen is
+      # reported like any other.
       #: (String name, VCard::Parser::Property property) -> bool
       def self.dropped_value?(name, property)
-        name == "EMAIL" && !property.value.include?("@")
+        return true if name == "EMAIL" && !property.value.include?("@")
+
+        name == "ADR" && property.parameters.any? { |key, value| key.casecmp?("TYPE") && value.casecmp?("WORK") }
       end
 
       # A line unfolded, without its terminator.

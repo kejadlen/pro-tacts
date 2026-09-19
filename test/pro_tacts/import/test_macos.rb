@@ -159,6 +159,32 @@ class ImportMacosTest < Minitest::Test
     end
   end
 
+  # The editor's address rows carry no type, so the work address would
+  # land as an unmarked second one beside the home; the home is the one
+  # the fields can hold, and the work stays in the source.
+  def test_a_work_address_is_dropped_and_the_home_carried
+    in_tmpdir do |dir|
+      lines = [
+        "ADR;type=HOME:;;12 Marylebone Rd;London;;NW1 5LS;",
+        "ADR;type=WORK:;;17 Clerkenwell Rd;London;;EC1R 5BQ;",
+        "item3.ADR;type=WORK;type=pref:;;4 Russell Sq;London;;WC1B 4JP;"
+      ]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      assert_equal [{"street" => "12 Marylebone Rd", "locality" => "London", "postal_code" => "NW1 5LS"}],
+        plan.card(plan.contacts.first.id).addresses
+    end
+  end
+
+  def test_a_work_address_alone_is_no_address_at_all
+    in_tmpdir do |dir|
+      lines = ["item1.ADR;type=WORK:;;17 Clerkenwell Rd;London;;EC1R 5BQ;"]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
+
+      assert_empty plan.card(plan.contacts.first.id).addresses
+    end
+  end
+
   # A work number is a number, and one Contacts labelled is too — the
   # label riding the annotation rail to the row it names, where a
   # labelled email's and address's are still dropped
