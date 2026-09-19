@@ -311,6 +311,47 @@ class ImportMacosTest < Minitest::Test
     end
   end
 
+  def test_a_maiden_name_is_written_under_the_note
+    in_tmpdir do |dir|
+      lines = [
+        "X-MAIDENNAME:Byron",
+        "item2.X-ABRELATEDNAMES;type=pref:Sylvia Lovelace",
+        "item2.X-ABLabel:_$!<Spouse>!$_"
+      ]
+      plan = Macos.plan(dir, [record("A:ABPerson", lines:, note: "Analyst.")], created_at: CREATED_AT)
+
+      assert_equal "Analyst.\n\nMaiden name: Byron\nSpouse: Sylvia Lovelace", plan.card(plan.contacts.first.id).note
+    end
+  end
+
+  def test_a_maiden_name_is_the_whole_note_of_a_contact_with_none
+    in_tmpdir do |dir|
+      plan = Macos.plan(dir, [record("A:ABPerson", lines: ["X-MAIDENNAME:Byron"])], created_at: CREATED_AT)
+
+      assert_equal "Maiden name: Byron", plan.card(plan.contacts.first.id).note
+    end
+  end
+
+  def test_a_second_maiden_name_is_refused
+    in_tmpdir do |dir|
+      records = [record("A:ABPerson", lines: ["X-MAIDENNAME:Byron", "X-MAIDENNAME:King"])]
+
+      error = assert_raises(Macos::Unknown) { Macos.plan(dir, records, created_at: CREATED_AT) }
+
+      assert_includes error.message, "X-MAIDENNAME lines: 2: 1"
+    end
+  end
+
+  def test_a_maiden_name_in_any_other_form_is_refused_under_that_form
+    in_tmpdir do |dir|
+      records = [record("A:ABPerson", lines: ["item1.X-MAIDENNAME:Byron"])]
+
+      error = assert_raises(Macos::Unknown) { Macos.plan(dir, records, created_at: CREATED_AT) }
+
+      assert_includes error.message, "item#.X-MAIDENNAME: 1"
+    end
+  end
+
   def test_an_annotation_with_no_line_to_annotate_is_refused
     in_tmpdir do |dir|
       records = [record("A:ABPerson", lines: ["item5.X-ABADR:us", "X-ABLabel:_$!<Spouse>!$_"])]

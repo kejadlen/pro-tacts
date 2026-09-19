@@ -123,6 +123,7 @@ module ProTacts
         first, last = name(carried, source_id, unknown)
         nickname = only(carried, "NICKNAME", source_id, unknown)
         birthday = only(carried, "BDAY", source_id, unknown)
+        maiden_name = only(carried, "X-MAIDENNAME", source_id, unknown)
         labels = labels_by_group(lines)
         phones = properties(carried, "TEL").filter_map { |property|
           number = property.text
@@ -143,19 +144,23 @@ module ProTacts
         photo = !contact.fetch("imageData").nil?
         card = Card.new(
           first:, last:, nickname:, birthday:, phones:, emails:, addresses:,
-          note: noted(note, related_names(lines, carried)), photo:, groups: [], source:
+          note: noted(note, maiden_name, related_names(lines, carried)), photo:, groups: [], source:
         )
         Plan::Entry.new(id:, source_id:, card:)
       end
 
-      # The note, with the people this contact is related to written
-      # under it: this address book has no field for a relation, and a
-      # spouse's name is worth more in the note than nowhere.
-      #: (String? note, Array[String] related) -> String?
-      def self.noted(note, related)
-        return note if related.empty?
+      # The note, with the maiden name and the people this contact is
+      # related to written under it: this address book has no field for
+      # either, and a name worth keeping is worth more in the note than
+      # nowhere (the related names' reasoning,
+      # docs/plans/2026-09-16-importing-from-macos.md, "The builder
+      # knows only what it was taught").
+      #: (String? note, String? maiden, Array[String] related) -> String?
+      def self.noted(note, maiden, related)
+        under = [maiden&.then { "Maiden name: #{it}" }, *related].compact
+        return note if under.empty?
 
-        [note, related.join("\n")].compact.reject(&:empty?).join("\n\n")
+        [note, under.join("\n")].compact.reject(&:empty?).join("\n\n")
       end
 
       # Each related name as "<label>: <name>", the label being the
@@ -329,7 +334,8 @@ module ProTacts
           "item#.EMAIL;type=INTERNET"
         ],
         "ADR" => ["ADR;type=HOME", "item#.ADR;type=HOME"],
-        "X-ABRELATEDNAMES" => ["item#.X-ABRELATEDNAMES"]
+        "X-ABRELATEDNAMES" => ["item#.X-ABRELATEDNAMES"],
+        "X-MAIDENNAME" => ["X-MAIDENNAME"]
       }.freeze #: Hash[String, Array[String]]
 
       # A number as Contacts hands one over, which is as a person typed
