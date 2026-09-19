@@ -10,9 +10,10 @@ require "pathname"
 # which rake redefines noisily when a file is loaded twice.
 module ImportTasks
   # All the import collateral under data/import: the standing
-  # configuration in config.yml beside the plans, active under plans/
-  # and filed away under done/ once every contact is off this Mac.
-  PLANS = Pathname.new("data/import/plans")
+  # configuration in config.yml beside the plans, in flight under
+  # active/ and filed away under done/ once every contact is off this
+  # Mac — the two states a plan's directory names.
+  ACTIVE = Pathname.new("data/import/active")
   DONE = Pathname.new("data/import/done")
 
   # Where the import tasks keep their standing data between plans:
@@ -28,18 +29,18 @@ module ImportTasks
   # The plan PLAN names, or the oldest one still waiting for this step:
   # plans are carried in the order they were built, so the next one to
   # take further is the oldest that has not been. A PLAN that is not a
-  # directory is read as a plan's name under PLANS, the way the
+  # directory is read as a plan's name under ACTIVE, the way the
   # directories there are named.
   def self.plan(waiting, step)
     named = ENV.fetch("PLAN", nil)&.then { Pathname.new(it) }
-    named = PLANS / named if named && !named.directory?
+    named = ACTIVE / named if named && !named.directory?
     if named
       abort "#{named} holds no plan.yml" unless (named / "plan.yml").file?
       return ProTacts::Import::Plan.read(named)
     end
 
-    ProTacts::Import::Plan.all(PLANS).find(&waiting) ||
-      abort("no plan in #{PLANS} is waiting #{step}: run rake import:macos:plan, or name one in PLAN")
+    ProTacts::Import::Plan.all(ACTIVE).find(&waiting) ||
+      abort("no plan in #{ACTIVE} is waiting #{step}: run rake import:macos:plan, or name one in PLAN")
   end
 
   # A finished plan's final state: moved under DONE, nothing left to
@@ -53,12 +54,12 @@ end
 
 namespace :import do
   namespace :macos do
-    desc "Plan importing this Mac's iCloud contacts into data/import/plans (LIMIT=n for the first n)"
+    desc "Plan importing this Mac's iCloud contacts into data/import/active (LIMIT=n for the first n)"
     task :plan do
       require "pro_tacts/import/macos"
 
       created_at = Time.now.utc
-      dir = ImportTasks::PLANS / "macos-#{created_at.strftime("%Y%m%dT%H%M%SZ")}"
+      dir = ImportTasks::ACTIVE / "macos-#{created_at.strftime("%Y%m%dT%H%M%SZ")}"
       limit = ENV.fetch("LIMIT", nil)&.then { Integer(it) }
 
       records = ProTacts::Import::Macos.read(limit:)
@@ -106,15 +107,15 @@ namespace :import do
     require "pro_tacts/import/plan"
 
     # A finished plan files away; this sweeps any a dead run left in
-    # plans/, so what is listed is what still has work — which is also
+    # active/, so what is listed is what still has work — which is also
     # why nothing here is ever finished: the sweep took it.
-    ProTacts::Import::Plan.all(ImportTasks::PLANS).each do |plan|
+    ProTacts::Import::Plan.all(ImportTasks::ACTIVE).each do |plan|
       ImportTasks.file_away(plan) if plan.done?
     end
 
-    plans = ProTacts::Import::Plan.all(ImportTasks::PLANS)
+    plans = ProTacts::Import::Plan.all(ImportTasks::ACTIVE)
     if plans.empty?
-      puts "no plans in #{ImportTasks::PLANS}; run rake import:macos:plan"
+      puts "no plans in #{ImportTasks::ACTIVE}; run rake import:macos:plan"
       next
     end
 
@@ -134,7 +135,7 @@ namespace :import do
     puts "next: import:macos:finalize would finish #{finalizing.dir.basename}" if finalizing
   end
 
-  desc "Land the oldest plan in data/import/plans still to land, or the one in PLAN, on the pro-tacts at HOST, a base URL such as https://contacts"
+  desc "Land the oldest plan in data/import/active still to land, or the one in PLAN, on the pro-tacts at HOST, a base URL such as https://contacts"
   task :execute do
     require "net/http"
     require "uri"

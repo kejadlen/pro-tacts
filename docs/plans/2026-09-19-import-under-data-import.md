@@ -8,18 +8,19 @@ and the last step of an import stopped being named for its action.
 ```
 data/import/
 ├── config.yml   # standing data between plans (ProTacts::Import::Config)
-├── plans/       # the plans in flight
+├── active/      # the plans in flight
 └── done/        # plans filed away, every contact off this Mac
 ```
 
 Before, plans lived in `data/imports` beside nothing. Everything the
-tasks keep now sits under the one directory, plans active under
-`plans/` and finished under `done/`. A machine with plans in the old
-place moves them once by hand:
+tasks keep now sits under the one directory, plans in flight under
+`active/` and finished under `done/` — the two states a plan's
+directory names. A machine with plans in the old place moves them
+once by hand:
 
 ```bash
-mkdir -p data/import/plans data/import/done
-mv data/imports/* data/import/plans/
+mkdir -p data/import/active data/import/done
+mv data/imports/* data/import/active/
 ```
 
 ## Finalizing, not removing
@@ -39,7 +40,7 @@ still finishes and files away; nothing is rewritten on disk.
 
 A plan whose every contact is done is finished (`Plan#done?`). The
 finalize task files one away into `done/` as its last step, and the
-status read sweeps any a dead run left in `plans/` before listing —
+status read sweeps any a dead run left in `active/` before listing —
 so what status lists is what still has work, and the finished plans
 are out of the way but kept, with their cards and sources, for as
 long as `data/` is.

@@ -17,7 +17,7 @@ class ImportStatusTaskTest < Minitest::Test
   def test_status_counts_each_plans_contacts_and_files_finished_plans_away
     Dir.mktmpdir do |root|
       root = Pathname.new(root)
-      plans = root / "data" / "import" / "plans"
+      plans = root / "data" / "import" / "active"
       # A plan carried all the way off the Mac — done, so swept into
       # done/ rather than listed — one mid-flight with a contact through
       # to the finalizing step and one past it, and one freshly built
@@ -45,7 +45,7 @@ class ImportStatusTaskTest < Minitest::Test
     Dir.mktmpdir do |root|
       out, = run_task(Pathname.new(root))
 
-      assert_includes out, "no plans in data/import/plans; run rake import:macos:plan"
+      assert_includes out, "no plans in data/import/active; run rake import:macos:plan"
     end
   end
 
