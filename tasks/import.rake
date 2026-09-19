@@ -8,6 +8,12 @@ require "pathname"
 module ImportTasks
   DIR = Pathname.new("data/imports")
 
+  # Where the import tasks keep their standing data between plans:
+  # data/import/config.yml (ProTacts::Import::Config reads it). The
+  # singular beside DIR's plural is deliberate — the directory of
+  # plans beside the one file of standing state.
+  CONFIG = Pathname.new("data/import/config.yml")
+
   # What each carrying task waits on — a contact still to carry through
   # that step — named so a status read can say what those tasks would
   # pick next without restating their choice.
