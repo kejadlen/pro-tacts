@@ -14,8 +14,10 @@ data/import/
 
 The config's first key is `host`: the base URL `import:execute`
 lands on, and the only place a host is named — command line included —
-so a plan cannot be aimed at another server by accident. Finalize
-takes no host at all, reading the one its plan recorded.
+so a plan cannot be aimed at another server by accident. Config
+parses it: a bare hostname is read as HTTPS, and anything but an http
+or https URL is refused at the read. Finalize takes no host at all,
+reading the one its plan recorded.
 
 Before, plans lived in `data/imports` beside nothing. Everything the
 tasks keep now sits under the one directory, plans in flight under

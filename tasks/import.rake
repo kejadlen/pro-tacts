@@ -12,16 +12,7 @@ require "pro_tacts/import/config"
 # The plan a task carries further. A module rather than task-file methods,
 # which rake redefines noisily when a file is loaded twice.
 module ImportTasks
-  # All the import collateral under data/import: the standing
-  # configuration in config.yml beside the plans, in flight under
-  # active/ and filed away under done/ once every contact is off this
-  # Mac — the two states a plan's directory names.
-  ACTIVE = Pathname.new("data/import/active")
-  DONE = Pathname.new("data/import/done")
-
-  # Where the import tasks keep their standing data between plans:
-  # data/import/config.yml (ProTacts::Import::Config reads it).
-  CONFIG = Pathname.new("data/import/config.yml")
+  Config = ProTacts::Import::Config
 
   # What each carrying task waits on — a contact still to carry through
   # that step — named so a status read can say what those tasks would
@@ -32,38 +23,26 @@ module ImportTasks
   # The plan PLAN names, or the oldest one still waiting for this step:
   # plans are carried in the order they were built, so the next one to
   # take further is the oldest that has not been. A PLAN that is not a
-  # directory is read as a plan's name under ACTIVE, the way the
-  # directories there are named.
+  # directory is read as a plan's name under Config::ACTIVE, the way
+  # the directories there are named.
   def self.plan(waiting, step)
     named = ENV.fetch("PLAN", nil)&.then { Pathname.new(it) }
-    named = ACTIVE / named if named && !named.directory?
+    named = Config::ACTIVE / named if named && !named.directory?
     if named
       abort "#{named} holds no plan.yml" unless (named / "plan.yml").file?
       return ProTacts::Import::Plan.read(named)
     end
 
-    ProTacts::Import::Plan.all(ACTIVE).find(&waiting) ||
-      abort("no plan in #{ACTIVE} is waiting #{step}: run rake import:macos:plan, or name one in PLAN")
+    ProTacts::Import::Plan.all(Config::ACTIVE).find(&waiting) ||
+      abort("no plan in #{Config::ACTIVE} is waiting #{step}: run rake import:macos:plan, or name one in PLAN")
   end
 
-  # A finished plan's final state: moved under DONE, nothing left to
-  # carry. The finalize task files one away as its last step; the
-  # status read sweeps any a dead run left behind.
+  # A finished plan's final state: moved under Config::DONE, nothing
+  # left to carry. The finalize task files one away as its last step;
+  # the status read sweeps any a dead run left behind.
   def self.file_away(plan)
-    FileUtils.mkdir_p(DONE)
-    FileUtils.mv(plan.dir, DONE / plan.dir.basename)
-  end
-
-  # The host to land a plan on: the standing `host` under CONFIG, the
-  # one place a host is named, and required at the read. A bare
-  # hostname is the base URL of a server that serves HTTPS, which
-  # every deployment does; the scheme is spelled out here so the host
-  # a plan records is the one a second run is compared against.
-  #: () -> String
-  def self.host
-    uri = URI.parse(ProTacts::Import::Config.read(CONFIG).host)
-    uri = URI.parse("https://#{uri}") if uri.scheme.nil?
-    uri.to_s
+    FileUtils.mkdir_p(Config::DONE)
+    FileUtils.mv(plan.dir, Config::DONE / plan.dir.basename)
   end
 end
 
@@ -74,7 +53,7 @@ namespace :import do
       require "pro_tacts/import/macos"
 
       created_at = Time.now.utc
-      dir = ImportTasks::ACTIVE / "macos-#{created_at.strftime("%Y%m%dT%H%M%SZ")}"
+      dir = ImportTasks::Config::ACTIVE / "macos-#{created_at.strftime("%Y%m%dT%H%M%SZ")}"
       limit = ENV.fetch("LIMIT", nil)&.then { Integer(it) }
 
       records = ProTacts::Import::Macos.read(limit:)
@@ -123,13 +102,13 @@ namespace :import do
     # A finished plan files away; this sweeps any a dead run left in
     # active/, so what is listed is what still has work — which is also
     # why nothing here is ever finished: the sweep took it.
-    ProTacts::Import::Plan.all(ImportTasks::ACTIVE).each do |plan|
+    ProTacts::Import::Plan.all(ImportTasks::Config::ACTIVE).each do |plan|
       ImportTasks.file_away(plan) if plan.done?
     end
 
-    plans = ProTacts::Import::Plan.all(ImportTasks::ACTIVE)
+    plans = ProTacts::Import::Plan.all(ImportTasks::Config::ACTIVE)
     if plans.empty?
-      puts "no plans in #{ImportTasks::ACTIVE}; run rake import:macos:plan"
+      puts "no plans in #{ImportTasks::Config::ACTIVE}; run rake import:macos:plan"
       next
     end
 
@@ -157,14 +136,13 @@ namespace :import do
     require "pro_tacts/import/plan"
 
     plan = ImportTasks.plan(ImportTasks::TO_LAND, "to land")
-    host = ImportTasks.host
-    uri = URI.parse(host)
-    puts "landing #{plan.dir} on #{host}"
+    uri = ImportTasks::Config.read.host
+    puts "landing #{plan.dir} on #{uri}"
 
     Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
-      ProTacts::Import::Execute.call(plan, host:, client: ProTacts::Import::HttpClient.new(http))
+      ProTacts::Import::Execute.call(plan, host: uri.to_s, client: ProTacts::Import::HttpClient.new(http))
     end
     groups = plan.contacts.flat_map { plan.card(it.id).groups }.uniq
-    puts "#{plan.contacts.size} contacts in #{groups.join(", ")} on #{host}"
+    puts "#{plan.contacts.size} contacts in #{groups.join(", ")} on #{uri}"
   end
 end

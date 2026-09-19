@@ -44,11 +44,16 @@ module ProTacts
     end
 
     class Config
-      attr_reader host: String
+      ROOT: Pathname
+      FILE: Pathname
+      ACTIVE: Pathname
+      DONE: Pathname
+
+      attr_reader host: URI::HTTP
 
       def self.members: () -> Array[Symbol]
-      def self.new: (host: String) -> instance
-      def self.read: (Pathname path) -> instance
+      def self.new: (host: URI::HTTP) -> instance
+      def self.read: (?Pathname path) -> instance
     end
 
     class Finalize

@@ -49,33 +49,7 @@ class ImportTasksTest < Minitest::Test
     end
   end
 
-  def test_the_host_comes_from_the_config_and_a_bare_hostname_gains_a_scheme
-    Dir.mktmpdir do |root|
-      root = Pathname.new(root)
-      write_config(root, "host: contacts\n")
-
-      with_import_tasks(root) do
-        assert_equal "https://contacts", ImportTasks.host
-      end
-    end
-  end
-
-  def test_a_config_without_a_host_fails_the_read
-    Dir.mktmpdir do |root|
-      with_import_tasks(Pathname.new(root)) do
-        error = assert_raises(ArgumentError) { ImportTasks.host }
-
-        assert_equal "data/import/config.yml: does not exist", error.message
-      end
-    end
-  end
-
   private
-
-  def write_config(root, content)
-    (root / "data" / "import").mkpath
-    (root / "data" / "import" / "config.yml").write(content)
-  end
 
   def run_status(root)
     with_import_tasks(root) { capture_io { Rake.application["import:status"].invoke } }

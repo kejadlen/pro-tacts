@@ -2,6 +2,7 @@ require_relative "../../test_helper"
 
 require "pathname"
 require "tmpdir"
+require "uri"
 
 require "pro_tacts/import/config"
 
@@ -10,15 +11,33 @@ class ImportConfigTest < Minitest::Test
 
   def test_the_mapping_is_read
     with_config_file("host: https://contacts\n") do |path|
-      assert_equal Config.new(host: "https://contacts"), Config.read(path)
+      assert_equal Config.new(host: URI.parse("https://contacts")), Config.read(path)
+    end
+  end
+
+  def test_a_bare_hostname_is_read_as_https
+    with_config_file("host: contacts\n") do |path|
+      assert_equal URI.parse("https://contacts"), Config.read(path).host
+    end
+  end
+
+  def test_read_names_the_config_under_the_data_directory_by_default
+    Dir.mktmpdir do |dir|
+      Dir.chdir(dir) do
+        error = assert_raises(ArgumentError) { Config.read }
+
+        assert_equal "data/import/config.yml: does not exist", error.message
+      end
     end
   end
 
   def test_a_missing_file_is_refused
     Dir.mktmpdir do |dir|
-      error = assert_raises(ArgumentError) { Config.read(Pathname.new(dir) / "config.yml") }
+      path = Pathname.new(dir) / "config.yml"
 
-      assert_equal "#{Pathname.new(dir) / "config.yml"}: does not exist", error.message
+      error = assert_raises(ArgumentError) { Config.read(path) }
+
+      assert_equal "#{path}: does not exist", error.message
     end
   end
 
@@ -59,6 +78,22 @@ class ImportConfigTest < Minitest::Test
       error = assert_raises(ArgumentError) { Config.read(path) }
 
       assert_equal "#{path}: host is blank", error.message
+    end
+  end
+
+  def test_a_host_that_does_not_read_as_a_url_is_refused
+    with_config_file("host: exa mple\n") do |path|
+      error = assert_raises(ArgumentError) { Config.read(path) }
+
+      assert_equal "#{path}: host does not read as a URL", error.message
+    end
+  end
+
+  def test_a_host_that_is_not_http_or_https_is_refused
+    with_config_file("host: ftp://example.com\n") do |path|
+      error = assert_raises(ArgumentError) { Config.read(path) }
+
+      assert_equal "#{path}: host must be an http or https URL, such as https://contacts", error.message
     end
   end
 
