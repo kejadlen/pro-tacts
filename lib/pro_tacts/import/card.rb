@@ -23,9 +23,9 @@ module ProTacts
       KEYS = %w[first last nickname birthday phones emails addresses note photo groups source].freeze #: Array[String]
 
       # What the source gave, kept in the card rather than off to the
-      # side: the fields above are read out of it, and `clear` compares
-      # the Mac's contact against it before deleting anything, so the two
-      # are read together and edited in one place.
+      # side: the fields above are read out of it, and `finalize`
+      # compares the Mac's contact against it before deleting anything,
+      # so the two are read together and edited in one place.
       SOURCE_KEYS = %w[identifier vcard note contact].freeze #: Array[String]
 
       # An address's parts, as the editor's own add row names them

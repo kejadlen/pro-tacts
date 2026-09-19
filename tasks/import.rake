@@ -23,7 +23,7 @@ module ImportTasks
   # that step — named so a status read can say what those tasks would
   # pick next without restating their choice.
   TO_LAND = ->(plan) { plan.with_status(nil).any? || plan.with_status("landed").any? }
-  TO_CLEAR = ->(plan) { plan.with_status("imported").any? }
+  TO_FINALIZE = ->(plan) { plan.with_status("imported").any? }
 
   # The plan PLAN names, or the oldest one still waiting for this step:
   # plans are carried in the order they were built, so the next one to
@@ -43,8 +43,8 @@ module ImportTasks
   end
 
   # A finished plan's final state: moved under DONE, nothing left to
-  # carry. The clear task files one away as its last step; the status
-  # read sweeps any a dead run left behind.
+  # carry. The finalize task files one away as its last step; the
+  # status read sweeps any a dead run left behind.
   def self.file_away(plan)
     FileUtils.mkdir_p(DONE)
     FileUtils.mv(plan.dir, DONE / plan.dir.basename)
@@ -73,27 +73,27 @@ namespace :import do
       abort error.message
     end
 
-    desc "Clear this Mac of the contacts the oldest landed plan imported, filing the plan away once its last contact is off (PLAN=dir for another)"
-    task :clear do
+    desc "Finalize the contacts the oldest landed plan imported, taking them off this Mac and filing the plan away done (PLAN=dir for another)"
+    task :finalize do
       require "net/http"
       require "uri"
       require "pro_tacts/import/http_client"
       require "pro_tacts/import/macos"
-      require "pro_tacts/import/clear"
+      require "pro_tacts/import/finalize"
 
-      plan = ImportTasks.plan(ImportTasks::TO_CLEAR, "to clear")
+      plan = ImportTasks.plan(ImportTasks::TO_FINALIZE, "to finalize")
       host = plan.host or abort("#{plan.dir} has not landed on a host")
       uri = URI.parse(host)
-      puts "clearing the contacts #{plan.dir} landed on #{host}"
+      puts "finalizing the contacts #{plan.dir} landed on #{host}"
 
-      result = nil #: ProTacts::Import::Clear::Result?
+      result = nil #: ProTacts::Import::Finalize::Result?
       Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
-        result = ProTacts::Import::Clear.call(
+        result = ProTacts::Import::Finalize.call(
           plan, client: ProTacts::Import::HttpClient.new(http), mac: ProTacts::Import::Macos::Mac
         )
       end
       result.kept.each { |id, name, why| puts "kept #{id} #{name}: #{why}" }
-      puts "#{result.cleared} contacts cleared from this Mac"
+      puts "#{result.done} contacts finalized"
       if plan.done?
         ImportTasks.file_away(plan)
         puts "filed #{plan.dir.basename} away in #{ImportTasks::DONE}"
@@ -101,7 +101,7 @@ namespace :import do
     end
   end
 
-  desc "Summarize the plans in data/import and what execute and clear would carry next"
+  desc "Summarize the plans in data/import and what execute and finalize would carry next"
   task :status do
     require "pro_tacts/import/plan"
 
@@ -129,9 +129,9 @@ namespace :import do
 
     puts ""
     landing = plans.find(&ImportTasks::TO_LAND)
-    clearing = plans.find(&ImportTasks::TO_CLEAR)
+    finalizing = plans.find(&ImportTasks::TO_FINALIZE)
     puts "next: import:execute would land #{landing.dir.basename}" if landing
-    puts "next: import:macos:clear would finish #{clearing.dir.basename}" if clearing
+    puts "next: import:macos:finalize would finish #{finalizing.dir.basename}" if finalizing
   end
 
   desc "Land the oldest plan in data/import/plans still to land, or the one in PLAN, on the pro-tacts at HOST, a base URL such as https://contacts"

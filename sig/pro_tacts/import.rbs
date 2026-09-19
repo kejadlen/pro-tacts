@@ -43,12 +43,12 @@ module ProTacts
       end
     end
 
-    class Clear
+    class Finalize
       class Result
-        attr_reader cleared: Integer
+        attr_reader done: Integer
         attr_reader kept: Array[[String, String, String]]
 
-        def self.new: (cleared: Integer, kept: Array[[String, String, String]]) -> instance
+        def self.new: (done: Integer, kept: Array[[String, String, String]]) -> instance
       end
     end
 

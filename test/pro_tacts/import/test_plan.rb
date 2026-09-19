@@ -133,14 +133,14 @@ class ImportPlanTest < Minitest::Test
     end
   end
 
-  def test_a_plan_is_done_once_every_contact_is_cleared
+  def test_a_plan_is_done_once_every_contact_reaches_done
     in_tmpdir do |dir|
       plan = Plan.write(dir, source: "macos", created_at: CREATED_AT, entries: [entry("kmnuqmzxylru"), entry("vmnlryyvktux")])
 
       refute plan.done?
-      plan.record("kmnuqmzxylru", Plan::CLEARED)
+      plan.record("kmnuqmzxylru", Plan::DONE)
       refute plan.done?
-      plan.record("vmnlryyvktux", Plan::CLEARED)
+      plan.record("vmnlryyvktux", Plan::DONE)
       assert plan.done?
     end
   end
