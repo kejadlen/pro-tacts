@@ -324,6 +324,7 @@ module ProTacts
           "TEL;type=HOME;type=VOICE",
           "TEL;type=IPHONE;type=CELL;type=VOICE",
           "TEL;type=MAIN",
+          "TEL;type=OTHER;type=VOICE",
           "TEL;type=WORK;type=VOICE",
           "item#.TEL"
         ],

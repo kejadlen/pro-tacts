@@ -265,11 +265,13 @@ class ImportMacosTest < Minitest::Test
         "TEL;type=pref:+1 203-536-3941",
         "TEL;type=HOME;type=VOICE;type=pref:(206) 651-4359",
         "TEL;type=IPHONE;type=CELL;type=VOICE:",
-        "TEL;type=CELL;type=VOICE:+12532189075"
+        "TEL;type=CELL;type=VOICE:+12532189075",
+        "TEL;type=OTHER;type=VOICE:+1 (425) 707-1712"
       ]
       plan = Macos.plan(dir, [record("A:ABPerson", lines:)], created_at: CREATED_AT)
 
-      assert_equal [{"number" => "+1 203-536-3941"}, {"number" => "(206) 651-4359"}, {"number" => "+12532189075"}], plan.card(plan.contacts.first.id).phones
+      assert_equal [{"number" => "+1 203-536-3941"}, {"number" => "(206) 651-4359"}, {"number" => "+12532189075"},
+        {"number" => "+1 (425) 707-1712"}], plan.card(plan.contacts.first.id).phones
     end
   end
 
