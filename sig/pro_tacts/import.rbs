@@ -1,8 +1,8 @@
-# Import::Card, Import::Plan::Entry, ::Contact, and Import::Execute::Response are Data
-# classes, whose members the inline parser cannot read (see
-# sig/pro_tacts/contact.rbs). Each is marked `@rbs skip` where it is
-# defined and signed here. _Client is an interface, which inline syntax
-# has no way to declare.
+# Import::Card, Import::Plan::Entry, ::Contact, Import::Land::Arrival, and
+# Import::HttpClient::Response are Data classes, whose members the inline
+# parser cannot read (see sig/pro_tacts/contact.rbs). Each is marked
+# `@rbs skip` where it is defined and signed here. _Client is an
+# interface, which inline syntax has no way to declare.
 module ProTacts
   module Import
     class Card
@@ -65,7 +65,7 @@ module ProTacts
       end
     end
 
-    class Execute
+    class HttpClient
       class Response
         attr_reader status: Integer
         attr_reader headers: Hash[String, String]
@@ -75,10 +75,19 @@ module ProTacts
       end
     end
 
+    class Land
+      class Arrival
+        attr_reader contact: ProTacts::Contact
+        attr_reader stored: bool
+
+        def self.new: (contact: ProTacts::Contact, stored: bool) -> instance
+      end
+    end
+
     # A host, spoken to by path: Import::HttpClient, or the app itself
     # under test.
     interface _Client
-      def call: (String method, String path, ?headers: Hash[String, String], ?body: String?) -> Execute::Response
+      def call: (String method, String path, ?headers: Hash[String, String], ?body: String?) -> HttpClient::Response
     end
 
     # The Mac a plan was read from: Import::Macos::Mac, or a test's stand-in.

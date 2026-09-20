@@ -19,26 +19,25 @@ class ImportTasksTest < Minitest::Test
       root = Pathname.new(root)
       plans = root / "data" / "import" / "active"
       # A plan carried all the way off the Mac — done, so swept into
-      # done/ rather than listed — one mid-flight with a contact through
-      # to the finalizing step and one past it, and one freshly built
-      # with everything to do.
+      # done/ rather than listed — one mid-flight with one contact
+      # finalized and one still to go, and one freshly built with
+      # everything to do.
       through = Plan.write(plans / "macos-20260831T000000Z", source: "macos", created_at: Time.utc(2026, 8, 31), entries: [entry("qxqmqmqmqmqm"), entry("zzzzzzzzzzzz")])
       through.contacts.each { it.status or through.record(it.id, Plan::DONE) }
       underway = Plan.write(plans / "macos-20260901T000000Z", source: "macos", created_at: Time.utc(2026, 9, 1), entries: [entry("kmnuqmzxylru"), entry("vmnlryyvktux")])
-      underway.record("kmnuqmzxylru", "imported")
       underway.record("vmnlryyvktux", Plan::DONE)
       Plan.write(plans / "macos-20260916T180412Z", source: "macos", created_at: Time.utc(2026, 9, 16, 18, 4, 12), entries: [entry("aaaaaaaaaaaa")])
 
       out, = run_status(root)
 
-      assert_includes out, "macos-20260901T000000Z  2/2 contacts\n"
-      assert_includes out, "macos-20260916T180412Z  0/1 contacts\n"
-      assert_includes out, "next: import:execute would land macos-20260916T180412Z\n"
+      assert_includes out, "macos-20260901T000000Z  1/2 finalized\n"
+      assert_includes out, "macos-20260916T180412Z  0/1 finalized\n"
+      assert_includes out, "next: /import would land the cards of macos-20260901T000000Z\n"
       assert_includes out, "next: import:macos:finalize would finish macos-20260901T000000Z\n"
       assert_includes out, "done:\nmacos-20260831T000000Z  2 contacts\n"
       assert (root / "data/import/done/macos-20260831T000000Z/plan.yml").file?
       refute (plans / "macos-20260831T000000Z").directory?
-      refute_includes out, "macos-20260831T000000Z  2/2 contacts"
+      refute_includes out, "macos-20260831T000000Z  2/2 finalized"
     end
   end
 

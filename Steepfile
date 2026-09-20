@@ -22,7 +22,8 @@ target :lib do
   # the files stay checked.
   ignore(*%w[
     avatar contact_dialog contacts_edit contacts_index contacts_show dashboard device_setup format
-    group_dialog group_label groups_edit groups_index groups_show icons layout list_item phlex upcoming_birthdays
+    group_dialog group_label groups_edit groups_index groups_show icons layout list_item phlex
+    plan_upload upcoming_birthdays
   ].map { "lib/pro_tacts/admin/#{it}.rb" }, inline: true)
   signature "sig"
 

@@ -36,6 +36,12 @@ class AdminFooterTest < Minitest::Test
     assert_includes last_response.body, %(<a href="/setup" class="type-label">device setup</a>)
   end
 
+  def test_the_footer_links_to_the_import_screen
+    with_env({})
+
+    assert_includes last_response.body, %(<a href="/import" class="type-label">import</a>)
+  end
+
   def test_the_footer_names_the_version_the_image_carries
     with_env("VERSION" => "20260904-1822-a1b2c3d")
 
@@ -49,11 +55,11 @@ class AdminFooterTest < Minitest::Test
   def test_an_unversioned_run_names_no_version
     with_env("VERSION" => "")
 
-    assert_includes last_response.body, %(<footer class="admin-footer"><a href="/setup")
+    assert_includes last_response.body, %(<footer class="admin-footer"><a href="/import")
 
     with_env({})
 
-    assert_includes last_response.body, %(<footer class="admin-footer"><a href="/setup")
+    assert_includes last_response.body, %(<footer class="admin-footer"><a href="/import")
   end
 
   # The label is a standing notice, not a status: the log is recording

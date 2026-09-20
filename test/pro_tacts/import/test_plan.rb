@@ -32,7 +32,6 @@ class ImportPlanTest < Minitest::Test
       assert_equal "macos", plan.source
       assert_equal "2026-09-16T18:04:12Z", plan.created_at
       assert_equal [Plan::Contact.new(id: "kmnuqmzxylru", source_id: "kmnuqmzxylru:ABPerson", name: "Ada Lovelace", status: nil), Plan::Contact.new(id: "vmnlryyvktux", source_id: "vmnlryyvktux:ABPerson", name: "Ada Lovelace", status: nil)], plan.contacts
-      assert_nil plan.host
     end
   end
 
@@ -109,13 +108,12 @@ class ImportPlanTest < Minitest::Test
       %w[20260916T180412Z 20260915T090000Z].each do |stamp|
         Plan.write(imports / "macos-#{stamp}", source: "macos", created_at: CREATED_AT, entries: [entry("kmnuqmzxylru")])
       end
-      Plan.read(imports / "macos-20260915T090000Z").record("kmnuqmzxylru", "imported")
+      Plan.read(imports / "macos-20260915T090000Z").record("kmnuqmzxylru", Plan::DONE)
 
       plans = Plan.all(imports)
 
       assert_equal ["macos-20260915T090000Z", "macos-20260916T180412Z"], plans.map { it.dir.basename.to_s }
-      assert_equal [[], ["kmnuqmzxylru"]], plans.map { it.with_status(nil).map(&:id) }
-      assert_equal [["kmnuqmzxylru"], []], plans.map { it.with_status("imported").map(&:id) }
+      assert_equal [[], ["kmnuqmzxylru"]], plans.map { it.outstanding.map(&:id) }
     end
   end
 
@@ -123,12 +121,10 @@ class ImportPlanTest < Minitest::Test
     in_tmpdir do |dir|
       plan = Plan.write(dir, source: "macos", created_at: CREATED_AT, entries: [entry("kmnuqmzxylru"), entry("vmnlryyvktux")])
 
-      plan.host = "https://contacts"
-      plan.record("kmnuqmzxylru", "landed")
+      plan.record("kmnuqmzxylru", Plan::DONE)
 
       read = Plan.read(dir)
-      assert_equal "https://contacts", read.host
-      assert_equal ["landed", nil], read.contacts.map(&:status)
+      assert_equal ["done", nil], read.contacts.map(&:status)
       assert_equal ["plan.yml"], dir.children.map { it.basename.to_s }.grep(/plan/)
     end
   end

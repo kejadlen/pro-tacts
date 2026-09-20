@@ -4,21 +4,37 @@ require "pathname"
 require "rack/mock"
 require "tmpdir"
 
-require "pro_tacts/import/execute"
-require "pro_tacts/import/plan"
 require "pro_tacts/import/finalize"
+require "pro_tacts/import/http_client"
+require "pro_tacts/import/land"
+require "pro_tacts/import/plan"
 require "pro_tacts/web"
 
 class ImportFinalizeTest < Minitest::Test
   include ThrowawayContacts
 
   Card = ProTacts::Import::Card
+  Land = ProTacts::Import::Land
   Plan = ProTacts::Import::Plan
-  Execute = ProTacts::Import::Execute
   Finalize = ProTacts::Import::Finalize
 
   HOST = "https://contacts"
   IDS = %w[kmnuqmzxylru vmnlryyvktux].freeze
+
+  # The app in place of the host finalize asks about each card, the
+  # proxy's identity header included. Landing no longer goes over the
+  # wire (ProTacts::Import::Land), so this is all a client is for.
+  class RackClient
+    def call(method, path, headers: {}, body: nil)
+      env = Rack::MockRequest.env_for(path, method:, input: body, "HTTP_REMOTE_USER" => "test@example.com")
+      headers.each { |name, value| env[name.casecmp?("Content-Type") ? "CONTENT_TYPE" : "HTTP_#{name.upcase.tr("-", "_")}"] = value }
+      status, response_headers, response_body = ProTacts::Web.call(env)
+      bytes = +""
+      response_body.each { bytes << it }
+      response_body.close if response_body.respond_to?(:close)
+      ProTacts::Import::HttpClient::Response.new(status:, headers: response_headers, body: bytes)
+    end
+  end
 
   # This Mac, as the contacts it still has: the reader's objects by source
   # id, and a delete that takes them out of this hash. A source id in
@@ -64,10 +80,9 @@ class ImportFinalizeTest < Minitest::Test
       Plan.write(dir, source: "macos", created_at: Time.utc(2026, 9, 16, 18, 4, 12), entries:)
       IDS.each { (dir / "cards/#{it}.yml").write(edit.call((dir / "cards/#{it}.yml").read)) } if edit
       with_contacts({}) do |store|
-        client = ImportExecuteTest::RackClient.new
         plan = Plan.read(dir)
-        Execute.call(plan, host: HOST, client:)
-        yield plan, store, client
+        Land.call(store, IDS.to_h { [it, plan.card(it)] })
+        yield plan, store, RackClient.new
       end
     end
   end
@@ -76,7 +91,7 @@ class ImportFinalizeTest < Minitest::Test
     with_landed_plan do |plan, _store, client|
       mac = Mac.new(IDS.to_h { [source_id(it), record(it)] })
 
-      result = Finalize.call(plan, client:, mac:)
+      result = Finalize.call(plan, host: HOST, client:, mac:)
 
       assert_equal 2, result.done
       assert_empty result.kept
@@ -91,11 +106,11 @@ class ImportFinalizeTest < Minitest::Test
       records[source_id(IDS.first)]["vcard"] = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Renamed\r\nEND:VCARD\r\n"
       mac = Mac.new(records)
 
-      result = Finalize.call(plan, client:, mac:)
+      result = Finalize.call(plan, host: HOST, client:, mac:)
 
       assert_equal [[IDS.first, "Contact #{IDS.first}", "it has changed on this Mac since the plan"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
-      assert_equal ["imported", "done"], Plan.read(plan.dir).contacts.map(&:status)
+      assert_equal [nil, "done"], Plan.read(plan.dir).contacts.map(&:status)
     end
   end
 
@@ -105,7 +120,7 @@ class ImportFinalizeTest < Minitest::Test
       records[source_id(IDS.first)]["note"] = "Analyst. Also a countess."
       mac = Mac.new(records)
 
-      result = Finalize.call(plan, client:, mac:)
+      result = Finalize.call(plan, host: HOST, client:, mac:)
 
       assert_equal [[IDS.first, "Contact #{IDS.first}", "its note has changed on this Mac since the plan"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
@@ -117,9 +132,9 @@ class ImportFinalizeTest < Minitest::Test
       store.delete(IDS.first)
       mac = Mac.new(IDS.to_h { [source_id(it), record(it)] })
 
-      result = Finalize.call(plan, client:, mac:)
+      result = Finalize.call(plan, host: HOST, client:, mac:)
 
-      assert_equal [[IDS.first, "Contact #{IDS.first}", "its card is no longer on #{HOST}"]], result.kept
+      assert_equal [[IDS.first, "Contact #{IDS.first}", "no card of its id is on #{HOST}"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
     end
   end
@@ -131,7 +146,7 @@ class ImportFinalizeTest < Minitest::Test
       refute_includes store.book_cards("test@example.com"), IDS.first
       mac = Mac.new(IDS.to_h { [source_id(it), record(it)] })
 
-      result = Finalize.call(plan, client:, mac:)
+      result = Finalize.call(plan, host: HOST, client:, mac:)
 
       assert_empty result.kept
       assert_equal IDS.map { source_id(it) }, mac.deleted
@@ -142,7 +157,7 @@ class ImportFinalizeTest < Minitest::Test
     with_landed_plan do |plan, _store, client|
       mac = Mac.new({source_id(IDS.last) => record(IDS.last)})
 
-      result = Finalize.call(plan, client:, mac:)
+      result = Finalize.call(plan, host: HOST, client:, mac:)
 
       assert_equal 2, result.done
       assert_equal [source_id(IDS.last)], mac.deleted
@@ -157,21 +172,21 @@ class ImportFinalizeTest < Minitest::Test
     with_landed_plan do |plan, _store, client|
       mac = Mac.new(IDS.to_h { [source_id(it), record(it)] }, refuses: {source_id(IDS.first) => "faulting, 134092"})
 
-      result = Finalize.call(plan, client:, mac:)
+      result = Finalize.call(plan, host: HOST, client:, mac:)
 
       assert_equal 1, result.done
       assert_equal [[IDS.first, "Contact #{IDS.first}", "this Mac would not delete #{source_id(IDS.first)}: faulting, 134092"]], result.kept
       assert_equal [source_id(IDS.last)], mac.deleted
-      assert_equal ["imported", "done"], Plan.read(plan.dir).contacts.map(&:status)
+      assert_equal [nil, "done"], Plan.read(plan.dir).contacts.map(&:status)
     end
   end
 
   def test_a_rerun_finalizes_nothing_again
     with_landed_plan do |plan, _store, client|
       mac = Mac.new(IDS.to_h { [source_id(it), record(it)] })
-      Finalize.call(plan, client:, mac:)
+      Finalize.call(plan, host: HOST, client:, mac:)
 
-      result = Finalize.call(Plan.read(plan.dir), client:, mac:)
+      result = Finalize.call(Plan.read(plan.dir), host: HOST, client:, mac:)
 
       assert_equal 0, result.done
       assert_equal IDS.map { source_id(it) }, mac.deleted

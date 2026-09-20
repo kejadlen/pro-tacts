@@ -1,11 +1,12 @@
 # Importing an address book from another source
-# (docs/plans/2026-09-16-importing-from-macos.md, and
+# (docs/plans/2026-09-16-importing-from-macos.md,
 # docs/plans/2026-09-19-import-under-data-import.md for the layout
-# and the vocabulary).
+# and the vocabulary, and docs/plans/2026-09-20-import-by-upload.md
+# for the middle step, which is a screen in the app rather than a
+# task here).
 
 require "fileutils"
 require "pathname"
-require "uri"
 
 require "pro_tacts/import/config"
 
@@ -14,11 +15,12 @@ require "pro_tacts/import/config"
 module ImportTasks
   Config = ProTacts::Import::Config
 
-  # What each carrying task waits on — a contact still to carry through
-  # that step — named so a status read can say what those tasks would
-  # pick next without restating their choice.
-  TO_LAND = ->(plan) { plan.with_status(nil).any? || plan.with_status("landed").any? }
-  TO_FINALIZE = ->(plan) { plan.with_status("imported").any? }
+  # What the one carrying task left here waits on — a contact still to
+  # finish — named so a status read can say what it would pick next
+  # without restating its choice. Landing is the import screen's, and
+  # writes nothing back to a plan, so a contact is outstanding until
+  # finalize takes it off this Mac.
+  TO_FINALIZE = ->(plan) { plan.outstanding.any? }
 
   # The plan PLAN names, or the oldest one still waiting for this step:
   # plans are carried in the order they were built, so the next one to
@@ -68,7 +70,7 @@ namespace :import do
       abort error.message
     end
 
-    desc "Finalize the contacts the oldest landed plan imported, taking them off this Mac and filing the plan away done (PLAN=dir for another)"
+    desc "Finalize the contacts the oldest unfinished plan landed, taking them off this Mac and filing the plan away done (PLAN=dir for another)"
     task :finalize do
       require "net/http"
       require "pro_tacts/import/http_client"
@@ -76,14 +78,19 @@ namespace :import do
       require "pro_tacts/import/finalize"
 
       plan = ImportTasks.plan(ImportTasks::TO_FINALIZE, "to finalize")
-      host = plan.host or abort("#{plan.dir} has not landed on a host")
-      uri = URI.parse(host)
-      puts "finalizing the contacts #{plan.dir} landed on #{host}"
+      # The host in the config rather than one the plan recorded: the
+      # import screen lands a plan and writes nothing back to it, so the
+      # config is the only place a host is named
+      # (docs/plans/2026-09-20-import-by-upload.md). Finalize asks it
+      # about every contact before deleting any, so a plan whose cards
+      # were never uploaded keeps all of them.
+      uri = ImportTasks::Config.read.host
+      puts "finalizing the contacts #{plan.dir} landed on #{uri}"
 
       result = nil #: ProTacts::Import::Finalize::Result?
       Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
         result = ProTacts::Import::Finalize.call(
-          plan, client: ProTacts::Import::HttpClient.new(http), mac: ProTacts::Import::Macos::Mac
+          plan, host: uri.to_s, client: ProTacts::Import::HttpClient.new(http), mac: ProTacts::Import::Macos::Mac
         )
       end
       result.kept.each { |id, name, why| puts "kept #{id} #{name}: #{why}" }
@@ -95,7 +102,7 @@ namespace :import do
     end
   end
 
-  desc "Summarize the plans in data/import — in flight and filed away done — and what execute and finalize would carry next"
+  desc "Summarize the plans in data/import — in flight and filed away done — and what would carry the next one further"
   task :status do
     require "pro_tacts/import/plan"
 
@@ -114,21 +121,21 @@ namespace :import do
       next
     end
 
-    # One line per plan in flight, as far along as it is: the fraction
-    # counts everything past “planned”, because from “landed” on the
-    # card is on the host — which is the state a glance wants. The
-    # plan names are the directories', copy-pasteable into PLAN=.
+    # One line per plan in flight, as far along as it is. The fraction
+    # counts the contacts finalized, which is the only progress a plan
+    # still records: landing happens in the app and leaves no mark here
+    # (docs/plans/2026-09-20-import-by-upload.md), so a glance answers
+    # “how much of this is off the Mac”. The plan names are the
+    # directories', copy-pasteable into PLAN=.
     in_flight = plans.map {
-      carried = it.contacts.size - it.with_status(nil).size
-      "#{it.dir.basename}  #{carried}/#{it.contacts.size} contacts"
+      "#{it.dir.basename}  #{it.contacts.size - it.outstanding.size}/#{it.contacts.size} finalized"
     }
 
-    landing = plans.find(&ImportTasks::TO_LAND)
     finalizing = plans.find(&ImportTasks::TO_FINALIZE)
-    next_up = [
-      ("next: import:execute would land #{landing.dir.basename}" if landing),
-      ("next: import:macos:finalize would finish #{finalizing.dir.basename}" if finalizing),
-    ].compact
+    next_up = finalizing ? [
+      "next: /import would land the cards of #{finalizing.dir.basename}",
+      "next: import:macos:finalize would finish #{finalizing.dir.basename}",
+    ] : []
 
     # What was carried through, whole counts because every contact
     # reached the final state — the fraction above can never appear
@@ -140,23 +147,5 @@ namespace :import do
     # next steps and still reports its history.
     sections = [in_flight, next_up, done.empty? ? [] : ["done:", *done]].reject(&:empty?)
     puts sections.map { it.join("\n") }.join("\n\n")
-  end
-
-  desc "Land the oldest plan in data/import/active still to land, or the one in PLAN, on the pro-tacts at the host in data/import/config.yml, a base URL such as https://contacts"
-  task :execute do
-    require "net/http"
-    require "pro_tacts/import/execute"
-    require "pro_tacts/import/http_client"
-    require "pro_tacts/import/plan"
-
-    plan = ImportTasks.plan(ImportTasks::TO_LAND, "to land")
-    uri = ImportTasks::Config.read.host
-    puts "landing #{plan.dir} on #{uri}"
-
-    Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
-      ProTacts::Import::Execute.call(plan, host: uri.to_s, client: ProTacts::Import::HttpClient.new(http))
-    end
-    groups = plan.contacts.flat_map { plan.card(it.id).groups }.uniq
-    puts "#{plan.contacts.size} contacts in #{groups.join(", ")} on #{uri}"
   end
 end

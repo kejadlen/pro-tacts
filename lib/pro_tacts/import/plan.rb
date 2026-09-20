@@ -8,8 +8,9 @@ require "pro_tacts/import/card"
 module ProTacts
   module Import
     # One import, as a directory: what a source builder decided, and how
-    # far execute and finalize have carried it
-    # (docs/plans/2026-09-16-importing-from-macos.md).
+    # far finalize has carried it
+    # (docs/plans/2026-09-16-importing-from-macos.md, and
+    # docs/plans/2026-09-20-import-by-upload.md for the step that left).
     class Plan
       # @rbs @dir: Pathname
       # @rbs @manifest: Hash[String, untyped]
@@ -22,10 +23,15 @@ module ProTacts
       Entry = Data.define(:id, :source_id, :card)
 
       # A contact as the plan lists it, with the last step it reached:
-      # nil, then landed, imported, and done, in that order. The name is
-      # the card's when the plan was built, written down so a person
-      # reading plan.yml can tell which line is whose without opening a
-      # card; nothing reads it back to decide anything.
+      # nil until it is done. The steps between — `landed` and
+      # `imported` — were `execute`'s to record, and went with it when
+      # landing moved into the app
+      # (docs/plans/2026-09-20-import-by-upload.md); a plan carried by
+      # that task still reads, and a contact wearing either status is
+      # outstanding like any other. The name is the card's when the plan
+      # was built, written down so a person reading plan.yml can tell
+      # which line is whose without opening a card; nothing reads it
+      # back to decide anything.
       # @rbs skip
       Contact = Data.define(:id, :source_id, :name, :status)
 
@@ -45,11 +51,9 @@ module ProTacts
       REMOVED = "removed" #: String
 
       # Whether the plan has carried every contact through: nothing
-      # left for execute or finalize to do.
+      # left for finalize to do.
       #: () -> bool
-      def done?
-        contacts.all? { [DONE, REMOVED].include?(it.status) }
-      end
+      def done? = outstanding.empty?
 
       #: (Pathname dir, source: String, created_at: Time, entries: Array[Entry]) -> Plan
       def self.write(dir, source:, created_at:, entries:)
@@ -71,7 +75,6 @@ module ProTacts
           "source" => source,
           "created_at" => created_at.utc.iso8601,
           "group" => group,
-          "host" => nil,
           "contacts" => entries.map {
             # A card may hold only one of the two names.
             person = [it.card.first, it.card.last].reject(&:empty?).join(" ")
@@ -114,16 +117,6 @@ module ProTacts
       #: () -> String
       def group = @manifest.fetch("group")
 
-      # The host the plan is landing on, once execute has started.
-      #: () -> String?
-      def host = @manifest.fetch("host")
-
-      #: (String host) -> void
-      def host=(host)
-        @manifest["host"] = host
-        save
-      end
-
       #: () -> Array[Contact]
       def contacts
         @manifest.fetch("contacts").map {
@@ -137,10 +130,12 @@ module ProTacts
         save
       end
 
-      # The contacts this far along, for a task picking a plan to carry
-      # further: none for a plan every step has finished.
-      #: (String? status) -> Array[Contact]
-      def with_status(status) = contacts.select { it.status == status }
+      # The contacts still to carry, for a task picking a plan to take
+      # further: none for a plan every step has finished. Anything that
+      # is not the final state counts, so a plan `execute` left part way
+      # through is outstanding where it left off.
+      #: () -> Array[Contact]
+      def outstanding = contacts.reject { [DONE, REMOVED].include?(it.status) }
 
       # The card as its file now reads, edits included.
       #: (String id) -> Card

@@ -7,8 +7,15 @@ module ProTacts
     # "Removing the originals"). Every check is a reason to keep a
     # contact rather than to delete one, because a wrong keep costs a
     # second look and a wrong delete costs the contact.
+    #
+    # The host is the one in data/import/config.yml, read by the task,
+    # rather than one the plan recorded: landing is the import screen's
+    # now and writes nothing back to the plan, so what the plan can
+    # still say is which contacts were meant to go, and the host is
+    # asked about each of them (docs/plans/2026-09-20-import-by-upload.md).
     class Finalize
       # @rbs @plan: Plan
+      # @rbs @host: String
       # @rbs @client: _Client
       # @rbs @mac: _Mac
 
@@ -22,23 +29,29 @@ module ProTacts
       # @rbs skip
       Result = Data.define(:done, :kept)
 
-      #: (Plan plan, client: _Client, mac: _Mac) -> Result
-      def self.call(plan, client:, mac:)
-        new(plan, client:, mac:).call
+      #: (Plan plan, host: String, client: _Client, mac: _Mac) -> Result
+      def self.call(plan, host:, client:, mac:)
+        new(plan, host:, client:, mac:).call
       end
 
-      #: (Plan plan, client: _Client, mac: _Mac) -> void
-      def initialize(plan, client:, mac:)
+      #: (Plan plan, host: String, client: _Client, mac: _Mac) -> void
+      def initialize(plan, host:, client:, mac:)
         @plan = plan
+        @host = host
         @client = client
         @mac = mac
       end
 
       #: () -> Result
       def call
-        imported = @plan.with_status("imported")
-        records = @mac.show(imported.map(&:source_id))
-        gone, still_there = imported.partition { !records.key?(it.source_id) }
+        # Every contact the plan has not finished, whether or not the
+        # import screen has landed it: #keep asks the host about each
+        # one, and a contact whose card is not there is kept rather
+        # than deleted — the check that stood behind the recorded
+        # status, and now stands in its place.
+        outstanding = @plan.outstanding
+        records = @mac.show(outstanding.map(&:source_id))
+        gone, still_there = outstanding.partition { !records.key?(it.source_id) }
         # A contact this Mac no longer has is a contact done, which is
         # what a rerun of an interrupted run sees.
         gone.each { @plan.record(it.id, Plan::DONE) }
@@ -73,7 +86,7 @@ module ProTacts
       def keep(contact, record)
         source = @plan.card(contact.id).source
         if !on_host?(contact.id)
-          "its card is no longer on #{@plan.host}"
+          "no card of its id is on #{@host}"
         elsif record.fetch("vcard") != source.fetch("vcard")
           "it has changed on this Mac since the plan"
         elsif record.fetch("note") != source.fetch("note")

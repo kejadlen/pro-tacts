@@ -41,14 +41,26 @@ module ProTacts
       # bytes cannot mislabel what they are.
       PHOTO_TYPES = {"image/jpeg" => "JPEG", "image/png" => "PNG", "image/gif" => "GIF"}.freeze #: Hash[String, String]
 
+      # A card off disk, where a plan keeps one. The BOM-tolerant mode is
+      # YAML.safe_load_file's own, kept because the read moved out of it.
+      #: (Pathname path) -> Card
+      def self.read(path)
+        parse(File.read(path, mode: "r:bom|utf-8"), path.to_s)
+      end
+
       # Every problem is refused rather than skipped: a key this does not
       # know, or a value YAML read as something other than text (an
       # unquoted `no` is false, and an unquoted 1815-12-10 a Date), is an
       # edit that would otherwise vanish.
-      #: (Pathname path) -> Card
-      def self.read(path)
-        document = YAML.safe_load_file(path)
-        invalid = ->(why) { raise Invalid, "#{path}: #{why}" }
+      #
+      # `name` is what a refusal names, and is a path only where the card
+      # came from one: an upload has no path this server can point at, so
+      # the import screen names the file the browser sent instead
+      # (docs/plans/2026-09-20-import-by-upload.md).
+      #: (String document, String name) -> Card
+      def self.parse(document, name)
+        document = YAML.safe_load(document)
+        invalid = ->(why) { raise Invalid, "#{name}: #{why}" }
         invalid.("is not a mapping") unless document.is_a?(Hash)
 
         missing = KEYS - document.keys
@@ -74,7 +86,7 @@ module ProTacts
 
         card
       rescue Psych::DisallowedClass => error
-        raise Invalid, "#{path}: #{error.message.sub(/\ATried to load unspecified class: /, "reads as a ")}; quote it"
+        raise Invalid, "#{name}: #{error.message.sub(/\ATried to load unspecified class: /, "reads as a ")}; quote it"
       end
 
       #: (untyped value) -> bool

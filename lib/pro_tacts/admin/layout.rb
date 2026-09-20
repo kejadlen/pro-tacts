@@ -120,11 +120,15 @@ module ProTacts
             # Device setup belongs here because the dashboard is a
             # search over contacts and /setup is not a contact — a
             # header link would put it beside the search on every
-            # screen, at the weight the app's own name has.
+            # screen, at the weight the app's own name has. Import is
+            # here for the same reason and is rarer still: a plan
+            # arrives a handful of times in a book's life
+            # (docs/plans/2026-09-20-import-by-upload.md).
             footer(class: "admin-footer") do
               version = ProTacts.config.version
               span(class: "type-label") { version } if version
               span(class: "type-label") { "+debug" } if ProTacts.config.debug?
+              a(href: "/import", class: "type-label") { "import" }
               a(href: "/setup", class: "type-label") { "device setup" }
             end
             # A server-rendered toast, Gloss's [role=status] contract:
