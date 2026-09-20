@@ -37,15 +37,7 @@ module ProTacts
       #: (Store store) -> void
       def initialize(store)
         @store = store
-        # Read once, and kept up to date as groups are made, so a plan
-        # naming one group across four hundred cards reads the list
-        # once rather than four hundred times. A nameless group is left
-        # out: a card's groups are names, and no name finds one.
         @group_ids = {} #: Hash[String, String]
-        store.all_groups.each do |group|
-          name = group.name
-          @group_ids[name] = group.id if name
-        end
       end
 
       #: (Hash[String, Card] cards) -> Array[Arrival]
@@ -86,10 +78,18 @@ module ProTacts
 
       # Looked up before it is made, so a plan naming a group this
       # server already has joins that one rather than colliding with
-      # its name (db/migrations/008_group_names.rb).
+      # its name (db/migrations/008_group_names.rb) — Execute's own
+      # shape, and for its reason.
+      #
+      # The lookup is per name rather than a list read once up front,
+      # because the put above makes a group of its own: the first card
+      # into an empty store creates `sync:*` (Store#everyone_group_id),
+      # and a list read before that would send this to create it again.
+      # Memoized, so a plan of four hundred cards under three group
+      # names reads the list three times.
       #: (String name) -> String
       def group_id(name)
-        @group_ids[name] ||= @store.create_group(name:)
+        @group_ids[name] ||= @store.all_groups.find { it.name == name }&.id || @store.create_group(name:)
       end
     end
   end
