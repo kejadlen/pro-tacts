@@ -140,8 +140,9 @@ module ProTacts
         source = {"identifier" => source_id, "vcard" => vcard, "note" => note, "contact" => contact}
         # Beyond the vCard, and carried from the source the card holds:
         # the note AppleScript gave up, and the picture the serializer
-        # leaves out.
-        photo = !contact.fetch("imageData").nil?
+        # leaves out. A contact whose picture came back only as a
+        # thumbnail still has one.
+        photo = !contact.fetch("imageData").nil? || !contact.fetch("thumbnailImageData").nil?
         card = Card.new(
           first:, last:, nickname:, birthday:, phones:, emails:, addresses:,
           note: noted(note, maiden_name, related_names(lines, carried)), photo:, groups: [], source:

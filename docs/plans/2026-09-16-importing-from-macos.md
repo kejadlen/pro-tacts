@@ -133,7 +133,8 @@ out again.
 
 The picture is the one field with no value of its own: `photo` says
 whether to carry what `source` holds, and the line is written from
-`imageData` with the TYPE its magic bytes name, the way Contact#photo
+`imageData`, or from `thumbnailImageData` when the framework gave no
+full image, with the TYPE its magic bytes name, the way Contact#photo
 reads one back. A `photo: true` the source cannot supply is refused.
 
 An address holds the editor's own parts — extended, street, locality,
@@ -191,9 +192,9 @@ contacts, macOS 26):
   has a unified identifier no container claims and a distinct
   `thumbnailImageData` of 723 to 333,967 bytes, and thumbnails without
   images are Monica's: 1,673 of its 1,680 cards, against 8 in the other
-  three accounts. Two of those 8 are iCloud's, and one has already
-  imported as `photo: false` over a 68,996-byte JPEG thumbnail, so
-  whether the builder falls back to `thumbnailImageData` is open.
+  three accounts. Two of those 8 are iCloud's, and one imported as
+  `photo: false` over a 68,996-byte JPEG thumbnail, so the builder
+  falls back to `thumbnailImageData` when `imageData` is nil.
 - `UID`. No card has one, so the builder adds the minted id.
 
 The reader asks for an explicit list of keys and fails if any comes back

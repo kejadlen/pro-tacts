@@ -151,12 +151,23 @@ module ProTacts
 
       # The source's picture as a PHOTO line, or nil for a card that
       # carries none and for data that decodes to no format the server
-      # knows — which Card.read refuses rather than dropping.
+      # knows — which Card.read refuses rather than dropping. The
+      # thumbnail stands in when the framework gave no full image, which
+      # is the only picture some contacts have
+      # (docs/plans/2026-09-16-importing-from-macos.md, "Reading the
+      # Mac").
       #: () -> String?
       def picture
         return unless photo
 
-        data = source.fetch("contact")["imageData"] #: untyped
+        contact = source.fetch("contact") #: untyped
+        photo_line(contact["imageData"]) || photo_line(contact["thumbnailImageData"])
+      end
+
+      # One picture as a PHOTO line, or nil for data that is not text,
+      # not base64, or no format the server knows.
+      #: (untyped data) -> String?
+      def photo_line(data)
         return unless data.is_a?(String)
 
         bytes = begin

@@ -163,6 +163,22 @@ class ImportCardTest < Minitest::Test
     assert_equal "image/jpeg", card.contact("kmnuqmzxylru").photo.mime_type
   end
 
+  def test_a_thumbnail_is_the_picture_when_the_source_holds_no_image
+    jpeg = ["\xFF\xD8\xFFthumbnail".b].pack("m0")
+    card = read(ADA.sub("photo: false", "photo: true").sub("  contact: {}", "  contact:\n    imageData:\n    thumbnailImageData: #{jpeg}"))
+
+    assert_includes card.contact("kmnuqmzxylru").vcard.to_s, "PHOTO;ENCODING=b;TYPE=JPEG:#{jpeg}\r\n"
+  end
+
+  def test_the_full_image_wins_over_the_thumbnail
+    image = ["\xFF\xD8\xFFimage".b].pack("m0")
+    thumbnail = ["\xFF\xD8\xFFthumbnail".b].pack("m0")
+    card = read(ADA.sub("photo: false", "photo: true")
+      .sub("  contact: {}", "  contact:\n    imageData: #{image}\n    thumbnailImageData: #{thumbnail}"))
+
+    assert_includes card.contact("kmnuqmzxylru").vcard.to_s, "PHOTO;ENCODING=b;TYPE=JPEG:#{image}\r\n"
+  end
+
   def test_a_photo_the_source_cannot_supply_is_refused
     assert_invalid ADA.sub("photo: false", "photo: true"), "photo is true and the source holds no picture"
   end

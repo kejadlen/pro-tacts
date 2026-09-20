@@ -16,11 +16,11 @@ class ImportMacosTest < Minitest::Test
   NAME = ["N:Lovelace;Ada;;;", "FN:Ada Lovelace"].freeze
   GROUPS = ["sync:*", "import-20260916T180412Z"].freeze
 
-  def record(identifier, name: NAME, lines: [], note: nil, image: nil)
+  def record(identifier, name: NAME, lines: [], note: nil, image: nil, thumbnail: nil)
     {
       "identifier" => identifier,
       "vcard" => ["BEGIN:VCARD", "VERSION:3.0", *name, *lines, "END:VCARD", ""].join("\r\n"),
-      "contact" => {"identifier" => identifier, "imageData" => image},
+      "contact" => {"identifier" => identifier, "imageData" => image, "thumbnailImageData" => thumbnail},
       "note" => note
     }
   end
@@ -291,6 +291,17 @@ class ImportMacosTest < Minitest::Test
 
       card = plan.card(plan.contacts.first.id)
       assert_equal "Analyst.", card.note
+      assert card.photo
+      assert_equal "image/jpeg", card.contact(plan.contacts.first.id).photo.mime_type
+    end
+  end
+
+  def test_a_contact_whose_picture_is_only_a_thumbnail_carries_it
+    in_tmpdir do |dir|
+      jpeg = ["\xFF\xD8\xFFthumbnail".b].pack("m0")
+      plan = Macos.plan(dir, [record("A:ABPerson", thumbnail: jpeg)], created_at: CREATED_AT)
+
+      card = plan.card(plan.contacts.first.id)
       assert card.photo
       assert_equal "image/jpeg", card.contact(plan.contacts.first.id).photo.mime_type
     end
