@@ -182,9 +182,18 @@ contacts, macOS 26):
   and reading `note` raises `CNPropertyNotFetchedException`. AppleScript's
   `note of person` returns the note, so notes come from there.
 - `PHOTO`. The image key comes back available, and still no card carries
-  a photo, so the builder writes `PHOTO` from `imageData`.
-  `imageDataAvailable` is true for 392 contacts while `imageData` is
-  present for 193; which of the two to believe is unsettled.
+  a photo, so the builder writes `PHOTO` from `imageData`. That is the
+  signal to believe: across the 360 people the iCloud container holds
+  unmerged, `imageDataAvailable` and `imageData` agree on every one
+  (measured 2026-09-19). The gap recorded here before — 392 against 193
+  — came of measuring the unified, all-account fetch instead, where 185
+  of 1,770 contacts claim an image and supply none. Each of those 185
+  has a unified identifier no container claims and a distinct
+  `thumbnailImageData` of 723 to 333,967 bytes, and thumbnails without
+  images are Monica's: 1,673 of its 1,680 cards, against 8 in the other
+  three accounts. Two of those 8 are iCloud's, and one has already
+  imported as `photo: false` over a 68,996-byte JPEG thumbnail, so
+  whether the builder falls back to `thumbnailImageData` is open.
 - `UID`. No card has one, so the builder adds the minted id.
 
 The reader asks for an explicit list of keys and fails if any comes back
