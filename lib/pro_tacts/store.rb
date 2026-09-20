@@ -112,6 +112,16 @@ module ProTacts
         Contact.new(id:, stored: VCard.new(lines.map { "#{it}\r\n" }.join), birthday: nil, inherited: [])
       end
 
+      # Whether this is one of the `sync:` groups that choose what a
+      # client syncs — #sync_name?'s rule, said of a group a screen
+      # already holds rather than of a row's name, for the listing that
+      # sets those groups apart from the ones a person made
+      # (Admin::GroupsIndex).
+      #: () -> bool
+      def sync?
+        name&.start_with?(SYNC_PREFIX) == true
+      end
+
       # The group's etag, for the editor's snapshot guard: a hash of
       # everything the edit screen shows and the save writes, so a
       # group edited since the page loaded refuses the stale save
