@@ -41,8 +41,7 @@ module ProTacts
     # no other page that holds what just arrived.
     #: (untyped r) -> String
     def apply_import(r)
-      uploads = r.params["cards"]
-      uploads = uploads.is_a?(Array) ? uploads.select { it.is_a?(Hash) && it[:tempfile] } : []
+      uploads = files_in(r.params["cards"])
       return plan_upload_screen(notice: "Choose the card files in a plan's cards directory.") if uploads.empty?
 
       cards = {} #: Hash[String, Import::Card]
@@ -72,6 +71,15 @@ module ProTacts
       end
 
       plan_upload_screen(arrivals: Import::Land.call(store, cards))
+    end
+
+    # The file parts the form sent, and none for a POST carrying no
+    # file: #ids_in's shape over an upload, and its reason for being a
+    # method — the empty case needs a type, and the signature is where
+    # one fits.
+    #: (untyped param) -> Array[untyped]
+    def files_in(param)
+      param.is_a?(Array) ? param.select { it.is_a?(Hash) && it[:tempfile] } : []
     end
 
     #: (?arrivals: Array[Import::Land::Arrival]?, ?notice: String?) -> String
