@@ -11,14 +11,16 @@ module ProTacts
     #
     # A card is stored as the card it arrived as, so nothing here is a
     # field-by-field mapping to approve. The only question is about the
-    # properties no screen in this address book shows: keep them (they
-    # are served back untouched, just invisible here), drop them, or
-    # write them under the note where they can at least be read. Keep
-    # is checked, because it is the choice that loses nothing.
+    # properties no screen in this address book shows. Those do not
+    # come in — a book padded with what nothing can display is worse
+    # than a book without it — so the question is narrower than it
+    # looks: is this one worth saving under the note on the way past?
+    # Dropping is checked, because it is what happens to everything
+    # nobody speaks for.
     #
     # Each property is shown with how many lines wear it and a few real
     # values out of this very file, so the choice is made looking at
-    # the book's own data rather than at a property name.
+    # the source's own data rather than at a property name.
     #
     # `upload` is the staged file (Import::Staged), carried in a hidden
     # field: the bytes stay on the server, and only the ticket to them
@@ -32,12 +34,10 @@ module ProTacts
 
       # What each choice is called where it is made. The wording says
       # what happens to the line, not what the server does with it: an
-      # importer is deciding about their own address book, not about
-      # RFC 6352's rule for a property a server does not understand.
+      # importer is deciding what their own address book is made of.
       WORDING = {
-        ::ProTacts::Import::Vcf::KEEP => "keep it in the card",
-        ::ProTacts::Import::Vcf::DROP => "drop it",
-        ::ProTacts::Import::Vcf::NOTE => "write it under the note",
+        ::ProTacts::Import::Vcf::DROP => "leave it behind",
+        ::ProTacts::Import::Vcf::NOTE => "save it under the note",
       }.freeze #: Hash[String, String]
 
       #: (upload: String, file: String, cards: Integer, unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String) -> void
@@ -89,7 +89,7 @@ module ProTacts
       def unknown_fields
         if @unknown.empty?
           p(class: "type-body-sm gl-muted") do
-            "Every property in this file is one this address book reads. Nothing to decide."
+            "Every property in this file is one pro-tacts reads. Nothing to decide."
           end
           return
         end
@@ -97,8 +97,8 @@ module ProTacts
         p(class: "type-body-sm") do
           "#{count(@unknown.length, "property", "properties")} here " \
             "#{@unknown.length == 1 ? "is one" : "are ones"} " \
-            "no screen in this address book shows. Kept, they travel with the card and come back out " \
-            "of it untouched; they are just not on display anywhere."
+            "no screen in pro-tacts shows, so #{@unknown.length == 1 ? "it stays" : "they stay"} " \
+            "behind. Send one under the note if the value is worth reading anyway."
         end
         @unknown.each { unknown_field(it) }
       end
@@ -115,7 +115,7 @@ module ProTacts
               # A label wrapping its own radio is Gloss's Radio.
               label do
                 input(type: "radio", name: "decide[#{property.name}]", value: choice,
-                      checked: choice == ::ProTacts::Import::Vcf::KEEP)
+                      checked: choice == ::ProTacts::Import::Vcf::DROP)
                 span { WORDING.fetch(choice) }
               end
             end

@@ -82,19 +82,22 @@ class AdminImportPagesTest < Minitest::Test
     assert_includes last_response.body, "X-ABRELATEDNAMES (1 line)"
     assert_includes last_response.body, "X-SOCIALPROFILE (1 line)"
     assert_includes last_response.body, "item1.X-ABRELATEDNAMES:Sam Booles"
-    %w[keep drop note].each do |choice|
+    %w[drop note].each do |choice|
       assert_includes last_response.body,
                       %(<input type="radio" name="decide[X-SOCIALPROFILE]" value="#{choice}")
     end
-    # Keeping loses nothing, so it is what an unread form sends.
+    # Nothing here will show it, so leaving it behind is what an
+    # unread form sends, and there is no third choice that keeps it.
     assert_includes last_response.body,
-                    %(name="decide[X-SOCIALPROFILE]" value="keep" checked>)
+                    %(name="decide[X-SOCIALPROFILE]" value="drop" checked>)
+    refute_includes last_response.body, %(value="keep")
   end
 
   def test_a_file_this_book_reads_whole_has_nothing_to_decide
     with_contacts({}) { upload(PLAIN) }
 
     assert_includes last_response.body, "Nothing to decide."
+    refute_includes last_response.body, "stays behind"
     refute_includes last_response.body, "decide["
   end
 
@@ -105,7 +108,7 @@ class AdminImportPagesTest < Minitest::Test
       post "/import/land",
            "upload" => staged,
            "group" => "import-20260921T031655Z",
-           "decide" => {"X-SOCIALPROFILE" => "drop", "X-ABRELATEDNAMES" => "note"}
+           "decide" => {"X-ABRELATEDNAMES" => "note"}
 
       assert_equal 200, last_response.status
       assert_includes last_response.body, "landed (1)"
@@ -120,15 +123,19 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
-  # The default is the choice that loses nothing, so a form submitted
-  # without touching a radio keeps everything.
-  def test_confirming_with_no_answers_keeps_everything
+  # Leaving it behind is what nobody has to ask for, so a form
+  # submitted without touching a radio brings in only what shows.
+  def test_confirming_with_no_answers_leaves_the_unknown_behind
     with_contacts({}) do |store|
       upload(JANE)
 
       post "/import/land", "upload" => staged, "group" => ""
 
-      assert_includes store.contacts.fetch(0).vcard.to_s, "X-SOCIALPROFILE"
+      card = store.contacts.fetch(0).vcard.to_s
+
+      refute_includes card, "X-SOCIALPROFILE"
+      refute_includes card, "X-ABRELATEDNAMES"
+      assert_includes card, "FN:Jane Booles"
       assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
     end
   end

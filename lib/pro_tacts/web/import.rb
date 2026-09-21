@@ -11,7 +11,9 @@ module ProTacts
     # tasks that read Contacts.app on a Mac, built a plan directory,
     # and carried it to a host over HTTP — a .vcf is what every
     # address book on earth already exports, and the machine holding
-    # it is whichever one the browser is on.
+    # it is whichever one the browser is on. What comes in is what
+    # this book can show; the rest is dropped, or saved under the note
+    # where the review screen says so.
     #
     # Two requests, because the question this screen exists to ask
     # cannot be asked until the file has been read: the first stages
@@ -109,13 +111,13 @@ module ProTacts
     # What the form said to do with each unknown property, read against
     # the survey rather than trusted: the names are the ones this run
     # found, and anything else a post carries is not a property of this
-    # file. An answer missing or unrecognized is a keep, the choice
-    # that loses nothing.
+    # file. An answer missing or unrecognized is a drop, which is what
+    # a property nobody spoke for gets either way (Import::Land#decide).
     #: (untyped param, Array[Import::Vcf::Unknown] unknown) -> Hash[String, String]
     def decisions_in(param, unknown)
       unknown.to_h { |property|
         answer = param.is_a?(Hash) ? param[property.name].to_s : ""
-        choice = Import::Vcf::CHOICES.include?(answer) ? answer : Import::Vcf::KEEP
+        choice = Import::Vcf::CHOICES.include?(answer) ? answer : Import::Vcf::DROP
         # A two-element literal is an Array until something says
         # otherwise, and an inline annotation needs its own line.
         [property.name, choice] #: [String, String]

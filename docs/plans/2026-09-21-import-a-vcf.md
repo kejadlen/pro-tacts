@@ -41,44 +41,61 @@ landed.
 ## Two screens, because of the question
 
 A card is stored as the card it arrived as. That is this server's whole
-posture (`2026-08-24-vcard-storage-and-groups.md`): RFC 6352 section
-6.3.2.2 requires a server to keep what it does not understand, and this
-one keeps it byte for byte. So there is no field mapping to approve on
-the way in, and nothing to confirm about N, TEL, ADR or PHOTO.
+posture (`2026-08-24-vcard-storage-and-groups.md`), and every property
+this address book reads travels through byte for byte. So there is no
+field mapping to approve on the way in, and nothing to confirm about N,
+TEL, ADR or PHOTO.
 
 There is one real question. A book exported from Contacts.app carries
 properties no screen here shows — `X-ABRELATEDNAMES`, `X-SOCIALPROFILE`,
-`X-ABADR`, `PRODID`, whatever the source thought worth writing. Kept,
-they travel with the card and come back out of it untouched; they are
-simply invisible in this app. That is the right default and it is not
-always what is wanted: some of it is the source's bookkeeping, and some
-of it is worth reading even with no field to read it in.
+`X-ABADR`, `PRODID`, whatever the source thought worth writing. Those
+do not come in. A card is meant to be the contact as this app can show
+it, and a book padded with lines nothing can display is one whose cards
+nobody can read — the bytes are the least of it.
 
-So the importer gets three choices per unknown property:
+RFC 6352 section 6.3.2.2 is not in tension with that. It binds this
+server to keep what a *client* submits and does not understand, and it
+does (`vcard.rb`): a property macOS PUTs into a card stays in that card
+and comes back out of it untouched. An import is the other direction —
+a person choosing what their own book is made of — and there the rule
+is the opposite one.
 
-- **keep it in the card** — the default, and the one that loses nothing.
-- **drop it** — for what the source keeps and this book has no use for.
-- **write it under the note** — for a value worth reading anyway. A
-  spouse's name is worth more under the note than nowhere.
+So the question is narrower than it first looks: of the properties
+leaving, which are worth saving on the way past? Two choices per
+unknown property:
+
+- **leave it behind** — the default, and what anything nobody speaks
+  for gets.
+- **save it under the note** — for a value worth reading even with no
+  field to read it in. A spouse's name is worth more under the note
+  than nowhere.
 
 The question cannot be asked until the file has been read, which is why
 this is two requests rather than one. The first stages the upload and
 surveys it; the second spends the answers. Each unknown property is
 shown with how many lines wear it and a few real values out of that very
-file, so the choice is made looking at the book's own data rather than
+file, so the choice is made looking at the source's own data rather than
 at a property name.
 
 The decision is per property name, not per line: `X-SOCIALPROFILE;
 type=twitter` is not a second decision from `X-SOCIALPROFILE`. A label
 Contacts hung beside a line it names (`item3.X-ABLabel`) goes wherever
-that line goes — a label naming nothing is worse than either choice.
-Under the note, the label is what the value is called, so the note
-reads `Spouse: Jane` and not `X-ABRELATEDNAMES: Jane`.
+that line goes — a label naming nothing is worse than either choice —
+while a label on a line that is coming in, `item1.ADR`'s say, comes in
+with it. Under the note, the label is what the value is called, so the
+note reads `Spouse: Jane` and not `X-ABRELATEDNAMES: Jane`.
+
+One thing is kept that nothing will show: a line that would not parse
+at all. The parser hands it back without a property name, so there is
+nothing to have listed on the review screen and nothing for the
+importer to have decided; throwing it away unnamed is worse than
+letting it ride along in the card's bytes.
 
 "Known" is the reader's list, not the writer's: the envelope, the fields
 a screen shows (`Contact`'s own accessors), and BDAY, which the store
-takes into the model. Adding a screen for a property is what takes it
-off the list of things to decide about.
+takes into the model. Adding a screen for a property is what brings it
+in, and until then importing one would only pad the cards with what
+nobody can read.
 
 ## The file waits on the server
 

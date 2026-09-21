@@ -10,12 +10,12 @@ module ProTacts
     # (docs/plans/2026-09-21-import-a-vcf.md).
     #
     # A card arrives a card and is stored as one: nothing here rebuilds
-    # it out of fields, so a property this address book has never heard
-    # of is kept by default and served back byte for byte (RFC 6352
-    # section 6.3.2.2, and VCard's whole posture). What the review
-    # screen collects is the exception to that — the handful of
-    # properties the importer would rather drop, or read under the
-    # note — and this is where those are spent.
+    # it out of fields, so every line this address book reads travels
+    # through byte for byte. What no screen here shows does not come in
+    # — a book padded with the source's bookkeeping is a book nobody
+    # can read the cards of — and what the review screen collects is
+    # the exception to that: the properties worth saving under the note
+    # on the way past. This is where those are spent.
     #
     # It writes through Store#put and Store#regroup rather than through
     # the routes those sit behind, so it is not a second way to write a
@@ -42,8 +42,9 @@ module ProTacts
       end
 
       # `decisions` is Vcf::CHOICES by property name, upper case, as
-      # Vcf#unknown names them; a property missing from it is kept.
-      # `group` is the group every arrival joins, or none.
+      # Vcf#unknown names them; a property missing from it is dropped,
+      # the choice nothing has to be said to get. `group` is the group
+      # every arrival joins, or none.
       #: (Store store, Array[VCard] cards, decisions: Hash[String, String], ?group: String?) -> Array[Contact]
       def self.call(store, cards, decisions:, group: nil)
         new(store, decisions:, group:).call(cards)
@@ -98,11 +99,10 @@ module ProTacts
         rest.insert(["UID:#{id}\r\n"])
       end
 
-      # The card with the importer's decisions spent on it: the lines
-      # they dropped gone, the lines they sent to the note gone from
-      # where they were and written under it, and everything else —
-      # every known property, and every unknown one they kept — exactly
-      # as it arrived, bytes and all.
+      # The card as this book will hold it: every property it reads,
+      # byte for byte as it arrived; nothing it does not read; and,
+      # under the note, the values the importer asked to save on the
+      # way past.
       #: (VCard card) -> VCard
       def decide(card)
         lines = card.lines
@@ -112,17 +112,19 @@ module ProTacts
 
         lines.each do |line|
           property = line.property
-          # A blank line, or one that would not read: there is no field
-          # to have made a decision about, and the bytes travel
-          # (VCard::Parser's own posture).
+          # A blank line, or one that would not read: no property name
+          # to have decided anything about, so the bytes travel rather
+          # than being thrown away unnamed (VCard::Parser's posture).
           if property.nil?
             kept << line.verbatim
             next
           end
 
-          choice = choice_for(property)
-          notes << noted(property, lines) if choice == Vcf::NOTE
-          next unless choice == Vcf::KEEP
+          unless Vcf.known?(property.name)
+            notes << noted(property, lines) if @decisions[property.name.upcase] == Vcf::NOTE
+            next
+          end
+
           # A label whose line is gone names nothing, so it goes too.
           next if orphaned.include?(property.group)
 
@@ -132,20 +134,13 @@ module ProTacts
         noted_into(VCard.new(kept.join), notes)
       end
 
-      # What the importer asked for this property. Anything they were
-      # not asked about — every known property — is kept, which is also
-      # what an unknown one gets when the form sent no answer for it
-      # (Web#decisions_in).
-      #: (VCard::Parser::Property property) -> String
-      def choice_for(property)
-        @decisions.fetch(property.name.upcase, Vcf::KEEP)
-      end
-
-      # The group prefixes (`item1.`) whose every line but the label is
-      # leaving. Apple hangs a label off the line it names rather than
-      # inside it, so dropping `item3.X-ABRELATEDNAMES` without this
-      # would leave `item3.X-ABLabel:_$!<Spouse>!$_` behind, naming a
-      # line that is no longer there.
+      # The group prefixes (`item1.`) with nothing left in them but a
+      # label. Apple hangs a label off the line it names rather than
+      # inside it, so bringing in `item3.X-ABLabel:_$!<Spouse>!$_`
+      # without its `item3.X-ABRELATEDNAMES` would leave a name for a
+      # line that is not there. A grouped property this book reads —
+      # `item1.ADR`, say — anchors its own group, because it is coming
+      # in.
       #: (Array[VCard::Parser::Line] lines) -> Array[String]
       def orphaned_groups(lines)
         anchored = {} #: Hash[String, bool]
@@ -156,7 +151,7 @@ module ProTacts
           group = property.group
           next if group.nil? || property.name.casecmp?(Vcf::LABEL)
 
-          anchored[group] = anchored.fetch(group, false) || choice_for(property) == Vcf::KEEP
+          anchored[group] = anchored.fetch(group, false) || Vcf.known?(property.name)
         end
         anchored.reject { |_group, kept| kept }.keys
       end

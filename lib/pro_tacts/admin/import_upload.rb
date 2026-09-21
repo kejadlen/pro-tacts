@@ -14,9 +14,10 @@ module ProTacts
     # file that Mac already knows how to export.
     #
     # The form takes one .vcf and nothing else. What it does not ask
-    # for here is what to do with the properties this address book does
-    # not read — that question needs the file open to be worth asking,
-    # so it is the next screen's (ImportReview).
+    # for here is what to do with the properties this address book
+    # does not read — which of them are worth saving under the note
+    # rather than leaving behind. That question needs the file open to
+    # be worth asking, so it is the next screen's (ImportReview).
     #
     # `landed` is the import that just happened, rendered below the
     # form that is still there to run another.
@@ -51,7 +52,8 @@ module ProTacts
             h1(class: "type-h2", style: "margin: 0;") { "Import contacts" }
             p(class: "type-body-sm") do
               "Choose a vCard file — Contacts exports one with File, Export, Export vCard. " \
-                "The next screen says what is in it before anything lands."
+                "The next screen says what is in it before anything lands, including what " \
+                "pro-tacts cannot show and will leave behind."
             end
             form(action: "/import", method: "post", enctype: "multipart/form-data", class: "field-stack") do
               label(class: "field") do

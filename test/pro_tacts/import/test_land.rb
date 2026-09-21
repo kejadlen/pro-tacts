@@ -17,8 +17,10 @@ class ImportLandTest < Minitest::Test
     N:Booles;Jane;;;
     FN:Jane Booles
     NOTE:Met at work
-    item1.X-ABRELATEDNAMES:Sam Booles
-    item1.X-ABLabel:_$!<Spouse>!$_
+    item1.ADR;type=HOME:;;1 Main St;Springfield;;;
+    item1.X-ABLabel:_$!<Home>!$_
+    item2.X-ABRELATEDNAMES:Sam Booles
+    item2.X-ABLabel:_$!<Spouse>!$_
     X-SOCIALPROFILE;type=twitter:https://twitter.com/jb
     UID:ABC-123
     END:VCARD
@@ -31,54 +33,55 @@ class ImportLandTest < Minitest::Test
     end
   end
 
-  # Nothing rebuilds a card out of fields: the bytes that arrived are
-  # the bytes that are stored, minus the id this server gives it.
-  def test_a_kept_property_travels_with_the_card
-    land({"X-SOCIALPROFILE" => Vcf::KEEP}) do |landed, _store|
+  # Nothing rebuilds a card out of fields: every line this book reads
+  # is the bytes that arrived, minus the id this server gives it.
+  def test_what_this_book_reads_travels_with_the_card
+    land({}) do |landed, _store|
       card = landed.fetch(0).vcard.to_s
 
-      assert_includes card, "X-SOCIALPROFILE;type=twitter:https://twitter.com/jb\r\n"
-      assert_includes card, "item1.X-ABRELATEDNAMES:Sam Booles\r\n"
+      assert_includes card, "N:Booles;Jane;;;\r\n"
+      assert_includes card, "FN:Jane Booles\r\n"
+      assert_includes card, "NOTE:Met at work\r\n"
+      assert_includes card, "item1.ADR;type=HOME:;;1 Main St;Springfield;;;\r\n"
     end
   end
 
-  # A property nobody was asked about is kept, which is every known
-  # one and any unknown one the form said nothing about.
-  def test_a_property_nobody_decided_is_kept
+  # A grouped property this book reads keeps the label that names it:
+  # the row is coming in, so the name for it is too.
+  def test_a_label_on_a_line_that_comes_in_comes_with_it
     land({}) do |landed, _store|
-      assert_includes landed.fetch(0).vcard.to_s, "X-SOCIALPROFILE"
+      assert_includes landed.fetch(0).vcard.to_s, "item1.X-ABLabel:_$!<Home>!$_\r\n"
     end
   end
 
-  def test_a_dropped_property_is_gone
-    land({"X-SOCIALPROFILE" => Vcf::DROP}) do |landed, _store|
+  # Nobody has to say so: a property no screen here shows is not
+  # carried in, and the label that named it goes with it.
+  def test_a_property_no_screen_shows_does_not_come_in
+    land({}) do |landed, _store|
       card = landed.fetch(0).vcard.to_s
 
       refute_includes card, "X-SOCIALPROFILE"
-      assert_includes card, "FN:Jane Booles\r\n"
-    end
-  end
-
-  # Apple hangs a row's label off the line it names rather than inside
-  # it, so a label whose line is dropped would be left naming nothing.
-  def test_a_dropped_line_takes_its_label_with_it
-    land({"X-ABRELATEDNAMES" => Vcf::DROP}) do |landed, _store|
-      card = landed.fetch(0).vcard.to_s
-
       refute_includes card, "X-ABRELATEDNAMES"
-      refute_includes card, "X-ABLabel"
+      refute_includes card, "_$!<Spouse>!$_"
     end
   end
 
-  # The note is where a value goes when it is worth reading and there
-  # is no field to read it in. It is called what the row was called,
-  # not what the property was named.
+  # Saying so explicitly is the same thing.
+  def test_dropping_is_what_a_drop_asks_for
+    land({"X-SOCIALPROFILE" => Vcf::DROP}) do |landed, _store|
+      refute_includes landed.fetch(0).vcard.to_s, "X-SOCIALPROFILE"
+    end
+  end
+
+  # The note is the way out for a value worth reading even with no
+  # field to read it in. It is called what the row was called, not
+  # what the property was named.
   def test_a_noted_property_is_written_under_the_note_by_its_label
     land({"X-ABRELATEDNAMES" => Vcf::NOTE}) do |landed, _store|
       card = landed.fetch(0).vcard.to_s
 
       refute_includes card, "X-ABRELATEDNAMES"
-      refute_includes card, "X-ABLabel"
+      refute_includes card, "_$!<Spouse>!$_"
       # One NOTE, the card's own and the addition, joined by the
       # escape a line break inside a text value is written as.
       assert_includes card, "NOTE:Met at work\\nSpouse: Sam Booles\r\n"
