@@ -81,14 +81,14 @@ class ImportLandTest < Minitest::Test
     end
   end
 
-  # The groups the review screen ticked, joined alongside the name it
-  # typed: an import is as often "these are the people from the school
-  # list" as it is a batch that only needs finding again.
-  def test_arrivals_join_the_groups_the_review_chose
+  # The groups the walk ticked, joined alongside the name the review
+  # screen typed: the import's own group takes in everything, and the
+  # rest is a contact at a time.
+  def test_an_arrival_joins_the_groups_chosen_for_it
     with_contacts({}) do |store|
       school = store.create_group(name: "school")
 
-      landed = Land.call(store, Vcf.cards(JANE), group: "import-20260921T031655Z", join: [school])
+      landed = Land.call(store, Vcf.cards(JANE), group: "import-20260921T031655Z", joins: [[school]])
       id = landed.fetch(0).id
 
       assert_equal [id], store.group(school).members
@@ -97,13 +97,30 @@ class ImportLandTest < Minitest::Test
     end
   end
 
-  # Either, or neither: the chosen groups stand on their own when no
-  # name is typed.
+  # A contact at a time means the cards do not all land alike: the
+  # choices are read by the card's own place in the file.
+  def test_each_arrival_joins_its_own_groups
+    with_contacts({}) do |store|
+      school = store.create_group(name: "school")
+      work = store.create_group(name: "work")
+
+      landed = Land.call(store, Vcf.cards(JANE + JANE + JANE), joins: [[school], [], [work, school]])
+      first, second, third = landed.map(&:id)
+
+      assert_equal [first, third].sort, store.group(school).members.sort
+      assert_equal [third], store.group(work).members
+      assert_equal [ProTacts::Store::EVERYONE],
+                   store.all_groups.select { it.members.include?(second) }.map(&:name)
+    end
+  end
+
+  # Either, or neither: a chosen group stands on its own when no name
+  # is typed.
   def test_arrivals_join_a_chosen_group_with_no_group_named
     with_contacts({}) do |store|
       school = store.create_group(name: "school")
 
-      landed = Land.call(store, Vcf.cards(JANE), join: [school])
+      landed = Land.call(store, Vcf.cards(JANE), joins: [[school]])
 
       assert_equal landed.map(&:id), store.group(school).members
       assert_equal %w[school], store.all_groups.map(&:name).reject { it == ProTacts::Store::EVERYONE }

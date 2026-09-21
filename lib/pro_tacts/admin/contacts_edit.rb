@@ -79,21 +79,26 @@ module ProTacts
       # @rbs @action: String
       # @rbs @back: [String, String]
       # @rbs @aside: Phlex::HTML?
+      # @rbs @fields: Phlex::HTML?
 
-      # `action`, `back` and `aside` are the import's: the same editor,
-      # over a card that is not stored yet, saving into the import
-      # rather than into a contact and rendered beside the card as it
-      # was exported (Admin::ImportOriginal). One editor rather than a
+      # `action`, `back`, `aside` and `fields` are the import's: the
+      # same editor, over a card that is not stored yet, saving into
+      # the import rather than into a contact, rendered beside the
+      # card as it was exported (Admin::ImportOriginal) and carrying
+      # what the walk decides about a contact that a card cannot hold
+      # — which groups it joins (Admin::ImportGroups), inside this
+      # form so that one Save writes the lot. One editor rather than a
       # second one for imports, because a field the two disagreed
       # about is a field an import writes and an edit cannot undo.
       # Defaulted to the contact's own, so the ordinary edit says
       # nothing about any of it.
-      #: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: Phlex::HTML?) -> void
-      def initialize(contact:, notice: nil, action: nil, back: nil, aside: nil)
+      #: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: Phlex::HTML?, ?fields: Phlex::HTML?) -> void
+      def initialize(contact:, notice: nil, action: nil, back: nil, aside: nil, fields: nil)
         @contact = contact
         @action = action || "/contacts/#{contact.id}"
         @back = back || ["/contacts/#{contact.id}", contact.name || contact.id]
         @aside = aside
+        @fields = fields
         # The rows are the contact's own, never what a group lends it
         # (Contact#own); the details page is where an inherited row is
         # read (Admin::ContactsShow). The etag below is still the
@@ -200,6 +205,10 @@ module ProTacts
                     textarea(name: "note", rows: 4,
                              placeholder: note ? "removed on save" : nil) { note.to_s }
                   end
+                  # Last, and only where something passed them: what
+                  # is not a property of the card reads after
+                  # everything that is.
+                  render @fields if @fields
                 end
               end
               # The card's action bar, a dialog footer's shape (admin.css),

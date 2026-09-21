@@ -108,17 +108,22 @@ So the review is a walk, four screens rather than a submission:
    not coming in struck in Gloss's danger color and labelled "not
    imported" beside it, a strike on its own being a color. On the
    right, the contact editor, pre-filled with what was read and
-   pointed at the import. Read the spouse's name off the left card and
-   type it into the note on the right, in your own words.
-4. **Confirm**, under whichever groups the arrivals should join, and
-   the cards land as the walk left them.
+   pointed at the import, with this book's groups under its fields as
+   boxes to tick. Read the spouse's name off the left card and type it
+   into the note on the right, in your own words, and put the contact
+   where it belongs while you are looking at it.
+4. **Confirm**, under a group for the lot, and the cards land as the
+   walk left them.
 
 The right-hand card is `Admin::ContactsEdit` itself, not a copy of it.
 A second editor for imports would be a place where the two could
 disagree — a field an import writes that an edit cannot undo — so the
-editor grew three arguments instead (`action`, `back`, `aside`) and the
-ordinary edit passes none of them. The birthday is split out of the
-card and into the model here exactly as `Store#put` splits it, so the
+editor grew four arguments instead (`action`, `back`, `aside`,
+`fields`) and the ordinary edit passes none of them. `fields` is the
+groups: they belong to the contact rather than to its card, and inside
+the editor's own form they save with everything else. The birthday is
+split out of the card and into the model here exactly as `Store#put`
+splits it, so the
 same row renders over a staged card as over a stored contact, and put
 back as a BDAY line on save; a BDAY spelling the model does not read
 stays in the card untouched, that method's own rule. The one birthday
@@ -132,12 +137,15 @@ it was typed.
 ## The import waits on the server
 
 An import is a directory under `data/imports`, keyed by a minted id
-that every screen of the walk carries in its path. Two slots in it,
-because the review screen shows two things at once: `original.vcf`, the
-uploaded file, written once and never again, and `landing.vcf`, the
-cards as they will land — pared when the import opens and rewritten
-whole each time the editor saves one of them. A card that has been
-edited still has to show what it arrived as, which is why both.
+that every screen of the walk carries in its path. Three slots in it.
+`original.vcf` is the uploaded file, written once and never again, and
+`landing.vcf` the cards as they will land — pared when the import opens
+and rewritten whole each time the editor saves one of them. A card that
+has been edited still has to show what it arrived as, which is why
+both. `groups.json` is which groups each of those cards is joining,
+keyed by the card's place in the file: a vCard says nothing about this
+book's groups, and a line invented to hold the answer would land in the
+contact.
 
 On disk rather than in the browser: a book with pictures in it is tens
 of megabytes, and a form carrying it back and forth is the upload done
@@ -166,21 +174,26 @@ dialog make:
 2. `Store#put` with `client: true`, so a card this creates joins
    everyone's book the way a client's create does
    (`2026-09-15-client-creates-join-everyone.md`).
-3. `Store#regroup` into whichever groups the review screen settled on.
-   There are two ways to name one there and they are both joins. The
-   text box makes a group, named `import-<timestamp>` by default — what
-   landed together can be found together, and undone together — and is
-   emptiable, a name this server already has joining that group rather
-   than colliding with it. Beside it every group this book already has,
-   as a box to tick, because an import is as often "these are the people
-   from the school list" as it is a batch that only needs finding again.
-   Neither is required: a card in no group is still in everyone's book.
+3. `Store#regroup` into whichever groups the walk settled on. Two
+   questions, asked in the two places they belong. The review screen
+   names one group for the lot, `import-<timestamp>` by default — what
+   landed together can be found together, and undone together — and it
+   is emptiable, a name this server already has joining that group
+   rather than colliding with it. Beside each contact's own card, every
+   group this book already has as a box to tick: an import is as often
+   "these three are from the school list" as it is a batch that only
+   needs finding again, and which people those are is exactly what the
+   walk is for. Neither is required, and a card in no group is still in
+   everyone's book.
 
-   Ticked for the whole file rather than per contact. The walk's pair of
-   cards is for fixing what one contact carries, and a group is not
-   something the file says anything about; once the arrivals have landed
-   the group they landed in is how to find them, and a group's own
-   editor is where its members are moved (`Admin::GroupsEdit`).
+   The per-contact boxes ride in the editor's own form, so one Save
+   writes the card and its groups together and there is no second
+   button to wonder about. They offer this book's groups and no new
+   name: naming a group per contact would be four hundred chances to
+   spell "Booles" two ways, and a contact's own page can make one the
+   moment it lands. What each contact is joining is read back on its
+   row in the list, because the walk is a screen at a time and the list
+   is where ten screens' worth of decisions are seen at once.
 
 Importing is not idempotent and cannot be. A `.vcf` carries no id this
 server minted, so a second upload of the same file is a second set of

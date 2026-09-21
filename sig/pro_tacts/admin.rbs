@@ -14,7 +14,7 @@ module ProTacts
     # ships no signatures and the views are ignored (see the
     # Steepfile).
     class ContactsEdit
-      def self.call: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: untyped) -> String
+      def self.call: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: untyped, ?fields: untyped) -> String
     end
 
     class Dashboard
@@ -46,13 +46,17 @@ module ProTacts
     end
 
     class ImportReview
-      def self.call: (upload: String, rows: Array[[Contact, Integer]], unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String, groups: Array[::ProTacts::Store::Group], ?notice: String?) -> String
+      def self.call: (upload: String, rows: Array[[Contact, Integer, Array[String]]], unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String, ?notice: String?) -> String
     end
 
-    # Rendered into ContactsEdit rather than called, so it is the one
-    # view here whose `new` is what checked code reaches for.
+    # Rendered into ContactsEdit rather than called, so these are the
+    # views here whose `new` is what checked code reaches for.
     class ImportOriginal
       def self.new: (card: ::ProTacts::VCard, dropped: Array[::ProTacts::VCard::Parser::Line]) -> instance
+    end
+
+    class ImportGroups
+      def self.new: (groups: Array[::ProTacts::Store::Group], joined: Array[String]) -> instance
     end
 
     # Rendered by Dashboard, not called from checked code; only

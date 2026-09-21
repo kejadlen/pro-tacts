@@ -1,7 +1,6 @@
 require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/format"
-require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
 require "pro_tacts/admin/list_item"
 
@@ -26,25 +25,22 @@ module ProTacts
     # going to copy across by hand.
     class ImportReview < Phlex::HTML
       # @rbs @upload: String
-      # @rbs @rows: Array[[::ProTacts::Contact, Integer]]
+      # @rbs @rows: Array[[::ProTacts::Contact, Integer, Array[String]]]
       # @rbs @unknown: Array[::ProTacts::Import::Vcf::Unknown]
       # @rbs @group: String
-      # @rbs @groups: Array[::ProTacts::Store::Group]
       # @rbs @notice: String?
 
-      # `rows` is the contact each card will land as, paired with how
-      # many of its original's lines are not coming with it. `upload`
-      # is the staged import every link and the confirm carry.
-      # `group` is the name the import offers to make; `groups` is
-      # every group this book already has, alphabetical because this
-      # is a list to find a name in (the groups dialog's own order).
-      #: (upload: String, rows: Array[[::ProTacts::Contact, Integer]], unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String, groups: Array[::ProTacts::Store::Group], ?notice: String?) -> void
-      def initialize(upload:, rows:, unknown:, group:, groups:, notice: nil)
+      # `rows` is the contact each card will land as, how many of its
+      # original's lines are not coming with it, and the groups the
+      # walk has put it in so far. `upload` is the staged import every
+      # link and the confirm carry, and `group` the name of the group
+      # this import offers to make for the lot of them.
+      #: (upload: String, rows: Array[[::ProTacts::Contact, Integer, Array[String]]], unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String, ?notice: String?) -> void
+      def initialize(upload:, rows:, unknown:, group:, notice: nil)
         @upload = upload
         @rows = rows
         @unknown = unknown
         @group = group
-        @groups = groups.sort_by { it.label.downcase }
         @notice = notice
       end
 
@@ -69,43 +65,19 @@ module ProTacts
             h1(class: "type-h2", style: "margin: 0;") { count(@rows.length, "contact") }
             losses
             form(action: "/import/#{@upload}/land", method: "post", class: "field-stack") do
-              # A group made for this import, named for the moment by
-              # default so one import can be found — or undone — apart
-              # from the next. Editable, and emptiable; a name this
-              # book already uses joins that group rather than making
-              # a second one by the same name (Import::Land#group_id).
+              # A group made for this import and taking in every
+              # contact, named for the moment by default so one import
+              # can be found — or undone — apart from the next.
+              # Editable, and emptiable; a name this book already uses
+              # joins that group rather than making a second one by the
+              # same name (Import::Land#group_id). Which of this book's
+              # own groups a contact joins is that contact's question,
+              # asked beside its card (Admin::ImportGroups).
               label(class: "field") do
-                span(class: "type-label") { "new group" }
+                span(class: "type-label") { "group for the lot" }
                 input(type: "text", name: "group", value: @group, placeholder: "no group")
               end
-              existing_groups
               button(type: "submit", data: {variant: "primary"}) { "import #{count(@rows.length, "contact")}" }
-            end
-          end
-        end
-      end
-
-      # The groups this book already has, every one of them a box the
-      # arrivals can join: an import is as often "these are the people
-      # from the school list" as it is a batch that only needs finding
-      # again, and a name typed into the box above is a name you have
-      # to know. Ticked alongside that name rather than instead of it
-      # — both are joins, and neither is required.
-      #
-      # Unchecked to begin with, every time. The import's own group is
-      # the default this screen argues for; putting four hundred
-      # arrivals somewhere else is a thing to say, not a box to leave
-      # as it was found.
-      #: () -> void
-      def existing_groups
-        return if @groups.empty?
-
-        div(class: "field-stack") do
-          span(class: "type-label") { "add to" }
-          @groups.each do |group|
-            label do
-              input(type: "checkbox", name: "groups[]", value: group.id)
-              render GroupLabel.new(group:)
             end
           end
         end
@@ -152,12 +124,17 @@ module ProTacts
             h2(class: "type-label") { "contacts" }
           end
           ul(class: "card") do
-            @rows.each_with_index do |(contact, dropped), index|
+            @rows.each_with_index do |(contact, dropped, joined), index|
               render ListItem.new(
                 href: "/import/#{@upload}/#{index}",
                 trailing: (count(dropped, "line") + " left behind" if dropped.positive?),
               ) do
                 div { Format.name_label(contact) }
+                # The groups this contact is joining, read back under
+                # its name: the walk is a screen at a time, and the
+                # list is where you see what the last ten screens
+                # settled on without opening them again.
+                div(class: "type-label") { joined.join(", ") } if joined.any?
               end
             end
           end

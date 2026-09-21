@@ -21,7 +21,7 @@ module ProTacts
     class Land
       # @rbs @store: Store
       # @rbs @group: String?
-      # @rbs @join: Array[String]
+      # @rbs @joins: Array[Array[String]]
       # @rbs @group_ids: Hash[String, String]
 
       # The group an import offers to put its arrivals in, named for
@@ -34,37 +34,38 @@ module ProTacts
       end
 
       # `group` is a group named rather than chosen — this server's
-      # own by that name, or a new one — and `join` the ids of groups
-      # it already has. Both, because the review screen offers both: a
-      # group named for the moment, so that what landed together can
-      # be found together, and the groups these people actually belong
-      # in. Either, or neither: nothing here is required, and a card
-      # in no group is still in everyone's book (#land).
-      #: (Store store, Array[VCard] cards, ?group: String?, ?join: Array[String]) -> Array[Contact]
-      def self.call(store, cards, group: nil, join: [])
-        new(store, group:, join:).call(cards)
+      # own by that name, or a new one — and it takes in every card,
+      # the import being the one thing they all have in common.
+      # `joins` is the rest, a card at a time: the ids of groups this
+      # book already has, as the walk ticked them contact by contact,
+      # in the cards' own order. Either, or neither: nothing here is
+      # required, and a card in no group is still in everyone's book
+      # (#land).
+      #: (Store store, Array[VCard] cards, ?group: String?, ?joins: Array[Array[String]]) -> Array[Contact]
+      def self.call(store, cards, group: nil, joins: [])
+        new(store, group:, joins:).call(cards)
       end
 
-      #: (Store store, ?group: String?, ?join: Array[String]) -> void
-      def initialize(store, group: nil, join: [])
+      #: (Store store, ?group: String?, ?joins: Array[Array[String]]) -> void
+      def initialize(store, group: nil, joins: [])
         @store = store
         @group = group
-        @join = join
+        @joins = joins
         @group_ids = {} #: Hash[String, String]
       end
 
       #: (Array[VCard] cards) -> Array[Contact]
       def call(cards)
-        cards.map { land(it) }
+        cards.each_with_index.map { |card, index| land(card, @joins.fetch(index, [])) }
       end
 
       private
 
-      # A card, then its group, the order a create writes them in: the
-      # put makes the contact, and the membership that follows puts it
-      # somewhere to be found.
-      #: (VCard card) -> Contact
-      def land(card)
+      # A card, then its groups, the order a create writes them in:
+      # the put makes the contact, and the memberships that follow put
+      # it somewhere to be found.
+      #: (VCard card, Array[String] chosen) -> Contact
+      def land(card, chosen)
         id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
         # `client: true` for what a client's PUT means here: a card this
         # creates joins `sync:*`, or it would be on the server and in
@@ -74,8 +75,8 @@ module ProTacts
         group = @group
         # The named group is resolved per card rather than up front,
         # for #group_id's reason; the chosen ids need no resolving,
-        # the review screen having read them off this same store.
-        join = group ? [*@join, group_id(group)] : @join
+        # the walk having read them off this same store.
+        join = group ? [*chosen, group_id(group)] : chosen
         @store.regroup(id, join:, leave: []) unless join.empty?
 
         # Read back rather than kept from the put, because the group

@@ -1,5 +1,6 @@
 require "pro_tacts/admin/card_form"
 require "pro_tacts/admin/contacts_edit"
+require "pro_tacts/admin/import_groups"
 require "pro_tacts/admin/import_original"
 require "pro_tacts/admin/import_review"
 require "pro_tacts/admin/import_upload"
@@ -113,11 +114,17 @@ module ProTacts
       return expired_screen if staged.nil?
 
       originals, landing = staged
+      chosen = Import::Staged.groups(upload)
+      # By name, because the row is read rather than submitted: a
+      # group the walk ticked and someone then deleted is simply not
+      # among these.
+      names = store.all_groups.to_h { |group| [group.id, group.label] }
       rows = landing.each_with_index.map { |card, index|
-        # A two-element literal is an Array until something says
-        # otherwise, and an inline annotation needs its own line.
+        # A literal of several elements is an Array until something
+        # says otherwise, and an inline annotation needs its own line.
         dropped = Import::Vcf.read(originals.fetch(index)).dropped
-        [import_contact(card, index), Import::Vcf.losses(dropped).length] #: [Contact, Integer]
+        joined = chosen.fetch(index.to_s, []).filter_map { names[it] }.sort
+        [import_contact(card, index), Import::Vcf.losses(dropped).length, joined] #: [Contact, Integer, Array[String]]
       }
 
       response["Content-Type"] = "text/html; charset=utf-8"
@@ -126,7 +133,6 @@ module ProTacts
         rows:,
         unknown: Import::Vcf.unknown(originals),
         group: Import::Land.default_group,
-        groups: store.all_groups,
         notice:,
       )
     end
@@ -155,6 +161,10 @@ module ProTacts
         action: "/import/#{upload}/#{index}",
         back: ["/import/#{upload}", "the import"],
         aside: Admin::ImportOriginal.new(card: original, dropped: Import::Vcf.read(original).dropped),
+        fields: Admin::ImportGroups.new(
+          groups: store.all_groups,
+          joined: Import::Staged.groups(upload).fetch(index.to_s, []),
+        ),
       )
     end
 
@@ -225,6 +235,15 @@ module ProTacts
 
       landing[index] = edited
       Import::Staged.update(upload, joined(landing))
+      # The groups ride in the same form and save with it
+      # (Admin::ImportGroups): a card the walk has looked at has been
+      # decided about in both ways at once. Only ids naming a group,
+      # #apply_groups' own rule, and the boxes are the whole answer —
+      # none ticked is none joined, not "leave it as it was".
+      Import::Staged.update_groups(
+        upload,
+        Import::Staged.groups(upload).merge(index.to_s => ids_in(r.params["groups"]) & store.all_groups.map(&:id)),
+      )
       r.redirect "/import/#{upload}", 303
     end
 
@@ -236,11 +255,14 @@ module ProTacts
 
       _originals, landing = staged
       group = r.params["group"].to_s.strip
-      # Only ids naming a group, #apply_groups' own rule: Store#add_member
-      # reads the group with `sole`, so a doctored one would be a 500
-      # rather than the bad input it is.
-      join = ids_in(r.params["groups"]) & store.all_groups.map(&:id)
-      landed = Import::Land.call(store, landing, group: group.empty? ? nil : group, join:)
+      # Filtered again here, and not only where the walk wrote them
+      # (#save_card): a group can be deleted between the tick and the
+      # confirm, and Store#add_member reads a group with `sole`, so a
+      # stale id would be a 500 rather than the nothing it means.
+      known = store.all_groups.map(&:id)
+      chosen = Import::Staged.groups(upload)
+      joins = landing.each_index.map { chosen.fetch(it.to_s, []) & known }
+      landed = Import::Land.call(store, landing, group: group.empty? ? nil : group, joins:)
       Import::Staged.close(upload)
 
       import_screen(landed:)

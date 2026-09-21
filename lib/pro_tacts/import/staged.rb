@@ -1,4 +1,5 @@
 require "fileutils"
+require "json"
 require "pathname"
 
 require "pro_tacts"
@@ -11,13 +12,15 @@ module ProTacts
     # over the contacts in a file, a screen at a time, and what the
     # walk is reading and writing has to outlive each request.
     #
-    # Two slots per import, because the review screen shows two things
-    # at once. ORIGINAL is the uploaded file, written once and never
-    # again: it is what the left-hand card renders, and a card that has
-    # been edited still has to show what it arrived as. LANDING is the
-    # cards as they will land — pared to what this book reads when the
-    # import opens (Vcf.read), and rewritten whole each time the editor
-    # saves one of them.
+    # Three slots per import. ORIGINAL is the uploaded file, written
+    # once and never again: it is what the left-hand card renders, and
+    # a card that has been edited still has to show what it arrived
+    # as. LANDING is the cards as they will land — pared to what this
+    # book reads when the import opens (Vcf.read), and rewritten whole
+    # each time the editor saves one of them. GROUPS is which groups
+    # each of those cards is joining, a decision the cards themselves
+    # cannot carry: a vCard says nothing about this book's groups, and
+    # a line invented to hold the answer would land in the contact.
     #
     # On disk rather than in the browser: a book with pictures in it is
     # tens of megabytes, and a form carrying it back and forth is the
@@ -33,7 +36,8 @@ module ProTacts
 
       ORIGINAL = "original" #: String
       LANDING = "landing" #: String
-      SLOTS = [ORIGINAL, LANDING].freeze #: Array[String]
+      GROUPS = "groups" #: String
+      SLOTS = [ORIGINAL, LANDING, GROUPS].freeze #: Array[String]
 
       # How long an import is worth keeping. Long enough to work down
       # a book's worth of contacts over an evening, and short enough
@@ -53,6 +57,10 @@ module ProTacts
         FileUtils.mkdir_p(directory)
         File.binwrite(directory / file_name(ORIGINAL), original)
         File.binwrite(directory / file_name(LANDING), landing)
+        # Empty rather than absent, so every slot of an import that
+        # exists is a file that exists and a write can say which of
+        # the two it found (#write).
+        File.binwrite(directory / file_name(GROUPS), JSON.generate({}))
         id
       end
 
@@ -79,10 +87,32 @@ module ProTacts
       # names one.
       #: (String id, String landing) -> void
       def self.update(id, landing)
-        file = path(id, LANDING) or raise ArgumentError, "#{id} is not an import id"
-        raise ArgumentError, "#{id} is not an import in progress" unless file.file?
+        write(id, LANDING, landing)
+      end
 
-        File.binwrite(file.to_s, landing)
+      # Which groups each contact joins, by its place in the file —
+      # the name every screen of the walk calls a contact by, there
+      # being no minted id until it lands. Rewritten whole like the
+      # cards beside it, and for the same reason: one save is one
+      # state of the whole import.
+      #: (String id, Hash[String, Array[String]] groups) -> void
+      def self.update_groups(id, groups)
+        write(id, GROUPS, JSON.generate(groups))
+      end
+
+      # What #update_groups last wrote, and nothing for an import
+      # that is gone. Read back into the shape it was written in
+      # rather than trusted: this is a file on disk, and a slot that
+      # will not parse is a broken assumption JSON says so about.
+      #: (String id) -> Hash[String, Array[String]]
+      def self.groups(id)
+        raw = read(id, GROUPS)
+        return {} if raw.nil?
+
+        parsed = JSON.parse(raw)
+        return {} unless parsed.is_a?(Hash)
+
+        parsed.to_h { |index, ids| [index.to_s, (ids.is_a?(Array) ? ids : []).map(&:to_s)] }
       end
 
       # The import, gone: the last step of a landing, and what keeps
@@ -132,12 +162,24 @@ module ProTacts
         directory / file_name(slot)
       end
 
-      #: (String slot) -> String
-      def self.file_name(slot)
-        "#{slot}.vcf"
+      # One slot, rewritten. Both refusals name which of the two
+      # things went wrong: an id this never minted, or an import that
+      # is no longer here.
+      #: (String id, String slot, String contents) -> void
+      def self.write(id, slot, contents)
+        file = path(id, slot) or raise ArgumentError, "#{id} is not an import id"
+        raise ArgumentError, "#{id} is not an import in progress" unless file.file?
+
+        File.binwrite(file.to_s, contents)
       end
 
-      private_class_method :root, :import_root, :path, :file_name
+      # The cards are a .vcf, and the groups beside them are not.
+      #: (String slot) -> String
+      def self.file_name(slot)
+        slot == GROUPS ? "#{slot}.json" : "#{slot}.vcf"
+      end
+
+      private_class_method :root, :import_root, :path, :file_name, :write
     end
   end
 end

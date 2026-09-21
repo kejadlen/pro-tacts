@@ -261,37 +261,83 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
-  # The groups this book already has, offered beside the name the
-  # import would make: an import is as often people who belong in a
-  # group that exists as it is a batch that only needs finding again.
-  def test_the_review_offers_the_groups_this_book_already_has
+  # The whole file's group is named on the review screen; which of
+  # this book's own groups a contact joins is asked beside that
+  # contact's card, and saved by the same Save as its fields.
+  def test_a_contact_is_put_in_its_groups_beside_its_own_card
     with_contacts({}) do |store|
       school = store.create_group(name: "school")
+      id = upload(JANE + PLAIN)
 
-      upload(JANE)
+      get "/import/#{id}/0"
+
+      assert_includes last_response.body, %(<input type="checkbox" name="groups[]" value="#{school}">school)
+
+      post "/import/#{id}/0",
+           "etag" => etag, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "nickname" => "", "note" => "", "groups" => [school]
+
+      assert_equal 303, last_response.status
+      assert_empty store.changes
+
+      # Read back on the row, so the walk can be seen without opening
+      # every contact again, and in the box when the card is reopened.
       follow_redirect!
 
-      assert_includes last_response.body, %(<input type="text" name="group" value="import-)
-      assert_includes last_response.body, %(<input type="checkbox" name="groups[]" value="#{school}">school)
+      assert_includes last_response.body, %(<div class="type-label">school</div>)
+
+      get "/import/#{id}/0"
+
+      assert_includes last_response.body,
+                      %(<input type="checkbox" name="groups[]" value="#{school}" checked>school)
     end
   end
 
-  # Ticked and typed are both joins. The id that names no group is
-  # dropped rather than carried into Store#add_member, which reads a
-  # group with `sole` and would answer bad input with a 500.
-  def test_confirming_joins_the_groups_that_were_ticked
+  # Contact by contact, so the cards do not all land alike. The id
+  # that names no group is dropped rather than carried into
+  # Store#add_member, which reads a group with `sole` and would
+  # answer bad input with a 500.
+  def test_confirming_joins_each_contact_to_its_own_groups
+    with_contacts({}) do |store|
+      school = store.create_group(name: "school")
+      id = upload(JANE + PLAIN)
+
+      get "/import/#{id}/0"
+      post "/import/#{id}/0",
+           "etag" => etag, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "nickname" => "", "note" => "", "groups" => [school, "zzzz"]
+
+      post "/import/#{id}/land", "group" => "import-20260921T031655Z"
+
+      assert_equal 200, last_response.status
+      jane = store.contacts.find { it.name == "Jane Booles" }
+      sam = store.contacts.find { it.name == "Sam Booles" }
+
+      assert_equal [jane.id], store.group(school).members
+      assert_equal ["import-20260921T031655Z", "school", ProTacts::Store::EVERYONE],
+                   store.all_groups.select { it.members.include?(jane.id) }.map(&:name).sort
+      assert_equal ["import-20260921T031655Z", ProTacts::Store::EVERYONE],
+                   store.all_groups.select { it.members.include?(sam.id) }.map(&:name).sort
+    end
+  end
+
+  # A group deleted between the tick and the confirm is nothing, not
+  # a 500: the ids are filtered again where they are used.
+  def test_a_group_that_went_away_before_the_confirm_is_dropped
     with_contacts({}) do |store|
       school = store.create_group(name: "school")
       id = upload(JANE)
 
-      post "/import/#{id}/land", "group" => "import-20260921T031655Z", "groups" => [school, "zzzz"]
+      get "/import/#{id}/0"
+      post "/import/#{id}/0",
+           "etag" => etag, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "nickname" => "", "note" => "", "groups" => [school]
+      store.delete_group(school)
+
+      post "/import/#{id}/land", "group" => ""
 
       assert_equal 200, last_response.status
-      landed = store.contacts.fetch(0)
-
-      assert_equal [landed.id], store.group(school).members
-      assert_equal ["import-20260921T031655Z", "school", ProTacts::Store::EVERYONE],
-                   store.all_groups.select { it.members.include?(landed.id) }.map(&:name).sort
+      assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
     end
   end
 
