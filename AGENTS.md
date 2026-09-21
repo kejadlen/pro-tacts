@@ -39,10 +39,10 @@ profiles, so leave those to the user.
 
 Importing is not a task at all: a .vcf is uploaded at `/import` in the
 app, and reviewed there contact by contact — the card as the file wrote
-it beside the card that is landing, with the lines no screen here shows
-struck, and this book's groups as boxes to tick beside a box for a new
-one — before the lot is landed through the store, into a group made for
-the import and whichever groups each contact was given
+it beside the card that is coming in, with the lines no screen here
+shows struck, and this book's groups as boxes to tick beside a box for a
+new one — before the lot is written through the store, into a group made
+for the import and whichever groups each contact was given
 (docs/plans/2026-09-21-import-a-vcf.md). The `import:*` tasks, the Swift
 reader they drove Contacts.app with, and the plan directories they wrote
 are gone.
@@ -67,7 +67,7 @@ lib/pro_tacts/
 ├── web/setup.rb    # The device setup screen and its profile
 ├── web/import.rb   # The import screen: a .vcf, uploaded and decided
 ├── web/api.rb      # JSON for scripts: the group list
-├── import/         # Reading an uploaded .vcf, and landing its cards
+├── import/         # Reading an uploaded .vcf, and writing its cards
 ├── admin/          # The Phlex views those screens render, plus
 │                   # card_form.rb, which reads a form back into a card
 ├── store.rb        # Sequel over SQLite: cards, change log, derived index

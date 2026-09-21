@@ -19,7 +19,7 @@ module ProTacts
     # A box per group this book has, then a box per group this import
     # has been told to make and has not made yet, then somewhere to
     # name another. A named group is not created here: it is made at
-    # the landing (Import::Land#group_id), because a group created
+    # the confirm (Import::Write#group_id), because a group created
     # while the walk is still going is a group left behind by an
     # import that was abandoned. So it rides as a name until then, and
     # shows as a ticked box like any other so that it can be unticked.
@@ -64,7 +64,7 @@ module ProTacts
           # and taken off again.
           label(class: "field") do
             span { "New group" }
-            input(type: "text", name: "new", placeholder: "made when the import lands")
+            input(type: "text", name: "new", placeholder: "made when the import is confirmed")
           end
         end
       end

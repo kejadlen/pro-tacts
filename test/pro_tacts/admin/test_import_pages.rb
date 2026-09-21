@@ -70,7 +70,7 @@ class AdminImportPagesTest < Minitest::Test
     assert_includes last_response.body, %(<input type="file" name="vcf" accept=".vcf,text/vcard">)
   end
 
-  def test_an_upload_is_looked_over_before_anything_lands
+  def test_an_upload_is_looked_over_before_anything_is_written
     with_contacts({}) do |store|
       id = upload(JANE + PLAIN)
 
@@ -116,7 +116,7 @@ class AdminImportPagesTest < Minitest::Test
       upload(PLAIN)
       follow_redirect!
 
-      assert_includes last_response.body, "Nothing in this file needs reading before it lands."
+      assert_includes last_response.body, "Nothing in this file needs reading before it comes in."
       refute_includes last_response.body, "left behind"
     end
   end
@@ -129,7 +129,7 @@ class AdminImportPagesTest < Minitest::Test
       upload(PLAIN.sub("VERSION:3.0\r\n", "VERSION:3.0\r\nPRODID:-//Apple Inc.//macOS 15.0//EN\r\n"))
       follow_redirect!
 
-      assert_includes last_response.body, "Nothing in this file needs reading before it lands."
+      assert_includes last_response.body, "Nothing in this file needs reading before it comes in."
       refute_includes last_response.body, "left behind"
       refute_includes last_response.body, "PRODID"
     end
@@ -147,14 +147,14 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body,
                       %(<li data-dropped><span>PRODID:-//Apple Inc.//macOS 15.0//EN</span>)
 
-      post "/import/#{id}/land", "group" => ""
+      post "/import/#{id}/confirm", "group" => ""
 
       refute_includes store.contacts.fetch(0).vcard.to_s, "PRODID"
     end
   end
 
   # The two cards: the contact as the file wrote it, and the contact
-  # that is landing, open in the editor.
+  # that is coming in, open in the editor.
   def test_a_contact_opens_beside_the_card_it_arrived_as
     with_contacts({}) do |_store|
       id = upload(JANE)
@@ -188,7 +188,7 @@ class AdminImportPagesTest < Minitest::Test
 
   # The point of the pair: read what is being left behind on the
   # left, and put what matters into the card on the right.
-  def test_an_edit_is_held_against_the_contact_until_the_import_lands
+  def test_an_edit_is_held_against_the_contact_until_the_import_is_confirmed
     with_contacts({}) do |store|
       id = upload(JANE)
       get "/import/#{id}/0"
@@ -200,7 +200,7 @@ class AdminImportPagesTest < Minitest::Test
       assert_equal 303, last_response.status
       assert_empty store.changes
 
-      post "/import/#{id}/land", "group" => ""
+      post "/import/#{id}/confirm", "group" => ""
 
       assert_includes store.contacts.fetch(0).vcard.to_s, "NOTE:Spouse: Sam Booles"
     end
@@ -224,8 +224,8 @@ class AdminImportPagesTest < Minitest::Test
 
   # The birthday is the one field the editor holds in the model
   # rather than in the card, and a staged contact has no model: the
-  # save writes it back as the BDAY line it will land as.
-  def test_a_birthday_typed_on_the_import_lands_with_the_contact
+  # save writes it back as the BDAY line it will come in as.
+  def test_a_birthday_typed_on_the_import_comes_in_with_the_contact
     with_contacts({}) do |store|
       id = upload(JANE)
       get "/import/#{id}/0"
@@ -237,7 +237,7 @@ class AdminImportPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
 
-      post "/import/#{id}/land", "group" => ""
+      post "/import/#{id}/confirm", "group" => ""
 
       assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), store.contacts.fetch(0).birthday
     end
@@ -245,8 +245,8 @@ class AdminImportPagesTest < Minitest::Test
 
   # And the shape no card can spell is refused rather than dropped:
   # the model that holds a partial birthday does not exist until the
-  # contact lands (docs/plans/2026-08-31-partial-birthdays.md).
-  def test_a_birthday_no_card_can_spell_is_refused_until_the_contact_lands
+  # contact is stored (docs/plans/2026-08-31-partial-birthdays.md).
+  def test_a_birthday_no_card_can_spell_is_refused_until_the_contact_is_stored
     with_contacts({}) do |_store|
       id = upload(JANE)
       get "/import/#{id}/0"
@@ -257,7 +257,7 @@ class AdminImportPagesTest < Minitest::Test
            "birthday" => { "year" => "1985", "month" => "", "day" => "" }
 
       assert_equal 200, last_response.status
-      assert_includes last_response.body, "A card cannot hold a birthday that partial until it lands."
+      assert_includes last_response.body, "A card cannot hold a birthday that partial."
     end
   end
 
@@ -294,10 +294,10 @@ class AdminImportPagesTest < Minitest::Test
   end
 
   # A group that does not exist yet is named beside the contact and
-  # made at the landing, not before: a group created while the walk
+  # made at the confirm, not before: a group created while the walk
   # is still going is one left behind by an import that was
   # abandoned.
-  def test_a_group_named_during_the_walk_waits_for_the_landing
+  def test_a_group_named_during_the_walk_waits_for_the_confirm
     with_contacts({}) do |store|
       id = upload(JANE)
       get "/import/#{id}/0"
@@ -316,14 +316,14 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body,
                       %(<input type="checkbox" name="named[]" value="Clarks" checked>)
 
-      post "/import/#{id}/land", "group" => ""
+      post "/import/#{id}/confirm", "group" => ""
       clarks = store.all_groups.find { it.name == "Clarks" }
 
       assert_equal [store.contacts.fetch(0).id], clarks.members
     end
   end
 
-  # Contact by contact, so the cards do not all land alike. The id
+  # Contact by contact, so the cards do not all come in alike. The id
   # that names no group is dropped rather than carried into
   # Store#add_member, which reads a group with `sole` and would
   # answer bad input with a 500.
@@ -337,7 +337,7 @@ class AdminImportPagesTest < Minitest::Test
            "etag" => etag, "first" => "Jane", "middle" => "", "last" => "Booles",
            "nickname" => "", "note" => "", "groups" => [school, "zzzz"]
 
-      post "/import/#{id}/land", "group" => "import-20260921T031655Z"
+      post "/import/#{id}/confirm", "group" => "import-20260921T031655Z"
 
       assert_equal 200, last_response.status
       jane = store.contacts.find { it.name == "Jane Booles" }
@@ -364,21 +364,21 @@ class AdminImportPagesTest < Minitest::Test
            "nickname" => "", "note" => "", "groups" => [school]
       store.delete_group(school)
 
-      post "/import/#{id}/land", "group" => ""
+      post "/import/#{id}/confirm", "group" => ""
 
       assert_equal 200, last_response.status
       assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
     end
   end
 
-  def test_confirming_lands_the_contacts_as_they_stand
+  def test_confirming_writes_the_contacts_as_they_stand
     with_contacts({}) do |store|
       id = upload(JANE + PLAIN)
 
-      post "/import/#{id}/land", "group" => "import-20260921T031655Z"
+      post "/import/#{id}/confirm", "group" => "import-20260921T031655Z"
 
       assert_equal 200, last_response.status
-      assert_includes last_response.body, "landed (2)"
+      assert_includes last_response.body, "imported (2)"
       assert_equal 2, store.contacts.length
       assert_includes store.all_groups.map(&:name), "import-20260921T031655Z"
 
@@ -393,12 +393,12 @@ class AdminImportPagesTest < Minitest::Test
 
   # Swept out from under a screen left open, or a confirm submitted
   # twice: the import is gone and only the person has another copy.
-  def test_a_confirm_with_no_staged_import_lands_nothing
+  def test_a_confirm_with_no_staged_import_writes_nothing
     with_contacts({}) do |store|
       id = upload(JANE)
 
-      post "/import/#{id}/land", "group" => ""
-      post "/import/#{id}/land", "group" => ""
+      post "/import/#{id}/confirm", "group" => ""
+      post "/import/#{id}/confirm", "group" => ""
 
       assert_includes last_response.body, "That import is no longer here."
       assert_equal 1, store.contacts.length
@@ -411,7 +411,7 @@ class AdminImportPagesTest < Minitest::Test
     with_contacts({}) do |store|
       refute ProTacts::ChangeId.minted?("notminted")
 
-      post "/import/notminted/land", "group" => ""
+      post "/import/notminted/confirm", "group" => ""
 
       assert_includes last_response.body, "That import is no longer here."
       assert_empty store.changes

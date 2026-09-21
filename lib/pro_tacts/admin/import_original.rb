@@ -9,7 +9,7 @@ module ProTacts
     #
     # Content lines rather than a rendered contact, and in the
     # monospace the bytes are actually in. The card beside this one is
-    # the rendered reading — it is the editor, over what is landing —
+    # the rendered reading — it is the editor, over what is coming in —
     # so a second rendering here would show the same thing twice and
     # answer neither question this card is for: what did the source
     # actually say, and what of it is not coming with it.

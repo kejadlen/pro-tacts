@@ -15,12 +15,13 @@ module ProTacts
     # Three slots per import. ORIGINAL is the uploaded file, written
     # once and never again: it is what the left-hand card renders, and
     # a card that has been edited still has to show what it arrived
-    # as. LANDING is the cards as they will land — pared to what this
-    # book reads when the import opens (Vcf.read), and rewritten whole
-    # each time the editor saves one of them. GROUPS is which groups
-    # each of those cards is joining, a decision the cards themselves
-    # cannot carry: a vCard says nothing about this book's groups, and
-    # a line invented to hold the answer would land in the contact.
+    # as. REVISED is the cards as they will be written — pared to what
+    # this book reads when the import opens (Vcf.read), and rewritten
+    # whole each time the editor saves one of them. GROUPS is which
+    # groups each of those cards is joining, a decision the cards
+    # themselves cannot carry: a vCard says nothing about this book's
+    # groups, and a line invented to hold the answer would end up in
+    # the contact.
     #
     # On disk rather than in the browser: a book with pictures in it is
     # tens of megabytes, and a form carrying it back and forth is the
@@ -35,9 +36,9 @@ module ProTacts
       DIRECTORY = "imports" #: String
 
       ORIGINAL = "original" #: String
-      LANDING = "landing" #: String
+      REVISED = "revised" #: String
       GROUPS = "groups" #: String
-      SLOTS = [ORIGINAL, LANDING, GROUPS].freeze #: Array[String]
+      SLOTS = [ORIGINAL, REVISED, GROUPS].freeze #: Array[String]
 
       # The two halves of the groups slot: the ids of groups this
       # book has, and the names of groups it does not have yet.
@@ -54,14 +55,14 @@ module ProTacts
       # it carries. Minted, so the id a link or a form hands back is
       # checked against the one shape this writes (#path) rather than
       # trusted as a filename.
-      #: (original: String, landing: String) -> String
-      def self.open(original:, landing:)
+      #: (original: String, revised: String) -> String
+      def self.open(original:, revised:)
         sweep
         id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
         directory = root / id
         FileUtils.mkdir_p(directory)
         File.binwrite(directory / file_name(ORIGINAL), original)
-        File.binwrite(directory / file_name(LANDING), landing)
+        File.binwrite(directory / file_name(REVISED), revised)
         # Empty rather than absent, so every slot of an import that
         # exists is a file that exists and a write can say which of
         # the two it found (#write).
@@ -71,7 +72,7 @@ module ProTacts
       end
 
       # One slot's bytes, or none — an import swept out from under a
-      # screen left open overnight, or one already landed, its second
+      # screen left open overnight, or one already written, its second
       # confirm finding what the first removed. Ordinary enough for
       # the screen to say so and ask for the file again.
       #: (String id, String slot) -> String?
@@ -86,20 +87,20 @@ module ProTacts
         File.read(file.to_s, encoding: Encoding::UTF_8)
       end
 
-      # The cards as they will land, rewritten: the editor's save, and
-      # the only write this takes after the import opens. Whole rather
-      # than a card at a time, because the file is the unit a re-read
-      # splits (Vcf.cards) and a card's index in it is how a screen
-      # names one.
-      #: (String id, String landing) -> void
-      def self.update(id, landing)
-        write(id, LANDING, landing)
+      # The cards as they will be written, rewritten: the editor's
+      # save, and the only write this takes after the import opens.
+      # Whole rather than a card at a time, because the file is the
+      # unit a re-read splits (Vcf.cards) and a card's index in it is
+      # how a screen names one.
+      #: (String id, String revised) -> void
+      def self.update(id, revised)
+        write(id, REVISED, revised)
       end
 
       # Which groups each contact joins, by its place in the file —
       # the name every screen of the walk calls a contact by, there
-      # being no minted id until it lands. Rewritten whole like the
-      # cards beside it, and for the same reason: one save is one
+      # being no minted id until it is written. Rewritten whole like
+      # the cards beside it, and for the same reason: one save is one
       # state of the whole import.
       #
       # Two maps rather than one, because a group this book has and a
@@ -107,9 +108,9 @@ module ProTacts
       # `chosen` holds ids, the only way to name a group that has no
       # name of its own (db/migrations/005_group_identity.rb).
       # `named` holds names of groups that do not exist yet: made at
-      # the landing and not before, because a group created while the
+      # the confirm and not before, because a group created while the
       # walk is still going is a group left behind by an import that
-      # was abandoned (Import::Land#group_id).
+      # was abandoned (Import::Write#group_id).
       #: (String id, Hash[String, Array[String]] chosen, Hash[String, Array[String]] named) -> void
       def self.update_groups(id, chosen, named)
         write(id, GROUPS, JSON.generate({CHOSEN => chosen, NAMED => named}))
@@ -134,7 +135,7 @@ module ProTacts
         [lists(parsed[CHOSEN]), lists(parsed[NAMED])]
       end
 
-      # The import, gone: the last step of a landing, and what keeps
+      # The import, gone: the last step of a confirm, and what keeps
       # the ordinary case from waiting on the sweep.
       #: (String id) -> void
       def self.close(id)

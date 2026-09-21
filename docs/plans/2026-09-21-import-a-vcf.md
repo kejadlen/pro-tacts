@@ -2,7 +2,7 @@
 
 2026-09-21. Importing is one upload of one file. `/import` takes a
 `.vcf`, says what is in it, asks what to do with the properties no
-screen here shows, and lands the cards through the store. Everything
+screen here shows, and writes the cards through the store. Everything
 that came before it — `import:macos:plan`, `import:macos:finalize`,
 `import:status`, the Swift reader they drove Contacts.app with, and the
 plan directories under `data/import` — is gone.
@@ -36,7 +36,7 @@ Mac any more. Finalize's check — ask the host, contact by contact,
 whether it has the card, then delete what it has — was the safe half of
 a two-sided sync, and there is no second side now. Deleting what you
 exported is a thing to do in Contacts.app, once you have looked at what
-landed.
+came in.
 
 ## What comes in
 
@@ -102,7 +102,7 @@ So the review is a walk, four screens rather than a submission:
    properties the whole file is losing. A book is hundreds of contacts
    and only some of them will have anything worth looking at, so the
    list is what says which rows are worth opening — and a file whose
-   every loss is noise says so at the top and can be landed unread.
+   every loss is noise says so at the top and can be confirmed unread.
 3. **One contact, two cards.** On the left, the card exactly as the
    file wrote it: content lines in monospace, with every line that is
    not coming in struck in Gloss's danger color and labelled "not
@@ -113,8 +113,8 @@ So the review is a walk, four screens rather than a submission:
    spouse's name off the left card and type it
    into the note on the right, in your own words, and put the contact
    where it belongs while you are looking at it.
-4. **Confirm**, under a group for the lot, and the cards land as the
-   walk left them.
+4. **Confirm**, under a group for the lot, and the cards are written as
+   the walk left them.
 
 The right-hand card is `Admin::ContactsEdit` itself, not a copy of it.
 A second editor for imports would be a place where the two could
@@ -132,7 +132,7 @@ that cannot make the trip is one no card can spell — a year on its own,
 a month without its day (`2026-08-31-partial-birthdays.md`). A stored
 contact holds that in the model and serves a card without it; a staged
 contact is only its card, so the save says so and asks for the date
-again once the contact has landed, rather than dropping it the moment
+again once the contact is stored, rather than dropping it the moment
 it was typed.
 
 ## The import waits on the server
@@ -140,33 +140,33 @@ it was typed.
 An import is a directory under `data/imports`, keyed by a minted id
 that every screen of the walk carries in its path. Three slots in it.
 `original.vcf` is the uploaded file, written once and never again, and
-`landing.vcf` the cards as they will land — pared when the import opens
-and rewritten whole each time the editor saves one of them. A card that
+`revised.vcf` the cards as they will come in — pared when the import
+opens and rewritten whole each time the editor saves one of them. A card that
 has been edited still has to show what it arrived as, which is why
 both. `groups.json` is which groups each of those cards is joining,
 keyed by the card's place in the file: a vCard says nothing about this
-book's groups, and a line invented to hold the answer would land in the
-contact. Two maps in it, because a group this book has and a group this
+book's groups, and a line invented to hold the answer would end up in
+the contact. Two maps in it, because a group this book has and a group this
 import is about to invent are not the same answer — ids for the first,
 which is the only way to name a group that has no name of its own, and
-names for the second, made at the landing.
+names for the second, made at the confirm.
 
 On disk rather than in the browser: a book with pictures in it is tens
 of megabytes, and a form carrying it back and forth is the upload done
 once per screen. An id off a link is checked against the shape
 `ChangeId.mint` draws before it is made into a path — `../../contacts.db`
-is a filename too. The directory goes the moment the cards land, and
+is a filename too. The directory goes the moment the cards are written, and
 anything older than a day is swept on the next upload: long enough to
 work down a book over an evening, short enough that a closed window
 does not leave that book on disk for a week.
 
 A contact is named by its place in the file, there being no minted id
-until it lands. That holds because the editor's save rewrites a card in
+until it is written. That holds because the editor's save rewrites a card in
 place and never adds or removes one.
 
-## Landing
+## Writing them in
 
-`Import::Land` writes through `Store#put` and `Store#regroup` rather
+`Import::Write` writes through `Store#put` and `Store#regroup` rather
 than through the routes those two sit behind. It is not a second way to
 write a card — it is the same two writes a client's PUT and the groups
 dialog make:
@@ -181,7 +181,7 @@ dialog make:
 3. `Store#regroup` into whichever groups the walk settled on. Two
    questions, asked in the two places they belong. The review screen
    names one group for the lot, `import-<timestamp>` by default — what
-   landed together can be found together, and undone together — and it
+   arrived together can be found together, and undone together — and it
    is emptiable, a name this server already has joining that group
    rather than colliding with it. Beside each contact's own card, every
    group this book already has as a box to tick: an import is as often
@@ -206,5 +206,5 @@ dialog make:
 Importing is not idempotent and cannot be. A `.vcf` carries no id this
 server minted, so a second upload of the same file is a second set of
 contacts. The review screen is what stands in for the `If-None-Match:
-*` the old PUT sent: it says how many contacts are about to land, and
+*` the old PUT sent: it says how many contacts are about to come in, and
 under what group name, before any of them do.

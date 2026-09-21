@@ -152,14 +152,14 @@ class ImportVcfTest < Minitest::Test
   # One card as this book will hold it: the lines it reads, in the
   # bytes and the order they arrived.
   def test_reading_a_card_keeps_what_a_screen_here_shows
-    landing = Vcf.read(Vcf.cards(JANE).fetch(0)).card.to_s
+    revised = Vcf.read(Vcf.cards(JANE).fetch(0)).card.to_s
 
-    assert_includes landing, "N:Booles;Jane;;;\r\n"
-    assert_includes landing, "TEL;type=CELL;type=VOICE;type=pref:+1 555 0100\r\n"
-    assert_includes landing, "item1.ADR;type=HOME:;;1 Main St;Springfield;;;\r\n"
-    assert_includes landing, "UID:ABC-123\r\n"
+    assert_includes revised, "N:Booles;Jane;;;\r\n"
+    assert_includes revised, "TEL;type=CELL;type=VOICE;type=pref:+1 555 0100\r\n"
+    assert_includes revised, "item1.ADR;type=HOME:;;1 Main St;Springfield;;;\r\n"
+    assert_includes revised, "UID:ABC-123\r\n"
     # Still a card: the envelope is read like anything else.
-    assert Vcf.cards(landing).fetch(0).card?
+    assert Vcf.cards(revised).fetch(0).card?
   end
 
   def test_reading_a_card_leaves_behind_what_no_screen_shows

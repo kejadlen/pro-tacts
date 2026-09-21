@@ -19,7 +19,7 @@ module ProTacts
     # per card the split #read makes: what is coming in, and what is
     # being left behind. The review screen shows both at once — the
     # card as it was exported with the doomed lines struck, beside the
-    # card that is landing, open in the editor — so nothing is lost
+    # card that is coming in, open in the editor — so nothing is lost
     # without having been shown first (Admin::ImportOriginal).
     module Vcf
       # A file that is not a set of vCards.
@@ -65,7 +65,7 @@ module ProTacts
       # What an import makes of one card: the card as it will come in,
       # and the lines it leaves behind. Both, because the review
       # screen shows them side by side — the original with its doomed
-      # lines struck, and the card that is actually landing, open in
+      # lines struck, and the card that is actually coming in, open in
       # the editor (Admin::ImportOriginal). Signed in
       # sig/pro_tacts/import.rbs, being a Data class.
       # @rbs skip
@@ -87,8 +87,8 @@ module ProTacts
       # The cards a file holds, in the order it wrote them, each as the
       # bytes it arrived in. A card is what lies from BEGIN to END, and
       # the lines between cards are blank or the file is not a set of
-      # vCards — refused whole rather than partly imported, `execute`'s
-      # own rule that a source which will not read lands nothing.
+      # vCards — refused whole rather than partly imported: a source
+      # that will not read brings in nothing.
       #: (String bytes) -> Array[VCard]
       def self.cards(bytes)
         cards = [] #: Array[VCard]
@@ -150,7 +150,7 @@ module ProTacts
 
       # Whether a property is one this address book reads, asked of a
       # name as a line spells it — the one question the survey, the
-      # review screen and the landing all ask.
+      # review screen and the confirm all ask.
       #: (String name) -> bool
       def self.known?(name)
         KNOWN.include?(name.upcase)

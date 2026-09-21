@@ -6,8 +6,8 @@ require "pro_tacts/admin/list_item"
 
 module ProTacts
   module Admin
-    # The contacts an uploaded .vcf holds, before any of them land
-    # (docs/plans/2026-09-21-import-a-vcf.md).
+    # The contacts an uploaded .vcf holds, before any of them are in
+    # the address book (docs/plans/2026-09-21-import-a-vcf.md).
     #
     # A list rather than every card laid open at once: a book is
     # hundreds of contacts and only some of them will have anything
@@ -30,9 +30,9 @@ module ProTacts
       # @rbs @group: String
       # @rbs @notice: String?
 
-      # `rows` is the contact each card will land as, how many of its
-      # original's lines are not coming with it, and the groups the
-      # walk has put it in so far. `upload` is the staged import every
+      # `rows` is the contact each card will be written as, how many
+      # of its original's lines are not coming with it, and the groups
+      # the walk has put it in so far. `upload` is the staged import every
       # link and the confirm carry, and `group` the name of the group
       # this import offers to make for the lot of them.
       #: (upload: String, rows: Array[[::ProTacts::Contact, Integer, Array[String]]], unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String, ?notice: String?) -> void
@@ -64,13 +64,13 @@ module ProTacts
           div(class: "card-body") do
             h1(class: "type-h2", style: "margin: 0;") { count(@rows.length, "contact") }
             losses
-            form(action: "/import/#{@upload}/land", method: "post", class: "field-stack") do
+            form(action: "/import/#{@upload}/confirm", method: "post", class: "field-stack") do
               # A group made for this import and taking in every
               # contact, named for the moment by default so one import
               # can be found — or undone — apart from the next.
               # Editable, and emptiable; a name this book already uses
               # joins that group rather than making a second one by the
-              # same name (Import::Land#group_id). Which of this book's
+              # same name (Import::Write#group_id). Which of this book's
               # own groups a contact joins is that contact's question,
               # asked beside its card (Admin::ImportGroups).
               label(class: "field") do
@@ -94,7 +94,7 @@ module ProTacts
           # noise is not read either (Vcf::NOISE), it is only not
           # worth a sentence. What is true in both cases is that
           # there is nothing in this file to stop over.
-          p(class: "type-body-sm gl-muted") { "Nothing in this file needs reading before it lands." }
+          p(class: "type-body-sm gl-muted") { "Nothing in this file needs reading before it comes in." }
           return
         end
 

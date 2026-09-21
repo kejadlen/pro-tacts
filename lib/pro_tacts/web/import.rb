@@ -5,14 +5,15 @@ require "pro_tacts/admin/import_original"
 require "pro_tacts/admin/import_review"
 require "pro_tacts/admin/import_upload"
 require "pro_tacts/birthday"
-require "pro_tacts/import/land"
+require "pro_tacts/import/write"
 require "pro_tacts/import/staged"
 require "pro_tacts/import/vcf"
 
 module ProTacts
   class Web < Roda
     # The import screens: a .vcf, read, looked over contact by
-    # contact, and landed (docs/plans/2026-09-21-import-a-vcf.md).
+    # contact, and written into the store
+    # (docs/plans/2026-09-21-import-a-vcf.md).
     # They replace the rake tasks that read Contacts.app on a Mac,
     # built a plan directory, and carried it to a host over HTTP — a
     # .vcf is what every address book on earth already exports, and
@@ -43,8 +44,8 @@ module ProTacts
         # Before the index below, and distinguishable from one: a
         # path segment is what says which request this is, not which
         # fields a form happened to carry.
-        r.post "land" do
-          land_upload(r, upload)
+        r.post "confirm" do
+          confirm_upload(r, upload)
         end
 
         r.is do
@@ -54,7 +55,7 @@ module ProTacts
         end
 
         # The contact's place in the file is its name here. There is
-        # no minted id until it lands, and the file's own order is
+        # no minted id until it is written, and the file's own order is
         # the one thing about a card that cannot change under the
         # walk: the editor's save rewrites a card in place and never
         # adds or removes one.
@@ -76,7 +77,7 @@ module ProTacts
 
     # The upload's own POST: the file read and judged whole before
     # anything is staged, the old `execute`'s rule that a source which
-    # will not read lands nothing. What it stages is both readings —
+    # will not read brings in nothing. What it stages is both readings —
     # the file as it arrived, and the cards pared to what this book
     # shows — and then it is the review screen's walk.
     #: (untyped r) -> untyped
@@ -100,7 +101,7 @@ module ProTacts
 
       id = Import::Staged.open(
         original: bytes,
-        landing: joined(cards.map { Import::Vcf.read(it).card }),
+        revised: joined(cards.map { Import::Vcf.read(it).card }),
       )
       # A 303, the other writes' answer, because what follows is a
       # walk: every screen of it is a GET a back button can revisit.
@@ -113,7 +114,7 @@ module ProTacts
       staged = staged_cards(upload)
       return expired_screen if staged.nil?
 
-      originals, landing = staged
+      originals, revised = staged
       chosen, named = Import::Staged.groups(upload)
       # By name, because the row is read rather than submitted: a
       # group the walk ticked and someone then deleted is simply not
@@ -123,7 +124,7 @@ module ProTacts
         # otherwise, and an inline annotation needs its own line.
         [group.id, group.label] #: [String, String]
       }
-      rows = landing.each_with_index.map { |card, index|
+      rows = revised.each_with_index.map { |card, index|
         # A literal of several elements is an Array until something
         # says otherwise, and an inline annotation needs its own line.
         dropped = Import::Vcf.read(originals.fetch(index)).dropped
@@ -136,13 +137,13 @@ module ProTacts
         upload:,
         rows:,
         unknown: Import::Vcf.unknown(originals),
-        group: Import::Land.default_group,
+        group: Import::Write.default_group,
         notice:,
       )
     end
 
     # One contact, the card it arrived as beside the card that is
-    # landing. The right-hand half is the contact editor itself, not a
+    # coming in. The right-hand half is the contact editor itself, not a
     # copy of it: a field the two disagreed about would be a field an
     # import writes and an edit cannot undo.
     #: (String upload, Integer index, ?notice: String?) -> String?
@@ -150,9 +151,9 @@ module ProTacts
       staged = staged_cards(upload)
       return expired_screen if staged.nil?
 
-      originals, landing = staged
+      originals, revised = staged
       original = originals[index]
-      card = landing[index]
+      card = revised[index]
       # An index past the end of the file is the empty-body 404 the
       # not_found handler fills in, the same as a contact id nobody
       # has.
@@ -177,8 +178,8 @@ module ProTacts
       staged = staged_cards(upload)
       return expired_screen if staged.nil?
 
-      _originals, landing = staged
-      card = landing[index]
+      _originals, revised = staged
+      card = revised[index]
       return nil if card.nil?
 
       contact = import_contact(card, index)
@@ -214,7 +215,7 @@ module ProTacts
 
       edited = Admin::CardForm.contact_card(contact, first, middle, last, r.params)
       # The birthday goes back into the card, an import having no
-      # model to hold one until it lands. Skipped for a card carrying
+      # model to hold one until it is written. Skipped for a card carrying
       # a BDAY spelling the model does not read: that line stayed in
       # the card (#import_contact, Store#put's own rule), no row
       # rendered for it, and a replace here would delete it.
@@ -228,14 +229,14 @@ module ProTacts
         # what it is, and writing it without the date would lose the
         # date the moment it was typed. Say so instead.
         if birthday && line.nil?
-          return card_screen(upload, index, notice: "A card cannot hold a birthday that partial until it lands. Land the contact, then add it on its own page.")
+          return card_screen(upload, index, notice: "A card cannot hold a birthday that partial. Import the contact, then add the date on its own page.")
         end
 
         edited = edited.replace("BDAY", line ? [line] : [])
       end
 
-      landing[index] = edited
-      Import::Staged.update(upload, joined(landing))
+      revised[index] = edited
+      Import::Staged.update(upload, joined(revised))
       # The groups ride in the same form and save with it
       # (Admin::ImportGroups): a card the walk has looked at has been
       # decided about in both ways at once. Only ids naming a group,
@@ -255,13 +256,14 @@ module ProTacts
       r.redirect "/import/#{upload}", 303
     end
 
-    # The confirm: the cards as the walk left them, landed.
+    # The confirm: the cards as the walk left them, written into the
+    # store.
     #: (untyped r, String upload) -> String
-    def land_upload(r, upload)
+    def confirm_upload(r, upload)
       staged = staged_cards(upload)
       return expired_screen if staged.nil?
 
-      _originals, landing = staged
+      _originals, revised = staged
       group = r.params["group"].to_s.strip
       # Filtered again here, and not only where the walk wrote them
       # (#save_card): a group can be deleted between the tick and the
@@ -269,12 +271,12 @@ module ProTacts
       # stale id would be a 500 rather than the nothing it means.
       known = store.all_groups.map(&:id)
       chosen, named = Import::Staged.groups(upload)
-      joins = landing.each_index.map { chosen.fetch(it.to_s, []) & known }
-      makes = landing.each_index.map { named.fetch(it.to_s, []) }
-      landed = Import::Land.call(store, landing, group: group.empty? ? nil : group, joins:, named: makes)
+      joins = revised.each_index.map { chosen.fetch(it.to_s, []) & known }
+      makes = revised.each_index.map { named.fetch(it.to_s, []) }
+      imported = Import::Write.call(store, revised, group: group.empty? ? nil : group, joins:, named: makes)
       Import::Staged.close(upload)
 
-      import_screen(landed:)
+      import_screen(imported:)
     end
 
     # The groups half of one contact's screen: what this book has,
@@ -292,7 +294,7 @@ module ProTacts
     end
 
     # The import's two readings, or none when it is gone — swept out
-    # from under a screen left open overnight, or landed already, a
+    # from under a screen left open overnight, or written already, a
     # second confirm finding what the first removed. Ordinary enough
     # for the screen to say so and ask for the file again.
     #
@@ -303,15 +305,16 @@ module ProTacts
     #: (String upload) -> [Array[VCard], Array[VCard]]?
     def staged_cards(upload)
       original = Import::Staged.read(upload, Import::Staged::ORIGINAL)
-      landing = Import::Staged.read(upload, Import::Staged::LANDING)
-      return nil if original.nil? || landing.nil?
+      revised = Import::Staged.read(upload, Import::Staged::REVISED)
+      return nil if original.nil? || revised.nil?
 
-      [Import::Vcf.cards(original), Import::Vcf.cards(landing)]
+      [Import::Vcf.cards(original), Import::Vcf.cards(revised)]
     end
 
     # A staged card read as the contact the editor edits. The id is
-    # its place in the file, there being no minted one until it lands,
-    # and no group lends an unlanded card a line.
+    # its place in the file, there being no minted one until it is
+    # written, and no group lends a card that is not stored yet a
+    # line.
     #
     # The birthday comes out of the card and into the model, which is
     # the split Store#put makes on the way in
@@ -352,15 +355,15 @@ module ProTacts
       param if param.is_a?(Hash) && param[:tempfile]
     end
 
-    # The screen a file is chosen on, and the page a landing answers
-    # with. The landing answers with the result rather than a 303, and
+    # The screen a file is chosen on, and the page a confirm answers
+    # with. The confirm answers with the result rather than a 303, and
     # has to: the staged import is gone, so the re-submission a back
-    # button offers has nothing to land, and there is no other page
+    # button offers has nothing to import, and there is no other page
     # holding what just arrived.
-    #: (?landed: Array[Contact]?, ?notice: String?) -> String
-    def import_screen(landed: nil, notice: nil)
+    #: (?imported: Array[Contact]?, ?notice: String?) -> String
+    def import_screen(imported: nil, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::ImportUpload.call(landed:, notice:)
+      Admin::ImportUpload.call(imported:, notice:)
     end
 
     #: () -> String

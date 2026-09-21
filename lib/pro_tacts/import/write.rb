@@ -3,8 +3,8 @@ require "pro_tacts/vcard"
 
 module ProTacts
   module Import
-    # Lands the cards an import has settled on in this server's store
-    # (docs/plans/2026-09-21-import-a-vcf.md).
+    # Writes the cards an import has settled on into this server's
+    # store (docs/plans/2026-09-21-import-a-vcf.md).
     #
     # What arrives here is already what is coming in: the review screen
     # pared each card to the properties this book reads and let the
@@ -17,8 +17,8 @@ module ProTacts
     # Not idempotent, and cannot be: a .vcf carries no id this server
     # minted, so a second upload of the same file is a second set of
     # cards. The review screen is what stands in for that — it says how
-    # many contacts are about to land before any of them do.
-    class Land
+    # many contacts are about to be written before any of them are.
+    class Write
       # @rbs @store: Store
       # @rbs @group: String?
       # @rbs @joins: Array[Array[String]]
@@ -26,7 +26,7 @@ module ProTacts
       # @rbs @group_ids: Hash[String, String]
 
       # The group an import offers to put its arrivals in, named for
-      # when it happened: what landed together can be found together,
+      # when it happened: what came in together can be found together,
       # and undone together, without anything having to be recorded
       # about the file it came from.
       #: (?Time now) -> String
@@ -43,7 +43,8 @@ module ProTacts
       # for the groups the walk asked for that do not exist yet —
       # made here and not while the walk was going, an abandoned
       # import being the case that argues for waiting. Any of them, or
-      # none: a card in no group is still in everyone's book (#land).
+      # none: a card in no group is still in everyone's book
+      # (#contact).
       #: (Store store, Array[VCard] cards, ?group: String?, ?joins: Array[Array[String]], ?named: Array[Array[String]]) -> Array[Contact]
       def self.call(store, cards, group: nil, joins: [], named: [])
         new(store, group:, joins:, named:).call(cards)
@@ -61,17 +62,17 @@ module ProTacts
       #: (Array[VCard] cards) -> Array[Contact]
       def call(cards)
         cards.each_with_index.map { |card, index|
-          land(card, @joins.fetch(index, []), @named.fetch(index, []))
+          contact(card, @joins.fetch(index, []), @named.fetch(index, []))
         }
       end
 
       private
 
-      # A card, then its groups, the order a create writes them in:
-      # the put makes the contact, and the memberships that follow put
-      # it somewhere to be found.
+      # One card, written as a contact: then its groups, the order a
+      # create writes them in — the put makes the contact, and the
+      # memberships that follow put it somewhere to be found.
       #: (VCard card, Array[String] chosen, Array[String] named) -> Contact
-      def land(card, chosen, named)
+      def contact(card, chosen, named)
         id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
         # `client: true` for what a client's PUT means here: a card this
         # creates joins `sync:*`, or it would be on the server and in
@@ -94,7 +95,7 @@ module ProTacts
         # above moved what the card serves. Nothing can have taken it
         # away in between, so a miss here is a broken assumption rather
         # than a case to handle.
-        @store.contact(id) || raise("#{id} was landed and is not stored")
+        @store.contact(id) || raise("#{id} was written and is not stored")
       end
 
       # The card under the id it is stored as. The source's UID goes
