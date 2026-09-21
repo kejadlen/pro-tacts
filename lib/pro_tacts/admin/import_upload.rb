@@ -13,11 +13,9 @@ module ProTacts
     # on a Mac and carrying a plan to a host over HTTP; now it is the
     # file that Mac already knows how to export.
     #
-    # The form takes one .vcf and nothing else. What it does not ask
-    # for here is what to do with the properties this address book
-    # does not read — which of them are worth saving under the note
-    # rather than leaving behind. That question needs the file open to
-    # be worth asking, so it is the next screen's (ImportReview).
+    # The form takes one .vcf and nothing else. Looking over what is
+    # in it needs the file open, so that is the next screen's
+    # (ImportReview, and the pair of cards a row there opens).
     #
     # `landed` is the import that just happened, rendered below the
     # form that is still there to run another.

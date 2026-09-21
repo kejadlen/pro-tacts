@@ -1,25 +1,27 @@
+require "pro_tacts/admin/card_form"
+require "pro_tacts/admin/contacts_edit"
+require "pro_tacts/admin/import_original"
 require "pro_tacts/admin/import_review"
 require "pro_tacts/admin/import_upload"
+require "pro_tacts/birthday"
 require "pro_tacts/import/land"
 require "pro_tacts/import/staged"
 require "pro_tacts/import/vcf"
 
 module ProTacts
   class Web < Roda
-    # The import screen: a .vcf lands its cards in this server's store
-    # (docs/plans/2026-09-21-import-a-vcf.md). It replaces the rake
-    # tasks that read Contacts.app on a Mac, built a plan directory,
-    # and carried it to a host over HTTP — a .vcf is what every
-    # address book on earth already exports, and the machine holding
-    # it is whichever one the browser is on. What comes in is what
-    # this book can show; the rest is dropped, or saved under the note
-    # where the review screen says so.
+    # The import screens: a .vcf, read, looked over contact by
+    # contact, and landed (docs/plans/2026-09-21-import-a-vcf.md).
+    # They replace the rake tasks that read Contacts.app on a Mac,
+    # built a plan directory, and carried it to a host over HTTP — a
+    # .vcf is what every address book on earth already exports, and
+    # the machine holding it is whichever one the browser is on.
     #
-    # Two requests, because the question this screen exists to ask
-    # cannot be asked until the file has been read: the first stages
-    # the upload and surveys what is in it, the second spends the
-    # answers. The file waits on the server between them
-    # (Import::Staged) rather than riding back through the browser.
+    # Four screens, because an import is a walk rather than a
+    # submission: choose the file, look down the contacts it holds,
+    # open any of them beside the card it arrived as, and confirm.
+    # What the walk reads and writes waits on the server between them
+    # (Import::Staged); nothing is in the store until the confirm.
     #
     # Under the same identity gate as every other route (web.rb),
     # which is also where the arrivals' books come from: a card this
@@ -32,27 +34,52 @@ module ProTacts
         end
 
         r.post do
-          survey_upload(r)
+          stage_upload(r)
         end
       end
 
-      # The second half, on its own path rather than the same one: two
-      # posts to /import would be told apart by which fields they
-      # carried, and a form's fields are the last thing that should
-      # decide what a request means.
-      r.post "land" do
-        land_upload(r)
+      r.on String do |upload|
+        # Before the index below, and distinguishable from one: a
+        # path segment is what says which request this is, not which
+        # fields a form happened to carry.
+        r.post "land" do
+          land_upload(r, upload)
+        end
+
+        r.is do
+          r.get do
+            review_screen(upload)
+          end
+        end
+
+        # The contact's place in the file is its name here. There is
+        # no minted id until it lands, and the file's own order is
+        # the one thing about a card that cannot change under the
+        # walk: the editor's save rewrites a card in place and never
+        # adds or removes one.
+        r.on Integer do |index|
+          r.is do
+            r.get do
+              card_screen(upload, index)
+            end
+
+            r.post do
+              save_card(r, upload, index)
+            end
+          end
+        end
       end
     end
 
     private
 
     # The upload's own POST: the file read and judged whole before
-    # anything is staged, `execute`'s old rule that a source which
-    # will not read lands nothing. Its answer is the review screen,
-    # which is where the decisions are made.
-    #: (untyped r) -> String
-    def survey_upload(r)
+    # anything is staged, the old `execute`'s rule that a source which
+    # will not read lands nothing. What it stages is both readings —
+    # the file as it arrived, and the cards pared to what this book
+    # shows — and then it is the review screen's walk.
+    #: (untyped r) -> untyped
+    def stage_upload(r)
       upload = file_in(r.params["vcf"])
       return import_screen(notice: "Choose a .vcf file to import.") if upload.nil?
 
@@ -70,58 +97,185 @@ module ProTacts
         return import_screen(notice: error.message)
       end
 
-      review_screen(
-        upload: Import::Staged.write(bytes),
-        file: name,
-        cards: cards.length,
-        unknown: Import::Vcf.unknown(cards),
+      id = Import::Staged.open(
+        original: bytes,
+        landing: joined(cards.map { Import::Vcf.read(it).card }),
+      )
+      # A 303, the other writes' answer, because what follows is a
+      # walk: every screen of it is a GET a back button can revisit.
+      r.redirect "/import/#{id}", 303
+    end
+
+    # The contacts the file holds, each with what it is losing.
+    #: (String upload, ?notice: String?) -> String
+    def review_screen(upload, notice: nil)
+      staged = staged_cards(upload)
+      return expired_screen if staged.nil?
+
+      originals, landing = staged
+      rows = landing.each_with_index.map { |card, index|
+        # A two-element literal is an Array until something says
+        # otherwise, and an inline annotation needs its own line.
+        [import_contact(card, index), Import::Vcf.read(originals.fetch(index)).dropped.length] #: [Contact, Integer]
+      }
+
+      response["Content-Type"] = "text/html; charset=utf-8"
+      Admin::ImportReview.call(
+        upload:,
+        rows:,
+        unknown: Import::Vcf.unknown(originals),
+        group: Import::Land.default_group,
+        notice:,
       )
     end
 
-    # The confirm: the staged file read back, the decisions the review
-    # screen collected applied, and the cards landed.
-    #
-    # The re-read parses a file this already parsed once, on the way to
-    # the review screen — not a second judgment of it, but the only way
-    # back to the cards, the bytes being what was staged. A file that
-    # read then and will not read now is a broken assumption and raises
-    # rather than being handled.
-    #: (untyped r) -> String
-    def land_upload(r)
-      id = r.params["upload"].to_s
-      bytes = Import::Staged.read(id)
-      # Swept out from under a review screen left open overnight, or a
-      # confirm submitted twice, the second finding what the first
-      # removed. The file is gone either way and only the person has
-      # another copy.
-      return import_screen(notice: "That upload is no longer here. Choose the file again.") if bytes.nil?
+    # One contact, the card it arrived as beside the card that is
+    # landing. The right-hand half is the contact editor itself, not a
+    # copy of it: a field the two disagreed about would be a field an
+    # import writes and an edit cannot undo.
+    #: (String upload, Integer index, ?notice: String?) -> String?
+    def card_screen(upload, index, notice: nil)
+      staged = staged_cards(upload)
+      return expired_screen if staged.nil?
 
-      cards = Import::Vcf.cards(bytes)
-      group = r.params["group"].to_s.strip
-      landed = Import::Land.call(
-        store, cards,
-        decisions: decisions_in(r.params["decide"], Import::Vcf.unknown(cards)),
-        group: group.empty? ? nil : group,
+      originals, landing = staged
+      original = originals[index]
+      card = landing[index]
+      # An index past the end of the file is the empty-body 404 the
+      # not_found handler fills in, the same as a contact id nobody
+      # has.
+      return nil if original.nil? || card.nil?
+
+      response["Content-Type"] = "text/html; charset=utf-8"
+      Admin::ContactsEdit.call(
+        contact: import_contact(card, index),
+        notice:,
+        action: "/import/#{upload}/#{index}",
+        back: ["/import/#{upload}", "the import"],
+        aside: Admin::ImportOriginal.new(card: original, dropped: Import::Vcf.read(original).dropped),
       )
-      Import::Staged.remove(id)
+    end
+
+    # The editor's save, written back into the import rather than into
+    # the store: #apply_edit's shape over a card that is not a contact
+    # yet, down to the refusals, because it is the same form.
+    #: (untyped r, String upload, Integer index) -> untyped
+    def save_card(r, upload, index)
+      staged = staged_cards(upload)
+      return expired_screen if staged.nil?
+
+      _originals, landing = staged
+      card = landing[index]
+      return nil if card.nil?
+
+      contact = import_contact(card, index)
+
+      # N and FN are mandatory (RFC 2426 section 4), so a save blank
+      # throughout is refused — the toast is the backstop, the form's
+      # name pair (Admin::NamePair) being the browser's own refusal of
+      # the same.
+      first = r.params["first"].to_s.strip
+      middle = r.params["middle"].to_s.strip
+      last = r.params["last"].to_s.strip
+      return card_screen(upload, index, notice: "A contact needs a name.") if first.empty? && last.empty?
+
+      fields = r.params["birthday"]
+      birthday =
+        if fields.is_a?(Hash)
+          begin
+            Admin::CardForm.birthday(fields)
+          rescue ArgumentError
+            return card_screen(upload, index, notice: "That birthday is not a shape a date can take.")
+          end
+        else
+          contact.birthday
+        end
+
+      # The snapshot guard the editor always carries, over the staged
+      # card rather than a stored one: two tabs open on the same
+      # import are the case, and applying this save over the other
+      # one's would revert it.
+      if r.params["etag"].to_s != contact.etag
+        return card_screen(upload, index, notice: "This card changed since the page loaded; nothing was saved.")
+      end
+
+      edited = Admin::CardForm.contact_card(contact, first, middle, last, r.params)
+      # The birthday goes back into the card, an import having no
+      # model to hold one until it lands. Skipped for a card carrying
+      # a BDAY spelling the model does not read: that line stayed in
+      # the card (#import_contact, Store#put's own rule), no row
+      # rendered for it, and a replace here would delete it.
+      edited = edited.replace("BDAY", birthday ? [birthday.to_line] : []) unless carries_own_bday?(contact)
+
+      landing[index] = edited
+      Import::Staged.update(upload, joined(landing))
+      r.redirect "/import/#{upload}", 303
+    end
+
+    # The confirm: the cards as the walk left them, landed.
+    #: (untyped r, String upload) -> String
+    def land_upload(r, upload)
+      staged = staged_cards(upload)
+      return expired_screen if staged.nil?
+
+      _originals, landing = staged
+      group = r.params["group"].to_s.strip
+      landed = Import::Land.call(store, landing, group: group.empty? ? nil : group)
+      Import::Staged.close(upload)
 
       import_screen(landed:)
     end
 
-    # What the form said to do with each unknown property, read against
-    # the survey rather than trusted: the names are the ones this run
-    # found, and anything else a post carries is not a property of this
-    # file. An answer missing or unrecognized is a drop, which is what
-    # a property nobody spoke for gets either way (Import::Land#decide).
-    #: (untyped param, Array[Import::Vcf::Unknown] unknown) -> Hash[String, String]
-    def decisions_in(param, unknown)
-      unknown.to_h { |property|
-        answer = param.is_a?(Hash) ? param[property.name].to_s : ""
-        choice = Import::Vcf::CHOICES.include?(answer) ? answer : Import::Vcf::DROP
-        # A two-element literal is an Array until something says
-        # otherwise, and an inline annotation needs its own line.
-        [property.name, choice] #: [String, String]
-      }
+    # The import's two readings, or none when it is gone — swept out
+    # from under a screen left open overnight, or landed already, a
+    # second confirm finding what the first removed. Ordinary enough
+    # for the screen to say so and ask for the file again.
+    #
+    # The re-read parses files this already parsed, which is not a
+    # second judgment of them: the bytes are what was staged, and this
+    # is the only way back to the cards. A file that read on the way
+    # in and will not read now is a broken assumption and raises.
+    #: (String upload) -> [Array[VCard], Array[VCard]]?
+    def staged_cards(upload)
+      original = Import::Staged.read(upload, Import::Staged::ORIGINAL)
+      landing = Import::Staged.read(upload, Import::Staged::LANDING)
+      return nil if original.nil? || landing.nil?
+
+      [Import::Vcf.cards(original), Import::Vcf.cards(landing)]
+    end
+
+    # A staged card read as the contact the editor edits. The id is
+    # its place in the file, there being no minted one until it lands,
+    # and no group lends an unlanded card a line.
+    #
+    # The birthday comes out of the card and into the model, which is
+    # the split Store#put makes on the way in
+    # (docs/plans/2026-09-11-every-birthday-in-the-model.md) — made
+    # here too, so the editor renders the same row over an import as
+    # over a contact. A BDAY the model does not read stays in the
+    # card, that method's own rule.
+    #: (VCard card, Integer index) -> Contact
+    def import_contact(card, index)
+      bdays, rest = card.extract("BDAY")
+      birthday = bdays.filter_map { it.property }.filter_map { Birthday.from_property(it) }.first
+      Contact.new(id: index.to_s, stored: birthday ? rest : card, birthday:, inherited: [])
+    end
+
+    #: (Contact contact) -> bool
+    def carries_own_bday?(contact)
+      contact.stored.lines.any? { it.names?("BDAY") }
+    end
+
+    # Cards back into a file, each keeping its own bytes. A break
+    # after any that did not carry one: a file whose last card ends
+    # without a newline is still a file, and two cards glued at
+    # END:VCARDBEGIN:VCARD is not.
+    #: (Array[VCard] cards) -> String
+    def joined(cards)
+      cards.map { |card|
+        bytes = card.to_s
+        bytes.end_with?("\n") ? bytes : "#{bytes}\r\n"
+      }.join
     end
 
     # The file part the form sent, and none for a POST carrying no
@@ -134,20 +288,19 @@ module ProTacts
     end
 
     # The screen a file is chosen on, and the page a landing answers
-    # with. It answers with the result rather than the 303 the other
-    # writes answer with, and has to: the staged file is gone, so the
-    # re-submission a back button offers has nothing to land, and there
-    # is no other page holding what just arrived.
+    # with. The landing answers with the result rather than a 303, and
+    # has to: the staged import is gone, so the re-submission a back
+    # button offers has nothing to land, and there is no other page
+    # holding what just arrived.
     #: (?landed: Array[Contact]?, ?notice: String?) -> String
     def import_screen(landed: nil, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
       Admin::ImportUpload.call(landed:, notice:)
     end
 
-    #: (upload: String, file: String, cards: Integer, unknown: Array[Import::Vcf::Unknown]) -> String
-    def review_screen(upload:, file:, cards:, unknown:)
-      response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::ImportReview.call(upload:, file:, cards:, unknown:, group: Import::Land.default_group)
+    #: () -> String
+    def expired_screen
+      import_screen(notice: "That import is no longer here. Choose the file again.")
     end
   end
 end

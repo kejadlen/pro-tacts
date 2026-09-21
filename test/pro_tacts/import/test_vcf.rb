@@ -14,8 +14,10 @@ class ImportVcfTest < Minitest::Test
     N:Booles;Jane;;;
     FN:Jane Booles
     TEL;type=CELL;type=VOICE;type=pref:+1 555 0100
-    item1.X-ABRELATEDNAMES:Sam Booles
-    item1.X-ABLabel:_$!<Spouse>!$_
+    item1.ADR;type=HOME:;;1 Main St;Springfield;;;
+    item1.X-ABLabel:_$!<Home>!$_
+    item2.X-ABRELATEDNAMES:Sam Booles
+    item2.X-ABLabel:_$!<Spouse>!$_
     X-SOCIALPROFILE;type=twitter:https://twitter.com/jb
     UID:ABC-123
     END:VCARD
@@ -128,5 +130,49 @@ class ImportVcfTest < Minitest::Test
     example = Vcf.unknown(Vcf.cards(folded)).find { it.name == "X-SOCIALPROFILE" }.examples.fetch(0)
 
     assert_equal "X-SOCIALPROFILE;type=twitter:https://twitter.com/jb", example
+  end
+  # One card as this book will hold it: the lines it reads, in the
+  # bytes and the order they arrived.
+  def test_reading_a_card_keeps_what_a_screen_here_shows
+    landing = Vcf.read(Vcf.cards(JANE).fetch(0)).card.to_s
+
+    assert_includes landing, "N:Booles;Jane;;;\r\n"
+    assert_includes landing, "TEL;type=CELL;type=VOICE;type=pref:+1 555 0100\r\n"
+    assert_includes landing, "item1.ADR;type=HOME:;;1 Main St;Springfield;;;\r\n"
+    assert_includes landing, "UID:ABC-123\r\n"
+    # Still a card: the envelope is read like anything else.
+    assert Vcf.cards(landing).fetch(0).card?
+  end
+
+  def test_reading_a_card_leaves_behind_what_no_screen_shows
+    reading = Vcf.read(Vcf.cards(JANE).fetch(0))
+
+    refute_includes reading.card.to_s, "X-SOCIALPROFILE"
+    refute_includes reading.card.to_s, "X-ABRELATEDNAMES"
+    assert_includes reading.dropped.map { Vcf.summary(it) },
+                    "X-SOCIALPROFILE;type=twitter:https://twitter.com/jb"
+  end
+
+  # Apple hangs a row's label off the line it names rather than
+  # inside it, so a label whose line is leaving has nothing left to
+  # name — while the label on a line that is coming in comes with it.
+  def test_a_label_goes_wherever_the_line_it_names_goes
+    reading = Vcf.read(Vcf.cards(JANE).fetch(0))
+
+    assert_includes reading.card.to_s, "item1.X-ABLabel:_$!<Home>!$_\r\n"
+    refute_includes reading.card.to_s, "_$!<Spouse>!$_"
+    assert_includes reading.dropped.map { Vcf.summary(it) }, "item2.X-ABLabel:_$!<Spouse>!$_"
+  end
+
+  # There is no property name to have shown on a screen and nothing
+  # anyone could have decided about it, so it rides along rather than
+  # being thrown away unnamed.
+  def test_a_line_that_will_not_read_is_kept
+    broken = JANE.sub("FN:Jane Booles\r\n", "FN:Jane Booles\r\nnot a content line\r\n")
+
+    reading = Vcf.read(Vcf.cards(broken).fetch(0))
+
+    assert_includes reading.card.to_s, "not a content line\r\n"
+    assert_empty reading.dropped.select { it.property.nil? }
   end
 end

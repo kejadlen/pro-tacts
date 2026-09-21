@@ -491,6 +491,61 @@ body {
   align-items: start;
 }
 
+/* The import review's two cards: the contact as the file wrote it
+   beside the contact that is landing, open in the editor
+   (Admin::ImportOriginal, Admin::ContactsEdit). The dashboard's own
+   columns and for its reason -- two where the viewport holds two,
+   one stacked column where it does not -- with `align-items: start`
+   so the shorter card does not stretch to match its neighbor. 22rem
+   rather than the dashboard's 20rem: the left card holds content
+   lines, which are longer than a contact's name. */
+.paired {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--gl-space-m);
+  align-items: start;
+}
+
+/* A card's content lines as the file wrote them, and the review
+   list's property names one rung up (Admin::ImportOriginal,
+   Admin::ImportReview): monospace, because these are the bytes and
+   not a rendering of them, and wrapping rather than scrolling
+   because a long value is the thing being judged. */
+.card-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-2xs);
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--1);
+  overflow-wrap: anywhere;
+}
+.card-lines > li {
+  display: flex;
+  gap: var(--gl-space-s);
+  align-items: baseline;
+  justify-content: space-between;
+}
+.card-lines > li > span:first-child {
+  min-width: 0;
+}
+
+/* A line that is not coming in, struck in the danger color a blanked
+   editor row wears (see .field[data-blank-removes] above): losing
+   something is what that color means on this surface. The words
+   beside it carry the same fact, a strike on its own being a color,
+   and they do not wrap -- the line wraps instead. */
+.card-lines > li[data-dropped] > span:first-child {
+  color: var(--gl-color-danger);
+  text-decoration: line-through;
+}
+.card-lines > li[data-dropped] > .type-label {
+  color: var(--gl-color-danger);
+  white-space: nowrap;
+}
+
 /* field.css's `form { max-width: 28rem; }` is sized for the
    settings-form pattern; the header's search is a single input, and
    flex: 1 + a narrower cap puts a deliberate 18rem box at the

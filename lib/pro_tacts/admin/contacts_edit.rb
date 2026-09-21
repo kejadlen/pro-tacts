@@ -76,10 +76,24 @@ module ProTacts
       # @rbs @first: String?
       # @rbs @middle: String?
       # @rbs @last: String?
+      # @rbs @action: String
+      # @rbs @back: [String, String]
+      # @rbs @aside: Phlex::HTML?
 
-      #: (contact: Contact, ?notice: String?) -> void
-      def initialize(contact:, notice: nil)
+      # `action`, `back` and `aside` are the import's: the same editor,
+      # over a card that is not stored yet, saving into the import
+      # rather than into a contact and rendered beside the card as it
+      # was exported (Admin::ImportOriginal). One editor rather than a
+      # second one for imports, because a field the two disagreed
+      # about is a field an import writes and an edit cannot undo.
+      # Defaulted to the contact's own, so the ordinary edit says
+      # nothing about any of it.
+      #: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: Phlex::HTML?) -> void
+      def initialize(contact:, notice: nil, action: nil, back: nil, aside: nil)
         @contact = contact
+        @action = action || "/contacts/#{contact.id}"
+        @back = back || ["/contacts/#{contact.id}", contact.name || contact.id]
+        @aside = aside
         # The rows are the contact's own, never what a group lends it
         # (Contact#own); the details page is where an inherited row is
         # read (Admin::ContactsShow). The etag below is still the
@@ -98,7 +112,11 @@ module ProTacts
       end
 
       def view_template
-        render Layout.new(title: "Edit #{@contact.name || @contact.id}", notice: @notice) do
+        # Wide only when something is beside the editor: the reading
+        # width a single column wants is still what one card gets
+        # (admin.css).
+        render Layout.new(title: "Edit #{@contact.name || @contact.id}",
+                          wide: !@aside.nil?, notice: @notice) do
           # The editor's Alpine scope, wrapping the record and the add
           # dialog both: the dialog names a type and the form grows a
           # row for it, so the two have to share state, and Alpine
@@ -114,15 +132,15 @@ module ProTacts
             # do to the record from it.
             div(class: "record") do
             div(class: "record-nav") do
-              a(href: "/contacts/#{@contact.id}", class: "type-label") {
-                "‹ #{@contact.name || @contact.id}"
-              }
+              href, label = @back
+              a(href:, class: "type-label") { "‹ #{label}" }
               button(type: "button", data_size: "sm",
                      popovertarget: "add-property") { "add property" }
             end
+            paired do
             div(class: "card") do
               div(class: "card-body") do
-                form(action: "/contacts/#{@contact.id}", method: "post", class: "field-stack", id: FORM) do
+                form(action: @action, method: "post", class: "field-stack", id: FORM) do
                   input(type: "hidden", name: "etag", value: @contact.etag)
                   # The caption is an element rather than bare text
                   # because the row is a grid (admin.css): a text node
@@ -190,9 +208,10 @@ module ProTacts
               # contract, which is what an anchor that acts like a button
               # opts into.
               footer do
-                a(href: "/contacts/#{@contact.id}", class: "btn") { "Cancel" }
+                a(href: @back.fetch(0), class: "btn") { "Cancel" }
                 button(type: "submit", form: FORM, data: {variant: "primary"}) { "Save" }
               end
+            end
             end
             end
             add_property_dialog
@@ -201,6 +220,22 @@ module ProTacts
       end
 
       private
+
+      # The editor's card, and what stands beside it when something
+      # does — the two-column grid the dashboard uses, for its reason
+      # (admin.css). With nothing beside it the wrapper is skipped
+      # rather than rendered around one card: a grid of one is a
+      # different element for no difference on screen.
+      #: () { () -> void } -> void
+      def paired
+        aside = @aside
+        return yield if aside.nil?
+
+        div(class: "paired") do
+          render aside
+          yield
+        end
+      end
 
       # The rows added this pass, rendered by Alpine from `added` —
       # one per type named in the dialog, in the order they were

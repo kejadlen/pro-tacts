@@ -1,6 +1,6 @@
-# Import::Vcf::Unknown is a Data class, whose members the inline parser
-# cannot read (see sig/pro_tacts/contact.rbs). It is marked `@rbs skip`
-# where it is defined and signed here.
+# Import::Vcf::Unknown and ::Reading are Data classes, whose members the
+# inline parser cannot read (see sig/pro_tacts/contact.rbs). Each is
+# marked `@rbs skip` where it is defined and signed here.
 module ProTacts
   module Import
     module Vcf
@@ -10,6 +10,13 @@ module ProTacts
         attr_reader examples: Array[String]
 
         def self.new: (name: String, count: Integer, examples: Array[String]) -> instance
+      end
+
+      class Reading
+        attr_reader card: ::ProTacts::VCard
+        attr_reader dropped: Array[::ProTacts::VCard::Parser::Line]
+
+        def self.new: (card: ::ProTacts::VCard, dropped: Array[::ProTacts::VCard::Parser::Line]) -> instance
       end
     end
   end

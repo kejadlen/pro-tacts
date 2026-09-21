@@ -10,8 +10,11 @@ module ProTacts
       def self.call: (contact: Contact, groups: Array[Store::Group], all_groups: Array[Store::Group], changes: Array[Store::Change], ?notice: String?) -> String
     end
 
+    # `aside` is a Phlex component, which has no type here: phlex
+    # ships no signatures and the views are ignored (see the
+    # Steepfile).
     class ContactsEdit
-      def self.call: (contact: Contact, ?notice: String?) -> String
+      def self.call: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: untyped) -> String
     end
 
     class Dashboard
@@ -43,7 +46,13 @@ module ProTacts
     end
 
     class ImportReview
-      def self.call: (upload: String, file: String, cards: Integer, unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String) -> String
+      def self.call: (upload: String, rows: Array[[Contact, Integer]], unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String, ?notice: String?) -> String
+    end
+
+    # Rendered into ContactsEdit rather than called, so it is the one
+    # view here whose `new` is what checked code reaches for.
+    class ImportOriginal
+      def self.new: (card: ::ProTacts::VCard, dropped: Array[::ProTacts::VCard::Parser::Line]) -> instance
     end
 
     # Rendered by Dashboard, not called from checked code; only

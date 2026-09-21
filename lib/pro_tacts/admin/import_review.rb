@@ -1,122 +1,122 @@
 require "pro_tacts/admin/phlex"
 
+require "pro_tacts/admin/format"
 require "pro_tacts/admin/layout"
-require "pro_tacts/import/vcf"
+require "pro_tacts/admin/list_item"
 
 module ProTacts
   module Admin
-    # The second screen of an import: what the uploaded file holds, and
-    # the one decision it asks the importer to make
+    # The contacts an uploaded .vcf holds, before any of them land
     # (docs/plans/2026-09-21-import-a-vcf.md).
     #
-    # A card is stored as the card it arrived as, so nothing here is a
-    # field-by-field mapping to approve. The only question is about the
-    # properties no screen in this address book shows. Those do not
-    # come in — a book padded with what nothing can display is worse
-    # than a book without it — so the question is narrower than it
-    # looks: is this one worth saving under the note on the way past?
-    # Dropping is checked, because it is what happens to everything
-    # nobody speaks for.
+    # A list rather than every card laid open at once: a book is
+    # hundreds of contacts and only some of them will have anything
+    # worth looking at, so each row says how many of its lines are not
+    # coming in and opening one is what shows the pair of cards
+    # (Admin::ImportOriginal beside the editor). A row with nothing
+    # left behind needs no visit.
     #
-    # Each property is shown with how many lines wear it and a few real
-    # values out of this very file, so the choice is made looking at
-    # the source's own data rather than at a property name.
-    #
-    # `upload` is the staged file (Import::Staged), carried in a hidden
-    # field: the bytes stay on the server, and only the ticket to them
-    # makes the round trip.
+    # Above the list, the same fact for the whole file: which
+    # properties are not coming in, and how many lines each of them
+    # wears. It is what says whether the list is worth working down
+    # at all — a file losing nothing but PRODID can be landed unread.
     class ImportReview < Phlex::HTML
       # @rbs @upload: String
-      # @rbs @file: String
-      # @rbs @cards: Integer
+      # @rbs @rows: Array[[::ProTacts::Contact, Integer]]
       # @rbs @unknown: Array[::ProTacts::Import::Vcf::Unknown]
       # @rbs @group: String
+      # @rbs @notice: String?
 
-      # What each choice is called where it is made. The wording says
-      # what happens to the line, not what the server does with it: an
-      # importer is deciding what their own address book is made of.
-      WORDING = {
-        ::ProTacts::Import::Vcf::DROP => "leave it behind",
-        ::ProTacts::Import::Vcf::NOTE => "save it under the note",
-      }.freeze #: Hash[String, String]
-
-      #: (upload: String, file: String, cards: Integer, unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String) -> void
-      def initialize(upload:, file:, cards:, unknown:, group:)
+      # `rows` is the contact each card will land as, paired with how
+      # many of its original's lines are not coming with it. `upload`
+      # is the staged import every link and the confirm carry.
+      #: (upload: String, rows: Array[[::ProTacts::Contact, Integer]], unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String, ?notice: String?) -> void
+      def initialize(upload:, rows:, unknown:, group:, notice: nil)
         @upload = upload
-        @file = file
-        @cards = cards
+        @rows = rows
         @unknown = unknown
         @group = group
+        @notice = notice
       end
 
       def view_template
-        render Layout.new(title: "Import") do
+        render Layout.new(title: "Import", notice: @notice) do
           div(class: "record") do
             div(class: "record-nav") do
               a(href: "/import", class: "type-label") { "‹ another file" }
             end
-            div(class: "card") do
-              div(class: "card-body") do
-                h1(class: "type-h2", style: "margin: 0;") { @file }
-                p(class: "type-body-sm") { "#{count(@cards, "contact")}, ready to land." }
-                form(action: "/import/land", method: "post", class: "field-stack") do
-                  input(type: "hidden", name: "upload", value: @upload)
-                  group_field
-                  unknown_fields
-                  button(type: "submit", data: {variant: "primary"}) { "import #{count(@cards, "contact")}" }
-                end
-              end
-            end
+            summary_card
+            contacts_list
           end
         end
       end
 
       private
 
-      # The group everything lands in, named for the moment by default
-      # so one import can be found — or undone — apart from the next.
-      # Editable, and emptiable: a blank name puts the arrivals in
-      # nobody's group but everyone's book.
       #: () -> void
-      def group_field
-        label(class: "field") do
-          span(class: "type-label") { "group" }
-          input(type: "text", name: "group", value: @group, placeholder: "no group")
+      def summary_card
+        div(class: "card") do
+          div(class: "card-body") do
+            h1(class: "type-h2", style: "margin: 0;") { count(@rows.length, "contact") }
+            losses
+            form(action: "/import/#{@upload}/land", method: "post", class: "field-stack") do
+              # The group everything lands in, named for the moment by
+              # default so one import can be found — or undone — apart
+              # from the next. Editable, and emptiable: a blank name
+              # puts the arrivals in nobody's group but everyone's book.
+              label(class: "field") do
+                span(class: "type-label") { "group" }
+                input(type: "text", name: "group", value: @group, placeholder: "no group")
+              end
+              button(type: "submit", data: {variant: "primary"}) { "import #{count(@rows.length, "contact")}" }
+            end
+          end
         end
       end
 
+      # What the file is losing, by property rather than by line: a
+      # reader deciding whether to open any of the rows below wants to
+      # know it is `X-SOCIALPROFILE` and `PRODID` going, not that
+      # eight hundred lines are.
       #: () -> void
-      def unknown_fields
+      def losses
         if @unknown.empty?
-          p(class: "type-body-sm gl-muted") do
-            "Every property in this file is one pro-tacts reads. Nothing to decide."
-          end
+          p(class: "type-body-sm gl-muted") { "Every property in this file is one pro-tacts reads." }
           return
         end
 
         p(class: "type-body-sm") do
-          "#{count(@unknown.length, "property", "properties")} here " \
-            "#{@unknown.length == 1 ? "is one" : "are ones"} " \
-            "no screen in pro-tacts shows, so #{@unknown.length == 1 ? "it stays" : "they stay"} " \
-            "behind. Send one under the note if the value is worth reading anyway."
+          plain "No screen in pro-tacts shows "
+          plain @unknown.length == 1 ? "this property" : "these properties"
+          plain ", so they stay behind. Open a contact to read what its own card says and "
+          plain "copy across anything worth keeping."
         end
-        @unknown.each { unknown_field(it) }
+        ul(class: "card-lines") do
+          @unknown.each do |property|
+            li do
+              span { property.name }
+              span(class: "type-label") { count(property.count, "line") }
+            end
+          end
+        end
       end
 
-      #: (::ProTacts::Import::Vcf::Unknown property) -> void
-      def unknown_field(property)
-        div(class: "field") do
-          span(class: "type-label") { "#{property.name} (#{count(property.count, "line")})" }
-          ul(class: "type-body-sm gl-muted", style: "margin: 0; padding-left: 1.25em;") do
-            property.examples.each { |example| li { example } }
+      # A row per contact, marked where something is being left
+      # behind — which is the whole of what the list is for, since
+      # those are the rows worth opening.
+      #: () -> void
+      def contacts_list
+        section do
+          div(class: "section-head") do
+            h2(class: "type-label") { "contacts" }
           end
-          div(class: "field-stack", role: "radiogroup", aria_label: property.name) do
-            ::ProTacts::Import::Vcf::CHOICES.each do |choice|
-              # A label wrapping its own radio is Gloss's Radio.
-              label do
-                input(type: "radio", name: "decide[#{property.name}]", value: choice,
-                      checked: choice == ::ProTacts::Import::Vcf::DROP)
-                span { WORDING.fetch(choice) }
+          ul(class: "card") do
+            @rows.each_with_index do |(contact, dropped), index|
+              render ListItem.new(
+                href: "/import/#{@upload}/#{index}",
+                trailing: (count(dropped, "line") + " left behind" if dropped.positive?),
+              ) do
+                div { Format.name_label(contact) }
               end
             end
           end

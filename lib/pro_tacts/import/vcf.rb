@@ -13,10 +13,14 @@ module ProTacts
     # what nothing here will ever show. RFC 6352 section 6.3.2.2 binds
     # this server to keep what a client submits and does not understand,
     # and it does (vcard.rb); an import is the other direction, a person
-    # choosing what their own book is made of. So the reading this
-    # module owes is the split into cards and the question the importer
-    # is asked: of the properties no screen here shows, which are worth
-    # saving under the note on the way past?
+    # choosing what their own book is made of.
+    #
+    # So this module owes two readings. The split into cards, and then
+    # per card the split #read makes: what is coming in, and what is
+    # being left behind. The review screen shows both at once — the
+    # card as it was exported with the doomed lines struck, beside the
+    # card that is landing, open in the editor — so nothing is lost
+    # without having been shown first (Admin::ImportOriginal).
     module Vcf
       # A file that is not a set of vCards.
       class Invalid < StandardError; end
@@ -36,9 +40,9 @@ module ProTacts
       # read.
       # Apple's own name for a row, carried on a line of its own beside
       # the one it names (`item1.X-ABLabel:_$!<Spouse>!$_`). Known, and
-      # named apart from the rest because a decision about the line it
-      # annotates is a decision about it too: a label whose line is
-      # gone names nothing (Land#decide).
+      # named apart from the rest because what happens to the line it
+      # annotates happens to it too: a label whose line is gone names
+      # nothing (#read).
       LABEL = "X-ABLABEL" #: String
 
       KNOWN = [
@@ -46,22 +50,20 @@ module ProTacts
         LABEL,
       ].freeze #: Array[String]
 
-      # What the importer can ask for an unknown property. Dropping is
-      # the default, and what happens to anything not spoken for: a
-      # line no screen here shows is a line this book has no use for,
-      # and carrying it in would leave every card padded with the
-      # source's bookkeeping. The note is the way out for a value worth
-      # reading even with no field to read it in — a spouse's name is
-      # worth more under the note than nowhere.
-      DROP = "drop" #: String
-      NOTE = "note" #: String
-      CHOICES = [DROP, NOTE].freeze #: Array[String]
+      # What an import makes of one card: the card as it will come in,
+      # and the lines it leaves behind. Both, because the review
+      # screen shows them side by side — the original with its doomed
+      # lines struck, and the card that is actually landing, open in
+      # the editor (Admin::ImportOriginal). Signed in
+      # sig/pro_tacts/import.rbs, being a Data class.
+      # @rbs skip
+      Reading = Data.define(:card, :dropped)
 
       # One property the file carries that KNOWN does not name, across
       # every card in it: how many lines wear it, and a few of their
-      # real values, so a choice is made looking at the source's own
-      # data rather than at a property name. Signed in
-      # sig/pro_tacts/import.rbs, being a Data class.
+      # real values. The review screen's summary of what the whole
+      # file is losing, read before working down the contacts one by
+      # one. Signed in sig/pro_tacts/import.rbs, being a Data class.
       # @rbs skip
       Unknown = Data.define(:name, :count, :examples)
 
@@ -84,7 +86,7 @@ module ProTacts
           if open.nil?
             next if line.verbatim.strip.empty?
 
-            raise Invalid, "a line outside a card: #{example(line)}" unless name&.casecmp?("BEGIN")
+            raise Invalid, "a line outside a card: #{summary(line)}" unless name&.casecmp?("BEGIN")
 
             open = [line]
           else
@@ -126,7 +128,7 @@ module ProTacts
             name = property.name.upcase
             next if known?(name)
 
-            (seen[name] ||= []) << example(line)
+            (seen[name] ||= []) << summary(line)
           end
         end
         seen.sort.map { |name, examples|
@@ -135,24 +137,71 @@ module ProTacts
       end
 
       # Whether a property is one this address book reads, asked of a
-      # name as a line spells it — the one question both the survey
-      # and the landing ask (Land#decide).
+      # name as a line spells it — the one question the survey, the
+      # review screen and the landing all ask.
       #: (String name) -> bool
       def self.known?(name)
         KNOWN.include?(name.upcase)
       end
 
+      # One card as this book will hold it, beside what that costs.
+      # The kept lines are the bytes that arrived, in the order they
+      # arrived, so a card comes in as the card it was; the dropped
+      # ones are what no screen here would ever show, which is what
+      # the review screen strikes through.
+      #
+      # A line that would not read is kept. The parser hands one back
+      # without a property name, so there is nothing to have shown on
+      # a screen and nothing anyone could have decided about it, and
+      # throwing it away unnamed is worse than letting it ride in the
+      # card's bytes (vcard/parser.rb's own posture).
+      #: (VCard card) -> Reading
+      def self.read(card)
+        lines = card.lines
+        orphaned = orphaned_groups(lines)
+        kept, dropped = lines.partition { |line|
+          property = line.property
+          property.nil? || (known?(property.name) && !orphaned.include?(property.group))
+        }
+        Reading.new(card: VCard.new(kept.map(&:verbatim).join), dropped:)
+      end
+
+      # The group prefixes (`item1.`) with nothing left in them but a
+      # label. Apple hangs a label off the line it names rather than
+      # inside it, so bringing in `item3.X-ABLabel:_$!<Spouse>!$_`
+      # without its `item3.X-ABRELATEDNAMES` would leave a name for a
+      # line that is not there. A grouped property this book reads —
+      # `item1.ADR`, say — anchors its own group, because it is coming
+      # in.
+      #: (Array[VCard::Parser::Line] lines) -> Array[String]
+      def self.orphaned_groups(lines)
+        anchored = {} #: Hash[String, bool]
+        lines.each do |line|
+          property = line.property
+          next if property.nil?
+
+          group = property.group
+          next if group.nil? || property.name.casecmp?(LABEL)
+
+          anchored[group] = anchored.fetch(group, false) || known?(property.name)
+        end
+        anchored.reject { |_group, kept| kept }.keys
+      end
+
       # A line unfolded, without its terminator, cut short of a
-      # payload nobody wants to read.
+      # payload nobody wants to read — the one rendering of a line
+      # this import shows, in the survey's examples and in the review
+      # screen's reading of the original card
+      # (Admin::ImportOriginal).
       #: (VCard::Parser::Line line) -> String
-      def self.example(line)
+      def self.summary(line)
         text = VCard::Parser.unfold(line.verbatim).chomp
         return text if text.length <= EXAMPLE_LENGTH
 
         "#{text[0, EXAMPLE_LENGTH]}… (#{text.length} characters)"
       end
 
-      private_class_method :example
+      private_class_method :orphaned_groups
     end
   end
 end

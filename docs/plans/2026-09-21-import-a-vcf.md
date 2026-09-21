@@ -38,7 +38,7 @@ a two-sided sync, and there is no second side now. Deleting what you
 exported is a thing to do in Contacts.app, once you have looked at what
 landed.
 
-## Two screens, because of the question
+## What comes in
 
 A card is stored as the card it arrived as. That is this server's whole
 posture (`2026-08-24-vcard-storage-and-groups.md`), and every property
@@ -46,12 +46,13 @@ this address book reads travels through byte for byte. So there is no
 field mapping to approve on the way in, and nothing to confirm about N,
 TEL, ADR or PHOTO.
 
-There is one real question. A book exported from Contacts.app carries
-properties no screen here shows — `X-ABRELATEDNAMES`, `X-SOCIALPROFILE`,
-`X-ABADR`, `PRODID`, whatever the source thought worth writing. Those
-do not come in. A card is meant to be the contact as this app can show
-it, and a book padded with lines nothing can display is one whose cards
-nobody can read — the bytes are the least of it.
+What does not come in is everything else. A book exported from
+Contacts.app carries properties no screen here shows —
+`X-ABRELATEDNAMES`, `X-SOCIALPROFILE`, `X-ABADR`, `PRODID`, whatever
+the source thought worth writing — and a card is meant to be the
+contact as this app can show it. A book padded with lines nothing can
+display is one whose cards nobody can read; the bytes are the least of
+it.
 
 RFC 6352 section 6.3.2.2 is not in tension with that. It binds this
 server to keep what a *client* submits and does not understand, and it
@@ -60,56 +61,80 @@ and comes back out of it untouched. An import is the other direction —
 a person choosing what their own book is made of — and there the rule
 is the opposite one.
 
-So the question is narrower than it first looks: of the properties
-leaving, which are worth saving on the way past? Two choices per
-unknown property:
+"Known" is the reader's list, not the writer's: the envelope, the
+fields a screen shows (`Contact`'s own accessors), and BDAY, which the
+store takes into the model. Adding a screen for a property is what
+brings it in.
 
-- **leave it behind** — the default, and what anything nobody speaks
-  for gets.
-- **save it under the note** — for a value worth reading even with no
-  field to read it in. A spouse's name is worth more under the note
-  than nowhere.
-
-The question cannot be asked until the file has been read, which is why
-this is two requests rather than one. The first stages the upload and
-surveys it; the second spends the answers. Each unknown property is
-shown with how many lines wear it and a few real values out of that very
-file, so the choice is made looking at the source's own data rather than
-at a property name.
-
-The decision is per property name, not per line: `X-SOCIALPROFILE;
-type=twitter` is not a second decision from `X-SOCIALPROFILE`. A label
-Contacts hung beside a line it names (`item3.X-ABLabel`) goes wherever
-that line goes — a label naming nothing is worse than either choice —
-while a label on a line that is coming in, `item1.ADR`'s say, comes in
-with it. Under the note, the label is what the value is called, so the
-note reads `Spouse: Jane` and not `X-ABRELATEDNAMES: Jane`.
+A label Contacts hung beside a line it names (`item3.X-ABLabel`) goes
+wherever that line goes — a label naming nothing is worse than either
+outcome — while a label on a line that is coming in, `item1.ADR`'s
+say, comes in with it.
 
 One thing is kept that nothing will show: a line that would not parse
 at all. The parser hands it back without a property name, so there is
-nothing to have listed on the review screen and nothing for the
-importer to have decided; throwing it away unnamed is worse than
-letting it ride along in the card's bytes.
+nothing to show on a screen and nothing anyone could decide about it;
+throwing it away unnamed is worse than letting it ride along in the
+card's bytes.
 
-"Known" is the reader's list, not the writer's: the envelope, the fields
-a screen shows (`Contact`'s own accessors), and BDAY, which the store
-takes into the model. Adding a screen for a property is what brings it
-in, and until then importing one would only pad the cards with what
-nobody can read.
+## The walk
 
-## The file waits on the server
+Dropping silently would be the wrong trade — the person cannot know
+what they lost — and a form of radio buttons over property names was
+the wrong remedy: it asks about `X-ABRELATEDNAMES` in the abstract,
+and the answer it can give back is a line this app composed. What the
+importer actually wants is to look at a contact and fix it.
 
-Between the two requests the bytes sit under `data/imports`, keyed by a
-minted id, and the review screen carries the id in a hidden field. Not
-the file: a book with pictures in it is tens of megabytes, and a form
-that carries it back to the server is the upload done twice. An id off a
-form is checked against the shape `ChangeId.mint` draws before it is
-made into a path — `../../contacts.db` is a filename too. The file goes
-the moment its cards land, and anything older than an hour is swept on
-the next upload.
+So the review is a walk, four screens rather than a submission:
 
-Rack's 128-part multipart limit is no longer raised in `config.ru`. A
-plan was one part per card; a `.vcf` is one part.
+1. **Choose the file.**
+2. **The contacts it holds**, one row each, marked with how many of
+   that contact's lines are not coming in, over a summary of which
+   properties the whole file is losing. A book is hundreds of contacts
+   and only some of them will have anything worth looking at, so the
+   list is what says which rows are worth opening — and a file losing
+   nothing but `PRODID` can be landed unread.
+3. **One contact, two cards.** On the left, the card exactly as the
+   file wrote it: content lines in monospace, with every line that is
+   not coming in struck in Gloss's danger color and labelled "not
+   imported" beside it, a strike on its own being a color. On the
+   right, the contact editor, pre-filled with what was read and
+   pointed at the import. Read the spouse's name off the left card and
+   type it into the note on the right, in your own words.
+4. **Confirm**, and the cards land as the walk left them.
+
+The right-hand card is `Admin::ContactsEdit` itself, not a copy of it.
+A second editor for imports would be a place where the two could
+disagree — a field an import writes that an edit cannot undo — so the
+editor grew three arguments instead (`action`, `back`, `aside`) and the
+ordinary edit passes none of them. The birthday is split out of the
+card and into the model here exactly as `Store#put` splits it, so the
+same row renders over a staged card as over a stored contact, and put
+back as a BDAY line on save; a BDAY spelling the model does not read
+stays in the card untouched, that method's own rule.
+
+## The import waits on the server
+
+An import is a directory under `data/imports`, keyed by a minted id
+that every screen of the walk carries in its path. Two slots in it,
+because the review screen shows two things at once: `original.vcf`, the
+uploaded file, written once and never again, and `landing.vcf`, the
+cards as they will land — pared when the import opens and rewritten
+whole each time the editor saves one of them. A card that has been
+edited still has to show what it arrived as, which is why both.
+
+On disk rather than in the browser: a book with pictures in it is tens
+of megabytes, and a form carrying it back and forth is the upload done
+once per screen. An id off a link is checked against the shape
+`ChangeId.mint` draws before it is made into a path — `../../contacts.db`
+is a filename too. The directory goes the moment the cards land, and
+anything older than a day is swept on the next upload: long enough to
+work down a book over an evening, short enough that a closed window
+does not leave that book on disk for a week.
+
+A contact is named by its place in the file, there being no minted id
+until it lands. That holds because the editor's save rewrites a card in
+place and never adds or removes one.
 
 ## Landing
 
