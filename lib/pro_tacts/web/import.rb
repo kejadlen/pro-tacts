@@ -205,7 +205,21 @@ module ProTacts
       # a BDAY spelling the model does not read: that line stayed in
       # the card (#import_contact, Store#put's own rule), no row
       # rendered for it, and a replace here would delete it.
-      edited = edited.replace("BDAY", birthday ? [birthday.to_line] : []) unless carries_own_bday?(contact)
+      unless carries_own_bday?(contact)
+        line = birthday&.to_line
+        # A birthday with no wire form — a year on its own, a month
+        # without its day — is one a vCard 3.0 card cannot spell
+        # (docs/plans/2026-08-31-partial-birthdays.md). A stored
+        # contact keeps one in the model and serves a card without it;
+        # a staged contact has no model, so the card is the whole of
+        # what it is, and writing it without the date would lose the
+        # date the moment it was typed. Say so instead.
+        if birthday && line.nil?
+          return card_screen(upload, index, notice: "A card cannot hold a birthday that partial until it lands. Land the contact, then add it on its own page.")
+        end
+
+        edited = edited.replace("BDAY", line ? [line] : [])
+      end
 
       landing[index] = edited
       Import::Staged.update(upload, joined(landing))

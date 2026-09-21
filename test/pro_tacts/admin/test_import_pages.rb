@@ -187,6 +187,45 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # The birthday is the one field the editor holds in the model
+  # rather than in the card, and a staged contact has no model: the
+  # save writes it back as the BDAY line it will land as.
+  def test_a_birthday_typed_on_the_import_lands_with_the_contact
+    with_contacts({}) do |store|
+      id = upload(JANE)
+      get "/import/#{id}/0"
+
+      post "/import/#{id}/0",
+           "etag" => etag, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "nickname" => "", "note" => "",
+           "birthday" => { "year" => "1985", "month" => "4", "day" => "12" }
+
+      assert_equal 303, last_response.status
+
+      post "/import/#{id}/land", "group" => ""
+
+      assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), store.contacts.fetch(0).birthday
+    end
+  end
+
+  # And the shape no card can spell is refused rather than dropped:
+  # the model that holds a partial birthday does not exist until the
+  # contact lands (docs/plans/2026-08-31-partial-birthdays.md).
+  def test_a_birthday_no_card_can_spell_is_refused_until_the_contact_lands
+    with_contacts({}) do |_store|
+      id = upload(JANE)
+      get "/import/#{id}/0"
+
+      post "/import/#{id}/0",
+           "etag" => etag, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "nickname" => "", "note" => "",
+           "birthday" => { "year" => "1985", "month" => "", "day" => "" }
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "A card cannot hold a birthday that partial until it lands."
+    end
+  end
+
   def test_confirming_lands_the_contacts_as_they_stand
     with_contacts({}) do |store|
       id = upload(JANE + PLAIN)

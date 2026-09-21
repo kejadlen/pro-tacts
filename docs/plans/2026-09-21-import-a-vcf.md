@@ -111,7 +111,13 @@ ordinary edit passes none of them. The birthday is split out of the
 card and into the model here exactly as `Store#put` splits it, so the
 same row renders over a staged card as over a stored contact, and put
 back as a BDAY line on save; a BDAY spelling the model does not read
-stays in the card untouched, that method's own rule.
+stays in the card untouched, that method's own rule. The one birthday
+that cannot make the trip is one no card can spell — a year on its own,
+a month without its day (`2026-08-31-partial-birthdays.md`). A stored
+contact holds that in the model and serves a card without it; a staged
+contact is only its card, so the save says so and asks for the date
+again once the contact has landed, rather than dropping it the moment
+it was typed.
 
 ## The import waits on the server
 
