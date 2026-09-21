@@ -39,6 +39,11 @@ module ProTacts
       GROUPS = "groups" #: String
       SLOTS = [ORIGINAL, LANDING, GROUPS].freeze #: Array[String]
 
+      # The two halves of the groups slot: the ids of groups this
+      # book has, and the names of groups it does not have yet.
+      CHOSEN = "chosen" #: String
+      NAMED = "named" #: String
+
       # How long an import is worth keeping. Long enough to work down
       # a book's worth of contacts over an evening, and short enough
       # that a window closed on the review screen does not leave that
@@ -61,7 +66,7 @@ module ProTacts
         # exists is a file that exists and a write can say which of
         # the two it found (#write).
         nothing = {} #: Hash[String, Array[String]]
-        File.binwrite(directory / file_name(GROUPS), JSON.generate(nothing))
+        File.binwrite(directory / file_name(GROUPS), JSON.generate({CHOSEN => nothing, NAMED => nothing}))
         id
       end
 
@@ -96,30 +101,35 @@ module ProTacts
       # being no minted id until it lands. Rewritten whole like the
       # cards beside it, and for the same reason: one save is one
       # state of the whole import.
-      #: (String id, Hash[String, Array[String]] groups) -> void
-      def self.update_groups(id, groups)
-        write(id, GROUPS, JSON.generate(groups))
+      #
+      # Two maps rather than one, because a group this book has and a
+      # group this import is about to invent are not the same answer.
+      # `chosen` holds ids, the only way to name a group that has no
+      # name of its own (db/migrations/005_group_identity.rb).
+      # `named` holds names of groups that do not exist yet: made at
+      # the landing and not before, because a group created while the
+      # walk is still going is a group left behind by an import that
+      # was abandoned (Import::Land#group_id).
+      #: (String id, Hash[String, Array[String]] chosen, Hash[String, Array[String]] named) -> void
+      def self.update_groups(id, chosen, named)
+        write(id, GROUPS, JSON.generate({CHOSEN => chosen, NAMED => named}))
       end
 
-      # What #update_groups last wrote, and nothing for an import
-      # that is gone. Read back into the shape it was written in
-      # rather than trusted: this is a file on disk, and a slot that
-      # will not parse is a broken assumption JSON says so about.
-      #: (String id) -> Hash[String, Array[String]]
+      # What #update_groups last wrote — the ids and then the names —
+      # and two empty maps for an import that is gone. Read back into
+      # the shape it was written in rather than trusted: this is a
+      # file on disk, and a slot that will not parse is a broken
+      # assumption JSON says so about.
+      #: (String id) -> [Hash[String, Array[String]], Hash[String, Array[String]]]
       def self.groups(id)
-        chosen = {} #: Hash[String, Array[String]]
         raw = read(id, GROUPS)
-        return chosen if raw.nil?
+        parsed = raw.nil? ? nil : JSON.parse(raw)
+        # #lists makes an empty map of anything that is not one, so
+        # the gone import and the half a file are the same answer
+        # here rather than two spellings of it.
+        return [lists(nil), lists(nil)] unless parsed.is_a?(Hash)
 
-        parsed = JSON.parse(raw)
-        return chosen unless parsed.is_a?(Hash)
-
-        parsed.each do |index, ids|
-          next unless ids.is_a?(Array)
-
-          chosen[index.to_s] = ids.map(&:to_s)
-        end
-        chosen
+        [lists(parsed[CHOSEN]), lists(parsed[NAMED])]
       end
 
       # The import, gone: the last step of a landing, and what keeps
@@ -180,13 +190,28 @@ module ProTacts
         File.binwrite(file.to_s, contents)
       end
 
+      # One map of a contact's place in the file to a list of
+      # strings, out of whatever the file actually holds.
+      #: (untyped raw) -> Hash[String, Array[String]]
+      def self.lists(raw)
+        lists = {} #: Hash[String, Array[String]]
+        return lists unless raw.is_a?(Hash)
+
+        raw.each do |index, values|
+          next unless values.is_a?(Array)
+
+          lists[index.to_s] = values.map(&:to_s)
+        end
+        lists
+      end
+
       # The cards are a .vcf, and the groups beside them are not.
       #: (String slot) -> String
       def self.file_name(slot)
         slot == GROUPS ? "#{slot}.json" : "#{slot}.vcf"
       end
 
-      private_class_method :root, :import_root, :path, :file_name, :write
+      private_class_method :root, :import_root, :path, :file_name, :write, :lists
     end
   end
 end

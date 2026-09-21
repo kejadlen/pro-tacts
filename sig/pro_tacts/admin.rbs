@@ -56,7 +56,7 @@ module ProTacts
     end
 
     class ImportGroups
-      def self.new: (groups: Array[::ProTacts::Store::Group], joined: Array[String]) -> instance
+      def self.new: (groups: Array[::ProTacts::Store::Group], joined: Array[String], named: Array[String]) -> instance
     end
 
     # Rendered by Dashboard, not called from checked code; only

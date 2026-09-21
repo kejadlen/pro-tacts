@@ -109,7 +109,8 @@ So the review is a walk, four screens rather than a submission:
    imported" beside it, a strike on its own being a color. On the
    right, the contact editor, pre-filled with what was read and
    pointed at the import, with this book's groups under its fields as
-   boxes to tick. Read the spouse's name off the left card and type it
+   boxes to tick and a box to name one it does not have yet. Read the
+   spouse's name off the left card and type it
    into the note on the right, in your own words, and put the contact
    where it belongs while you are looking at it.
 4. **Confirm**, under a group for the lot, and the cards land as the
@@ -145,7 +146,10 @@ has been edited still has to show what it arrived as, which is why
 both. `groups.json` is which groups each of those cards is joining,
 keyed by the card's place in the file: a vCard says nothing about this
 book's groups, and a line invented to hold the answer would land in the
-contact.
+contact. Two maps in it, because a group this book has and a group this
+import is about to invent are not the same answer — ids for the first,
+which is the only way to name a group that has no name of its own, and
+names for the second, made at the landing.
 
 On disk rather than in the browser: a book with pictures in it is tens
 of megabytes, and a form carrying it back and forth is the upload done
@@ -188,12 +192,16 @@ dialog make:
 
    The per-contact boxes ride in the editor's own form, so one Save
    writes the card and its groups together and there is no second
-   button to wonder about. They offer this book's groups and no new
-   name: naming a group per contact would be four hundred chances to
-   spell "Booles" two ways, and a contact's own page can make one the
-   moment it lands. What each contact is joining is read back on its
-   row in the list, because the walk is a screen at a time and the list
-   is where ten screens' worth of decisions are seen at once.
+   button to wonder about. Under them is a box for a group this book
+   does not have yet, and what it writes is a name rather than a
+   group: nothing is in the store until the confirm, and a group
+   created while the walk was still going is one left behind by an
+   import that was abandoned. A name waiting like that shows as a box
+   of its own, ticked and in the italic the groups dialog gives a name
+   that is not a group yet, so it can be taken off again. What each
+   contact is joining is read back on its row in the list, because the
+   walk is a screen at a time and the list is where ten screens' worth
+   of decisions are seen at once.
 
 Importing is not idempotent and cannot be. A `.vcf` carries no id this
 server minted, so a second upload of the same file is a second set of

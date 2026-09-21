@@ -114,6 +114,31 @@ class ImportLandTest < Minitest::Test
     end
   end
 
+  # A group the walk asked for by name is made here and not before:
+  # a group created while the walk was still going is one left behind
+  # by an import that was abandoned.
+  def test_a_group_named_during_the_walk_is_made_at_the_landing
+    with_contacts({}) do |store|
+      landed = Land.call(store, Vcf.cards(JANE + JANE), named: [["Clarks"], ["Clarks"]])
+      clarks = store.all_groups.find { it.name == "Clarks" }
+
+      assert_equal landed.map(&:id).sort, clarks.members.sort
+      assert_equal 1, store.all_groups.count { it.name == "Clarks" }
+    end
+  end
+
+  # Two answers can mean one group, and a membership written twice is
+  # a constraint violation rather than a second membership.
+  def test_a_name_that_is_the_imports_own_group_joins_it_once
+    with_contacts({}) do |store|
+      landed = Land.call(store, Vcf.cards(JANE), group: "Clarks", named: [["Clarks"]])
+      id = landed.fetch(0).id
+
+      assert_equal 1, store.all_groups.count { it.name == "Clarks" }
+      assert_equal [id], store.all_groups.find { it.name == "Clarks" }.members
+    end
+  end
+
   # Either, or neither: a chosen group stands on its own when no name
   # is typed.
   def test_arrivals_join_a_chosen_group_with_no_group_named

@@ -293,6 +293,36 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # A group that does not exist yet is named beside the contact and
+  # made at the landing, not before: a group created while the walk
+  # is still going is one left behind by an import that was
+  # abandoned.
+  def test_a_group_named_during_the_walk_waits_for_the_landing
+    with_contacts({}) do |store|
+      id = upload(JANE)
+      get "/import/#{id}/0"
+
+      post "/import/#{id}/0",
+           "etag" => etag, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "nickname" => "", "note" => "", "new" => " Clarks "
+
+      assert_equal 303, last_response.status
+      assert_empty store.all_groups
+
+      # Read back as a box of its own, ticked, so it can be taken off
+      # again before the confirm.
+      get "/import/#{id}/0"
+
+      assert_includes last_response.body,
+                      %(<input type="checkbox" name="named[]" value="Clarks" checked>)
+
+      post "/import/#{id}/land", "group" => ""
+      clarks = store.all_groups.find { it.name == "Clarks" }
+
+      assert_equal [store.contacts.fetch(0).id], clarks.members
+    end
+  end
+
   # Contact by contact, so the cards do not all land alike. The id
   # that names no group is dropped rather than carried into
   # Store#add_member, which reads a group with `sole` and would

@@ -114,7 +114,7 @@ module ProTacts
       return expired_screen if staged.nil?
 
       originals, landing = staged
-      chosen = Import::Staged.groups(upload)
+      chosen, named = Import::Staged.groups(upload)
       # By name, because the row is read rather than submitted: a
       # group the walk ticked and someone then deleted is simply not
       # among these.
@@ -127,7 +127,7 @@ module ProTacts
         # A literal of several elements is an Array until something
         # says otherwise, and an inline annotation needs its own line.
         dropped = Import::Vcf.read(originals.fetch(index)).dropped
-        joined = chosen.fetch(index.to_s, []).filter_map { names[it] }.sort
+        joined = (chosen.fetch(index.to_s, []).filter_map { names[it] } + named.fetch(index.to_s, [])).sort
         [import_contact(card, index), Import::Vcf.losses(dropped).length, joined] #: [Contact, Integer, Array[String]]
       }
 
@@ -165,10 +165,7 @@ module ProTacts
         action: "/import/#{upload}/#{index}",
         back: ["/import/#{upload}", "the import"],
         aside: Admin::ImportOriginal.new(card: original, dropped: Import::Vcf.read(original).dropped),
-        fields: Admin::ImportGroups.new(
-          groups: store.all_groups,
-          joined: Import::Staged.groups(upload).fetch(index.to_s, []),
-        ),
+        fields: import_groups(upload, index),
       )
     end
 
@@ -243,10 +240,17 @@ module ProTacts
       # (Admin::ImportGroups): a card the walk has looked at has been
       # decided about in both ways at once. Only ids naming a group,
       # #apply_groups' own rule, and the boxes are the whole answer —
-      # none ticked is none joined, not "leave it as it was".
+      # none ticked is none joined, not "leave it as it was". A name
+      # typed into the new-group box joins the names already standing
+      # for this contact, and none of them is made until the confirm.
+      chosen, named = Import::Staged.groups(upload)
+      ticked = ids_in(r.params["groups"]) & store.all_groups.map(&:id)
+      standing = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
+      fresh = r.params["new"].to_s.strip
       Import::Staged.update_groups(
         upload,
-        Import::Staged.groups(upload).merge(index.to_s => ids_in(r.params["groups"]) & store.all_groups.map(&:id)),
+        chosen.merge(index.to_s => ticked),
+        named.merge(index.to_s => (fresh.empty? ? standing : standing + [fresh]).uniq),
       )
       r.redirect "/import/#{upload}", 303
     end
@@ -264,12 +268,27 @@ module ProTacts
       # confirm, and Store#add_member reads a group with `sole`, so a
       # stale id would be a 500 rather than the nothing it means.
       known = store.all_groups.map(&:id)
-      chosen = Import::Staged.groups(upload)
+      chosen, named = Import::Staged.groups(upload)
       joins = landing.each_index.map { chosen.fetch(it.to_s, []) & known }
-      landed = Import::Land.call(store, landing, group: group.empty? ? nil : group, joins:)
+      makes = landing.each_index.map { named.fetch(it.to_s, []) }
+      landed = Import::Land.call(store, landing, group: group.empty? ? nil : group, joins:, named: makes)
       Import::Staged.close(upload)
 
       import_screen(landed:)
+    end
+
+    # The groups half of one contact's screen: what this book has,
+    # what the walk has ticked, and what it has said to make. Read
+    # here rather than in the view, which is handed the answer like
+    # every other view (Admin::ImportGroups).
+    #: (String upload, Integer index) -> Admin::ImportGroups
+    def import_groups(upload, index)
+      chosen, named = Import::Staged.groups(upload)
+      Admin::ImportGroups.new(
+        groups: store.all_groups,
+        joined: chosen.fetch(index.to_s, []),
+        named: named.fetch(index.to_s, []),
+      )
     end
 
     # The import's two readings, or none when it is gone — swept out
