@@ -30,16 +30,6 @@ rake dev              # Dev server, seeded from test/fixtures/cards into a
 rake console          # irb with the store open on the configured database
                       # (console.rb loads it), after db:dump commits a
                       # safety net for what the session might do there
-rake import:macos:plan # Plan importing this Mac's iCloud contacts
-                      # (LIMIT=n; reads Contacts, so leave it to the user)
-rake import:macos:finalize # Finalize the contacts the oldest
-                      # unfinished plan landed, taking them off this
-                      # Mac and filing the plan away done (host in
-                      # data/import/config.yml; PLAN=dir for another;
-                      # writes Contacts, so leave it to the user)
-rake import:status    # Summarize the plans in data/import — in
-                      # flight and filed away done — and what would
-                      # carry the next one further
 rake profile:install  # Download carddav.mobileconfig from the app and
                       # stage it for approval
 ```
@@ -47,10 +37,12 @@ rake profile:install  # Download carddav.mobileconfig from the app and
 `rake profile:*` needs `PRO_TACTS_HOSTNAME` and touches installed system
 profiles, so leave those to the user.
 
-An import's middle step is not a task: a plan's cards are uploaded at
-`/import` in the app, which lands them through the store
-(docs/plans/2026-09-20-import-by-upload.md). `rake import:execute` was
-that step and is gone.
+Importing is not a task at all: a .vcf is uploaded at `/import` in the
+app, which reads it, asks what to do with the properties no screen here
+shows, and lands the cards through the store
+(docs/plans/2026-09-21-import-a-vcf.md). The `import:*` tasks, the Swift
+reader they drove Contacts.app with, and the plan directories they wrote
+are gone.
 
 ## Task management
 
@@ -70,9 +62,9 @@ lib/pro_tacts/
 ├── web/contacts.rb # The card browser and its editor
 ├── web/groups.rb   # The group screens and their editor
 ├── web/setup.rb    # The device setup screen and its profile
-├── web/import.rb   # The import screen: a plan's cards, uploaded
+├── web/import.rb   # The import screen: a .vcf, uploaded and decided
 ├── web/api.rb      # JSON for scripts: the group list
-├── import/         # Import plans, and landing one in the store
+├── import/         # Reading an uploaded .vcf, and landing its cards
 ├── admin/          # The Phlex views those screens render, plus
 │                   # card_form.rb, which reads a form back into a card
 ├── store.rb        # Sequel over SQLite: cards, change log, derived index

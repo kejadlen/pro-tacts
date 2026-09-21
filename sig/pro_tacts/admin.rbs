@@ -38,8 +38,12 @@ module ProTacts
       def self.call: (hostname: String, name: String) -> String
     end
 
-    class PlanUpload
-      def self.call: (?arrivals: Array[::ProTacts::Import::Land::Arrival]?, ?notice: String?) -> String
+    class ImportUpload
+      def self.call: (?landed: Array[Contact]?, ?notice: String?) -> String
+    end
+
+    class ImportReview
+      def self.call: (upload: String, file: String, cards: Integer, unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String) -> String
     end
 
     # Rendered by Dashboard, not called from checked code; only

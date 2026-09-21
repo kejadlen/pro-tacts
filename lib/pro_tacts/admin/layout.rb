@@ -121,9 +121,9 @@ module ProTacts
             # search over contacts and /setup is not a contact — a
             # header link would put it beside the search on every
             # screen, at the weight the app's own name has. Import is
-            # here for the same reason and is rarer still: a plan
-            # arrives a handful of times in a book's life
-            # (docs/plans/2026-09-20-import-by-upload.md).
+            # here for the same reason and is rarer still: an address
+            # book arrives a handful of times in a book's life
+            # (docs/plans/2026-09-21-import-a-vcf.md).
             footer(class: "admin-footer") do
               version = ProTacts.config.version
               span(class: "type-label") { version } if version

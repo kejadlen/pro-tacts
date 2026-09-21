@@ -1,100 +1,16 @@
-# Import::Card, Import::Plan::Entry, ::Contact, Import::Land::Arrival, and
-# Import::HttpClient::Response are Data classes, whose members the inline
-# parser cannot read (see sig/pro_tacts/contact.rbs). Each is marked
-# `@rbs skip` where it is defined and signed here. _Client is an
-# interface, which inline syntax has no way to declare.
+# Import::Vcf::Unknown is a Data class, whose members the inline parser
+# cannot read (see sig/pro_tacts/contact.rbs). It is marked `@rbs skip`
+# where it is defined and signed here.
 module ProTacts
   module Import
-    class Card
-      attr_reader first: String
-      attr_reader last: String
-      attr_reader nickname: String?
-      attr_reader birthday: String?
-      attr_reader phones: Array[Hash[String, String]]
-      attr_reader emails: Array[String]
-      attr_reader addresses: Array[Hash[String, String]]
-      attr_reader note: String?
-      attr_reader photo: bool
-      attr_reader groups: Array[String]
-      attr_reader source: Hash[String, untyped]
-
-      def self.new: (first: String, last: String, nickname: String?, birthday: String?, phones: Array[Hash[String, String]], emails: Array[String], addresses: Array[Hash[String, String]], note: String?, photo: bool, groups: Array[String], source: Hash[String, untyped]) -> instance
-
-      # Data#with, for the one member a plan fills in itself.
-      def with: (groups: Array[String]) -> Card
-    end
-
-    class Plan
-      class Entry
-        attr_reader id: String
-        attr_reader source_id: String
-        attr_reader card: Card
-
-        def self.new: (id: String, source_id: String, card: Card) -> instance
-      end
-
-      class Contact
-        attr_reader id: String
-        attr_reader source_id: String
+    module Vcf
+      class Unknown
         attr_reader name: String
-        attr_reader status: String?
+        attr_reader count: Integer
+        attr_reader examples: Array[String]
 
-        def self.new: (id: String, source_id: String, name: String, status: String?) -> instance
+        def self.new: (name: String, count: Integer, examples: Array[String]) -> instance
       end
-    end
-
-    class Config
-      ROOT: Pathname
-      FILE: Pathname
-      ACTIVE: Pathname
-      DONE: Pathname
-
-      attr_reader host: URI::HTTP
-
-      def self.members: () -> Array[Symbol]
-      def self.new: (host: URI::HTTP) -> instance
-      def self.read: (?Pathname path) -> instance
-    end
-
-    class Finalize
-      class Result
-        attr_reader done: Integer
-        attr_reader kept: Array[[String, String, String]]
-
-        def self.new: (done: Integer, kept: Array[[String, String, String]]) -> instance
-      end
-    end
-
-    class HttpClient
-      class Response
-        attr_reader status: Integer
-        attr_reader headers: Hash[String, String]
-        attr_reader body: String
-
-        def self.new: (status: Integer, headers: Hash[String, String], body: String) -> instance
-      end
-    end
-
-    class Land
-      class Arrival
-        attr_reader contact: ProTacts::Contact
-        attr_reader stored: bool
-
-        def self.new: (contact: ProTacts::Contact, stored: bool) -> instance
-      end
-    end
-
-    # A host, spoken to by path: Import::HttpClient, or the app itself
-    # under test.
-    interface _Client
-      def call: (String method, String path, ?headers: Hash[String, String], ?body: String?) -> HttpClient::Response
-    end
-
-    # The Mac a plan was read from: Import::Macos::Mac, or a test's stand-in.
-    interface _Mac
-      def show: (Array[String] source_ids) -> Hash[String, untyped]
-
-      def delete: (Array[String] source_ids) -> Hash[String, String]
     end
   end
 end

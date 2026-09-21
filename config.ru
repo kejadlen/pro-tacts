@@ -3,7 +3,6 @@
 # require time, so requiring the app has no side effects.
 require "pathname"
 require "fileutils"
-require "rack"
 require "sentry-ruby"
 
 $LOAD_PATH.unshift(Pathname.new(__dir__) / "lib")
@@ -50,17 +49,6 @@ Sentry.init do |sentry|
 
   sentry.traces_sample_rate = 1.0
 end
-
-# Rack refuses a multipart body of more than 128 parts by default, and
-# the import screen is handed one part per card in a plan -- 443 for
-# this Mac's iCloud book, and no plan is split to suit a parser. The
-# limit guards a public endpoint against a cheap body; this app is
-# reachable only over the tailnet, by a few family members, all trusted
-# (README, the simplifying assumptions), so raising it spends nothing
-# that was being protected. Here rather than beside the route, because
-# Rack reads it when it parses and requiring the app has no side
-# effects.
-Rack::Utils.multipart_part_limit = 2048
 
 ProTacts::Web.plugin :common_logger, $stderr
 

@@ -2,10 +2,12 @@ require "json"
 
 module ProTacts
   class Web < Roda
-    # JSON for scripts, beside the HTML screens a person uses. An import
-    # looks its group up here by name before making it, so a rerun
-    # joins the group an earlier run made
-    # (docs/plans/2026-09-16-importing-from-macos.md).
+    # JSON for scripts, beside the HTML screens a person uses. It was
+    # written for `rake import:execute`, which looked a group up by
+    # name over HTTP before making it; that import is gone
+    # (docs/plans/2026-09-21-import-a-vcf.md) and the route stays as
+    # what it always was — the group list, for anything scripted
+    # pointed at this server.
     hash_branch("api") do |r|
       r.get "groups" do
         response["Content-Type"] = "application/json"
