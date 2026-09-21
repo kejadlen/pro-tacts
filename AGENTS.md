@@ -22,12 +22,13 @@ rake contacts:reid    # Move contacts whose ids are not server-minted
 rake book:name        # Name a login's book and rename its sync group
                       # (LOGIN=login NAME=name; no NAME clears it)
 rake db:dump          # Write the cards, birthdays, and groups to data/dump
+                      # and commit them to the repository there
                       # (DUMP=path to move it)
 rake dev              # Dev server, seeded from test/fixtures/cards into a
                       # throwaway tmpdir on every start, reloading on change
                       # (needs fd and entr)
 rake console          # irb with the store open on the configured database
-                      # (console.rb loads it), after committing the dump as a
+                      # (console.rb loads it), after db:dump commits a
                       # safety net for what the session might do there
 rake import:macos:plan # Plan importing this Mac's iCloud contacts
                       # (LIMIT=n; reads Contacts, so leave it to the user)

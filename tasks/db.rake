@@ -4,7 +4,14 @@
 # groups/ are made to hold exactly what the store holds, so a dump kept
 # in version control shows deletions too; anything else in the
 # directory is left alone.
+#
+# The dump then commits what it wrote, into a repository of its own
+# beside the code's — `data/` is ignored here — so a snapshot can be
+# reverted to rather than overwritten by the next one
+# (docs/plans/2026-09-20-the-dump-commits.md). This is the one place
+# the tooling runs git; the app still runs none.
 
+require "open3"
 require "pathname"
 require "pro_tacts"
 
@@ -16,7 +23,7 @@ directory cards.to_s
 directory groups.to_s
 
 namespace :db do
-  desc "Dump the cards, birthdays, and groups into #{dump} (DUMP=path to move it)"
+  desc "Dump the cards, birthdays, and groups into #{dump} and commit them there (DUMP=path to move it)"
   task dump: [cards.to_s, groups.to_s] do
     require "yaml"
     require "pro_tacts/store"
@@ -36,6 +43,7 @@ namespace :db do
         ["#{group.id}.yml", YAML.dump({"name" => group.name, "lines" => group.lines, "members" => group.members})]
       })
     end
+    commit_dump(dump)
     puts "dumped #{database} into #{dump}"
   end
 
@@ -51,5 +59,29 @@ namespace :db do
   # back is binary.
   def dump_file(path, content)
     path.binwrite(content) unless path.exist? && path.binread == content.b
+  end
+
+  # The repository is the dump's own, made on the first dump. The
+  # identity is passed per invocation rather than read from the
+  # machine's git configuration, so a host that dumps needs none set up
+  # (docs/plans/2026-09-20-the-dump-commits.md).
+  def commit_dump(dump)
+    sh "git", "-C", dump.to_s, "init", "-b", "main" unless (dump / ".git").exist?
+    sh "git", "-C", dump.to_s, "add", "--all"
+
+    # Porcelain is the whole answer: empty means nothing to commit, so a
+    # dump that moved nothing adds no commit and the history is the
+    # writes rather than the runs. A failure here raises rather than
+    # leaving a caller believing the snapshot was recorded.
+    staged, error, = Open3.capture3("git", "-C", dump.to_s, "status", "--porcelain")
+    raise error unless error.empty?
+    return if staged.empty?
+
+    # The time is all a snapshot has to say for itself; what moved is
+    # the store's change log, which the dump deliberately leaves out.
+    sh "git", "-C", dump.to_s,
+      "-c", "user.name=pro-tacts", "-c", "user.email=dump@localhost",
+      "-c", "commit.gpgsign=false",
+      "commit", "--message", "dump #{Time.now.utc.strftime("%Y-%m-%dT%H:%M:%SZ")}"
   end
 end

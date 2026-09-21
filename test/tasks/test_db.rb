@@ -1,5 +1,6 @@
 require_relative "../test_helper"
 
+require "open3"
 require "pathname"
 require "rake"
 require "tmpdir"
@@ -46,6 +47,48 @@ class DbTasksTest < Minitest::Test
     end
   end
 
+  # The dump is a repository of its own, so the snapshot a console
+  # session starts from can be reverted to
+  # (docs/plans/2026-09-20-the-dump-commits.md).
+  def test_the_dump_commits_what_it_wrote
+    with_store do |store, root|
+      store.put("aiden", vcard(AIDEN))
+
+      dump(root)
+
+      assert_includes tracked(root / "dump"), "cards/aiden.vcf"
+      assert_equal 1, subjects(root / "dump").size
+      assert_match(/\Adump \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\z/, subjects(root / "dump").first)
+    end
+  end
+
+  # History is the writes rather than the runs, so dumping again over an
+  # unchanged store says nothing.
+  def test_a_dump_that_moved_nothing_adds_no_commit
+    with_store do |store, root|
+      store.put("aiden", vcard(AIDEN))
+      dump(root)
+
+      dump(root)
+
+      assert_equal 1, subjects(root / "dump").size
+    end
+  end
+
+  # What left the store leaves the repository too, rather than staying
+  # tracked at the revision it was deleted in.
+  def test_the_commit_drops_what_left_the_store
+    with_store do |store, root|
+      store.put("aiden", vcard(AIDEN))
+      dump(root)
+      store.delete("aiden")
+
+      dump(root)
+
+      refute_includes tracked(root / "dump"), "cards/aiden.vcf"
+    end
+  end
+
   private
 
   def with_store
@@ -68,10 +111,20 @@ class DbTasksTest < Minitest::Test
     ProTacts.config = ProTacts::Config.new("PRO_TACTS_DATA_DIR" => root.to_s)
     Rake.application = Rake::Application.new
     load (Pathname.new(__dir__).parent.parent / "tasks" / "db.rake").to_s
-    capture_io { Rake.application["db:dump"].invoke }
+    capture_subprocess_io { Rake.application["db:dump"].invoke }
   ensure
     ProTacts.config = config
     Rake.application = application
     ENV["DUMP"] = overridden
+  end
+
+  def tracked(dump) = git(dump, "ls-files")
+
+  def subjects(dump) = git(dump, "log", "--format=%s")
+
+  def git(dump, *arguments)
+    out, error, status = Open3.capture3("git", "-C", dump.to_s, *arguments)
+    raise error unless status.success?
+    out.lines(chomp: true)
   end
 end

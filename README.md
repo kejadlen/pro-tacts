@@ -39,8 +39,10 @@ birthdays because a partial date has no vCard 3.0 spelling — and an
 index of parsed properties, which can: `rake index:rebuild` derives
 that again from the stored cards alone. `rake db:dump` writes the
 cards, birthdays, and groups out as plain files, into `data/dump`
-unless `DUMP` names another directory
-(`docs/plans/2026-09-12-database-dump.md`).
+unless `DUMP` names another directory, and commits them to that
+directory's own repository, so a snapshot is something to revert to
+(`docs/plans/2026-09-12-database-dump.md`,
+`docs/plans/2026-09-20-the-dump-commits.md`).
 
 A group holds attributes its members' cards carry: an address or a note
 written once and composed into every member's card on the way out, with
