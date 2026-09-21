@@ -261,6 +261,40 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # The groups this book already has, offered beside the name the
+  # import would make: an import is as often people who belong in a
+  # group that exists as it is a batch that only needs finding again.
+  def test_the_review_offers_the_groups_this_book_already_has
+    with_contacts({}) do |store|
+      school = store.create_group(name: "school")
+
+      upload(JANE)
+      follow_redirect!
+
+      assert_includes last_response.body, %(<input type="text" name="group" value="import-)
+      assert_includes last_response.body, %(<input type="checkbox" name="groups[]" value="#{school}">school)
+    end
+  end
+
+  # Ticked and typed are both joins. The id that names no group is
+  # dropped rather than carried into Store#add_member, which reads a
+  # group with `sole` and would answer bad input with a 500.
+  def test_confirming_joins_the_groups_that_were_ticked
+    with_contacts({}) do |store|
+      school = store.create_group(name: "school")
+      id = upload(JANE)
+
+      post "/import/#{id}/land", "group" => "import-20260921T031655Z", "groups" => [school, "zzzz"]
+
+      assert_equal 200, last_response.status
+      landed = store.contacts.fetch(0)
+
+      assert_equal [landed.id], store.group(school).members
+      assert_equal ["import-20260921T031655Z", "school", ProTacts::Store::EVERYONE],
+                   store.all_groups.select { it.members.include?(landed.id) }.map(&:name).sort
+    end
+  end
+
   def test_confirming_lands_the_contacts_as_they_stand
     with_contacts({}) do |store|
       id = upload(JANE + PLAIN)

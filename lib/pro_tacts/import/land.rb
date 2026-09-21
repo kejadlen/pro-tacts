@@ -21,6 +21,7 @@ module ProTacts
     class Land
       # @rbs @store: Store
       # @rbs @group: String?
+      # @rbs @join: Array[String]
       # @rbs @group_ids: Hash[String, String]
 
       # The group an import offers to put its arrivals in, named for
@@ -32,16 +33,23 @@ module ProTacts
         "import-#{now.utc.strftime("%Y%m%dT%H%M%SZ")}"
       end
 
-      # `group` is the group every arrival joins, or none.
-      #: (Store store, Array[VCard] cards, ?group: String?) -> Array[Contact]
-      def self.call(store, cards, group: nil)
-        new(store, group:).call(cards)
+      # `group` is a group named rather than chosen — this server's
+      # own by that name, or a new one — and `join` the ids of groups
+      # it already has. Both, because the review screen offers both: a
+      # group named for the moment, so that what landed together can
+      # be found together, and the groups these people actually belong
+      # in. Either, or neither: nothing here is required, and a card
+      # in no group is still in everyone's book (#land).
+      #: (Store store, Array[VCard] cards, ?group: String?, ?join: Array[String]) -> Array[Contact]
+      def self.call(store, cards, group: nil, join: [])
+        new(store, group:, join:).call(cards)
       end
 
-      #: (Store store, ?group: String?) -> void
-      def initialize(store, group: nil)
+      #: (Store store, ?group: String?, ?join: Array[String]) -> void
+      def initialize(store, group: nil, join: [])
         @store = store
         @group = group
+        @join = join
         @group_ids = {} #: Hash[String, String]
       end
 
@@ -64,7 +72,11 @@ module ProTacts
         @store.put(id, identified(card, id), client: true)
 
         group = @group
-        @store.regroup(id, join: [group_id(group)], leave: []) if group
+        # The named group is resolved per card rather than up front,
+        # for #group_id's reason; the chosen ids need no resolving,
+        # the review screen having read them off this same store.
+        join = group ? [*@join, group_id(group)] : @join
+        @store.regroup(id, join:, leave: []) unless join.empty?
 
         # Read back rather than kept from the put, because the group
         # above moved what the card serves. Nothing can have taken it

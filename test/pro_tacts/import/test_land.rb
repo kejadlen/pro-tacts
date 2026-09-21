@@ -81,6 +81,35 @@ class ImportLandTest < Minitest::Test
     end
   end
 
+  # The groups the review screen ticked, joined alongside the name it
+  # typed: an import is as often "these are the people from the school
+  # list" as it is a batch that only needs finding again.
+  def test_arrivals_join_the_groups_the_review_chose
+    with_contacts({}) do |store|
+      school = store.create_group(name: "school")
+
+      landed = Land.call(store, Vcf.cards(JANE), group: "import-20260921T031655Z", join: [school])
+      id = landed.fetch(0).id
+
+      assert_equal [id], store.group(school).members
+      assert_equal ["import-20260921T031655Z", "school", ProTacts::Store::EVERYONE],
+                   store.all_groups.select { it.members.include?(id) }.map(&:name).sort
+    end
+  end
+
+  # Either, or neither: the chosen groups stand on their own when no
+  # name is typed.
+  def test_arrivals_join_a_chosen_group_with_no_group_named
+    with_contacts({}) do |store|
+      school = store.create_group(name: "school")
+
+      landed = Land.call(store, Vcf.cards(JANE), join: [school])
+
+      assert_equal landed.map(&:id), store.group(school).members
+      assert_equal %w[school], store.all_groups.map(&:name).reject { it == ProTacts::Store::EVERYONE }
+    end
+  end
+
   def test_no_group_name_lands_the_cards_in_everyones_book_alone
     land do |landed, store|
       assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)

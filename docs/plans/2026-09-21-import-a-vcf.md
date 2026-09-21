@@ -110,7 +110,8 @@ So the review is a walk, four screens rather than a submission:
    right, the contact editor, pre-filled with what was read and
    pointed at the import. Read the spouse's name off the left card and
    type it into the note on the right, in your own words.
-4. **Confirm**, and the cards land as the walk left them.
+4. **Confirm**, under whichever groups the arrivals should join, and
+   the cards land as the walk left them.
 
 The right-hand card is `Admin::ContactsEdit` itself, not a copy of it.
 A second editor for imports would be a place where the two could
@@ -165,10 +166,21 @@ dialog make:
 2. `Store#put` with `client: true`, so a card this creates joins
    everyone's book the way a client's create does
    (`2026-09-15-client-creates-join-everyone.md`).
-3. `Store#regroup` into the import's group, made if it is missing. The
-   group is named `import-<timestamp>` by default and can be renamed or
-   emptied on the review screen: what landed together can be found
-   together, and undone together.
+3. `Store#regroup` into whichever groups the review screen settled on.
+   There are two ways to name one there and they are both joins. The
+   text box makes a group, named `import-<timestamp>` by default — what
+   landed together can be found together, and undone together — and is
+   emptiable, a name this server already has joining that group rather
+   than colliding with it. Beside it every group this book already has,
+   as a box to tick, because an import is as often "these are the people
+   from the school list" as it is a batch that only needs finding again.
+   Neither is required: a card in no group is still in everyone's book.
+
+   Ticked for the whole file rather than per contact. The walk's pair of
+   cards is for fixing what one contact carries, and a group is not
+   something the file says anything about; once the arrivals have landed
+   the group they landed in is how to find them, and a group's own
+   editor is where its members are moved (`Admin::GroupsEdit`).
 
 Importing is not idempotent and cannot be. A `.vcf` carries no id this
 server minted, so a second upload of the same file is a second set of

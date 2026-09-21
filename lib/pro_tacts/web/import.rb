@@ -126,6 +126,7 @@ module ProTacts
         rows:,
         unknown: Import::Vcf.unknown(originals),
         group: Import::Land.default_group,
+        groups: store.all_groups,
         notice:,
       )
     end
@@ -235,7 +236,11 @@ module ProTacts
 
       _originals, landing = staged
       group = r.params["group"].to_s.strip
-      landed = Import::Land.call(store, landing, group: group.empty? ? nil : group)
+      # Only ids naming a group, #apply_groups' own rule: Store#add_member
+      # reads the group with `sole`, so a doctored one would be a 500
+      # rather than the bad input it is.
+      join = ids_in(r.params["groups"]) & store.all_groups.map(&:id)
+      landed = Import::Land.call(store, landing, group: group.empty? ? nil : group, join:)
       Import::Staged.close(upload)
 
       import_screen(landed:)
