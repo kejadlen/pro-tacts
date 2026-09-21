@@ -123,7 +123,7 @@ class ImportLandTest < Minitest::Test
       assert_equal 2, ids.uniq.length
       groups = store.all_groups.select { it.members.sort == ids.sort }
 
-      assert_equal [ProTacts::Store::EVERYONE, "import-20260921T031655Z"],
+      assert_equal ["import-20260921T031655Z", ProTacts::Store::EVERYONE],
                    groups.map(&:name).sort
     end
   end
