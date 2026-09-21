@@ -19,7 +19,16 @@ module ProTacts
 
       #: (groups: Array[Store::Group], ?notice: String?) -> void
       def initialize(groups:, notice: nil)
-        @groups = groups
+        # The `sync:` groups first — the books a client syncs, which
+        # are the store's own rather than anything a person made — and
+        # the rest alphabetically. Sorted here rather than asked of the
+        # store the way ContactsIndex sorts its rows: #all_groups is
+        # ordered by id so that a rename never moves a tag, and only
+        # this listing wants the reader's order. The key is the label
+        # the row shows (GroupLabel), so a nameless group sorts by the
+        # id it is shown by, and the id breaks a tie between two groups
+        # labelled the same.
+        @groups = groups.sort_by { [it.sync? ? 0 : 1, it.label.downcase, it.id] }
         @notice = notice
       end
 

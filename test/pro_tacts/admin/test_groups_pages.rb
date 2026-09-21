@@ -51,6 +51,20 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
+  # The `sync:` groups are the books a client syncs, so they lead the
+  # list; the rest read alphabetically, whatever their case.
+  def test_the_list_leads_with_the_sync_groups_and_then_reads_alphabetically
+    with_contacts({}) do |store|
+      %w[zoetrope Abacus sync:alpha barometer sync:*].each { store.create_group(name: it) }
+      ids = store.all_groups.to_h { [it.name, it.id] }
+
+      get "/groups"
+
+      assert_equal %w[sync:* sync:alpha Abacus barometer zoetrope].map { ids.fetch(it) },
+                   last_response.body.scan(%r{<a href="/groups/([^"]+)">}).flatten
+    end
+  end
+
   def test_an_empty_list_says_so
     with_contacts({}) do
       get "/groups"
