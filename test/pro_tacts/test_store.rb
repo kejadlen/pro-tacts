@@ -1490,8 +1490,8 @@ class StoreTest < Minitest::Test
       FixtureData.seed_group(store, name: "sync:Alpha Chen", members: %w[aiden znorth])
       FixtureData.seed_group(store, name: "Household", members: ["yuki"])
 
-      assert_equal Set["aiden", "znorth"], store.book("Alpha Chen")
-      assert_equal Set["aiden"], store.book("Zoë Chen")
+      assert_equal Set["aiden", "znorth"], store.book_cards("Alpha Chen")
+      assert_equal Set["aiden"], store.book_cards("Zoë Chen")
     end
   end
 
@@ -1503,7 +1503,7 @@ class StoreTest < Minitest::Test
       FixtureData.seed_group(store, name: "sync:alpha chen", members: ["znorth"])
       FixtureData.seed_group(store, name: "SYNC:Alpha Chen", members: ["yuki"])
 
-      assert_equal Set["aiden"], store.book("Alpha Chen")
+      assert_equal Set["aiden"], store.book_cards("Alpha Chen")
     end
   end
 
@@ -1518,14 +1518,14 @@ class StoreTest < Minitest::Test
 
       assert_equal "sync:Alpha Chen", store.group(id).name
       assert_equal "Alpha Chen", store.book_name("alpha@example.com")
-      assert_equal Set["aiden"], store.book("alpha@example.com")
+      assert_equal Set["aiden"], store.book_cards("alpha@example.com")
       assert_equal %w[group put], store.changes_of("aiden").map(&:action)
 
       store.name_book("alpha@example.com", " ")
 
       assert_equal "sync:alpha@example.com", store.group(id).name
       assert_nil store.book_name("alpha@example.com")
-      assert_equal Set["aiden"], store.book("alpha@example.com")
+      assert_equal Set["aiden"], store.book_cards("alpha@example.com")
     end
   end
 
@@ -1534,7 +1534,7 @@ class StoreTest < Minitest::Test
       store.name_book("alpha@example.com", "Alpha Chen")
       FixtureData.seed_group(store, name: "sync:Alpha Chen", members: ["aiden"])
 
-      assert_equal Set["aiden"], store.book("alpha@example.com")
+      assert_equal Set["aiden"], store.book_cards("alpha@example.com")
     end
   end
 
@@ -1557,7 +1557,7 @@ class StoreTest < Minitest::Test
       store.put("aiden", vcard(AIDEN), client: true)
       store.put("znorth", vcard(ZED), client: true)
 
-      assert_equal Set["aiden", "znorth"], store.book("Zoë Chen")
+      assert_equal Set["aiden", "znorth"], store.book_cards("Zoë Chen")
       assert_equal ["sync:*"], store.all_groups.map(&:name)
       assert_equal ["put"], store.changes_of("aiden").map(&:action)
     end
@@ -1567,7 +1567,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN}) do |store|
       store.put("aiden", vcard(AIDEN), client: true)
 
-      assert_empty store.book("Alpha Chen")
+      assert_empty store.book_cards("Alpha Chen")
     end
   end
 
@@ -2137,7 +2137,7 @@ class StoreTest < Minitest::Test
       assert_equal({"aiden" => AIDEN}, snapshot.cards)
       assert_equal({"aiden" => ProTacts::Birthday.new(year: 1985, month: 4, day: 12)}, snapshot.birthdays)
       assert_equal [["Booles", ["aiden"]]], snapshot.groups.map { [it.name, it.members] }
-      assert_equal({"alpha@example.com" => "Alpha Chen"}, snapshot.book_names)
+      assert_equal({"alpha@example.com" => "Alpha Chen"}, snapshot.books)
     end
   end
 

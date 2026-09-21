@@ -322,7 +322,7 @@ module ProTacts
 
     #: () -> Set[String]
     def book
-      @book ||= store.book(@login)
+      @book ||= store.book_cards(@login)
     end
 
     # One member of the requester's book, or nil for a card outside it

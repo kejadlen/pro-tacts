@@ -38,7 +38,7 @@ the birthdays — the two things in it that cannot be rebuilt, the
 birthdays because a partial date has no vCard 3.0 spelling — and an
 index of parsed properties, which can: `rake index:rebuild` derives
 that again from the stored cards alone. `rake db:dump` writes the
-cards, birthdays, groups, and book names out as plain files, into
+cards, birthdays, groups, and books out as plain files, into
 `data/dump` unless `DUMP` names another directory, and commits them to
 that directory's own repository, so a snapshot is something to revert
 to (`docs/plans/2026-09-12-database-dump.md`,

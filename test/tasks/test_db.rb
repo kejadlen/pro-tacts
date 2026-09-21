@@ -30,7 +30,7 @@ class DbTasksTest < Minitest::Test
       assert_equal({"aiden" => {"year" => 1985, "month" => 4}}, YAML.safe_load((root / "dump" / "birthdays.yml").read))
       assert_equal({"name" => "Booles", "lines" => ["NOTE:a household"], "members" => ["aiden"]},
         YAML.safe_load((root / "dump" / "groups" / "#{group}.yml").read))
-      assert_equal({"alpha@example.com" => "Alpha Chen"}, YAML.safe_load((root / "dump" / "book_names.yml").read))
+      assert_equal({"alpha@example.com" => "Alpha Chen"}, YAML.safe_load((root / "dump" / "books.yml").read))
     end
   end
 
@@ -42,7 +42,7 @@ class DbTasksTest < Minitest::Test
 
       dump(root)
 
-      assert_equal({}, YAML.safe_load((root / "dump" / "book_names.yml").read))
+      assert_equal({}, YAML.safe_load((root / "dump" / "books.yml").read))
     end
   end
 

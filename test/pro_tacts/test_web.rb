@@ -1024,8 +1024,8 @@ class WebTest < Minitest::Test
       put_request "new", card("new", "New"), "CONTENT_TYPE" => VCARD, "HTTP_IF_NONE_MATCH" => "*"
 
       assert_equal 201, last_response.status
-      assert_equal Set["new"], store.book("test@example.com")
-      assert_equal Set["new"], store.book("zoë@example.com")
+      assert_equal Set["new"], store.book_cards("test@example.com")
+      assert_equal Set["new"], store.book_cards("zoë@example.com")
     end
   end
 

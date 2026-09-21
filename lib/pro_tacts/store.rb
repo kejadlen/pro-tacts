@@ -89,9 +89,10 @@ module ProTacts
 
     # Everything the store cannot rebuild, read at one moment: the
     # stored cards by id, the birthdays by card id, the groups, and the
-    # book names by login. What `rake db:dump` writes (tasks/db.rake).
+    # books — the name each named one goes by, keyed by login. What
+    # `rake db:dump` writes (tasks/db.rake).
     # @rbs skip
-    Snapshot = Data.define(:cards, :birthdays, :groups, :book_names)
+    Snapshot = Data.define(:cards, :birthdays, :groups, :books)
 
     # A group as the admin screens read one: its own row, the lines it
     # lends in the order it lends them, and its members' card ids. The
@@ -268,7 +269,7 @@ module ProTacts
           },
           birthdays: birthdays_by_id,
           groups: all_groups,
-          book_names: all_book_names,
+          books: all_books,
         )
       end
     end
@@ -383,8 +384,11 @@ module ProTacts
     # where the name is the login's book name or the login itself
     # (docs/plans/2026-09-16-book-names.md). Matched as spelled: a login
     # whose case reads badly gets a name rather than a folded match.
+    # Named for the cards rather than for the book, because `books` is
+    # the table of the books that have names
+    # (docs/plans/2026-09-21-books-not-book-names.md).
     #: (String login) -> Set[String]
-    def book(login)
+    def book_cards(login)
       ids = groups.where(name: [EVERYONE, own_sync_name(login)]).select_map(:id)
       Set.new(group_members.where(group_id: ids).select_map(:card_id).map(&:to_s))
     end
@@ -393,7 +397,7 @@ module ProTacts
     # the login itself.
     #: (String login) -> String?
     def book_name(login)
-      book_names.where(login:).sole.fetch(:name).to_s
+      books.where(login:).sole.fetch(:name).to_s
     rescue Sequel::NoMatchingRow
       nil
     end
@@ -413,8 +417,8 @@ module ProTacts
 
       @database.transaction do
         group = groups.where(name: own_sync_name(login)).select_map(:id).first
-        book_names.where(login:).delete
-        book_names.insert(login:, name:) unless name.nil?
+        books.where(login:).delete
+        books.insert(login:, name:) unless name.nil?
         rename_group(group.to_s, name: own_sync_name(login)) unless group.nil?
       end
     end
@@ -898,8 +902,8 @@ module ProTacts
     end
 
     #: () -> Sequel::Dataset
-    def book_names
-      @database[:book_names]
+    def books
+      @database[:books]
     end
 
     #: () -> Sequel::Dataset
@@ -1451,14 +1455,15 @@ module ProTacts
       end
     end
 
-    # Every book name, keyed by login, for the dump — the one read that
-    # wants them all (docs/plans/2026-09-19-book-names-in-the-dump.md).
-    # Ordered here rather than by the caller, the birthdays' arrangement
-    # reversed: nothing else reads this, so the order a dumped file
-    # needs belongs with the read.
+    # Every named book, the name keyed by the login whose book it is,
+    # for the dump — the one read that wants them all
+    # (docs/plans/2026-09-19-books-in-the-dump.md). Ordered here
+    # rather than by the caller, the birthdays' arrangement reversed:
+    # nothing else reads this, so the order a dumped file needs belongs
+    # with the read.
     #: () -> Hash[String, String]
-    def all_book_names
-      book_names.order(:login).all.to_h {
+    def all_books
+      books.order(:login).all.to_h {
         [it.fetch(:login).to_s, it.fetch(:name).to_s] #: [String, String]
       }
     end

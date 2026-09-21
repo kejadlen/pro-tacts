@@ -21,9 +21,9 @@ rake contacts:reid    # Move contacts whose ids are not server-minted
                       # onto minted ones, rewriting each card's UID
 rake book:name        # Name a login's book and rename its sync group
                       # (LOGIN=login NAME=name; no NAME clears it)
-rake db:dump          # Write the cards, birthdays, groups, and book
-                      # names to data/dump and commit them to the
-                      # repository there (DUMP=path to move it)
+rake db:dump          # Write the cards, birthdays, groups, and books
+                      # to data/dump and commit them to the repository
+                      # there (DUMP=path to move it)
 rake dev              # Dev server, seeded from test/fixtures/cards into a
                       # throwaway tmpdir on every start, reloading on change
                       # (needs fd and entr)

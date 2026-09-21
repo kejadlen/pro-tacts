@@ -128,7 +128,7 @@ class ImportFinalizeTest < Minitest::Test
   # user's book, which a card in no `sync:` group is outside of.
   def test_a_contact_whose_card_is_in_no_book_still_leaves_the_mac
     with_landed_plan(edit: ->(yaml) { yaml.sub("- sync:*\n", "") }) do |plan, store, client|
-      refute_includes store.book("test@example.com"), IDS.first
+      refute_includes store.book_cards("test@example.com"), IDS.first
       mac = Mac.new(IDS.to_h { [source_id(it), record(it)] })
 
       result = Finalize.call(plan, client:, mac:)
