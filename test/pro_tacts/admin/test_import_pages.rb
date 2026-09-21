@@ -293,6 +293,26 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # A book with three hundred groups is the same screen as a book
+  # with three, and the walk opens it once per contact: the boxes are
+  # filtered, and the filter is the groups dialog's own
+  # (Admin::GroupFilter). Every row it is meant to see says which
+  # name it matches on, and the filter itself is the way to name a
+  # group this book does not have — one place rather than a list and
+  # a text field under it.
+  def test_the_groups_beside_a_card_are_filtered_like_the_dialogs
+    with_contacts({}) do |store|
+      store.create_group(name: "school")
+      id = upload(JANE)
+
+      get "/import/#{id}/0"
+
+      assert_includes last_response.body, %(<input type="search" placeholder="Filter or add groups")
+      assert_includes last_response.body, %(data-label="school")
+      assert_includes last_response.body, %(<input type="checkbox" name="new" :value="filter.trim()">)
+    end
+  end
+
   # A group that does not exist yet is named beside the contact and
   # made at the confirm, not before: a group created while the walk
   # is still going is one left behind by an import that was
@@ -310,11 +330,14 @@ class AdminImportPagesTest < Minitest::Test
       assert_empty store.all_groups
 
       # Read back as a box of its own, ticked, so it can be taken off
-      # again before the confirm.
+      # again before the confirm — and filtered like the rest, so a
+      # name this import is already making is not offered again as a
+      # name to make.
       get "/import/#{id}/0"
 
       assert_includes last_response.body,
                       %(<input type="checkbox" name="named[]" value="Clarks" checked>)
+      assert_includes last_response.body, %(data-label="clarks")
 
       post "/import/#{id}/confirm", "group" => ""
       clarks = store.all_groups.find { it.name == "Clarks" }
