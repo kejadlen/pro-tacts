@@ -60,7 +60,8 @@ module ProTacts
         # Empty rather than absent, so every slot of an import that
         # exists is a file that exists and a write can say which of
         # the two it found (#write).
-        File.binwrite(directory / file_name(GROUPS), JSON.generate({}))
+        nothing = {} #: Hash[String, Array[String]]
+        File.binwrite(directory / file_name(GROUPS), JSON.generate(nothing))
         id
       end
 
@@ -106,13 +107,19 @@ module ProTacts
       # will not parse is a broken assumption JSON says so about.
       #: (String id) -> Hash[String, Array[String]]
       def self.groups(id)
+        chosen = {} #: Hash[String, Array[String]]
         raw = read(id, GROUPS)
-        return {} if raw.nil?
+        return chosen if raw.nil?
 
         parsed = JSON.parse(raw)
-        return {} unless parsed.is_a?(Hash)
+        return chosen unless parsed.is_a?(Hash)
 
-        parsed.to_h { |index, ids| [index.to_s, (ids.is_a?(Array) ? ids : []).map(&:to_s)] }
+        parsed.each do |index, ids|
+          next unless ids.is_a?(Array)
+
+          chosen[index.to_s] = ids.map(&:to_s)
+        end
+        chosen
       end
 
       # The import, gone: the last step of a landing, and what keeps

@@ -118,7 +118,11 @@ module ProTacts
       # By name, because the row is read rather than submitted: a
       # group the walk ticked and someone then deleted is simply not
       # among these.
-      names = store.all_groups.to_h { |group| [group.id, group.label] }
+      names = store.all_groups.to_h { |group|
+        # A pair is a two-element array until something says
+        # otherwise, and an inline annotation needs its own line.
+        [group.id, group.label] #: [String, String]
+      }
       rows = landing.each_with_index.map { |card, index|
         # A literal of several elements is an Array until something
         # says otherwise, and an inline annotation needs its own line.
