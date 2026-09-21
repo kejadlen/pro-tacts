@@ -122,11 +122,13 @@ module ProTacts
       # assumption JSON says so about.
       #: (String id) -> [Hash[String, Array[String]], Hash[String, Array[String]]]
       def self.groups(id)
-        raw = read(id, GROUPS)
-        parsed = raw.nil? ? nil : JSON.parse(raw)
         # #lists makes an empty map of anything that is not one, so
         # the gone import and the half a file are the same answer
         # here rather than two spellings of it.
+        raw = read(id, GROUPS)
+        return [lists(nil), lists(nil)] if raw.nil?
+
+        parsed = JSON.parse(raw)
         return [lists(nil), lists(nil)] unless parsed.is_a?(Hash)
 
         [lists(parsed[CHOSEN]), lists(parsed[NAMED])]
