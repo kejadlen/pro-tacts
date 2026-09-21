@@ -393,13 +393,17 @@ module ProTacts
       Set.new(group_members.where(group_id: ids).select_map(:card_id).map(&:to_s))
     end
 
-    # The name a login's book goes by in place of the login, or nil for
-    # the login itself.
-    #: (String login) -> String?
+    # The name a login's book goes by. A login with no row has a book
+    # all the same and it goes by the login, so that is the answer
+    # rather than a nil for every caller to spell the fallback out
+    # again (docs/plans/2026-09-21-books-not-book-names.md). Whether a
+    # book was named is a question nothing asks; #name_book is how one
+    # is set either way.
+    #: (String login) -> String
     def book_name(login)
       books.where(login:).sole.fetch(:name).to_s
     rescue Sequel::NoMatchingRow
-      nil
+      login
     end
 
     # Sets the name a login's book goes by, or with nil or a blank goes
@@ -1010,7 +1014,7 @@ module ProTacts
     # The group name that puts cards in this login's book alone.
     #: (String login) -> String
     def own_sync_name(login)
-      "#{SYNC_PREFIX}#{book_name(login) || login}"
+      "#{SYNC_PREFIX}#{book_name(login)}"
     end
 
     #: (String? name) -> bool

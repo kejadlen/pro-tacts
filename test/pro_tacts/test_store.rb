@@ -1524,7 +1524,7 @@ class StoreTest < Minitest::Test
       store.name_book("alpha@example.com", " ")
 
       assert_equal "sync:alpha@example.com", store.group(id).name
-      assert_nil store.book_name("alpha@example.com")
+      assert_equal "alpha@example.com", store.book_name("alpha@example.com")
       assert_equal Set["aiden"], store.book_cards("alpha@example.com")
     end
   end
@@ -1546,7 +1546,7 @@ class StoreTest < Minitest::Test
 
       assert_raises(Sequel::UniqueConstraintViolation) { store.name_book("zoe@example.com", "Alpha Chen") }
       assert_raises(ProTacts::Store::EveryonesBookName) { store.name_book("zoe@example.com", "*") }
-      assert_nil store.book_name("zoe@example.com")
+      assert_equal "zoe@example.com", store.book_name("zoe@example.com")
     end
   end
 

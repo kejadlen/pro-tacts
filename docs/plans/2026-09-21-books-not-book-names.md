@@ -30,12 +30,28 @@ The pairs that stay, because each already said which half it meant:
 |---|---|
 | `Store#books` | The table |
 | `Store#all_books` | Every named book, by login — `groups`/`all_groups`'s arrangement |
-| `Store#book_name(login)` | The name, or nil for a book that goes by its login |
+| `Store#book_name(login)` | The name it goes by, which is the login until one is set |
 | `Store#name_book(login, name)` | Sets it, and renames the `sync:` group with it |
 | `Store#book_cards(login)` | The card ids that client syncs |
 
 `Snapshot#books` and the dump's `books.yml` follow the table
 (`2026-09-19-books-in-the-dump.md`).
+
+## A book has a name whether or not it has a row
+
+`book_name` answered with nil for a login with no row, and all three of
+its callers wrote `book_name(login) || login` — the fallback spelled out
+again each time, and a name the method's own comment had already said was
+the login's. A login with no row has a book all the same, and it goes by
+the login, so that is what the method answers now and the `|| login`
+goes.
+
+Nothing asked the other question. Whether a book was ever named is not a
+thing any screen, task or route branches on: the two writers
+(`rake book:name` and the setup POST) set a name or clear one, and both
+report what the book goes by afterwards either way. A reader that needs
+the distinction can ask the table, but none does, and a nil that every
+caller had to undo was not that reader.
 
 ## Why now
 

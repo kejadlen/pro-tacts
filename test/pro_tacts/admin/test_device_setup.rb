@@ -113,7 +113,7 @@ class AdminDeviceSetupTest < Minitest::Test
       post "/setup/book"
 
       assert_equal "test@example.com syncs sync:test@example.com\n", last_response.body
-      assert_nil store.book_name("test@example.com")
+      assert_equal "test@example.com", store.book_name("test@example.com")
     end
   end
 
@@ -125,7 +125,7 @@ class AdminDeviceSetupTest < Minitest::Test
 
       assert_equal 409, last_response.status
       assert_equal "sync:zoe is taken; test@example.com's book is unchanged.\n", last_response.body
-      assert_nil store.book_name("test@example.com")
+      assert_equal "test@example.com", store.book_name("test@example.com")
 
       post "/setup/book", name: "*"
 
