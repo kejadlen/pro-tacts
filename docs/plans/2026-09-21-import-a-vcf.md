@@ -71,6 +71,15 @@ wherever that line goes — a label naming nothing is worse than either
 outcome — while a label on a line that is coming in, `item1.ADR`'s
 say, comes in with it.
 
+One property is dropped without being mentioned. `PRODID` names the
+program that wrote the file rather than anything about the person, and
+every export carries one, so counting it as a loss would put a line in
+every file's summary and a mark on every contact's row — a mark every
+row wears is a mark that says nothing. What goes quiet is the asking,
+not the dropping: the line still does not come in, and the card as
+exported still shows it struck, that card being the file's own bytes
+and a line shown plain there being a line that claims to arrive.
+
 One thing is kept that nothing will show: a line that would not parse
 at all. The parser hands it back without a property name, so there is
 nothing to show on a screen and nothing anyone could decide about it;
@@ -92,8 +101,8 @@ So the review is a walk, four screens rather than a submission:
    that contact's lines are not coming in, over a summary of which
    properties the whole file is losing. A book is hundreds of contacts
    and only some of them will have anything worth looking at, so the
-   list is what says which rows are worth opening — and a file losing
-   nothing but `PRODID` can be landed unread.
+   list is what says which rows are worth opening — and a file whose
+   every loss is noise says so at the top and can be landed unread.
 3. **One contact, two cards.** On the left, the card exactly as the
    file wrote it: content lines in monospace, with every line that is
    not coming in struck in Gloss's danger color and labelled "not

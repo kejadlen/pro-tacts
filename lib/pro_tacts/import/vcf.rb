@@ -50,6 +50,18 @@ module ProTacts
         LABEL,
       ].freeze #: Array[String]
 
+      # Unknown, and not worth saying so. PRODID names the program
+      # that wrote the file rather than anything about the person, and
+      # every export carries one: counted as a loss it would put a
+      # line in every file's summary and a mark on every contact's
+      # row, for a fact nobody is going to copy into a card. What goes
+      # quiet is the asking, not the dropping — the line still does
+      # not come in, and the card as exported still shows it struck
+      # (Admin::ImportOriginal), because that card is the file's own
+      # bytes and a line shown plain there would be a line claiming to
+      # arrive.
+      NOISE = %w[PRODID].freeze #: Array[String]
+
       # What an import makes of one card: the card as it will come in,
       # and the lines it leaves behind. Both, because the review
       # screen shows them side by side — the original with its doomed
@@ -126,7 +138,7 @@ module ProTacts
             next if property.nil?
 
             name = property.name.upcase
-            next if known?(name)
+            next if known?(name) || noise?(name)
 
             (seen[name] ||= []) << summary(line)
           end
@@ -142,6 +154,25 @@ module ProTacts
       #: (String name) -> bool
       def self.known?(name)
         KNOWN.include?(name.upcase)
+      end
+
+      # Whether a property is one to drop without remark (NOISE).
+      #: (String name) -> bool
+      def self.noise?(name)
+        NOISE.include?(name.upcase)
+      end
+
+      # The dropped lines a reader is meant to look at: everything a
+      # card is losing but the noise. It is what the review list
+      # counts on a row, and so what says whether the pair of cards
+      # behind that row is worth opening at all — a contact losing
+      # nothing but its exporter's name is a contact to leave shut.
+      #: (Array[VCard::Parser::Line] dropped) -> Array[VCard::Parser::Line]
+      def self.losses(dropped)
+        dropped.reject { |line|
+          property = line.property
+          !property.nil? && noise?(property.name)
+        }
       end
 
       # One card as this book will hold it, beside what that costs.

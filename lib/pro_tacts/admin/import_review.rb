@@ -19,7 +19,10 @@ module ProTacts
     # Above the list, the same fact for the whole file: which
     # properties are not coming in, and how many lines each of them
     # wears. It is what says whether the list is worth working down
-    # at all — a file losing nothing but PRODID can be landed unread.
+    # at all. Neither count mentions the noise a file is losing
+    # (Vcf::NOISE): a mark every row wears is a mark that says
+    # nothing, and an export's own PRODID is not something anyone is
+    # going to copy across by hand.
     class ImportReview < Phlex::HTML
       # @rbs @upload: String
       # @rbs @rows: Array[[::ProTacts::Contact, Integer]]
@@ -81,7 +84,11 @@ module ProTacts
       #: () -> void
       def losses
         if @unknown.empty?
-          p(class: "type-body-sm gl-muted") { "Every property in this file is one pro-tacts reads." }
+          # Not "every property here is one pro-tacts reads": the
+          # noise is not read either (Vcf::NOISE), it is only not
+          # worth a sentence. What is true in both cases is that
+          # there is nothing in this file to stop over.
+          p(class: "type-body-sm gl-muted") { "Nothing in this file needs reading before it lands." }
           return
         end
 

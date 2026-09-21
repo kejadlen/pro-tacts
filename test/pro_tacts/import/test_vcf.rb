@@ -78,7 +78,25 @@ class ImportVcfTest < Minitest::Test
   def test_the_survey_names_what_no_screen_here_shows
     unknown = Vcf.unknown(Vcf.cards(JANE + SAM))
 
-    assert_equal %w[PRODID X-ABRELATEDNAMES X-SOCIALPROFILE], unknown.map(&:name)
+    assert_equal %w[X-ABRELATEDNAMES X-SOCIALPROFILE], unknown.map(&:name)
+  end
+
+  # The exporter's own name is not a loss to report: every file
+  # carries one, and a line in every summary for it would say
+  # nothing.
+  def test_the_survey_says_nothing_about_the_noise
+    refute_includes Vcf.unknown(Vcf.cards(SAM)).map(&:name), "PRODID"
+  end
+
+  # It is still not imported, though, and the card as exported still
+  # shows it struck: #losses is what a reader is asked to look at,
+  # not what comes in.
+  def test_the_noise_is_dropped_like_anything_else_unknown
+    reading = Vcf.read(Vcf.cards(SAM).fetch(0))
+
+    refute_includes reading.card.to_s, "PRODID"
+    assert_includes reading.dropped.map { |line| line.property&.name }, "PRODID"
+    refute_includes Vcf.losses(reading.dropped).map { |line| line.property&.name }, "PRODID"
   end
 
   # The envelope, the fields a screen shows, and the label that names a

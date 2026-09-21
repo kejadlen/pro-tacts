@@ -116,8 +116,40 @@ class AdminImportPagesTest < Minitest::Test
       upload(PLAIN)
       follow_redirect!
 
-      assert_includes last_response.body, "Every property in this file is one pro-tacts reads."
+      assert_includes last_response.body, "Nothing in this file needs reading before it lands."
       refute_includes last_response.body, "left behind"
+    end
+  end
+
+  # Every export names the program that wrote it, and nobody is
+  # going to copy that into a card: it is dropped without being
+  # counted, so a file losing nothing else reads as losing nothing.
+  def test_a_file_losing_only_its_exporters_name_asks_for_nothing
+    with_contacts({}) do |_store|
+      upload(PLAIN.sub("VERSION:3.0\r\n", "VERSION:3.0\r\nPRODID:-//Apple Inc.//macOS 15.0//EN\r\n"))
+      follow_redirect!
+
+      assert_includes last_response.body, "Nothing in this file needs reading before it lands."
+      refute_includes last_response.body, "left behind"
+      refute_includes last_response.body, "PRODID"
+    end
+  end
+
+  # The card as exported still says so, though: it is the file's own
+  # bytes, and a line shown plain there would be one claiming to
+  # arrive.
+  def test_the_exporters_name_is_struck_on_the_card_it_arrived_on
+    with_contacts({}) do |store|
+      id = upload(PLAIN.sub("VERSION:3.0\r\n", "VERSION:3.0\r\nPRODID:-//Apple Inc.//macOS 15.0//EN\r\n"))
+
+      get "/import/#{id}/0"
+
+      assert_includes last_response.body,
+                      %(<li data-dropped><span>PRODID:-//Apple Inc.//macOS 15.0//EN</span>)
+
+      post "/import/#{id}/land", "group" => ""
+
+      refute_includes store.contacts.fetch(0).vcard.to_s, "PRODID"
     end
   end
 

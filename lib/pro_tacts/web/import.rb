@@ -116,7 +116,8 @@ module ProTacts
       rows = landing.each_with_index.map { |card, index|
         # A two-element literal is an Array until something says
         # otherwise, and an inline annotation needs its own line.
-        [import_contact(card, index), Import::Vcf.read(originals.fetch(index)).dropped.length] #: [Contact, Integer]
+        dropped = Import::Vcf.read(originals.fetch(index)).dropped
+        [import_contact(card, index), Import::Vcf.losses(dropped).length] #: [Contact, Integer]
       }
 
       response["Content-Type"] = "text/html; charset=utf-8"
