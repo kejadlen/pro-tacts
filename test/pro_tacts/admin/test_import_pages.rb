@@ -55,9 +55,12 @@ class AdminImportPagesTest < Minitest::Test
     last_response.headers["location"].to_s[%r{/import/([a-z]+)}, 1]
   end
 
-  # The snapshot guard the editor's form carries, so a test's save
-  # reads like the browser's.
-  def etag = last_response.body[/name="etag" value="([^"]+)"/, 1]
+  # The snapshot guard the editor's form carries, read off the page
+  # rather than out of the store, a staged contact having no row
+  # there yet. An etag wears quotes (RFC 9110 section 8.8.3) and the
+  # attribute spells them as entities; a browser sends back the
+  # quotes themselves.
+  def etag = last_response.body[/name="etag" value="([^"]+)"/, 1].to_s.gsub("&quot;", '"')
 
   def test_the_screen_asks_for_a_vcf
     get "/import"
