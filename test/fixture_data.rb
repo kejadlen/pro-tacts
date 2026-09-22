@@ -97,17 +97,62 @@ module FixtureData
   # `sync:` prefix, so joining them to a book is one rename in the admin UI.
   CURIES = %w[unsynced-marie unsynced-pierre].freeze #: Array[String]
 
+  # The clubs a family accumulates, and the reason the seed holds
+  # thirty of them: the groups dialog opens on eight rows and hides the
+  # rest (Admin::GroupDialog::LIMIT,
+  # docs/plans/2026-09-22-a-few-groups-at-a-time.md), which is nothing
+  # to look at in a book with four groups. Named rather than numbered,
+  # because what the filter is given is a name somebody is typing and
+  # "Group 12" exercises a search box against a string no one would
+  # type. Several share an opening — Book club and Boulderers and
+  # Brass band, Cheese share and Chess club and Choir — so a filter can
+  # be narrowed twice and still have somewhere to go.
+  #
+  # None of them carries a line. A group with properties composes them
+  # into its members' served bytes, and the recorded exchanges are a
+  # session that saw those cards without these groups in the book, so
+  # anything lent here is a replay diff (see MEMBERS).
+  CLUBS = [
+    "Allotment", "Book club", "Boulderers", "Brass band", "Cheese share", "Chess club",
+    "Choir", "Cycling", "Dentists", "Dog walkers", "Film night", "Fishing", "Gardeners",
+    "Hiking", "Knitting", "Locksmiths", "Neighbours", "Pub quiz", "Rowing", "Running club",
+    "Sailing", "School run", "Swimming", "Tennis", "Ukulele", "Vets", "Walkers",
+    "Wine club", "Yoga", "Zebrafish lab"
+  ].freeze #: Array[String]
+
+  # The one club seeded with a household in it, and last in the book by
+  # name on purpose: a dialog opened on a Boole then has a group it is
+  # already in sorting well past the cap, which is the row the cap is
+  # not allowed to take (Admin::GroupDialog#initialize).
+  ZOO = "Zoo volunteers" #: String
+
   # The third is `sync:*`, holding every card but the unsynced ones, so
   # every user's book is the rest of the seed — the replay's included,
   # whose recorded sessions saw every card they asked for — and the
   # admin UI still shows a contact that is in nobody's
   # (docs/plans/2026-09-12-per-user-books.md). The fourth is CURIES'.
+  # The rest are CLUBS and ZOO.
   #: (ProTacts::Store store) -> void
   def self.seed_groups(store)
     seed_group(store, name: "Booles", lines: HOUSEHOLD, members: MEMBERS)
     seed_group(store, members: birthday_cards)
     seed_group(store, name: ProTacts::Store::EVERYONE, members: cards.keys - unsynced_cards)
     seed_group(store, name: "Curies", members: CURIES)
+    seed_clubs(store)
+  end
+
+  # CLUBS, each holding a different few cards, so the list a group
+  # screen shows and the chips a contact's row carries both vary. Rolled
+  # off the card order rather than tabulated per club, for the reason
+  # ago_seconds is computed: a table of memberships is a second list to
+  # keep in step with test/fixtures/cards.
+  #: (ProTacts::Store store) -> void
+  def self.seed_clubs(store)
+    ids = cards.keys
+    CLUBS.each_with_index do |name, index|
+      seed_group(store, name:, members: ids.rotate(index).take(index % 4))
+    end
+    seed_group(store, name: ZOO, members: MEMBERS)
   end
 
   # A group, seeded without a change-log entry for any member it moves
