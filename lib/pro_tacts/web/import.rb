@@ -227,29 +227,29 @@ module ProTacts
     end
 
     # The groups beside one card: this book's own list, with the two
-    # an arrival comes in under already ticked.
+    # an arrival comes in under already ticked. Both are boxes like
+    # any other — unticking everyone's book is how a card comes in
+    # without going out to anybody's phone, and unticking the
+    # import's own group is how an arrival that does not belong with
+    # the lot says so.
     #
-    # Everyone's book is ticked and fixed, `Store#put`'s `client:
-    # true` joining it whatever this form says. It is missing from
-    # the list on one screen in the life of a server — the first card
-    # of the first import into an empty book, where that put is what
-    # creates it — and a row for a group that does not exist would be
-    # a worse answer than none.
-    #
-    # The group for the import is ticked and can be unticked. It is a
-    # name rather than an id until something makes it, which is the
-    # first Save to go in under it (Import::Write#group_id), so it
-    # rides as one of the staged names on that first screen and as an
-    # ordinary box on every screen after.
+    # The group for the import is a name rather than an id until
+    # something makes it, which is the first Save to go in under it
+    # (Import::Write#group_id), so it rides as one of the staged
+    # names on that first screen and as an ordinary box after.
+    # Everyone's book is missing from the list on one screen in the
+    # life of a server — the first card of the first import into an
+    # empty book, which is the write that creates it — and a row for
+    # a group that does not exist would be a worse answer than none.
     #: (String group, Array[String]? joined, Array[String]? named) -> Admin::ImportGroups
     def import_picker(group, joined, named)
       choices = store.group_choices
       lot = group.empty? ? nil : choices.find { it.name == group }
+      everyone = choices.find { it.name == Store::EVERYONE }
       Admin::ImportGroups.new(
         groups: choices,
-        joined: joined || [lot&.id].compact,
+        joined: joined || [everyone&.id, lot&.id].compact,
         named: named || [(group unless lot || group.empty?)].compact,
-        fixed: choices.select { it.name == Store::EVERYONE }.map(&:id),
       )
     end
 
@@ -290,10 +290,19 @@ module ProTacts
       # back to be fixed comes back with its boxes as they were
       # ticked: nothing is staged, and the form is the only record of
       # them until the write.
-      ticked = ids_in(r.params["groups"]) & store.group_choices.map(&:id)
+      choices = store.group_choices
+      ticked = ids_in(r.params["groups"]) & choices.map(&:id)
       standing = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
       fresh = r.params["new"].to_s.strip
       wanted = (fresh.empty? ? standing : standing + [fresh]).uniq
+      # Everyone's book is one of those boxes, and the only one the
+      # write cannot take as an id: on the screen where unticking it
+      # matters least — the first card into an empty book — the group
+      # does not exist yet, so there is no row and no answer, and the
+      # card joins it the way every other create does
+      # (Import::Write#call).
+      everyone = choices.find { it.name == Store::EVERYONE }
+      syncing = everyone.nil? || ticked.include?(everyone.id)
 
       # N and FN are mandatory (RFC 2426 section 4), so a save blank
       # throughout is refused — the toast is the backstop, the form's
@@ -357,7 +366,7 @@ module ProTacts
       # is still a row the list has to be able to name.
       revised[index] = edited
       Import::Staged.update(upload, joined(revised))
-      written = Import::Write.call(store, edited, joins: ticked, named: wanted)
+      written = Import::Write.call(store, edited, joins: ticked, named: wanted, everyone: syncing)
       Import::Staged.record(upload, index.to_s, written.id)
 
       # The last one: there is nothing left to come back to, so the

@@ -908,8 +908,16 @@ dialog > .field-stack > input[type="search"] {
    text of one row stays in line with the others, and it is the rows
    still to do that wear it -- a list starts out entirely unsaved, and
    what is worth marking is what is left. The word is still in the row
-   for a screen reader, which cannot see a rail. */
-.walk-list a[data-state="unsaved"] {
+   for a screen reader, which cannot see a rail.
+
+   Both rules below carry `:only-child` for the specificity rather
+   than for the match: a whole-row link is Gloss's `all: unset`
+   (components.css, .card > li > a:only-child), which resets
+   box-shadow and background along with everything else, and a
+   selector that does not out-weigh it loses whatever it declares
+   here. The hover rule further up this file names the same shape for
+   the same reason. */
+.walk-list a:only-child[data-state="unsaved"] {
   box-shadow: inset 3px 0 0 var(--gl-color-accent);
 }
 
@@ -918,10 +926,10 @@ dialog > .field-stack > input[type="search"] {
    accent-soft would have said it in one declaration and is not an
    option here: tokens.css never derives it again in dark mode (see
    the accent block above). */
-.walk-list a[aria-current] {
+.walk-list a:only-child[aria-current] {
   background: var(--gl-color-surface-fill-2);
 }
-.walk-list a[aria-current] > div {
+.walk-list a:only-child[aria-current] > div {
   font-weight: 700;
 }
 

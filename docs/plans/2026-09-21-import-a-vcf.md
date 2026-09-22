@@ -260,9 +260,11 @@ the same two writes a client's PUT and the groups dialog make:
    own UID names a record in a book this is not, and a contact with two
    spellings of its identity is what `rake contacts:reid` exists to
    undo.
-2. `Store#put` with `client: true`, so a card this creates joins
-   everyone's book the way a client's create does
-   (`2026-09-15-client-creates-join-everyone.md`).
+2. `Store#put` with `client: false`, and everyone's book joined below
+   with the rest. A client's own create takes `client: true` and joins
+   it unconditionally (`2026-09-15-client-creates-join-everyone.md`);
+   an import is a person deciding what their book is made of, and that
+   is a box on the screen.
 3. `Store#regroup` into whichever groups this contact's screen settled
    on — all of them, the group for the import included, `Import::Write`
    knowing that one from no other answer because there is nothing it
@@ -278,22 +280,30 @@ the same two writes a client's PUT and the groups dialog make:
    everyone's book.
 
    Both groups a card comes in under stand among those boxes rather
-   than out of sight, because the question this screen answers is what
-   the contact will be in, and leaving one out is the same silence the
-   walk exists to undo. Everyone's book is ticked and fixed —
-   `Store#put`'s `client: true` joins it whatever the form says, so a
-   box that could be cleared would be a box that lies, and disabling
-   it is also what keeps the value out of the submission. The group
-   for the import is ticked and can be unticked: an arrival that does
-   not belong with the lot is exactly the kind of thing the walk is
-   for deciding. That one is a name rather than an id until something
-   makes it, which is the first Save to go in under it, so it rides as
-   one of the staged names on that first screen and as an ordinary box
-   on every screen after. Everyone's book is missing from the list on
-   one screen in the life of a server — the first card of the first
-   import into an empty book, where that same put is what creates it —
-   and a row for a group that does not exist would be a worse answer
-   than none.
+   than out of sight, ticked, because the question this screen answers
+   is what the contact will be in and leaving one out is the same
+   silence the walk exists to undo. Both can be unticked, for the same
+   reason: an arrival that does not belong with the lot is exactly the
+   kind of thing the walk is for deciding, and so is a card that is to
+   sit on the server without going out to anybody's phone.
+
+   That second one costs `Store#put`'s `client: true`, which every
+   other create here passes. The flag answers this very question and
+   answers it the one way, so an import passes `client: false` and
+   joins everyone's book through `Store#regroup` with the rest — the
+   box is there to be unticked, and the answer has to have somewhere
+   to be no. Nothing else rides on the flag: it adds that one
+   membership and does nothing else.
+
+   The group for the import is a name rather than an id until
+   something makes it, which is the first Save to go in under it, so
+   it rides as one of the staged names on that first screen and as an
+   ordinary box after. Everyone's book is missing from the list on one
+   screen in the life of a server — the first card of the first import
+   into an empty book, which is the write that creates it — and a row
+   for a group that does not exist would be a worse answer than none.
+   So it arrives at `Import::Write` as the answer rather than as a
+   group, and is resolved there the way a name is.
 
    The per-contact boxes ride in the editor's own form, so one Save
    writes the card and its groups together and there is no second

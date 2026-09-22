@@ -75,11 +75,9 @@ class AdminImportPagesTest < Minitest::Test
           "groups" => ticked("groups[]"), "named" => ticked("named[]")}.merge(params)
   end
 
-  # The values of the boxes the last page rendered ticked. A fixed box
-  # is disabled and a browser sends none of those back, so neither
-  # does this (Admin::ImportGroups).
+  # The values of the boxes the last page rendered ticked.
   def ticked(name)
-    last_response.body.scan(/name="#{Regexp.escape(name)}" value="([^"]*)" checked(?! disabled)/).flatten
+    last_response.body.scan(/name="#{Regexp.escape(name)}" value="([^"]*)" checked/).flatten
   end
 
   # The screen about the file rather than about a contact: what the
@@ -528,10 +526,10 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
-  # Everyone's book is shown with the rest, ticked and fixed: every
-  # card this writes joins it whatever the form says, so a box that
-  # could be cleared would be a box that lies.
-  def test_everyones_book_is_shown_beside_a_card_and_cannot_be_cleared
+  # Everyone's book stands with the rest, ticked: a card comes in
+  # going out to every phone this book syncs, and the question is
+  # asked where every other group question is.
+  def test_everyones_book_is_shown_beside_a_card_and_ticked
     with_contacts({}) do |store|
       id = upload(JANE + PLAIN)
       save(id, 0, first: "Jane", last: "Booles")
@@ -540,11 +538,28 @@ class AdminImportPagesTest < Minitest::Test
       get "/import/#{id}/1"
 
       assert_includes last_response.body,
-                      %(<input type="checkbox" name="groups[]" value="#{everyone.id}" checked disabled>)
+                      %(<input type="checkbox" name="groups[]" value="#{everyone.id}" checked>)
 
       save(id, 1, first: "Sam", last: "Booles")
 
       assert_equal store.contacts.map(&:id).sort, store.group(everyone.id).members.sort
+    end
+  end
+
+  # And it can be unticked, like the rest: a card that is to sit on
+  # the server without going out to anybody's phone.
+  def test_an_arrival_can_be_kept_out_of_everyones_book
+    with_contacts({}) do |store|
+      id = upload(JANE + PLAIN)
+      save(id, 0, first: "Jane", last: "Booles")
+      everyone = store.all_groups.find { it.name == ProTacts::Store::EVERYONE }
+
+      save(id, 1, first: "Sam", last: "Booles", "groups" => [], "named" => [])
+
+      sam = store.contacts.find { it.name == "Sam Booles" }
+
+      assert sam
+      refute_includes store.group(everyone.id).members, sam.id
     end
   end
 

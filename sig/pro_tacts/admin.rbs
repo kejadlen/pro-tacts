@@ -56,7 +56,7 @@ module ProTacts
     end
 
     class ImportGroups
-      def self.new: (groups: Array[::ProTacts::Store::GroupChoice], joined: Array[String], named: Array[String], ?fixed: Array[String]) -> instance
+      def self.new: (groups: Array[::ProTacts::Store::GroupChoice], joined: Array[String], named: Array[String]) -> instance
     end
 
     class ImportSidebar

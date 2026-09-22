@@ -19,6 +19,11 @@ module ProTacts
     # import abandoned halfway keeps everything it had already written
     # (Import::Staged). Nothing here knows about the rest of the file.
     #
+    # Every group it joins comes from the boxes beside that card,
+    # everyone's book included: an import is a person deciding what
+    # their book is made of, and a membership this applied on its own
+    # would be one no screen asked for.
+    #
     # Not idempotent, and cannot be: a .vcf carries no id this server
     # minted, so a second upload of the same file is a second set of
     # cards. The walk is what stands in for that — a card already
@@ -45,11 +50,16 @@ module ProTacts
       # the two, whichever it has become by now
       # (Web#import_picker) — nothing here knows it from any other
       # answer, there being nothing this can do about it that it does
-      # not do about the rest. Either list, or neither: a card in no
-      # group is still in everyone's book (#call).
-      #: (Store store, VCard card, ?joins: Array[String], ?named: Array[String]) -> Contact
-      def self.call(store, card, joins: [], named: [])
-        new(store).call(card, joins, named)
+      # not do about the rest.
+      #
+      # `everyone` is the one that cannot ride in either list on the
+      # screen where it matters most: the first card into an empty
+      # book is the write that creates `sync:*`, so there is no id to
+      # tick and no row to have unticked. It arrives as the answer
+      # rather than as a group, and is resolved here like a name.
+      #: (Store store, VCard card, ?joins: Array[String], ?named: Array[String], ?everyone: bool) -> Contact
+      def self.call(store, card, joins: [], named: [], everyone: true)
+        new(store).call(card, joins, named, everyone)
       end
 
       #: (Store store) -> void
@@ -61,21 +71,26 @@ module ProTacts
       # The card, written as a contact: then its groups, the order a
       # create writes them in — the put makes the contact, and the
       # memberships that follow put it somewhere to be found.
-      #: (VCard card, Array[String] chosen, Array[String] named) -> Contact
-      def call(card, chosen, named)
+      #: (VCard card, Array[String] chosen, Array[String] named, bool everyone) -> Contact
+      def call(card, chosen, named, everyone)
         id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
-        # `client: true` for what a client's PUT means here: a card this
-        # creates joins `sync:*`, or it would be on the server and in
-        # nobody's book (docs/plans/2026-09-15-client-creates-join-everyone.md).
-        @store.put(id, identified(card, id), client: true)
+        # `client: false`, though this is a create and a client's own
+        # create joins `sync:*` for it
+        # (docs/plans/2026-09-15-client-creates-join-everyone.md).
+        # That flag answers a question the screen beside this card has
+        # already asked, and would answer it the one way; here the box
+        # is there to be unticked, so the join goes through #regroup
+        # with the rest and the answer has somewhere to be no.
+        @store.put(id, identified(card, id), client: false)
 
         # The chosen ids need no resolving, the screen having read
         # them off this same store. Deduplicated because two of these
         # can mean one group — a name typed for a group that the box
-        # above it already offers, say — and a membership written
-        # twice is a constraint violation rather than a second
-        # membership.
+        # above it already offers, or everyone's book arriving both
+        # ticked and asked for — and a membership written twice is a
+        # constraint violation rather than a second membership.
         join = [*chosen, *named.map { group_id(it) }]
+        join << group_id(Store::EVERYONE) if everyone
         @store.regroup(id, join: join.uniq, leave: []) unless join.empty?
 
         # Read back rather than kept from the put, because the group

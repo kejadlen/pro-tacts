@@ -161,11 +161,23 @@ class ImportWriteTest < Minitest::Test
   end
 
   # Nothing ticked is nothing joined, the group for the import
-  # included: a card in no group is still in everyone's book.
+  # included: a card in no group is still in everyone's book, which
+  # is an answer of its own and the one a card arrives with.
   def test_no_group_at_all_puts_the_card_in_everyones_book_alone
     write_card do |imported, store|
       assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
       assert_equal [imported.id], store.all_groups.fetch(0).members
+    end
+  end
+
+  # And no is one of the answers: a card can sit on the server
+  # without going out to anybody's phone.
+  def test_an_arrival_can_be_written_into_no_book_at_all
+    with_contacts({}) do |store|
+      id = Write.call(store, card, everyone: false).id
+
+      assert_empty store.all_groups
+      assert store.contact(id)
     end
   end
 
