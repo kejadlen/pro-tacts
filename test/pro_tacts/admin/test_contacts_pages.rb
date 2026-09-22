@@ -472,6 +472,64 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # The cap (docs/plans/2026-09-22-a-few-groups-at-a-time.md): eight
+  # rows stand shown and the ninth is marked, rendered for the filter
+  # to reach rather than left out of the page.
+  def test_the_groups_dialog_shows_a_few_groups_at_a_time
+    with_contacts({"ada" => ADA}) do |store|
+      ("a".."i").each { FixtureData.seed_group(store, name: "Group #{it}") }
+
+      get "/contacts/ada"
+      dialog = last_response.body[%r{<dialog id="edit-groups".*?</dialog>}].to_s
+
+      assert_includes dialog, %(<label data-label="group h" :hidden="!visible($el)">)
+      assert_includes dialog, %(<label data-label="group i" data-capped :hidden="!visible($el)">)
+      assert_equal 1, dialog.scan("data-capped").length
+    end
+  end
+
+  # A group the contact is in takes a row from the cap rather than
+  # standing outside it: nine groups, the last of them joined, and the
+  # eighth is what goes under.
+  def test_the_groups_dialog_caps_nothing_a_contact_is_in
+    with_contacts({"ada" => ADA}) do |store|
+      ("a".."h").each { FixtureData.seed_group(store, name: "Group #{it}") }
+      FixtureData.seed_group(store, name: "Zulus", members: ["ada"])
+
+      get "/contacts/ada"
+      dialog = last_response.body[%r{<dialog id="edit-groups".*?</dialog>}].to_s
+
+      assert_includes dialog, %(<label data-label="zulus" :hidden="!visible($el)">)
+      assert_includes dialog, %(<label data-label="group h" data-capped :hidden="!visible($el)">)
+      assert_equal 1, dialog.scan("data-capped").length
+    end
+  end
+
+  # The button counts the whole list, and renders only where a row is
+  # actually held back.
+  def test_the_groups_dialog_offers_the_rest_of_a_capped_list
+    with_contacts({"ada" => ADA}) do |store|
+      ("a".."i").each { FixtureData.seed_group(store, name: "Group #{it}") }
+
+      get "/contacts/ada"
+
+      assert_includes last_response.body,
+                      %(<button type="button" data-size="sm" x-show="!all && needle === \'\'" ) +
+                      %(@click="all = true">show all 9 groups</button>)
+    end
+  end
+
+  def test_the_groups_dialog_offers_no_such_thing_uncapped
+    with_contacts({"ada" => ADA}) do |store|
+      ("a".."h").each { FixtureData.seed_group(store, name: "Group #{it}") }
+
+      get "/contacts/ada"
+
+      refute_includes last_response.body, "show all"
+      refute_includes last_response.body, "data-capped"
+    end
+  end
+
   # Joining is the membership and what comes of it: the card serves
   # what the group lends, and the change log tells every client so.
   def test_checking_a_group_adds_the_contact_to_it
