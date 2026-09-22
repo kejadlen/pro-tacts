@@ -8,13 +8,13 @@ module ProTacts
   class VCard
     # Reads a card's bytes into Lines.
     #
-    # Deliberately shallow: a property is a name, its parameters, and the
-    # text of its value, and nothing here knows what any of them mean.
-    # That is not a shortcut. The stored card is authoritative and this
-    # is only a projection of it, so a property this code has never heard
-    # of has to travel through untouched, which is what RFC 6352 section
-    # 6.3.2.2 requires of a CardDAV server. See
-    # docs/plans/2026-08-24-vcard-storage-and-groups.md.
+    # Deliberately shallow: a property is a name, its parameters, and
+    # the text of its value, and nothing here knows what any of them
+    # mean. That is not a shortcut — a property this code has never
+    # heard of has to travel through untouched (RFC 6352 section
+    # 6.3.2.2, and docs/plans/2026-08-24-vcard-storage-and-groups.md
+    # for why the stored card is the authority and this only a
+    # projection of it).
     #
     # The whole reading half of VCard lives here — unfolding, the split
     # into logical lines, the reads over them, and the values they come

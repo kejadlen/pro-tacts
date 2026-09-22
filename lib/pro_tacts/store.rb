@@ -18,20 +18,14 @@ module ProTacts
   # card exactly as it was submitted.
   #
   # Four kinds of state live here and they are not equally precious.
-  # The cards are the truth about contact data, and the reason they are
-  # stored as the card rather than a parse of it is
-  # docs/plans/2026-08-24-vcard-storage-and-groups.md. The change log is
-  # the truth about history, and is why this is one database rather than
-  # a directory of files: "what changed since token X" cannot be
-  # recovered from current state, so a card, its etag, and its
-  # change-log entry have to land or fail together. The birthdays are
-  # the third thing that cannot be rebuilt — a partial date has no
-  # vCard 3.0 spelling, so it lives beside its card rather than in it
-  # (docs/plans/2026-08-31-partial-birthdays.md). The groups are the
-  # fourth — membership and the lines a group contributes to its
-  # members' served cards, facts no stored card carries and so nothing
-  # can re-derive. Everything else is an index derived from the cards,
-  # and #rebuild_index will make it again from nothing.
+  # Only the cards, the change log, the birthdays, and the groups
+  # cannot be rebuilt, and each is argued where it was decided: the
+  # first two in docs/plans/2026-08-25-sqlite-schema.md, "What the
+  # tables are for", the birthdays in
+  # docs/plans/2026-08-31-partial-birthdays.md, the groups in
+  # docs/plans/2026-08-24-vcard-storage-and-groups.md. Everything else
+  # is an index derived from the cards, and #rebuild_index will make
+  # it again from nothing.
   #
   # Every Contact this store hands out is composed, never the stored
   # card alone: a birthday and the lines a contact inherits from its
@@ -39,12 +33,6 @@ module ProTacts
   # composes them back in on read — so the vcard and the etag a caller
   # sees, and the etag the change log records, describe the card a
   # client downloads, not the bytes on disk.
-  #
-  # Sequel's transactions join one already open rather than failing on
-  # SQLite's lack of nesting, which is what lets the group fan-out this
-  # design needs — one member's card rewriting its group and every other
-  # member's card — call #put from inside a larger write and still be a
-  # single atomic unit.
   #
   # The signature lives in sig/pro_tacts/store.rbs, for the Change Data
   # class the inline syntax cannot read.
@@ -173,15 +161,11 @@ module ProTacts
     # no value types — and this is the one caller that compares values.
     STRUCTURED_VALUES = %w[ADR].freeze #: Array[String]
 
-    # The property names a group may lend, which is a second copy of
-    # the CHECK in db/migrations/004_groups.rb and says so here. The
-    # constraint stays the authority; this is the pre-check a
-    # propagated edit passes first, because the line a member's client
-    # hands back is not always one the group can hold — an address
-    # edited in a type Contacts cannot model comes back as an
-    # `item1.ADR` with its label beside it (see #kept_types?), which
-    # the CHECK refuses. Without this the refusal would be an
-    # exception on an ordinary sync
+    # The property names a group may lend, a second copy of the CHECK
+    # in db/migrations/004_groups.rb and saying so here. The constraint
+    # stays the authority; this is the pre-check a propagated edit
+    # passes first, so that a line the group cannot hold is refused
+    # rather than raising on an ordinary sync
     # (docs/plans/2026-09-09-group-edits-propagate.md, "The line a
     # group cannot hold").
     SHAREABLE_NAMES = %w[ADR NOTE].freeze #: Array[String]
@@ -236,14 +220,9 @@ module ProTacts
       # pragma: Sequel turns them on for every SQLite connection it
       # opens, which is what makes the index's cascades fire.
       @database.run("PRAGMA journal_mode = WAL")
-      # BEGIN IMMEDIATE for every transaction, so that the writes which
-      # read before they write serialize instead of one of them dying.
-      # A deferred transaction — SQLite's default — takes no write lock
-      # until its first write, and the busy handler declines to retry
-      # that upgrade because retrying could deadlock, so the second of
-      # two concurrent group edits gets SQLITE_BUSY straight back
-      # however long BUSY_TIMEOUT is. Taking the lock at BEGIN is what
-      # puts the wait back under the timeout
+      # BEGIN IMMEDIATE for every transaction, so the writes that read
+      # before they write serialize instead of one of them dying on
+      # SQLITE_BUSY however long BUSY_TIMEOUT is
       # (docs/plans/2026-09-09-group-edits-propagate.md, "Two edits,
       # one shared value"). Readers are unaffected: WAL is on above.
       @database.transaction_mode = :immediate
@@ -441,31 +420,25 @@ module ProTacts
     # this card hashed to now, and the index rows read off the card. One
     # transaction, because the log entry cannot be rebuilt from anything.
     #
-    # What is stored is the card minus its birthday, which moves into
-    # the birthdays table — vCard 3.0 cannot carry a partial date, so
-    # no stored card carries the model's BDAY and every read composes
-    # it back in (docs/plans/2026-08-31-partial-birthdays.md).
+    # What is stored is the card minus its birthday and minus what its
+    # groups lend it, both composed back in on read
+    # (docs/plans/2026-08-31-partial-birthdays.md,
+    # docs/plans/2026-08-24-vcard-storage-and-groups.md).
     #
     # A card rather than its bytes, so the reading a caller already
     # made is the one #split_birthday decides from: a PUT has asked
     # whether the bytes are a card at all and whose UID they carry
-    # before it gets here (Web#write_card), and taking the card it
-    # asked those of leaves the walk behind them made once.
+    # before it gets here (Web#write_card).
     #
-    # The strings are UTF-8 by contract, and the adapter holds the store
-    # to it: the sqlite3 gem encodes every bound value to UTF-8, so a
-    # binary-flagged byte above 7 bits raises at the bind, and bytes
-    # that are not UTF-8 at all stop at the insert, which SQLite refuses
-    # to store as text. The body — the one binary input — is relabelled
-    # and judged in the same breath where it is read, in write_card, so
-    # nothing that is not text gets this far; VCard's own raise, at the
-    # construction the caller makes, is the assertion under that, and
-    # the bind is the third line.
+    # The strings are UTF-8 by contract and the bind is the third line
+    # holding them to it, under Web#write_card's relabel-and-judge and
+    # VCard's own raise. AGENTS.md, "Those tables are STRICT", has the
+    # whole of it.
     #
     # `client` marks a client's write: a card it creates joins `sync:*`,
-    # created on first use, or it would drop out of the collection it
-    # was written to (docs/plans/2026-09-15-client-creates-join-everyone.md).
-    # A rewrite of a card that exists joins nothing.
+    # created on first use
+    # (docs/plans/2026-09-15-client-creates-join-everyone.md). A
+    # rewrite of a card that exists joins nothing.
     #: (String id, VCard vcard, ?client: bool) -> Contact
     def put(id, vcard, client: false)
       existing = birthday_of(id)
@@ -898,31 +871,19 @@ module ProTacts
 
     # The block's group writes, bracketed by a read of every member
     # they could move: what each served before and what each serves
-    # after, and a `group` entry wherever the two differ. A group edit
-    # moves bytes on cards nobody wrote to, and a client is told a card
-    # changed only by the log — a sync token silently skips whatever
-    # the log missed (see the class comment).
+    # after, and a `group` entry wherever the two differ. Why an entry
+    # only where the bytes moved, why `except` is the writing member,
+    # and why this runs inside the caller's own transaction are
+    # docs/plans/2026-09-09-group-edits-propagate.md, "The fan-out".
     #
-    # An entry only where the bytes actually moved, which is narrower
-    # than one per member: a rename moves nothing and a group that
-    # lends nothing lends nothing to a new member either, and an entry
-    # for either would spend every client's next poll re-fetching a
-    # card that reads the same. `except` is the member doing the
-    # writing, whose own entry already carries this composition
-    # (docs/plans/2026-09-09-group-edits-propagate.md, "The fan-out").
-    #
-    # `moved` is the exception: cards logged whatever their bytes did,
-    # because a `sync:` membership moves a card into or out of a book
-    # without touching what it serves, and the log is the only way a
-    # client's sync token hears of it
+    # `moved` is the exception the plan does not cover: cards logged
+    # whatever their bytes did, because a `sync:` membership moves a
+    # card between books without touching what it serves
     # (docs/plans/2026-09-12-per-user-books.md, "The change log").
     #
     # Card ids rather than groups, because the cards a write can move
     # are not always members yet: a card joining a group is read before
     # the row that makes it one exists.
-    #
-    # Inside whatever transaction the caller has open: Sequel joins one
-    # rather than nesting, which is what lets this run from #put.
     #: (Array[String] cards, ?except: String?, ?moved: Array[String]) { () -> void } -> void
     def fan_out(cards, except: nil, moved: [])
       ids = cards - [except].compact
@@ -1134,20 +1095,10 @@ module ProTacts
     # minus inherited and a client that PUTs back what it downloaded
     # stores what it started with
     # (docs/plans/2026-08-24-vcard-storage-and-groups.md, "Groups
-    # compose into cards"). Without this a member's rewrite would
-    # materialize the group's lines into its own card, and a later edit
-    # to the group would reach nobody.
-    #
-    # Each lent line is classified against the submission, and three of
-    # the four shapes act. The line coming back saying what the group
-    # lends is the group's, untouched, and it goes. One line of that
-    # name left over is an edit to the shared value: it goes too, and
-    # the group's row takes its bytes, so the member does not end up
-    # carrying its own copy beside the one composition puts back. None
-    # left over is a deletion, and the group's row goes with it
-    # (docs/plans/2026-09-09-group-edits-propagate.md). More than one
-    # left over is a line this cannot attribute at all, and reports
-    # rather than guesses.
+    # compose into cards"). Which of four shapes a lent line came back
+    # as, and what each asks of its group, is #classify — argued in
+    # that plan's "Classifying what came back" and in
+    # docs/plans/2026-09-09-group-edits-propagate.md.
     #
     # Two passes, because one lent line must not be attributed a line
     # another lent line would have matched exactly. A member of two
@@ -1259,22 +1210,16 @@ module ProTacts
 
     # Whether a submitted line still says what the group lends, which
     # is a question about what it says and not about its bytes: macOS
-    # re-serializes every card it touches, so `ADR;TYPE=home` comes
-    # back `ADR;type=HOME;type=pref` on an address nobody edited
+    # re-serializes every card it touches
     # (docs/apple-contacts.md, "The client rewrites every card it
-    # touches"). Comparing bytes reads every such line as an edit.
+    # touches"), and comparing bytes reads every such line as an edit.
     #
-    # What a line says is its value and its types: a member who
-    # relabels a lent address from home to work edited the shared line
-    # as surely as one who changed a digit of it, and an edit is the
-    # group's to take (the plan's "Edits propagate to the group"). So a
-    # type that moved is not subtracted, and stays in the member's card
-    # where the propagation will find it.
-    #
-    # Every other parameter goes uncompared, being the half the client
-    # rewrites without being asked: it drops the ones it does not model
-    # — a `NOTE;LANGUAGE=en` comes back bare — and fills in defaults on
-    # the ones it does.
+    # What a line says is its value and its types, because a relabel is
+    # an edit the group takes like any other
+    # (docs/plans/2026-08-24-vcard-storage-and-groups.md, "Edits
+    # propagate to the group"). Every other parameter goes uncompared,
+    # being the half the client rewrites unasked — it drops the ones it
+    # does not model and fills in defaults on the ones it does.
     #
     # A line that will not read has no value to compare and falls back
     # to its bytes, which still recognize the line nobody touched.
@@ -1287,19 +1232,16 @@ module ProTacts
     end
 
     # Whether a submitted line carries the types the group lent it,
-    # across the three rewrites they survive: the values come back
-    # uppercased and `pref` filled in, so neither side's case counts
-    # and neither counts `pref` (types_of drops it). An untyped line
-    # comes back untyped, so no types compares to no types and a
-    # member who labels one has edited it.
+    # across the three rewrites they survive. Two are cosmetic and
+    # Property#types already absorbs them: the values come back
+    # uppercased, and `pref` comes back filled in.
     #
-    # The third: a type Contacts has no field for comes back moved,
-    # not kept — into a property group, `TYPE` parameter gone, the type
-    # the value of an `X-ABLabel` beside it — on an address nobody
-    # touched (docs/apple-contacts.md, "An address type the client
-    # cannot model becomes a custom label"). So that label counts as
-    # one of the line's types, and `ADR;TYPE=dom` coming back as
-    # `item1.ADR` with `item1.X-ABLabel:dom` is unedited.
+    # The third moves the type off the line: a type Contacts has no
+    # field for comes back as an `X-ABLabel` in a property group
+    # (docs/apple-contacts.md, "An address type the client cannot
+    # model becomes a custom label"), so that label counts as one of
+    # the line's types and `ADR;TYPE=dom` coming back as `item1.ADR`
+    # with `item1.X-ABLabel:dom` is unedited.
     #: (VCard::Parser::Line line, VCard::Parser::Line lent, Array[VCard::Parser::Line] pool) -> bool
     def kept_types?(line, lent, pool)
       label = label_of(line, pool)&.property

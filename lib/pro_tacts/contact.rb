@@ -10,44 +10,35 @@ module ProTacts
   # One contact: its id, the card served for it, and the etag over that
   # card's bytes — the one model of a contact
   # (docs/plans/2026-09-01-contact-is-the-model.md). The id is the
-  # vCard's UID and the name in its href (see
-  # docs/plans/2026-01-12-carddav-architecture.md).
+  # vCard's UID and the name in its href
+  # (docs/plans/2026-01-12-carddav-architecture.md).
   #
-  # A VCard rather than the bytes, because a contact that held bytes
-  # would have to make a card out of them to answer anything, and every
-  # caller handing one over already had a card in hand to make the bytes
-  # from. One card is built per contact and every read is asked of it.
+  # What it holds is the *stored* card — a VCard rather than its bytes,
+  # since every caller handing one over already had a card in hand and
+  # a contact holding bytes would have to make one to answer anything —
+  # with the birthday and the lines its groups lend beside it rather
+  # than parsed back out of the card they compose into; #vcard composes
+  # the served one from the three.
+  # Why each sits beside the card instead of in it, and why they are
+  # independent rather than two spellings of one fact, is
+  # docs/plans/2026-09-05-contact-takes-its-structure.md,
+  # docs/plans/2026-08-31-partial-birthdays.md, and
+  # docs/plans/2026-08-24-vcard-storage-and-groups.md. An unmodeled
+  # BDAY spelling stays the card's own: #properties shows it, and
+  # #birthday reads nil over it.
   #
-  # The card this holds is the stored one, and the birthday sits beside
-  # it rather than being parsed back out of the card it was composed
-  # into (docs/plans/2026-09-05-contact-takes-its-structure.md): Store's
-  # write either moves a BDAY line into the model or leaves it in the
-  # card, never both, so the two facts are independent and #vcard
-  # composes the served card from them. An unmodeled BDAY spelling is
-  # the card's own — #properties shows it, and #birthday reads nil over
-  # it. The lines a contact inherits from its groups sit beside the
-  # birthday the same way: no stored card carries them, so they are
-  # store facts composed in at read
-  # (docs/plans/2026-08-24-vcard-storage-and-groups.md).
-  #
-  # The etag hashes the card that goes out, so it changes exactly when
-  # what the client downloads changes. It is derived here and stored
-  # nowhere: a contact read back from the store hashes its card the same
-  # way one about to be written does, which is why there is one
-  # constructor rather than one that computes and one that trusts. It is
-  # in the entity-tag's quoted form (RFC 7232 section 2.3), which is what
-  # both the ETag header and getetag properties carry.
-  #
-  # The structured accessors are that idea applied to the card's
-  # contents: everything else derives from the bytes, and the card defers
-  # the walk that reads them until something asks. The CardDAV paths never
-  # ask — they answer in bytes — so the serving paths pay for no parse
-  # they do not use, and that laziness is VCard's to keep rather than
-  # this class's to arrange.
+  # The etag hashes the composed card, so it changes exactly when what
+  # the client downloads changes, and is derived here and stored
+  # nowhere — one constructor, rather than one that computes it and one
+  # that takes it on trust. Quoted, the entity-tag's own form (RFC 7232
+  # section 2.3), which both the ETag header and getetag carry.
   #
   # The accessors are deliberately shallow, like the parser: a card can
   # carry properties no accessor knows, and CardDAV still serves every
-  # one. #properties is the read for those.
+  # one — #properties is the read for those. Their walk is lazy and
+  # that is load-bearing rather than style, for the reason the first
+  # plan gives under "Contact stops being a Data class": the paths that
+  # answer in bytes never ask.
   class Contact
     # @rbs @id: String
     # @rbs @stored: VCard
@@ -66,15 +57,12 @@ module ProTacts
     # ADR's seven components (section 3.2.1: post office box, extended
     # address, street, locality, region, postal code, country — nil
     # where the card left the position blank or stopped short of it).
-    # A phone also carries a `label`, the `X-ABLabel` sharing its
-    # property group — macOS's spelling of a custom label, a different
-    # fact from the types and carried beside them
-    # (docs/plans/2026-09-18-phone-labels.md, "Reading").
-    # Each also carries `line`, the parsed line the value was read
-    # from: the address a save names that row by
-    # (docs/plans/2026-09-05-web-card-editor.md) — the accessors fold
-    # lines into typed values, and without provenance no form could
-    # say "edit this phone."
+    # A phone's `label` is the `X-ABLabel` sharing its property group,
+    # a different fact from its types
+    # (docs/plans/2026-09-18-phone-labels.md, "Reading"), and every
+    # shape's `line` is the parsed line it was read from, the address
+    # a save names that row by
+    # (docs/plans/2026-09-05-web-card-editor.md).
     # Data classes, whose members the inline syntax cannot read; the
     # signatures live in sig/pro_tacts/contact.rbs.
     # @rbs skip
@@ -111,20 +99,14 @@ module ProTacts
     end
 
     # A contact from its id, its stored card, its birthday, and the
-    # content lines it inherits from its groups. An etag that came from
-    # anywhere but the card in hand is an etag that can be wrong, and a
-    # birthday or an inheritance from anywhere but the store is wrong
-    # the same way — which is why `birthday:` and `inherited:` are
-    # required and carry no defaults, since an optional nil would let a
-    # caller quietly get no birthday off a card that has one, and an
-    # omitted inheritance would serve a member its group's lines no
-    # longer reach. Named `stored:` rather than `vcard:` because what
-    # #vcard returns is composed, and an argument that is not what the
-    # reader hands back is a trap.
+    # content lines it inherits from its groups. Why `birthday:` and
+    # `inherited:` are required and carry no default, and why the card
+    # is `stored:` rather than `vcard:`, is
+    # docs/plans/2026-09-05-contact-takes-its-structure.md, "The
+    # contracts".
     #
-    # The id check is here rather than behind a factory: an id outside
-    # ID_FORMAT cannot be served, and a guard a caller can walk around
-    # by reaching for `new` is not a guard.
+    # The id check is here rather than behind a factory: a guard a
+    # caller can walk around by reaching for `new` is not a guard.
     #: (id: String, stored: VCard, birthday: Birthday?, inherited: Array[Inherited]) -> void
     def initialize(id:, stored:, birthday:, inherited:)
       raise ArgumentError, "invalid contact id: #{id}" unless id.match?(ID_FORMAT)

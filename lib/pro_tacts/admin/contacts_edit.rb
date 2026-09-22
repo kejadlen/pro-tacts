@@ -9,42 +9,30 @@ require "pro_tacts/admin/name_pair"
 
 module ProTacts
   module Admin
-    # GET /contacts/:id/edit — the editor
-    # (docs/plans/2026-09-05-web-card-editor.md): an explicit mode
-    # rather than an always-editable page, one form over the
-    # properties the save knows how to address. The cardinality-1 set
-    # — name, nickname, note — saves through VCard#replace under each
-    # field; the phone, email, and address rows save through
-    # VCard#substitute, each named by its line's digest; the birthday
-    # row saves to the model, no card line existing to address
-    # (docs/plans/2026-09-07-web-birthday-editor.md).
+    # GET /contacts/:id/edit — the editor. What the save can address,
+    # how each kind of row is written back, and the
+    # blank-equals-absent rule are
+    # docs/plans/2026-09-05-web-card-editor.md and
+    # docs/plans/2026-09-07-web-birthday-editor.md; the fields
+    # prefill from the accessors' unescaped readings so write and read
+    # agree on what an empty value means.
     #
-    # The fields prefill from the accessors' unescaped readings, and
-    # blank equals absent on the way back (CardForm.contact_card), so
-    # write and read agree on what an empty value means. Blank's meaning is
-    # stated before the save, not only enforced by it: a standing row
-    # whose blanking deletes — a phone, email, or address line, the
-    # nickname or note property, a held birthday — wears
-    # `data-blank-removes`, its single-value box says "removed on
-    # save" in its blank, and admin.css strikes the caption in
-    # Gloss's danger color once every value in the row reads blank —
-    # destructive is what that color means there, carried by the
-    # caption rather than the boxes' borders, a blank row being a
-    # valid save and Gloss's danger border the aria-invalid
-    # contract. The birthday row renders only over a held birthday —
-    # absence is added by the dialog like any other property — and
-    # earns a remove control of its own, three separate blanks
-    # being a rule nobody can guess: one click empties the row
-    # (Alpine's own verb, a mutation markup cannot do) and the blank
-    # rule does the rest. The state itself is CSS over :placeholder-shown, not
-    # Alpine — revealing a state over standing elements is markup's
-    # job (see Layout). The rows the add dialog reveals wear none of
-    # it, their blank a no-op rather than a removal; the nickname
-    # and note rows, which render whether or not the card carries
-    # the property, wear it only over something to lose (each row's
-    # own comment says which). The etag rides
-    # along hidden — the snapshot guard's half, the POST's refusal
-    # being the other. `autofocus` on the first field: this screen's
+    # What is this screen's own is telling the person that rule before
+    # the save enforces it. A standing row whose blanking deletes
+    # wears `data-blank-removes`, its single-value box says "removed
+    # on save" in its blank, and admin.css strikes the caption in
+    # Gloss's danger color once every value in the row reads blank.
+    # The caption carries the color rather than the boxes' borders,
+    # because a blank row is a valid save and Gloss's danger border is
+    # the aria-invalid contract. The state is CSS over
+    # :placeholder-shown rather than Alpine — revealing a state over
+    # standing elements is markup's job (see Layout).
+    #
+    # Two kinds of row wear none of it: the ones the add dialog
+    # reveals, whose blank is a no-op rather than a removal, and a
+    # nickname or note row over a card that carries neither, which has
+    # nothing to lose. The etag rides along hidden, the snapshot
+    # guard's half. `autofocus` on the first field: this screen's
     # entry point is the name, not the header search.
     class ContactsEdit < Phlex::HTML
       # The property types the add dialog offers, in the order it
@@ -219,13 +207,10 @@ module ProTacts
       # one per type named in the dialog, in the order they were
       # asked for. Nothing stands here until something is added and
       # nothing lingers after: an empty row waiting to be used is the
-      # scaffold docs/DESIGN.md refuses, and a trailing one left over
-      # from a row already filled is the same scaffold arriving late.
-      # A blank added row is a no-op rather than a removal
-      # (CardForm.edited_values), so these rows wear no removal state —
-      # the class comment's exemption.
-      # That verb — make a row, now, without a round trip — is what
-      # CSS could not do and what Alpine is here for (see Layout).
+      # scaffold docs/DESIGN.md refuses ("Records are cards, not
+      # forms"). That verb — make a row, now, without a round trip —
+      # is what CSS could not do and what Alpine is here for (see
+      # Layout).
       #
       # The row is a div rather than the standing rows' label because
       # one template serves every kind and the address kind holds six
@@ -368,18 +353,12 @@ module ProTacts
 
       # The calendar affordance: a date input the row never shows and
       # never submits, and the button that opens its native picker.
-      # The three fields stay the value — a date input holds only the
-      # complete shape, and four of the six this row edits have no
-      # spelling in one — so the picker writes into them and they are
-      # what posts (docs/plans/2026-09-15-a-picker-beside-the-birthday.md).
-      #
-      # The input carries no `name`, so nothing of it reaches the
-      # save; `tabindex` and `aria-hidden` keep it out of both orders,
-      # the button being the control a person actually meets. It is
-      # hidden by being taken out of flow at zero width rather than by
-      # `display: none` (admin.css), because showPicker() on an
-      # element that is not rendered is not a thing the HTML standard
-      # promises to honor.
+      # Why the picker writes the three fields instead of being one,
+      # why the input is hidden out of flow rather than by
+      # `display: none`, why it carries no name and sits outside both
+      # the tab order and the accessibility tree, and why opening
+      # syncs from the boxes with no guard for a partial birthday are
+      # all docs/plans/2026-09-15-a-picker-beside-the-birthday.md.
       #
       # aria-hidden is spelled out rather than left bare: ARIA's
       # true/false attributes are enumerated, not HTML booleans, and
@@ -388,16 +367,6 @@ module ProTacts
       # harmless doing it — a decorative svg inside a labelled button
       # contributes no name either way — but this is an input, and
       # an input that reaches the tree unlabelled is not harmless.
-      #
-      # Opening syncs the picker to the fields rather than the fields
-      # being prefilled once at render: a date typed into the boxes is
-      # then where the calendar opens. A blank component makes a
-      # string no date input accepts, and the assignment of an invalid
-      # value leaves the input empty (HTML section 4.10.5.1.7) — so a
-      # partial birthday opens the picker on its own default with no
-      # guard here. Picking writes all three fields, which is the
-      # trade this control is: the year is the one a no-year birthday
-      # then blanks by hand.
       #: () -> void
       def birthday_picker
         sync = "const r = $el.closest('.date-row'), n = r.querySelectorAll('input[type=number]'), " \
@@ -444,24 +413,11 @@ module ProTacts
 
       # Where a property a contact does not have yet gets named —
       # docs/DESIGN.md's "a quiet add affordance opens a native dialog
-      # that names the attribute types available." It replaces the
-      # blank add-row that used to sit in the stack, because that row
-      # was an empty attribute with a caption on it and the card is
-      # supposed to render the record's real weight. One row per type
-      # would have been three of them by the time emails and addresses
-      # land; one dialog is one row of chrome no matter how many types
-      # it names.
-      #
-      # The dialog names a type and nothing else. It holds no value,
-      # so there is nothing staged out of sight, and Cancel is a plain
-      # hide with nothing to undo — Add is the only thing that changes
+      # that names the attribute types available." It holds no value,
+      # so there is nothing staged out of sight and Cancel is a plain
+      # hide with nothing to undo; Add is the only thing that changes
       # the form, and what it changes is visible in the card the
       # moment the popover closes.
-      #
-      # The options are the kinds of row the save can insert, the
-      # birthday only over a contact that holds none (#addable_types)
-      # — and its radio leaves the list the moment its row stands,
-      # so the dialog never names what cannot be added again.
       #
       # The radios share a `name` so they are one native group —
       # arrow-key navigation and "1 of n" come from that, not from
