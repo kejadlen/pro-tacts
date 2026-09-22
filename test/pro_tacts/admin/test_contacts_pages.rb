@@ -506,7 +506,8 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # The button counts the whole list, and renders only where a row is
-  # actually held back.
+  # actually held back. It rolls the list back up as well as down, so
+  # the long dialog the cap exists to avoid is not a one-way door.
   def test_the_groups_dialog_offers_the_rest_of_a_capped_list
     with_contacts({"ada" => ADA}) do |store|
       ("a".."i").each { FixtureData.seed_group(store, name: "Group #{it}") }
@@ -514,8 +515,20 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/ada"
 
       assert_includes last_response.body,
-                      %(<button type="button" data-size="sm" x-show="!all && needle === \'\'" ) +
-                      %(@click="all = true">show all 9 groups</button>)
+                      %(<button type="button" data-size="sm" x-show="needle === \'\'" ) +
+                      %(@click="all = !all" x-text="all ? 'show fewer' : &quot;show all 9 groups&quot;">) +
+                      %(show all 9 groups</button>)
+    end
+  end
+
+  # A popover is hidden rather than rebuilt, so what the dialog was
+  # left in is what it reopens in unless the close clears it.
+  def test_the_groups_dialog_recaps_itself_when_it_closes
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada"
+
+      assert_includes last_response.body,
+                      %(@toggle="if ($event.newState === 'closed') { all = false; filter = '' }")
     end
   end
 

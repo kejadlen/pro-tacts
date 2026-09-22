@@ -21,6 +21,12 @@ module ProTacts
     # still rendered: the filter is client-side, so a group that is not
     # in the page is one nothing in the dialog can reach.
     #
+    # Closing the popover puts the cap and the filter back. Alpine's
+    # state belongs to the element, and a popover is hidden rather
+    # than rebuilt, so without the reset a dialog reopens on whatever
+    # the last visit left in it — a filter typed ten minutes ago, or
+    # the whole list still unrolled.
+    #
     # A filter naming no group exactly also offers itself as a new
     # group (`new`), created and joined by the save. Unchecked until
     # ticked: a filter is usually half a name typed to find a group,
@@ -70,7 +76,8 @@ module ProTacts
       end
 
       def view_template
-        dialog(id: ID, popover: "auto", x_data: STATE) do
+        dialog(id: ID, popover: "auto", x_data: STATE,
+               "@toggle": "if ($event.newState === 'closed') { all = false; filter = '' }") do
           header { "Groups" }
           div(class: "field-stack") do
             input(type: "search", placeholder: "Filter or add groups", aria_label: "Filter or add groups",
@@ -113,11 +120,20 @@ module ProTacts
       # under the cap, that being the number a person is deciding
       # whether to read. It stands down while the filter is typed into,
       # which lifts the cap itself.
+      #
+      # It goes both ways, the label saying which way the next press
+      # goes: a list unrolled is the long dialog the cap exists to
+      # avoid, and rolling it back up should not mean closing the
+      # dialog. The opening label is rendered rather than left to
+      # x-text alone, so the button reads before Alpine runs.
       #: () -> void
       def rest_button
-        button(type: "button", data_size: "sm", "x-show": "!all && needle === ''",
-               "@click": "all = true") { "show all #{@groups.length} groups" }
+        button(type: "button", data_size: "sm", "x-show": "needle === ''", "@click": "all = !all",
+               x_text: "all ? 'show fewer' : #{rest_label.inspect}") { rest_label }
       end
+
+      #: () -> String
+      def rest_label = "show all #{@groups.length} groups"
     end
   end
 end

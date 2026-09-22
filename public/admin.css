@@ -738,6 +738,21 @@ dialog > .field-stack > input[type="search"] {
   padding-block: var(--gl-space-3xs);
 }
 
+/* The groups dialog's list is the one that can outgrow the screen, so
+   it is the one that scrolls — the popover cannot, Gloss giving a
+   dialog height: fit-content and overflow: hidden, and what a dialog
+   taller than the viewport loses off the bottom is the footer holding
+   Save (docs/plans/2026-09-22-a-few-groups-at-a-time.md). The cap is
+   still what keeps the opening list short; this is for the two lists
+   the cap does not shorten, the whole list once it is asked for and a
+   contact's own memberships, which are never capped. The filter and
+   the buttons sit outside the scroller, so both stay put while it
+   moves. */
+#edit-groups form.field-stack {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
 /* The stored card in its own collapsed card under the record — the
    column's gap spaces the two, so no margin here. <details> is native,
    keeping the admin UI script-free; the summary rides the label
