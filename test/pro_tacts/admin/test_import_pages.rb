@@ -295,7 +295,7 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body, %(data-state="saved")
       assert_includes last_response.body, %(<span class="gl-visually-hidden">saved</span>)
       assert_includes last_response.body, %(href="/import/#{id}/1")
-      assert_includes last_response.body, "1 contact in the book."
+      assert_includes last_response.body, "1 of 2 contacts in the book."
     end
   end
 
