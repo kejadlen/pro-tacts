@@ -38,14 +38,15 @@ rake profile:install  # Download carddav.mobileconfig from the app and
 profiles, so leave those to the user.
 
 Importing is not a task at all: a .vcf is uploaded at `/import` in the
-app, and reviewed there contact by contact — the card as the file wrote
-it beside the card that is coming in, with the lines no screen here
-shows struck, and this book's groups as a filtered list of boxes to tick
-— before the lot is written through the store, into a group made for the
-import and whichever groups each contact was given
-(docs/plans/2026-09-21-import-a-vcf.md). The `import:*` tasks, the Swift
-reader they drove Contacts.app with, and the plan directories they wrote
-are gone.
+app, and worked down there contact by contact — the card as the file
+wrote it beside the card that is coming in, with the lines no screen
+here shows struck, and this book's groups as a filtered list of boxes to
+tick. Each contact's own Save is what writes it through the store, into
+a group made for the import and whichever groups that contact was given,
+so the list says which rows are in the book and stopping halfway keeps
+every one of them (docs/plans/2026-09-21-import-a-vcf.md). The `import:*`
+tasks, the Swift reader they drove Contacts.app with, and the plan
+directories they wrote are gone.
 
 ## Task management
 
@@ -65,7 +66,7 @@ lib/pro_tacts/
 ├── web/contacts.rb # The card browser and its editor
 ├── web/groups.rb   # The group screens and their editor
 ├── web/setup.rb    # The device setup screen and its profile
-├── web/import.rb   # The import screen: a .vcf, uploaded and decided
+├── web/import.rb   # The import screens: a .vcf, uploaded and saved
 ├── web/api.rb      # JSON for scripts: the group list
 ├── import/         # Reading an uploaded .vcf, and writing its cards
 ├── admin/          # The Phlex views those screens render, plus

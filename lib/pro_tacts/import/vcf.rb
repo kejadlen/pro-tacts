@@ -150,7 +150,7 @@ module ProTacts
 
       # Whether a property is one this address book reads, asked of a
       # name as a line spells it — the one question the survey, the
-      # review screen and the confirm all ask.
+      # review screen and the write all ask.
       #: (String name) -> bool
       def self.known?(name)
         KNOWN.include?(name.upcase)

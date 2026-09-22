@@ -19,11 +19,13 @@ module ProTacts
     # .vcf is what every address book on earth already exports, and
     # the machine holding it is whichever one the browser is on.
     #
-    # Four screens, because an import is a walk rather than a
+    # Three screens, because an import is a walk rather than a
     # submission: choose the file, look down the contacts it holds,
-    # open any of them beside the card it arrived as, and confirm.
-    # What the walk reads and writes waits on the server between them
-    # (Import::Staged); nothing is in the store until the confirm.
+    # and open any of them beside the card it arrived as. The Save on
+    # that last screen is the import of that one contact — not a note
+    # kept until a confirm at the end — so the list is a list of what
+    # is in the book and what is not yet, and what is left when the
+    # walk stops is only the part nobody looked at.
     #
     # Under the same identity gate as every other route (web.rb),
     # which is also where the arrivals' books come from: a card this
@@ -44,8 +46,12 @@ module ProTacts
         # Before the index below, and distinguishable from one: a
         # path segment is what says which request this is, not which
         # fields a form happened to carry.
-        r.post "confirm" do
-          confirm_upload(r, upload)
+        r.post "group" do
+          name_import_group(r, upload)
+        end
+
+        r.post "done" do
+          finish_import(upload)
         end
 
         r.is do
@@ -54,15 +60,14 @@ module ProTacts
           end
         end
 
-        # The contact's place in the file is its name here. There is
-        # no minted id until it is written, and the file's own order is
-        # the one thing about a card that cannot change under the
-        # walk: the editor's save rewrites a card in place and never
-        # adds or removes one.
+        # The contact's place in the file is its name here, until its
+        # own Save mints one. The file's own order is the one thing
+        # about a card that cannot change under the walk: the editor's
+        # save rewrites a card in place and never adds or removes one.
         r.on Integer do |index|
           r.is do
             r.get do
-              card_screen(upload, index)
+              open_card(r, upload, index)
             end
 
             r.post do
@@ -102,34 +107,31 @@ module ProTacts
       id = Import::Staged.open(
         original: bytes,
         revised: joined(cards.map { Import::Vcf.read(it).card }),
+        # Named here and not at the end, there being no end to name it
+        # at: the first Save has to know what to file its contact
+        # under. Still the importer's to change until that first Save
+        # (#name_import_group).
+        group: Import::Write.default_group,
       )
       # A 303, the other writes' answer, because what follows is a
       # walk: every screen of it is a GET a back button can revisit.
       r.redirect "/import/#{id}", 303
     end
 
-    # The contacts the file holds, each with what it is losing.
+    # The contacts the file holds: what each is losing, and whether it
+    # is in the book yet.
     #: (String upload, ?notice: String?) -> String
     def review_screen(upload, notice: nil)
       staged = staged_cards(upload)
       return expired_screen if staged.nil?
 
       originals, revised = staged
-      chosen, named = Import::Staged.groups(upload)
-      # By name, because the row is read rather than submitted: a
-      # group the walk ticked and someone then deleted is simply not
-      # among these.
-      names = store.group_choices.to_h { |group|
-        # A pair is a two-element array until something says
-        # otherwise, and an inline annotation needs its own line.
-        [group.id, group.label] #: [String, String]
-      }
+      group, saved = Import::Staged.saved(upload)
       rows = revised.each_with_index.map { |card, index|
         # A literal of several elements is an Array until something
         # says otherwise, and an inline annotation needs its own line.
         dropped = Import::Vcf.read(originals.fetch(index)).dropped
-        joined = (chosen.fetch(index.to_s, []).filter_map { names[it] } + named.fetch(index.to_s, [])).sort
-        [import_contact(card, index), Import::Vcf.losses(dropped).length, joined] #: [Contact, Integer, Array[String]]
+        [import_contact(card, index), Import::Vcf.losses(dropped).length] #: [Contact, Integer]
       }
 
       response["Content-Type"] = "text/html; charset=utf-8"
@@ -137,17 +139,39 @@ module ProTacts
         upload:,
         rows:,
         unknown: Import::Vcf.unknown(originals),
-        group: Import::Write.default_group,
+        group:,
+        saved:,
         notice:,
       )
+    end
+
+    # A row opened: the card it arrived as beside the card that is
+    # coming in — or the contact itself, for a card this walk has
+    # already saved. The editor here writes into the import, and an
+    # import that has already written this one has nothing left to say
+    # about it: from then on it is a contact, edited where every other
+    # contact is.
+    #: (untyped r, String upload, Integer index) -> untyped
+    def open_card(r, upload, index)
+      _group, saved = Import::Staged.saved(upload)
+      contact = saved[index.to_s]
+      return r.redirect "/contacts/#{contact}" if contact
+
+      card_screen(upload, index)
     end
 
     # One contact, the card it arrived as beside the card that is
     # coming in. The right-hand half is the contact editor itself, not a
     # copy of it: a field the two disagreed about would be a field an
     # import writes and an edit cannot undo.
-    #: (String upload, Integer index, ?notice: String?) -> String?
-    def card_screen(upload, index, notice: nil)
+    #
+    # `joined` and `named` are the groups a refused save had ticked.
+    # Empty on the way in, because a card that is not in the book is a
+    # card nothing has been decided about yet — there is no staged
+    # answer to read back, the Save that would have written one being
+    # the Save that writes the contact.
+    #: (String upload, Integer index, ?notice: String?, ?joined: Array[String], ?named: Array[String]) -> String?
+    def card_screen(upload, index, notice: nil, joined: [], named: [])
       staged = staged_cards(upload)
       return expired_screen if staged.nil?
 
@@ -166,13 +190,14 @@ module ProTacts
         action: "/import/#{upload}/#{index}",
         back: ["/import/#{upload}", "the import"],
         aside: Admin::ImportOriginal.new(card: original, dropped: Import::Vcf.read(original).dropped),
-        fields: import_groups(upload, index),
+        fields: Admin::ImportGroups.new(groups: store.group_choices, joined:, named:),
       )
     end
 
-    # The editor's save, written back into the import rather than into
-    # the store: #apply_edit's shape over a card that is not a contact
-    # yet, down to the refusals, because it is the same form.
+    # The editor's save, which is this contact's import: #apply_edit's
+    # shape over a card that is not a contact yet, down to the
+    # refusals, because it is the same form — and then the write, the
+    # card and its groups going in together.
     #: (untyped r, String upload, Integer index) -> untyped
     def save_card(r, upload, index)
       staged = staged_cards(upload)
@@ -182,7 +207,32 @@ module ProTacts
       card = revised[index]
       return nil if card.nil?
 
+      group, saved = Import::Staged.saved(upload)
+      # A Save pressed twice, or a back button onto the screen of a
+      # contact that is already in the book: a second write here would
+      # be a second contact rather than an edit of the first, there
+      # being no id in the file to recognise it by.
+      stored = saved[index.to_s]
+      return r.redirect "/contacts/#{stored}", 303 if stored
+
       contact = import_contact(card, index)
+
+      # The groups ride in the same form and are written by the same
+      # Save (Admin::ImportGroups): a card the walk has looked at is
+      # decided about in both ways at once. Only ids naming a group,
+      # #apply_groups' own rule, and the boxes are the whole answer —
+      # none ticked is none joined. A name typed into the filter joins
+      # the names already standing for this contact, and is made by
+      # the write below (Import::Write#group_id).
+      #
+      # Read before the refusals rather than after, so a card sent
+      # back to be fixed comes back with its boxes as they were
+      # ticked: nothing is staged, and the form is the only record of
+      # them until the write.
+      ticked = ids_in(r.params["groups"]) & store.group_choices.map(&:id)
+      standing = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
+      fresh = r.params["new"].to_s.strip
+      wanted = (fresh.empty? ? standing : standing + [fresh]).uniq
 
       # N and FN are mandatory (RFC 2426 section 4), so a save blank
       # throughout is refused — the toast is the backstop, the form's
@@ -191,7 +241,9 @@ module ProTacts
       first = r.params["first"].to_s.strip
       middle = r.params["middle"].to_s.strip
       last = r.params["last"].to_s.strip
-      return card_screen(upload, index, notice: "A contact needs a name.") if first.empty? && last.empty?
+      if first.empty? && last.empty?
+        return card_screen(upload, index, notice: "A contact needs a name.", joined: ticked, named: wanted)
+      end
 
       fields = r.params["birthday"]
       birthday =
@@ -199,7 +251,8 @@ module ProTacts
           begin
             Admin::CardForm.birthday(fields)
           rescue ArgumentError
-            return card_screen(upload, index, notice: "That birthday is not a shape a date can take.")
+            return card_screen(upload, index, notice: "That birthday is not a shape a date can take.",
+                                              joined: ticked, named: wanted)
           end
         else
           contact.birthday
@@ -210,7 +263,8 @@ module ProTacts
       # import are the case, and applying this save over the other
       # one's would revert it.
       if r.params["etag"].to_s != contact.etag
-        return card_screen(upload, index, notice: "This card changed since the page loaded; nothing was saved.")
+        return card_screen(upload, index, notice: "This card changed since the page loaded; nothing was saved.",
+                                          joined: ticked, named: wanted)
       end
 
       edited = Admin::CardForm.contact_card(contact, first, middle, last, r.params)
@@ -229,73 +283,81 @@ module ProTacts
         # what it is, and writing it without the date would lose the
         # date the moment it was typed. Say so instead.
         if birthday && line.nil?
-          return card_screen(upload, index, notice: "A card cannot hold a birthday that partial. Import the contact, then add the date on its own page.")
+          return card_screen(upload, index,
+                             notice: "A card cannot hold a birthday that partial. Import the contact, then add the date on its own page.",
+                             joined: ticked, named: wanted)
         end
 
         edited = edited.replace("BDAY", line ? [line] : [])
       end
 
+      # Staged before it is stored, and kept afterwards: the list
+      # renders every row from these bytes, so a row that has come in
+      # is still a row the list has to be able to name.
       revised[index] = edited
       Import::Staged.update(upload, joined(revised))
-      # The groups ride in the same form and save with it
-      # (Admin::ImportGroups): a card the walk has looked at has been
-      # decided about in both ways at once. Only ids naming a group,
-      # #apply_groups' own rule, and the boxes are the whole answer —
-      # none ticked is none joined, not "leave it as it was". A name
-      # typed into the new-group box joins the names already standing
-      # for this contact, and none of them is made until the confirm.
-      chosen, named = Import::Staged.groups(upload)
-      ticked = ids_in(r.params["groups"]) & store.group_choices.map(&:id)
-      standing = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
-      fresh = r.params["new"].to_s.strip
-      Import::Staged.update_groups(
-        upload,
-        chosen.merge(index.to_s => ticked),
-        named.merge(index.to_s => (fresh.empty? ? standing : standing + [fresh]).uniq),
-      )
+      written = Import::Write.call(store, edited, group: group.empty? ? nil : group, joins: ticked, named: wanted)
+      Import::Staged.record(upload, index.to_s, written.id)
+
+      # The last one: there is nothing left to come back to, so the
+      # import ends here rather than on a list of rows that all say
+      # the same thing and a button under them.
+      return finish_import(upload) if saved.length + 1 == revised.length
+
       r.redirect "/import/#{upload}", 303
     end
 
-    # The confirm: the cards as the walk left them, written into the
-    # store.
-    #: (untyped r, String upload) -> String
-    def confirm_upload(r, upload)
-      staged = staged_cards(upload)
-      return expired_screen if staged.nil?
+    # The group the arrivals are filed under, named. Only while the
+    # import has written nothing: the name is what every Save files
+    # its contact under, and changing it halfway would leave what is
+    # already in the book under the old name and put the rest
+    # somewhere else, which is one import in two groups.
+    #: (untyped r, String upload) -> untyped
+    def name_import_group(r, upload)
+      return expired_screen if Import::Staged.read(upload, Import::Staged::SAVED).nil?
 
-      _originals, revised = staged
-      group = r.params["group"].to_s.strip
-      # Filtered again here, and not only where the walk wrote them
-      # (#save_card): a group can be deleted between the tick and the
-      # confirm, and Store#add_member reads a group with `sole`, so a
-      # stale id would be a 500 rather than the nothing it means.
-      known = store.group_choices.map(&:id)
-      chosen, named = Import::Staged.groups(upload)
-      joins = revised.each_index.map { chosen.fetch(it.to_s, []) & known }
-      makes = revised.each_index.map { named.fetch(it.to_s, []) }
-      imported = Import::Write.call(store, revised, group: group.empty? ? nil : group, joins:, named: makes)
+      group, saved = Import::Staged.saved(upload)
+      if saved.any?
+        settled =
+          if group.empty?
+            "Contacts from this import are in the book already, in no group of their own."
+          else
+            "Contacts from this import are in #{group} already, and the rest join them."
+          end
+        return review_screen(upload, notice: settled)
+      end
+
+      Import::Staged.name_group(upload, r.params["group"].to_s.strip)
+      r.redirect "/import/#{upload}", 303
+    end
+
+    # The end of the walk: what it wrote, listed, and the file and the
+    # walk's own notes gone. Reached by saving the last card or by
+    # saying so on the list, and the rows nobody opened are simply
+    # left behind — the file they came from is the importer's own, and
+    # this copy of it goes with the button.
+    #
+    # Answered with the page rather than a 303, and has to be: the
+    # staged import is gone, so the re-submission a back button offers
+    # has nothing left to finish, and there is no other page holding
+    # what just arrived.
+    #: (String upload) -> String
+    def finish_import(upload)
+      return expired_screen if Import::Staged.read(upload, Import::Staged::SAVED).nil?
+
+      _group, saved = Import::Staged.saved(upload)
+      # In the file's own order rather than the order the walk got to
+      # them in, which is the order the list they are read back
+      # instead of was in.
+      imported = saved.keys.sort_by(&:to_i).filter_map { store.contact(saved.fetch(it)) }
       Import::Staged.close(upload)
 
       import_screen(imported:)
     end
 
-    # The groups half of one contact's screen: what this book has,
-    # what the walk has ticked, and what it has said to make. Read
-    # here rather than in the view, which is handed the answer like
-    # every other view (Admin::ImportGroups).
-    #: (String upload, Integer index) -> Admin::ImportGroups
-    def import_groups(upload, index)
-      chosen, named = Import::Staged.groups(upload)
-      Admin::ImportGroups.new(
-        groups: store.group_choices,
-        joined: chosen.fetch(index.to_s, []),
-        named: named.fetch(index.to_s, []),
-      )
-    end
-
     # The import's two readings, or none when it is gone — swept out
-    # from under a screen left open overnight, or written already, a
-    # second confirm finding what the first removed. Ordinary enough
+    # from under a screen left open overnight, or finished already, a
+    # second press finding what the first removed. Ordinary enough
     # for the screen to say so and ask for the file again.
     #
     # The re-read parses files this already parsed, which is not a
@@ -355,11 +417,8 @@ module ProTacts
       param if param.is_a?(Hash) && param[:tempfile]
     end
 
-    # The screen a file is chosen on, and the page a confirm answers
-    # with. The confirm answers with the result rather than a 303, and
-    # has to: the staged import is gone, so the re-submission a back
-    # button offers has nothing to import, and there is no other page
-    # holding what just arrived.
+    # The screen a file is chosen on, and the page a finished import
+    # answers with.
     #: (?imported: Array[Contact]?, ?notice: String?) -> String
     def import_screen(imported: nil, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"

@@ -8,7 +8,8 @@ require "pro_tacts/admin/list_item"
 module ProTacts
   module Admin
     # GET /import — the screen an address book arrives on, and the page
-    # a confirm answers with (docs/plans/2026-09-21-import-a-vcf.md).
+    # a finished import answers with
+    # (docs/plans/2026-09-21-import-a-vcf.md).
     # Until this existed an import meant rake tasks reading Contacts.app
     # on a Mac and carrying a plan to a host over HTTP; now it is the
     # file that Mac already knows how to export.
@@ -17,8 +18,9 @@ module ProTacts
     # in it needs the file open, so that is the next screen's
     # (ImportReview, and the pair of cards a row there opens).
     #
-    # `imported` is the import that just happened, rendered below the
-    # form that is still there to run another.
+    # `imported` is what the import that just ended brought in — the
+    # rows its walk saved, and not the ones it left behind — rendered
+    # below the form that is still there to run another.
     class ImportUpload < Phlex::HTML
       # @rbs @imported: Array[Contact]?
       # @rbs @notice: String?

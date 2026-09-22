@@ -15,7 +15,7 @@ module ProTacts
     # is no second button to wonder about. That is the difference from
     # a stored contact, whose groups are a dialog on the details page
     # (Admin::GroupDialog) — there the card exists and a membership is
-    # a write of its own, here neither is true until the confirm.
+    # a write of its own, here neither exists until that Save.
     #
     # A box per group this book has, then a box per group this import
     # has been told to make and has not made yet, then the filter
@@ -26,11 +26,12 @@ module ProTacts
     # three hundred groups buries either picker, and this is the one
     # the walk opens once per contact.
     #
-    # A named group is not created here: it is made at the confirm
-    # (Import::Write#group_id), because a group created while the walk
-    # is still going is a group left behind by an import that was
-    # abandoned. So it rides as a name until then, and shows as a
-    # ticked box like any other so that it can be unticked.
+    # A named group is not created here: it is made by the Save, with
+    # the contact it was named for (Import::Write#group_id), because a
+    # group created while a card is still being looked over is one
+    # left behind if that card is never saved. So it rides as a name
+    # until then, and shows as a ticked box like any other so that it
+    # can be unticked.
     class ImportGroups < Phlex::HTML
       # @rbs @groups: Array[Store::GroupChoice]
       # @rbs @joined: Array[String]
@@ -40,14 +41,20 @@ module ProTacts
       # Alphabetical, the groups dialog's own order: this is a list to
       # find a name in, and nothing here stays put across a rename.
       # `groups` is every group as a choice, no members read
-      # (Store#group_choices); `joined` the ids ticked so far, `named`
-      # the groups this import is making that do not exist yet.
+      # (Store#group_choices); `joined` the ids ticked, `named` the
+      # groups this card is making that do not exist yet.
       #
-      # Both of those are rows the cap spares, for the dialog's own
-      # reason: a box this contact has already been given is one the
-      # walk came back to untick. The names take rows from the limit
-      # without being in the list the cap reads, so they are counted
-      # into it rather than listed in it.
+      # Those last two are empty whenever the card is opened, and hold
+      # what was ticked only when a save was sent back to be fixed
+      # (Web#card_screen): nothing is staged between screens, because
+      # the Save that would have staged it is the Save that writes the
+      # contact.
+      #
+      # Both are rows the cap spares, for the dialog's own reason: a
+      # box this contact has already been given is one the walk came
+      # back to untick. The names take rows from the limit without
+      # being in the list the cap reads, so they are counted into it
+      # rather than listed in it.
       #: (groups: Array[Store::GroupChoice], joined: Array[String], named: Array[String]) -> void
       def initialize(groups:, joined:, named:)
         @groups = groups.sort_by { it.label.downcase }

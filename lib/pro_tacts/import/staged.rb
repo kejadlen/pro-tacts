@@ -17,11 +17,16 @@ module ProTacts
     # a card that has been edited still has to show what it arrived
     # as. REVISED is the cards as they will be written — pared to what
     # this book reads when the import opens (Vcf.read), and rewritten
-    # whole each time the editor saves one of them. GROUPS is which
-    # groups each of those cards is joining, a decision the cards
-    # themselves cannot carry: a vCard says nothing about this book's
-    # groups, and a line invented to hold the answer would end up in
-    # the contact.
+    # whole each time the editor saves one of them. SAVED is what the
+    # import has already done: the group it files its arrivals under,
+    # and which of its cards are contacts now.
+    #
+    # That last one is what makes the walk resumable rather than
+    # batched. A card is written the moment its Save is pressed
+    # (Import::Write), so the store is the record of it and this slot
+    # is only how the list knows which rows are done. Nothing here
+    # holds a decision back: the groups a contact joins are ticked and
+    # written by that same Save, so they are never staged at all.
     #
     # On disk rather than in the browser: a book with pictures in it is
     # tens of megabytes, and a form carrying it back and forth is the
@@ -37,13 +42,14 @@ module ProTacts
 
       ORIGINAL = "original" #: String
       REVISED = "revised" #: String
-      GROUPS = "groups" #: String
-      SLOTS = [ORIGINAL, REVISED, GROUPS].freeze #: Array[String]
+      SAVED = "saved" #: String
+      SLOTS = [ORIGINAL, REVISED, SAVED].freeze #: Array[String]
 
-      # The two halves of the groups slot: the ids of groups this
-      # book has, and the names of groups it does not have yet.
-      CHOSEN = "chosen" #: String
-      NAMED = "named" #: String
+      # The two halves of the saved slot: the name of the group this
+      # import files its arrivals under, and the contact each saved
+      # card became, by the card's place in the file.
+      GROUP = "group" #: String
+      CONTACTS = "contacts" #: String
 
       # How long an import is worth keeping. Long enough to work down
       # a book's worth of contacts over an evening, and short enough
@@ -55,26 +61,30 @@ module ProTacts
       # it carries. Minted, so the id a link or a form hands back is
       # checked against the one shape this writes (#path) rather than
       # trusted as a filename.
-      #: (original: String, revised: String) -> String
-      def self.open(original:, revised:)
+      #: (original: String, revised: String, group: String) -> String
+      def self.open(original:, revised:, group:)
         sweep
         id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
         directory = root / id
         FileUtils.mkdir_p(directory)
         File.binwrite(directory / file_name(ORIGINAL), original)
         File.binwrite(directory / file_name(REVISED), revised)
-        # Empty rather than absent, so every slot of an import that
+        # The group is settled here rather than at the end, there
+        # being no end to settle it at any more: the first Save has to
+        # know what to file its contact under, and every Save after it
+        # has to agree (Web#name_import_group). Nothing saved yet, and
+        # empty rather than absent, so every slot of an import that
         # exists is a file that exists and a write can say which of
         # the two it found (#write).
-        nothing = {} #: Hash[String, Array[String]]
-        File.binwrite(directory / file_name(GROUPS), JSON.generate({CHOSEN => nothing, NAMED => nothing}))
+        none = {} #: Hash[String, String]
+        File.binwrite(directory / file_name(SAVED), JSON.generate({GROUP => group, CONTACTS => none}))
         id
       end
 
       # One slot's bytes, or none — an import swept out from under a
-      # screen left open overnight, or one already written, its second
-      # confirm finding what the first removed. Ordinary enough for
-      # the screen to say so and ask for the file again.
+      # screen left open overnight, or one already finished, a second
+      # press finding what the first removed. Ordinary enough for the
+      # screen to say so and ask for the file again.
       #: (String id, String slot) -> String?
       def self.read(id, slot)
         file = path(id, slot)
@@ -88,55 +98,63 @@ module ProTacts
       end
 
       # The cards as they will be written, rewritten: the editor's
-      # save, and the only write this takes after the import opens.
-      # Whole rather than a card at a time, because the file is the
-      # unit a re-read splits (Vcf.cards) and a card's index in it is
-      # how a screen names one.
+      # save, and one of the two writes this takes after the import
+      # opens. Whole rather than a card at a time, because the file is
+      # the unit a re-read splits (Vcf.cards) and a card's index in it
+      # is how a screen names one.
+      #
+      # Still rewritten for a card that was just saved into the store,
+      # rather than dropped from the file: the list renders every row
+      # from these bytes, and a row that has come in is one the list
+      # still has to be able to name (Admin::ImportReview).
       #: (String id, String revised) -> void
       def self.update(id, revised)
         write(id, REVISED, revised)
       end
 
-      # Which groups each contact joins, by its place in the file —
-      # the name every screen of the walk calls a contact by, there
-      # being no minted id until it is written. Rewritten whole like
-      # the cards beside it, and for the same reason: one save is one
-      # state of the whole import.
-      #
-      # Two maps rather than one, because a group this book has and a
-      # group this import is about to invent are not the same answer.
-      # `chosen` holds ids, the only way to name a group that has no
-      # name of its own (db/migrations/005_group_identity.rb).
-      # `named` holds names of groups that do not exist yet: made at
-      # the confirm and not before, because a group created while the
-      # walk is still going is a group left behind by an import that
-      # was abandoned (Import::Write#group_id).
-      #: (String id, Hash[String, Array[String]] chosen, Hash[String, Array[String]] named) -> void
-      def self.update_groups(id, chosen, named)
-        write(id, GROUPS, JSON.generate({CHOSEN => chosen, NAMED => named}))
-      end
-
-      # What #update_groups last wrote — the ids and then the names —
-      # and two empty maps for an import that is gone. Read back into
-      # the shape it was written in rather than trusted: this is a
-      # file on disk, and a slot that will not parse is a broken
-      # assumption JSON says so about.
-      #: (String id) -> [Hash[String, Array[String]], Hash[String, Array[String]]]
-      def self.groups(id)
-        # #lists makes an empty map of anything that is not one, so
-        # the gone import and the half a file are the same answer
-        # here rather than two spellings of it.
-        raw = read(id, GROUPS)
-        return [lists(nil), lists(nil)] if raw.nil?
+      # What this import has done: the group it files under, and the
+      # contact each saved card became, by the card's place in the
+      # file — the name every screen of the walk calls a contact by
+      # until there is a minted id to call it by instead. Two empty
+      # answers for an import that is gone or a slot that will not
+      # parse: this is a file on disk, and one that will not read back
+      # in the shape it was written in is a broken assumption JSON
+      # says so about.
+      #: (String id) -> [String, Hash[String, String]]
+      def self.saved(id)
+        raw = read(id, SAVED)
+        return ["", ids(nil)] if raw.nil?
 
         parsed = JSON.parse(raw)
-        return [lists(nil), lists(nil)] unless parsed.is_a?(Hash)
+        return ["", ids(nil)] unless parsed.is_a?(Hash)
 
-        [lists(parsed[CHOSEN]), lists(parsed[NAMED])]
+        [parsed[GROUP].to_s, ids(parsed[CONTACTS])]
       end
 
-      # The import, gone: the last step of a confirm, and what keeps
-      # the ordinary case from waiting on the sweep.
+      # One card, written: its place in the file against the id the
+      # store minted for it. Read back and rewritten whole, the slot
+      # beside this one being written the same way.
+      #: (String id, String index, String contact) -> void
+      def self.record(id, index, contact)
+        group, contacts = saved(id)
+        write(id, SAVED, JSON.generate({GROUP => group, CONTACTS => contacts.merge(index => contact)}))
+      end
+
+      # The group the import files under, renamed. Only before the
+      # first card is saved, which is the route's rule rather than
+      # this one's (Web#name_import_group): a rename after that would
+      # leave what is already in the book under the old name and put
+      # the rest somewhere else, which is one import in two groups.
+      #: (String id, String group) -> void
+      def self.name_group(id, group)
+        _, contacts = saved(id)
+        write(id, SAVED, JSON.generate({GROUP => group, CONTACTS => contacts}))
+      end
+
+      # The import, gone: what the walk's last screen leaves behind,
+      # and what keeps the ordinary case from waiting on the sweep.
+      # The contacts it wrote are in the store and stay there; this
+      # takes only the file and the walk's own notes.
       #: (String id) -> void
       def self.close(id)
         directory = import_root(id)
@@ -193,28 +211,24 @@ module ProTacts
         File.binwrite(file.to_s, contents)
       end
 
-      # One map of a contact's place in the file to a list of
-      # strings, out of whatever the file actually holds.
-      #: (untyped raw) -> Hash[String, Array[String]]
-      def self.lists(raw)
-        lists = {} #: Hash[String, Array[String]]
-        return lists unless raw.is_a?(Hash)
+      # One map of a contact's place in the file to the id it was
+      # stored under, out of whatever the file actually holds.
+      #: (untyped raw) -> Hash[String, String]
+      def self.ids(raw)
+        ids = {} #: Hash[String, String]
+        return ids unless raw.is_a?(Hash)
 
-        raw.each do |index, values|
-          next unless values.is_a?(Array)
-
-          lists[index.to_s] = values.map(&:to_s)
-        end
-        lists
+        raw.each { |index, contact| ids[index.to_s] = contact.to_s }
+        ids
       end
 
-      # The cards are a .vcf, and the groups beside them are not.
+      # The cards are a .vcf, and the walk's notes beside them are not.
       #: (String slot) -> String
       def self.file_name(slot)
-        slot == GROUPS ? "#{slot}.json" : "#{slot}.vcf"
+        slot == ORIGINAL || slot == REVISED ? "#{slot}.vcf" : "#{slot}.json"
       end
 
-      private_class_method :root, :import_root, :path, :file_name, :write, :lists
+      private_class_method :root, :import_root, :path, :file_name, :write, :ids
     end
   end
 end

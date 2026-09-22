@@ -2,8 +2,9 @@
 
 2026-09-21. Importing is one upload of one file. `/import` takes a
 `.vcf`, says what is in it, asks what to do with the properties no
-screen here shows, and writes the cards through the store. Everything
-that came before it — `import:macos:plan`, `import:macos:finalize`,
+screen here shows, and writes each card through the store as that
+card's own screen is looked over and saved. Everything that came
+before it — `import:macos:plan`, `import:macos:finalize`,
 `import:status`, the Swift reader they drove Contacts.app with, and the
 plan directories under `data/import` — is gone.
 
@@ -94,15 +95,15 @@ the wrong remedy: it asks about `X-ABRELATEDNAMES` in the abstract,
 and the answer it can give back is a line this app composed. What the
 importer actually wants is to look at a contact and fix it.
 
-So the review is a walk, four screens rather than a submission:
+So the review is a walk, three screens rather than a submission:
 
 1. **Choose the file.**
 2. **The contacts it holds**, one row each, marked with how many of
-   that contact's lines are not coming in, over a summary of which
-   properties the whole file is losing. A book is hundreds of contacts
-   and only some of them will have anything worth looking at, so the
-   list is what says which rows are worth opening — and a file whose
-   every loss is noise says so at the top and can be confirmed unread.
+   that contact's lines are not coming in — or marked as in the book
+   already, once its own screen has been through — over a summary of
+   which properties the whole file is losing. A book is hundreds of
+   contacts and only some of them will have anything worth looking at,
+   so the list is what says which rows are worth opening.
 3. **One contact, two cards.** On the left, the card exactly as the
    file wrote it: content lines in monospace, with every line that is
    not coming in struck in Gloss's danger color and labelled "not
@@ -112,9 +113,10 @@ So the review is a walk, four screens rather than a submission:
    a filtered list of boxes to tick, the filter doubling as the way to
    name one it does not have yet. Read the spouse's name off the left
    card and type it into the note on the right, in your own words, and
-   put the contact where it belongs while you are looking at it.
-4. **Confirm**, under a group for the lot, and the cards are written as
-   the walk left them.
+   put the contact where it belongs while you are looking at it. The
+   Save on that screen is the import of that contact: it goes into the
+   book there and then, under the group named for the lot and whatever
+   else was ticked beside it.
 
 The right-hand card is `Admin::ContactsEdit` itself, not a copy of it.
 A second editor for imports would be a place where the two could
@@ -135,6 +137,48 @@ contact is only its card, so the save says so and asks for the date
 again once the contact is stored, rather than dropping it the moment
 it was typed.
 
+## Nothing waits for the end
+
+The first shape of this had a confirm at the end: the walk wrote its
+decisions down, and one button at the bottom of the list wrote every
+card at once. What that bought was a single point of no return, and
+what it cost was everything around it.
+
+- **A walk that has to be finished to be worth anything.** A book is
+  hundreds of contacts, and looking them over is an evening rather
+  than a sitting. Written only at the end, that evening's work is held
+  by a temporary directory and a browser tab, and stopping halfway
+  imports nothing at all.
+- **A second record of decisions already made.** The groups ticked
+  beside a card had to be staged, because nothing could be written
+  yet — so a contact's groups lived in two places, and a slot on disk
+  existed whose only reader was the button at the bottom.
+- **A button that means more than it says.** "Import 242 contacts",
+  under a list where twelve rows have been read and two hundred and
+  thirty have not, is one press standing for two quite different
+  decisions.
+
+So the Save is the import. A contact is in the book the moment its own
+screen says so, and the list reads that back: a row that has come in
+says so and leads to the contact rather than back into the editor,
+which is also the answer to what a second Save on it would mean. The
+walk is resumable because nothing is being held back — a tab left
+overnight, a window closed, a crash, all read the same way.
+
+That makes the end of the walk a thing to say rather than a thing to
+press. Saving the last unsaved row ends it; a "finish" on the list ends
+it early. Either way the rows nobody opened are left behind with this
+copy of the file, which the importer has their own of, and what came in
+is listed on the same page an import has always ended on.
+
+One decision does have to be settled up front, and that is the group
+for the lot: every Save files its contact under it. So it is named when
+the import opens — `import-<timestamp>` by default — and stays editable
+until the first contact is in, after which the list shows it as a fact
+rather than a field. Renaming it halfway would leave what is already in
+the book under the old name and put the rest somewhere else, which is
+one import in two groups.
+
 ## The import waits on the server
 
 An import is a directory under `data/imports`, keyed by a minted id
@@ -143,19 +187,18 @@ that every screen of the walk carries in its path. Three slots in it.
 `revised.vcf` the cards as they will come in — pared when the import
 opens and rewritten whole each time the editor saves one of them. A card that
 has been edited still has to show what it arrived as, which is why
-both. `groups.json` is which groups each of those cards is joining,
-keyed by the card's place in the file: a vCard says nothing about this
-book's groups, and a line invented to hold the answer would end up in
-the contact. Two maps in it, because a group this book has and a group this
-import is about to invent are not the same answer — ids for the first,
-which is the only way to name a group that has no name of its own, and
-names for the second, made at the confirm.
+both. `saved.json` is what the import has already done: the group it
+files its arrivals under, and the contact each saved card became, keyed
+by the card's place in the file. That last map is only how the list
+knows which rows are done — the store is the record of the contact
+itself — and it is the whole of what this holds back, the groups a
+contact joins being written by the same Save that writes the contact.
 
 On disk rather than in the browser: a book with pictures in it is tens
 of megabytes, and a form carrying it back and forth is the upload done
 once per screen. An id off a link is checked against the shape
 `ChangeId.mint` draws before it is made into a path — `../../contacts.db`
-is a filename too. The directory goes the moment the cards are written, and
+is a filename too. The directory goes the moment the walk ends, and
 anything older than a day is swept on the next upload: long enough to
 work down a book over an evening, short enough that a closed window
 does not leave that book on disk for a week.
@@ -166,10 +209,10 @@ place and never adds or removes one.
 
 ## Writing them in
 
-`Import::Write` writes through `Store#put` and `Store#regroup` rather
-than through the routes those two sit behind. It is not a second way to
-write a card — it is the same two writes a client's PUT and the groups
-dialog make:
+`Import::Write` writes one card, on the Save of that card's own screen,
+through `Store#put` and `Store#regroup` rather than through the routes
+those two sit behind. It is not a second way to write a card — it is
+the same two writes a client's PUT and the groups dialog make:
 
 1. Mint an id, and give the card the UID that spells it. The source's
    own UID names a record in a book this is not, and a contact with two
@@ -178,8 +221,8 @@ dialog make:
 2. `Store#put` with `client: true`, so a card this creates joins
    everyone's book the way a client's create does
    (`2026-09-15-client-creates-join-everyone.md`).
-3. `Store#regroup` into whichever groups the walk settled on. Two
-   questions, asked in the two places they belong. The review screen
+3. `Store#regroup` into whichever groups this contact's screen settled
+   on. Two questions, asked in the two places they belong. The list
    names one group for the lot, `import-<timestamp>` by default — what
    arrived together can be found together, and undone together — and it
    is emptiable, a name this server already has joining that group
@@ -201,20 +244,29 @@ dialog make:
 
    The filter is also how a group this book does not have yet is
    asked for. Naming no group exactly, it offers itself as one to
-   make, and what that writes is a name rather than a group: nothing
-   is in the store until the confirm, and a group created while the
-   walk was still going is one left behind by an import that was
-   abandoned. A name waiting like that shows as a box of its own,
-   ticked and in the italic the groups dialog gives a name that is not
-   a group yet, so it can be taken off again — and filtered alongside
-   the real groups, so a name this import is already making is not
-   offered a second time as a name to make. What each contact is
-   joining is read back on its row in the list, because the walk is a
-   screen at a time and the list is where ten screens' worth of
-   decisions are seen at once.
+   make, and what that rides as until the Save is a name rather than a
+   group: a group created while its card is still being looked over is
+   one left behind if that card is never saved. A name waiting like
+   that shows as a box of its own, ticked and in the italic the groups
+   dialog gives a name that is not a group yet, so it can be taken off
+   again — and filtered alongside the real groups, so a name this
+   contact is already making is not offered a second time as a name to
+   make. It is made by the Save, with the contact it was named for,
+   and found rather than made again by the next card that asks for it
+   (`Import::Write#group_id`, which is also how the group for the lot
+   carries across the walk).
+
+   Nothing is staged between screens, which is why a card opened
+   afresh has no box ticked: there is no earlier answer to read back,
+   the Save that would have written one being the Save that writes the
+   contact. A save sent back to be fixed — a blank name, a birthday no
+   card can spell — is the one case where there is something to carry,
+   and it comes back with its boxes as the form had them.
 
 Importing is not idempotent and cannot be. A `.vcf` carries no id this
 server minted, so a second upload of the same file is a second set of
-contacts. The review screen is what stands in for the `If-None-Match:
-*` the old PUT sent: it says how many contacts are about to come in, and
-under what group name, before any of them do.
+contacts. The walk is what stands in for the `If-None-Match: *` the old
+PUT sent: a row is looked at before it comes in, and once it has, both
+its row and its screen lead to the contact it became rather than back
+into the editor — so the second press of a Save, and the back button
+onto a screen already done, are the same nothing.

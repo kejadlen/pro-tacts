@@ -3,7 +3,7 @@ require_relative "../../test_helper"
 require "pro_tacts/import/write"
 require "pro_tacts/import/vcf"
 
-# Writing the cards an import has settled on
+# Writing a card an import has settled on
 # (docs/plans/2026-09-21-import-a-vcf.md).
 class ImportWriteTest < Minitest::Test
   include ThrowawayContacts
@@ -21,42 +21,47 @@ class ImportWriteTest < Minitest::Test
     END:VCARD
   CARD
 
-  def write_cards(cards: Vcf.cards(JANE), group: nil)
+  # One card, which is what one Save hands over.
+  def card = Vcf.cards(JANE).fetch(0)
+
+  def write_card(group: nil, joins: [], named: [])
     with_contacts({}) do |store|
-      yield Write.call(store, cards, group:), store
+      yield Write.call(store, card, group:, joins:, named:), store
     end
   end
 
   # What arrives here is already what is coming in, so nothing is
   # pared, rewritten or rebuilt but the card's identity.
   def test_the_card_comes_in_as_it_was_handed_over
-    write_cards do |imported, _store|
-      card = imported.fetch(0).vcard.to_s
+    write_card do |imported, _store|
+      written = imported.vcard.to_s
 
-      assert_includes card, "N:Booles;Jane;;;\r\n"
-      assert_includes card, "FN:Jane Booles\r\n"
-      assert_includes card, "NOTE:Met at work\r\n"
+      assert_includes written, "N:Booles;Jane;;;\r\n"
+      assert_includes written, "FN:Jane Booles\r\n"
+      assert_includes written, "NOTE:Met at work\r\n"
     end
   end
 
   # A minted id, and the UID spelling it: the source's own UID named a
   # record in a book this is not (rake contacts:reid's whole subject).
   def test_the_card_is_stored_under_a_minted_id_its_uid_spells
-    write_cards do |imported, store|
-      id = imported.fetch(0).id
+    write_card do |imported, store|
+      id = imported.id
 
       assert ProTacts::ChangeId.minted?(id)
-      refute_includes imported.fetch(0).vcard.to_s, "ABC-123"
-      assert_includes imported.fetch(0).vcard.to_s, "UID:#{id}\r\n"
+      refute_includes imported.vcard.to_s, "ABC-123"
+      assert_includes imported.vcard.to_s, "UID:#{id}\r\n"
       assert_equal id, store.card_id_with_uid(id)
     end
   end
 
   # A card this creates joins everyone's book the way a client's
-  # create does, and the import's own group besides.
+  # create does, and the import's own group besides. One call per
+  # card, so the second card's group is the first card's, found
+  # rather than made again.
   def test_arrivals_join_the_import_group_and_everyones_book
-    write_cards(cards: Vcf.cards(JANE + JANE), group: "import-20260921T031655Z") do |imported, store|
-      ids = imported.map(&:id)
+    with_contacts({}) do |store|
+      ids = 2.times.map { Write.call(store, card, group: "import-20260921T031655Z").id }
 
       assert_equal 2, ids.uniq.length
       groups = store.all_groups.select { it.members.sort == ids.sort }
@@ -74,22 +79,20 @@ class ImportWriteTest < Minitest::Test
     with_contacts({}) do |store|
       existing = store.create_group(name: "import-20260921T031655Z")
 
-      imported = Write.call(store, Vcf.cards(JANE + JANE), group: "import-20260921T031655Z")
+      ids = 2.times.map { Write.call(store, card, group: "import-20260921T031655Z").id }
 
-      assert_equal imported.map(&:id).sort, store.group(existing).members.sort
+      assert_equal ids.sort, store.group(existing).members.sort
       assert_equal 1, store.all_groups.count { it.name == "import-20260921T031655Z" }
     end
   end
 
-  # The groups the walk ticked, joined alongside the name the review
-  # screen typed: the import's own group takes in everything, and the
-  # rest is a contact at a time.
+  # The groups the walk ticked beside this card, joined alongside the
+  # group the import files everything under.
   def test_an_arrival_joins_the_groups_chosen_for_it
     with_contacts({}) do |store|
       school = store.create_group(name: "school")
 
-      imported = Write.call(store, Vcf.cards(JANE), group: "import-20260921T031655Z", joins: [[school]])
-      id = imported.fetch(0).id
+      id = Write.call(store, card, group: "import-20260921T031655Z", joins: [school]).id
 
       assert_equal [id], store.group(school).members
       assert_equal ["import-20260921T031655Z", "school", ProTacts::Store::EVERYONE],
@@ -97,15 +100,16 @@ class ImportWriteTest < Minitest::Test
     end
   end
 
-  # A contact at a time means the cards do not all come in alike: the
-  # choices are read by the card's own place in the file.
+  # A card at a time means the cards do not all come in alike: each
+  # call carries the answer its own screen gave.
   def test_each_arrival_joins_its_own_groups
     with_contacts({}) do |store|
       school = store.create_group(name: "school")
       work = store.create_group(name: "work")
 
-      imported = Write.call(store, Vcf.cards(JANE + JANE + JANE), joins: [[school], [], [work, school]])
-      first, second, third = imported.map(&:id)
+      first = Write.call(store, card, joins: [school]).id
+      second = Write.call(store, card).id
+      third = Write.call(store, card, joins: [work, school]).id
 
       assert_equal [first, third].sort, store.group(school).members.sort
       assert_equal [third], store.group(work).members
@@ -114,15 +118,16 @@ class ImportWriteTest < Minitest::Test
     end
   end
 
-  # A group the walk asked for by name is made here and not before:
-  # a group created while the walk was still going is one left behind
-  # by an import that was abandoned.
-  def test_a_group_named_during_the_walk_is_made_at_the_confirm
+  # A group the walk asked for by name is made with the contact it was
+  # named for, and found by the next card that asks for it: a group
+  # created before the card is saved is one left behind if that card
+  # never is.
+  def test_a_group_named_during_the_walk_is_made_with_its_contact
     with_contacts({}) do |store|
-      imported = Write.call(store, Vcf.cards(JANE + JANE), named: [["Clarks"], ["Clarks"]])
+      ids = 2.times.map { Write.call(store, card, named: ["Clarks"]).id }
       clarks = store.all_groups.find { it.name == "Clarks" }
 
-      assert_equal imported.map(&:id).sort, clarks.members.sort
+      assert_equal ids.sort, clarks.members.sort
       assert_equal 1, store.all_groups.count { it.name == "Clarks" }
     end
   end
@@ -131,31 +136,30 @@ class ImportWriteTest < Minitest::Test
   # a constraint violation rather than a second membership.
   def test_a_name_that_is_the_imports_own_group_joins_it_once
     with_contacts({}) do |store|
-      imported = Write.call(store, Vcf.cards(JANE), group: "Clarks", named: [["Clarks"]])
-      id = imported.fetch(0).id
+      id = Write.call(store, card, group: "Clarks", named: ["Clarks"]).id
 
       assert_equal 1, store.all_groups.count { it.name == "Clarks" }
       assert_equal [id], store.all_groups.find { it.name == "Clarks" }.members
     end
   end
 
-  # Either, or neither: a chosen group stands on its own when no name
-  # is typed.
+  # Either, or neither: a chosen group stands on its own when the
+  # import files under no group at all.
   def test_arrivals_join_a_chosen_group_with_no_group_named
     with_contacts({}) do |store|
       school = store.create_group(name: "school")
 
-      imported = Write.call(store, Vcf.cards(JANE), joins: [[school]])
+      id = Write.call(store, card, joins: [school]).id
 
-      assert_equal imported.map(&:id), store.group(school).members
+      assert_equal [id], store.group(school).members
       assert_equal %w[school], store.all_groups.map(&:name).reject { it == ProTacts::Store::EVERYONE }
     end
   end
 
-  def test_no_group_name_puts_the_cards_in_everyones_book_alone
-    write_cards do |imported, store|
+  def test_no_group_name_puts_the_card_in_everyones_book_alone
+    write_card do |imported, store|
       assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
-      assert_equal imported.map(&:id), store.all_groups.fetch(0).members
+      assert_equal [imported.id], store.all_groups.fetch(0).members
     end
   end
 
