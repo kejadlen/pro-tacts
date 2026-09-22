@@ -2,19 +2,20 @@
 require "sequel"
 
 module Sequel
-  # The row a filter identifies, or a raise.
+  # The row a filter identifies, and what to do when there is not one.
   #
   # A filter meant to identify one row — a lookup by primary key, later
   # the group that contributed a property to a card — reads naturally as
   # `first`, and `first` answers with one of several without a word when
   # the filter turns out not to identify anything. That is the failure
-  # worth catching: the query claimed one row, so anything else is a
-  # broken assumption rather than a result to pick from.
+  # worth catching: the query claimed one row, so more than one is a
+  # broken assumption rather than a result to pick from, and both of
+  # these raise on it.
   #
-  # Both ways of being wrong raise, so the assertion is in one method
-  # rather than split across a pair. A caller for whom no row is
-  # ordinary says so by rescuing Sequel::NoMatchingRow, which is the
-  # error Sequel's own `first!` raises for it.
+  # Where the two differ is no row at all, which is the ordinary answer
+  # for some reads — an href nobody has, a login whose book was never
+  # named — and a corruption for others. `sole` answers nil there and
+  # `sole!` raises, which is what the bang says everywhere else in Ruby.
   #
   # Load it with `DB.extension(:sole)`, which reaches every dataset the
   # database makes.
@@ -25,7 +26,7 @@ module Sequel
     class TooManyRows < Sequel::Error; end
 
     #: () -> Hash[Symbol, untyped]
-    def sole
+    def sole!
       # Two is enough to know, and a LIMIT keeps a filter that turned out
       # to match the whole table from dragging it back to prove the
       # point. It replaces any limit already set, which is why this is
@@ -41,14 +42,12 @@ module Sequel
       rows.fetch(0)
     end
 
-    # The same read where no row is the ordinary answer — an href
-    # nobody has, a login whose book was never named — so the caller
-    # says so once here rather than spelling the rescue out again.
-    # Only the empty case: more rows than the filter claimed is still
-    # the broken assumption #sole exists to raise on.
+    # Sequel::NoMatchingRow is what Sequel's own `first!` raises for an
+    # empty dataset, so the rescue names one error rather than this
+    # extension's own.
     #: () -> Hash[Symbol, untyped]?
-    def sole_or_nil
-      sole
+    def sole
+      sole!
     rescue Sequel::NoMatchingRow
       nil
     end

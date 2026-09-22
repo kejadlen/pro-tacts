@@ -342,7 +342,7 @@ module ProTacts
     # the ordinary answer for an href nobody has — the 404 path.
     #: (String id) -> Contact?
     def contact(id)
-      row = cards.where(id:).sole_or_nil
+      row = cards.where(id:).sole
       row && contact_from(row, birthday_of(id), inherited_of(id))
     end
 
@@ -388,7 +388,7 @@ module ProTacts
     # is set either way.
     #: (String login) -> String
     def book_name(login)
-      row = books.where(login:).sole_or_nil
+      row = books.where(login:).sole
       row ? row.fetch(:name).to_s : login
     end
 
@@ -422,7 +422,7 @@ module ProTacts
     # cards sharing a UID is a corruption to raise on, not a choice.
     #: (String uid) -> String?
     def card_id_with_uid(uid)
-      row = card_properties.where(name: "UID", value: uid).sole_or_nil
+      row = card_properties.where(name: "UID", value: uid).sole
       row && row.fetch(:card_id).to_s
     end
 
@@ -570,10 +570,10 @@ module ProTacts
     # keep serving the dead href out of its cache forever.
     #: (String id) -> String
     def reid(id)
-      # `sole` rather than #contact's nil-for-404: a read whose filter
+      # `sole!` rather than #contact's nil: a read whose filter
       # means one row, and no row here is the caller's mistake to hear
       # about as Sequel::NoMatchingRow, not a request to answer.
-      before = contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
+      before = contact_from(cards.where(id:).sole!, birthday_of(id), inherited_of(id))
 
       CONTACT_ID_ATTEMPTS.times do
         new_id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
@@ -601,7 +601,7 @@ module ProTacts
             # rather than moved — the deal #reindex always gives it. The
             # parameters follow their properties away on the cascade.
             card_properties.where(card_id: id).delete
-            after = contact_from(cards.where(id: new_id).sole, birthday_of(new_id), inherited_of(new_id))
+            after = contact_from(cards.where(id: new_id).sole!, birthday_of(new_id), inherited_of(new_id))
             record(id, action: Action::DELETE, etag: nil, diff: CardDiff.between(before.vcard, nil))
             record(
               new_id,
@@ -662,7 +662,7 @@ module ProTacts
     # #contact's own shape.
     #: (String id) -> Group?
     def group(id)
-      row = groups.select(*GROUP_COLUMNS, group_label.as(:label)).where(id:).sole_or_nil
+      row = groups.select(*GROUP_COLUMNS, group_label.as(:label)).where(id:).sole
       row && load_groups([row]).fetch(0)
     end
 
@@ -676,7 +676,7 @@ module ProTacts
     def rename_group(id, name:)
       name = nil if name.to_s.strip.empty?
       @database.transaction do
-        was = groups.where(id:).sole.fetch(:name)&.to_s
+        was = groups.where(id:).sole!.fetch(:name)&.to_s
         if was != name && (sync_name?(was) || sync_name?(name))
           members = member_ids([id])
           fan_out(members, moved: members) { groups.where(id:).update(name:) }
@@ -757,7 +757,7 @@ module ProTacts
     # the ordinary miss, #delete's shape.
     #: (String id) -> bool
     def delete_group(id)
-      row = groups.where(id:).sole_or_nil
+      row = groups.where(id:).sole
       return false if row.nil?
 
       name = row.fetch(:name).to_s
@@ -961,7 +961,7 @@ module ProTacts
     # (db/migrations/008_group_names.rb).
     #: () -> String
     def everyone_group_id
-      row = groups.where(name: EVERYONE).sole_or_nil
+      row = groups.where(name: EVERYONE).sole
       row ? row.fetch(:id).to_s : create_group(name: EVERYONE)
     end
 
@@ -978,7 +978,7 @@ module ProTacts
 
     #: (String group_id) -> bool
     def sync_group?(group_id)
-      sync_name?(groups.where(id: group_id).sole.fetch(:name)&.to_s)
+      sync_name?(groups.where(id: group_id).sole!.fetch(:name)&.to_s)
     end
 
     #: (String group_id, String card_id) -> bool
@@ -999,11 +999,11 @@ module ProTacts
     end
 
     # A group_members row names a card by foreign key, so a missing
-    # row here is the corruption `sole` exists to raise on rather than
+    # row here is the corruption `sole!` exists to raise on rather than
     # the ordinary miss an href off the wire is.
     #: (String id) -> Contact
     def contact!(id)
-      contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
+      contact_from(cards.where(id:).sole!, birthday_of(id), inherited_of(id))
     end
 
     # Replaces a card's rows in the index. Rebuilt wholesale rather than

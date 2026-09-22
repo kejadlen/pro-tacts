@@ -1302,7 +1302,7 @@ class StoreTest < Minitest::Test
     with_store do |store|
       id = store.create_group
 
-      assert_nil database(store)[:groups].where(id:).sole.fetch(:name)
+      assert_nil database(store)[:groups].where(id:).sole!.fetch(:name)
       assert_raises(Sequel::ConstraintViolation) { store.create_group(name: "") }
     end
   end
@@ -2149,7 +2149,7 @@ class StoreTest < Minitest::Test
   class FailingLog < ProTacts::Store
     private
 
-    def record(card_id, action, etag, diff)
+    def record(card_id, action:, etag:, diff:)
       raise "the change log is unavailable"
     end
   end
@@ -2167,7 +2167,7 @@ class StoreTest < Minitest::Test
   end
 
   def card_row(store, id)
-    database(store)[:cards].where(id:).sole
+    database(store)[:cards].where(id:).sole!
   end
 
   def indexed_names(store, card_id)
