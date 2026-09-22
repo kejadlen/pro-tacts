@@ -1344,6 +1344,23 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # The pickers' read: id, name and the same coalesced label a tag
+  # shows, and nothing about who is in a group — a nameless group is
+  # its id here as everywhere.
+  def test_group_choices_carry_the_label_without_the_membership
+    with_store do |store|
+      named = store.create_group(name: "Household")
+      nameless = store.create_group
+
+      choices = store.group_choices
+
+      assert_equal({named => ["Household", "Household"], nameless => [nil, nameless]}.sort.to_h,
+                   choices.to_h { [it.id, [it.name, it.label]] })
+      refute choices.first.respond_to?(:members),
+             "a choice is the group row alone, with no membership read behind it"
+    end
+  end
+
   # What a group lends is what every member serves, so setting it logs
   # a `group` entry on each (docs/plans/2026-09-09-group-edits-propagate.md,
   # "The fan-out").

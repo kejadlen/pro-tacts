@@ -119,7 +119,7 @@ module ProTacts
       # By name, because the row is read rather than submitted: a
       # group the walk ticked and someone then deleted is simply not
       # among these.
-      names = store.all_groups.to_h { |group|
+      names = store.group_choices.to_h { |group|
         # A pair is a two-element array until something says
         # otherwise, and an inline annotation needs its own line.
         [group.id, group.label] #: [String, String]
@@ -245,7 +245,7 @@ module ProTacts
       # typed into the new-group box joins the names already standing
       # for this contact, and none of them is made until the confirm.
       chosen, named = Import::Staged.groups(upload)
-      ticked = ids_in(r.params["groups"]) & store.all_groups.map(&:id)
+      ticked = ids_in(r.params["groups"]) & store.group_choices.map(&:id)
       standing = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
       fresh = r.params["new"].to_s.strip
       Import::Staged.update_groups(
@@ -269,7 +269,7 @@ module ProTacts
       # (#save_card): a group can be deleted between the tick and the
       # confirm, and Store#add_member reads a group with `sole`, so a
       # stale id would be a 500 rather than the nothing it means.
-      known = store.all_groups.map(&:id)
+      known = store.group_choices.map(&:id)
       chosen, named = Import::Staged.groups(upload)
       joins = revised.each_index.map { chosen.fetch(it.to_s, []) & known }
       makes = revised.each_index.map { named.fetch(it.to_s, []) }
@@ -287,7 +287,7 @@ module ProTacts
     def import_groups(upload, index)
       chosen, named = Import::Staged.groups(upload)
       Admin::ImportGroups.new(
-        groups: store.all_groups,
+        groups: store.group_choices,
         joined: chosen.fetch(index.to_s, []),
         named: named.fetch(index.to_s, []),
       )

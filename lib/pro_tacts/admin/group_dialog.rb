@@ -27,18 +27,25 @@ module ProTacts
       ID = "edit-groups" #: String
       FORM = "edit-groups-form" #: String
 
+      # @rbs @contact: Contact
+      # @rbs @groups: Array[Store::GroupChoice]
+      # @rbs @joined: Array[String]
+      # @rbs @capped: Array[String]
+
       # Alphabetical rather than the id order a tag keeps: this is a list
       # to find a name in, and nothing here stays put across a rename.
-      # The groups this contact is in are what the cap spares: those
-      # are the boxes the dialog is opened to untick.
-      #: (contact: Contact, groups: Array[Store::Group]) -> void
-      def initialize(contact:, groups:)
+      # `groups` is every group as a choice — no members read, the
+      # book's whole membership not being this dialog's business
+      # (Store#group_choices) — and `joined` the ids this contact is
+      # already in, which the show screen already holds (Store#groups_of)
+      # and so does not read a second time. `joined` is also what the
+      # cap spares: those are the boxes this is opened to untick.
+      #: (contact: Contact, groups: Array[Store::GroupChoice], joined: Array[String]) -> void
+      def initialize(contact:, groups:, joined:)
         @contact = contact
         @groups = groups.sort_by { it.label.downcase }
-        @capped = GroupFilter.capped(
-          @groups.map(&:id),
-          joined: @groups.select { it.members.include?(contact.id) }.map(&:id),
-        )
+        @joined = joined
+        @capped = GroupFilter.capped(@groups.map(&:id), joined:)
       end
 
       def view_template
@@ -50,7 +57,7 @@ module ProTacts
             form(id: FORM, action: "/contacts/#{@contact.id}/groups", method: "post",
                  class: "field-stack", x_ref: "options") do
               @groups.each do |group|
-                joined = group.members.include?(@contact.id)
+                joined = @joined.include?(group.id)
                 label(**GroupFilter.row(group.label, capped: @capped.include?(group.id))) do
                   input(type: "checkbox", name: "groups[]", value: group.id, checked: joined)
                   render GroupLabel.new(group:)

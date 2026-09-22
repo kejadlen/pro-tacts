@@ -7,7 +7,7 @@
 module ProTacts
   module Admin
     class ContactsShow
-      def self.call: (contact: Contact, groups: Array[Store::Group], all_groups: Array[Store::Group], changes: Array[Store::Change], ?notice: String?) -> String
+      def self.call: (contact: Contact, groups: Array[Store::Group], all_groups: Array[Store::GroupChoice], changes: Array[Store::Change], ?notice: String?) -> String
     end
 
     # `aside` is a Phlex component, which has no type here: phlex
@@ -56,7 +56,7 @@ module ProTacts
     end
 
     class ImportGroups
-      def self.new: (groups: Array[::ProTacts::Store::Group], joined: Array[String], named: Array[String]) -> instance
+      def self.new: (groups: Array[::ProTacts::Store::GroupChoice], joined: Array[String], named: Array[String]) -> instance
     end
 
     # Rendered by Dashboard, not called from checked code; only

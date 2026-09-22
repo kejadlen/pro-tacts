@@ -30,15 +30,16 @@ module ProTacts
     # abandoned. So it rides as a name until then, and shows as a
     # ticked box like any other so that it can be unticked.
     class ImportGroups < Phlex::HTML
-      # @rbs @groups: Array[Store::Group]
+      # @rbs @groups: Array[Store::GroupChoice]
       # @rbs @joined: Array[String]
       # @rbs @named: Array[String]
 
       # Alphabetical, the groups dialog's own order: this is a list to
       # find a name in, and nothing here stays put across a rename.
-      # `joined` is the ids ticked so far, `named` the groups this
-      # import is making that do not exist yet.
-      #: (groups: Array[Store::Group], joined: Array[String], named: Array[String]) -> void
+      # `groups` is every group as a choice, no members read
+      # (Store#group_choices); `joined` the ids ticked so far, `named`
+      # the groups this import is making that do not exist yet.
+      #: (groups: Array[Store::GroupChoice], joined: Array[String], named: Array[String]) -> void
       def initialize(groups:, joined:, named:)
         @groups = groups.sort_by { it.label.downcase }
         @joined = joined

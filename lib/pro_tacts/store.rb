@@ -141,6 +141,17 @@ module ProTacts
       end
     end
 
+    # A group as a picker names it: enough to show it and to submit it,
+    # and no more. A Group carries the lines it lends and the ids of
+    # its members, two reads beyond the group row itself (#load_groups);
+    # a picker is a list of names to tick and needs neither, so
+    # #group_choices reads only the row. The label is the same SQL one
+    # (#group_label), so a choice and a tag never disagree about what
+    # to call a nameless group. Signed in sig/pro_tacts/store.rbs,
+    # being a Data class.
+    # @rbs skip
+    GroupChoice = Data.define(:id, :name, :label)
+
     # SQLite has no ON UPDATE, so the column default stamps a row on
     # insert and this stamps it again on the way past. Same expression as
     # the migration's, deliberately: the database keeps the clock, so two
@@ -661,6 +672,21 @@ module ProTacts
     #: () -> Array[Group]
     def all_groups
       load_groups(groups.select(*GROUP_COLUMNS, group_label.as(:label)).order(:id).all)
+    end
+
+    # Every group as a picker needs it: the row and its label, without
+    # the lines it lends or the members it holds. #all_groups' one
+    # read where a picker would otherwise pay for two, the members read
+    # among them being the one that grows with the book — `sync:*`
+    # holds every contact, so listing groups to tick would read the
+    # whole address book to show none of it (Admin::GroupDialog,
+    # Admin::ImportGroups). Ordered by id like #all_groups; a picker
+    # sorts by label itself.
+    #: () -> Array[GroupChoice]
+    def group_choices
+      groups.select(*GROUP_COLUMNS, group_label.as(:label)).order(:id).all.map { |row|
+        GroupChoice.new(id: row.fetch(:id).to_s, name: row.fetch(:name)&.to_s, label: row.fetch(:label).to_s)
+      }
     end
 
     # One group, or nil for an id nobody has: the admin's 404 path,

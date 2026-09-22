@@ -46,6 +46,14 @@ module ProTacts
       def self.new: (id: String, name: String?, label: String, lines: Array[String], members: Array[String]) -> instance
     end
 
+    class GroupChoice
+      attr_reader id: String
+      attr_reader name: String?
+      attr_reader label: String
+
+      def self.new: (id: String, name: String?, label: String) -> instance
+    end
+
     class Snapshot
       attr_reader cards: Hash[String, String]
       attr_reader birthdays: Hash[String, Birthday]

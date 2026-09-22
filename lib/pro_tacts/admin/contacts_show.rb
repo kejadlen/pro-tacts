@@ -35,7 +35,7 @@ module ProTacts
       # one: a card with no entries is a card whose history was lost,
       # and an empty default would render that as an ordinary quiet
       # record. Every group is the groups dialog's (GroupDialog).
-      #: (Contact contact, Array[Store::Group] groups, Array[Store::Group] all_groups, Array[Store::Change] changes, ?notice: String?) -> void
+      #: (Contact contact, Array[Store::Group] groups, Array[Store::GroupChoice] all_groups, Array[Store::Change] changes, ?notice: String?) -> void
       def initialize(contact:, groups:, all_groups:, changes:, notice: nil)
         @contact = contact
         @groups = groups
@@ -113,8 +113,11 @@ module ProTacts
               end
             end
           end
-          # No row, so outside the record's grid.
-          render GroupDialog.new(contact: @contact, groups: @all_groups)
+          # No row, so outside the record's grid. The groups this
+          # contact is in are the tag row's already (Store#groups_of),
+          # so the dialog is told which boxes to check rather than
+          # reading every group's members to work it out.
+          render GroupDialog.new(contact: @contact, groups: @all_groups, joined: @groups.map(&:id))
         end
       end
 

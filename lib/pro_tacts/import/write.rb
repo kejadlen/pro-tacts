@@ -120,10 +120,12 @@ module ProTacts
       # into an empty store creates `sync:*` (Store#everyone_group_id),
       # and a list read before that would send this to create it again.
       # Memoized, so four hundred cards under one group name read the
-      # list once.
+      # list once. The choices read, not the whole groups read: the
+      # match is on name, and a group's members are no part of it
+      # (Store#group_choices).
       #: (String name) -> String
       def group_id(name)
-        @group_ids[name] ||= @store.all_groups.find { it.name == name }&.id || @store.create_group(name:)
+        @group_ids[name] ||= @store.group_choices.find { it.name == name }&.id || @store.create_group(name:)
       end
     end
   end

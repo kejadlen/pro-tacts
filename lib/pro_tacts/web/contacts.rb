@@ -199,7 +199,7 @@ module ProTacts
       contact = store.contact(id)
       return if contact.nil?
 
-      known = store.all_groups.map(&:id)
+      known = store.group_choices.map(&:id)
       checked = ids_in(r.params["groups"]) & known
       was = ids_in(r.params["was"]) & known
       name = r.params["new"].to_s.strip
@@ -225,7 +225,7 @@ module ProTacts
       Admin::ContactsShow.call(
         contact:,
         groups: store.groups_of(contact.id),
-        all_groups: store.all_groups,
+        all_groups: store.group_choices,
         changes: store.changes_of(contact.id),
         notice:,
       )
