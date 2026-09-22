@@ -210,13 +210,13 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   so no repair is ever needed for it. A write that touches a card must
   land its change-log entry in the same transaction, because a client's
   sync token silently skips whatever the log missed.
-- A read whose filter is meant to identify one row uses `sole` or
-  `sole!`, not `first` — `first` answers with one of several rather
-  than saying the filter was too loose. Both raise
-  `Sequel::Sole::TooManyRows` for more than one row. They differ on
-  none: `sole!` raises `Sequel::NoMatchingRow`, and `sole` answers nil
-  for a read where no row is ordinary, which is what `Store#contact`
-  does for the 404 path. The store loads the extension on every open.
+- A read whose filter is meant to identify one row uses `sole`, not
+  `first` — `first` answers with one of several rather than saying the
+  filter was too loose. `sole` raises either way it is wrong:
+  `Sequel::NoMatchingRow` for none, `Sequel::Sole::TooManyRows` for
+  more. A caller for whom no row is ordinary rescues the first, which is
+  what `Store#contact` does for the 404 path. The store loads the
+  extension on every open.
 - An etag is derived from the card, never stored beside it: `Contact`
   hashes what it serves, and its constructor is the only way to make
   one — no second path takes an etag on trust. The etag in `changes` is

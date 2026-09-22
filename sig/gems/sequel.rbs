@@ -154,8 +154,7 @@ module Sequel
   class Error < StandardError
   end
 
-  # What `first!` raises on an empty dataset, `sole!` with it, and
-  # `sole` rescues to answer nil.
+  # What `first!` raises on an empty dataset, and `sole` with it.
   class NoMatchingRow < Error
     def initialize: (?untyped message_or_dataset) -> void
   end

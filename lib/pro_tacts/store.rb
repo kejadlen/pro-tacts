@@ -338,12 +338,15 @@ module ProTacts
     end
 
     # `sole` rather than `first`: the id is the primary key, so a second
-    # row is a corruption and not a choice to make quietly. No row is
-    # the ordinary answer for an href nobody has — the 404 path.
+    # row is a corruption and not a choice to make quietly. It raises on
+    # no row too, which here is the ordinary answer for an href nobody
+    # has — the 404 path — so that one is caught and turned back into
+    # nil.
     #: (String id) -> Contact?
     def contact(id)
-      row = cards.where(id:).sole
-      row && contact_from(row, birthday_of(id), inherited_of(id))
+      contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
+    rescue Sequel::NoMatchingRow
+      nil
     end
 
     # The groups a contact belongs to, whole — a tag names one and
@@ -388,8 +391,9 @@ module ProTacts
     # is set either way.
     #: (String login) -> String
     def book_name(login)
-      row = books.where(login:).sole
-      row ? row.fetch(:name).to_s : login
+      books.where(login:).sole.fetch(:name).to_s
+    rescue Sequel::NoMatchingRow
+      login
     end
 
     # Sets the name a login's book goes by, or with nil or a blank goes
@@ -422,8 +426,9 @@ module ProTacts
     # cards sharing a UID is a corruption to raise on, not a choice.
     #: (String uid) -> String?
     def card_id_with_uid(uid)
-      row = card_properties.where(name: "UID", value: uid).sole
-      row && row.fetch(:card_id).to_s
+      card_properties.where(name: "UID", value: uid).sole.fetch(:card_id).to_s
+    rescue Sequel::NoMatchingRow
+      nil
     end
 
     # Stores a card and everything that has to move with it: the
@@ -570,10 +575,10 @@ module ProTacts
     # keep serving the dead href out of its cache forever.
     #: (String id) -> String
     def reid(id)
-      # `sole!` rather than #contact's nil: a read whose filter
+      # `sole` rather than #contact's nil-for-404: a read whose filter
       # means one row, and no row here is the caller's mistake to hear
       # about as Sequel::NoMatchingRow, not a request to answer.
-      before = contact_from(cards.where(id:).sole!, birthday_of(id), inherited_of(id))
+      before = contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
 
       CONTACT_ID_ATTEMPTS.times do
         new_id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
@@ -601,7 +606,7 @@ module ProTacts
             # rather than moved — the deal #reindex always gives it. The
             # parameters follow their properties away on the cascade.
             card_properties.where(card_id: id).delete
-            after = contact_from(cards.where(id: new_id).sole!, birthday_of(new_id), inherited_of(new_id))
+            after = contact_from(cards.where(id: new_id).sole, birthday_of(new_id), inherited_of(new_id))
             record(id, action: Action::DELETE, etag: nil, diff: CardDiff.between(before.vcard, nil))
             record(
               new_id,
@@ -662,8 +667,9 @@ module ProTacts
     # #contact's own shape.
     #: (String id) -> Group?
     def group(id)
-      row = groups.select(*GROUP_COLUMNS, group_label.as(:label)).where(id:).sole
-      row && load_groups([row]).fetch(0)
+      load_groups([groups.select(*GROUP_COLUMNS, group_label.as(:label)).where(id:).sole]).fetch(0)
+    rescue Sequel::NoMatchingRow
+      nil
     end
 
     # A group's name, or none — NULL being the one spelling of
@@ -676,7 +682,7 @@ module ProTacts
     def rename_group(id, name:)
       name = nil if name.to_s.strip.empty?
       @database.transaction do
-        was = groups.where(id:).sole!.fetch(:name)&.to_s
+        was = groups.where(id:).sole.fetch(:name)&.to_s
         if was != name && (sync_name?(was) || sync_name?(name))
           members = member_ids([id])
           fan_out(members, moved: members) { groups.where(id:).update(name:) }
@@ -757,7 +763,12 @@ module ProTacts
     # the ordinary miss, #delete's shape.
     #: (String id) -> bool
     def delete_group(id)
-      row = groups.where(id:).sole
+      # A plain `first` read, #stored_card's reason: id is the primary
+      # key, so there is no ambiguity for `sole` to catch. Read here
+      # rather than rescued around the whole method, which would have
+      # swallowed a NoMatchingRow raised from inside the transaction
+      # below and answered it as an ordinary miss.
+      row = groups.where(id:).first
       return false if row.nil?
 
       name = row.fetch(:name).to_s
@@ -961,8 +972,9 @@ module ProTacts
     # (db/migrations/008_group_names.rb).
     #: () -> String
     def everyone_group_id
-      row = groups.where(name: EVERYONE).sole
-      row ? row.fetch(:id).to_s : create_group(name: EVERYONE)
+      groups.where(name: EVERYONE).sole.fetch(:id).to_s
+    rescue Sequel::NoMatchingRow
+      create_group(name: EVERYONE)
     end
 
     # The group name that puts cards in this login's book alone.
@@ -978,7 +990,7 @@ module ProTacts
 
     #: (String group_id) -> bool
     def sync_group?(group_id)
-      sync_name?(groups.where(id: group_id).sole!.fetch(:name)&.to_s)
+      sync_name?(groups.where(id: group_id).sole.fetch(:name)&.to_s)
     end
 
     #: (String group_id, String card_id) -> bool
@@ -999,11 +1011,11 @@ module ProTacts
     end
 
     # A group_members row names a card by foreign key, so a missing
-    # row here is the corruption `sole!` exists to raise on rather than
+    # row here is the corruption `sole` exists to raise on rather than
     # the ordinary miss an href off the wire is.
     #: (String id) -> Contact
     def contact!(id)
-      contact_from(cards.where(id:).sole!, birthday_of(id), inherited_of(id))
+      contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
     end
 
     # Replaces a card's rows in the index. Rebuilt wholesale rather than

@@ -2,20 +2,19 @@
 require "sequel"
 
 module Sequel
-  # The row a filter identifies, and what to do when there is not one.
+  # The row a filter identifies, or a raise.
   #
   # A filter meant to identify one row — a lookup by primary key, later
   # the group that contributed a property to a card — reads naturally as
   # `first`, and `first` answers with one of several without a word when
   # the filter turns out not to identify anything. That is the failure
-  # worth catching: the query claimed one row, so more than one is a
-  # broken assumption rather than a result to pick from, and both of
-  # these raise on it.
+  # worth catching: the query claimed one row, so anything else is a
+  # broken assumption rather than a result to pick from.
   #
-  # Where the two differ is no row at all, which is the ordinary answer
-  # for some reads — an href nobody has, a login whose book was never
-  # named — and a corruption for others. `sole` answers nil there and
-  # `sole!` raises, which is what the bang says everywhere else in Ruby.
+  # Both ways of being wrong raise, so the assertion is in one method
+  # rather than split across a pair. A caller for whom no row is
+  # ordinary says so by rescuing Sequel::NoMatchingRow, which is the
+  # error Sequel's own `first!` raises for it.
   #
   # Load it with `DB.extension(:sole)`, which reaches every dataset the
   # database makes.
@@ -26,7 +25,7 @@ module Sequel
     class TooManyRows < Sequel::Error; end
 
     #: () -> Hash[Symbol, untyped]
-    def sole!
+    def sole
       # Two is enough to know, and a LIMIT keeps a filter that turned out
       # to match the whole table from dragging it back to prove the
       # point. It replaces any limit already set, which is why this is
@@ -40,16 +39,6 @@ module Sequel
       raise Sequel::NoMatchingRow.new(self) if rows.empty?
 
       rows.fetch(0)
-    end
-
-    # Sequel::NoMatchingRow is what Sequel's own `first!` raises for an
-    # empty dataset, so the rescue names one error rather than this
-    # extension's own.
-    #: () -> Hash[Symbol, untyped]?
-    def sole
-      sole!
-    rescue Sequel::NoMatchingRow
-      nil
     end
   end
 

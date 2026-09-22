@@ -190,7 +190,7 @@ module ProTacts
     # `was` is the boxes checked when the page loaded, so a group joined
     # or left elsewhere since stays as it is, and a stale page has
     # nothing to revert and no snapshot to refuse. Only ids naming a
-    # group: Store#add_member reads the group with `sole!`, so a doctored
+    # group: Store#add_member reads the group with `sole`, so a doctored
     # one would be a 500 rather than the bad input it is. A `new` name
     # is a group the filter box offered to create, joined in the same
     # save; a blank one is none.
