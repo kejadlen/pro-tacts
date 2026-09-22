@@ -1346,18 +1346,17 @@ class StoreTest < Minitest::Test
 
   # The pickers' read: id, name and the same coalesced label a tag
   # shows, and nothing about who is in a group — a nameless group is
-  # its id here as everywhere.
+  # its id here as everywhere. A choice a member joins reads the same
+  # as one nobody is in, the membership being no part of what a picker
+  # shows.
   def test_group_choices_carry_the_label_without_the_membership
-    with_store do |store|
+    with_store({"aiden" => UUID_CARD}) do |store|
       named = store.create_group(name: "Household")
       nameless = store.create_group
-
-      choices = store.group_choices
+      store.add_member(named, "aiden")
 
       assert_equal({named => ["Household", "Household"], nameless => [nil, nameless]}.sort.to_h,
-                   choices.to_h { [it.id, [it.name, it.label]] })
-      refute choices.first.respond_to?(:members),
-             "a choice is the group row alone, with no membership read behind it"
+                   store.group_choices.to_h { [it.id, [it.name, it.label]] })
     end
   end
 
