@@ -83,9 +83,9 @@ module ProTacts
       end
 
       # One slot's bytes, or none — an import swept out from under a
-      # screen left open overnight, or one already finished, a second
-      # press finding what the first removed. Ordinary enough for the
-      # screen to say so and ask for the file again.
+      # screen left open overnight, or one already closed by the Save
+      # that took its last card in. Ordinary enough for the screen to
+      # say so and ask for the file again.
       #: (String id, String slot) -> String?
       def self.read(id, slot)
         file = path(id, slot)

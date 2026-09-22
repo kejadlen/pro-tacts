@@ -47,13 +47,6 @@ module ProTacts
       end
 
       r.on String do |upload|
-        # Before the index below, and distinguishable from one: a
-        # path segment is what says which request this is, not which
-        # fields a form happened to carry.
-        r.post "done" do
-          finish_import(upload)
-        end
-
         r.is do
           r.get do
             review_screen(upload)
@@ -142,7 +135,6 @@ module ProTacts
 
       response["Content-Type"] = "text/html; charset=utf-8"
       Admin::ImportReview.call(
-        upload:,
         contacts: revised.length,
         saved: saved.length,
         unknown: Import::Vcf.unknown(originals),
@@ -371,24 +363,26 @@ module ProTacts
 
       # The last one: there is nothing left to come back to, so the
       # import ends here rather than on a list of rows that all say
-      # the same thing and a button under them.
-      return finish_import(upload) if saved.length + 1 == revised.length
+      # the same thing.
+      return closing_screen(upload) if saved.length + 1 == revised.length
 
       r.redirect "/import/#{upload}", 303
     end
 
-    # The end of the walk: what it wrote, listed, and the file and the
-    # walk's own notes gone. Reached by saving the last card or by
-    # saying so on the list, and the rows nobody opened are simply
-    # left behind — the file they came from is the importer's own, and
-    # this copy of it goes with the button.
+    # The end of the walk: what it wrote, listed, and the file and
+    # the walk's own notes gone. Reached one way only, by saving the
+    # last card there was to save, because that is the only end a walk
+    # has. Leaving one needs no screen and no button: the staged file
+    # expires on its own (Import::Staged::LIFETIME), and what has come
+    # in has come in. A control whose only power is to throw away the
+    # rows nobody has read yet has nothing to gain by being pressed.
     #
     # Answered with the page rather than a 303, and has to be: the
     # staged import is gone, so the re-submission a back button offers
-    # has nothing left to finish, and there is no other page holding
+    # has nothing left to close, and there is no other page holding
     # what just arrived.
     #: (String upload) -> String
-    def finish_import(upload)
+    def closing_screen(upload)
       return expired_screen if Import::Staged.read(upload, Import::Staged::SAVED).nil?
 
       _group, saved = Import::Staged.saved(upload)
@@ -402,9 +396,9 @@ module ProTacts
     end
 
     # The import's two readings, or none when it is gone — swept out
-    # from under a screen left open overnight, or finished already, a
-    # second press finding what the first removed. Ordinary enough
-    # for the screen to say so and ask for the file again.
+    # from under a screen left open overnight, or closed already by
+    # the Save that took the last card in. Ordinary enough for the
+    # screen to say so and ask for the file again.
     #
     # The re-read parses files this already parsed, which is not a
     # second judgment of them: the bytes are what was staged, and this

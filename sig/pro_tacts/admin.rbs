@@ -46,7 +46,7 @@ module ProTacts
     end
 
     class ImportReview
-      def self.call: (upload: String, contacts: Integer, saved: Integer, unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String, sidebar: untyped, ?notice: String?) -> String
+      def self.call: (contacts: Integer, saved: Integer, unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String, sidebar: untyped, ?notice: String?) -> String
     end
 
     # Rendered into ContactsEdit rather than called, so these are the

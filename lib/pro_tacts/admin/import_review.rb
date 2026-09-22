@@ -20,10 +20,14 @@ module ProTacts
     #
     # The import happens a row at a time, on the Save of the screen a
     # row opens, so nothing here writes a contact and there is no
-    # "import everything". What this does have is the way out before
-    # the end of the file — a walk can be enough — and what it costs.
+    # "import everything" — and nothing here ends the walk either. A
+    # walk ends by being over, which is the last row's own Save, or by
+    # being left, which needs no button: the staged file expires on
+    # its own (Import::Staged::LIFETIME), and the contacts already
+    # written stay written. A control whose only power is to throw
+    # away the rows nobody has read yet is one with nothing to gain
+    # by pressing it.
     class ImportReview < Phlex::HTML
-      # @rbs @upload: String
       # @rbs @contacts: Integer
       # @rbs @saved: Integer
       # @rbs @unknown: Array[::ProTacts::Import::Vcf::Unknown]
@@ -32,12 +36,11 @@ module ProTacts
       # @rbs @notice: String?
 
       # `contacts` is how many the file holds and `saved` how many of
-      # them are in the book. `upload` is the staged import every link
-      # and form carries, `group` the name of the group this import
-      # files its arrivals under, and `sidebar` the rows themselves.
-      #: (upload: String, contacts: Integer, saved: Integer, unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String, sidebar: Phlex::HTML, ?notice: String?) -> void
-      def initialize(upload:, contacts:, saved:, unknown:, group:, sidebar:, notice: nil)
-        @upload = upload
+      # them are in the book. `group` is the name of the group this
+      # import files its arrivals under, and `sidebar` the rows
+      # themselves.
+      #: (contacts: Integer, saved: Integer, unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String, sidebar: Phlex::HTML, ?notice: String?) -> void
+      def initialize(contacts:, saved:, unknown:, group:, sidebar:, notice: nil)
         @contacts = contacts
         @saved = saved
         @unknown = unknown
@@ -69,7 +72,7 @@ module ProTacts
             h1(class: "type-h2", style: "margin: 0;") { count(@contacts, "contact") }
             losses
             group_line
-            finish_form
+            progress
           end
         end
       end
@@ -91,22 +94,20 @@ module ProTacts
         end
       end
 
-      # The way out before the end of the file. An import is a walk,
-      # and a walk can be enough: what has come in stays, and what
-      # nobody opened is left behind with the copy of the file this
-      # was holding.
+      # How far down the file the walk has got, which is the whole of
+      # what this screen has to say about it: the rows themselves are
+      # beside it, each saying for itself whether it is in the book.
+      # Said and not asked — there is nothing to press here, an import
+      # being over when its last row is saved and left when it is
+      # left.
       #: () -> void
-      def finish_form
-        form(action: "/import/#{@upload}/done", method: "post", class: "field-stack") do
-          p(class: "type-body-sm gl-muted") do
-            if @saved.zero?
-              "Nothing has come in yet. Open a contact to look it over; its Save is what puts it in the book."
-            else
-              "#{count(@saved, "contact")} in the book. " \
-                "Finishing now leaves the other #{@contacts - @saved} behind."
-            end
+      def progress
+        p(class: "type-body-sm gl-muted") do
+          if @saved.zero?
+            "Nothing has come in yet. Open a contact to look it over; its Save is what puts it in the book."
+          else
+            "#{@saved} of #{count(@contacts, "contact")} in the book."
           end
-          button(type: "submit", data: {variant: "primary"}) { "finish" }
         end
       end
 

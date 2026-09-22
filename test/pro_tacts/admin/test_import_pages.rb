@@ -125,7 +125,7 @@ class AdminImportPagesTest < Minitest::Test
 
   # And the file's own screen is a click back up the list.
   def test_the_file_itself_is_a_screen_the_list_links_to
-    with_contacts({}) do |_store|
+    with_contacts({}) do |store|
       id = upload(JANE + PLAIN)
       follow_redirect!
 
@@ -136,6 +136,7 @@ class AdminImportPagesTest < Minitest::Test
       assert_equal 200, last_response.status
       assert_includes last_response.body, "2 contacts"
       assert_includes last_response.body, "Nothing has come in yet."
+      assert_empty store.contacts
     end
   end
 
@@ -369,21 +370,24 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
-  # A walk can be enough: what came in stays, and the rows nobody
-  # opened are left behind with this copy of the file.
-  def test_finishing_early_leaves_the_rest_behind
+  # A walk is over when its last row is saved, and left when it is
+  # left: there is nothing to press, and nothing whose only power
+  # would be to throw away the rows nobody has read.
+  def test_the_walk_says_how_far_down_the_file_it_is_and_offers_no_button
     with_contacts({}) do |store|
       id = upload(JANE + PLAIN)
       save(id, 0, first: "Jane", last: "Booles")
-      follow_redirect!
+      summary(id)
 
-      assert_includes last_response.body, "Finishing now leaves the other 1 behind."
+      assert_includes last_response.body, "1 of 2 contacts in the book."
+      # Nothing to press at all: this screen only says things.
+      refute_includes last_response.body, %(type="submit")
+      refute_includes last_response.body, "/done"
+      assert_equal 1, store.contacts.length
 
       post "/import/#{id}/done"
 
-      assert_equal 200, last_response.status
-      assert_includes last_response.body, "imported (1)"
-      assert_equal 1, store.contacts.length
+      assert_equal 404, last_response.status
     end
   end
 
@@ -697,14 +701,15 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
-  # Swept out from under a screen left open, or a finish submitted
-  # twice: the import is gone and only the person has another copy.
-  def test_finishing_an_import_that_is_gone_writes_nothing
+  # Swept out from under a screen left open, or come back to after
+  # its last row was saved: the import is gone and only the person
+  # has another copy.
+  def test_a_walk_that_is_gone_says_so
     with_contacts({}) do |store|
       id = upload(JANE)
       save(id, 0, first: "Jane", last: "Booles")
 
-      post "/import/#{id}/done"
+      summary(id)
 
       assert_includes last_response.body, "That import is no longer here."
       assert_equal 1, store.contacts.length
@@ -717,7 +722,7 @@ class AdminImportPagesTest < Minitest::Test
     with_contacts({}) do |store|
       refute ProTacts::ChangeId.minted?("notminted")
 
-      post "/import/notminted/done"
+      get "/import/notminted"
 
       assert_includes last_response.body, "That import is no longer here."
       assert_empty store.changes

@@ -207,10 +207,17 @@ walk is resumable because nothing is being held back — a tab left
 overnight, a window closed, a crash, all read the same way.
 
 That makes the end of the walk a thing to say rather than a thing to
-press. Saving the last unsaved row ends it; a "finish" on the list ends
-it early. Either way the rows nobody opened are left behind with this
-copy of the file, which the importer has their own of, and what came in
-is listed on the same page an import has always ended on.
+press, and the last Save is what says it: what came in is listed on the
+same page an import has always ended on. There is no "finish" beside the
+list either, because the only power such a button would have that the
+walk does not already have is throwing away the rows nobody has read —
+nothing to gain by pressing it, and the one irreversible move on a
+screen whose whole posture is that nothing is being held back. What else
+it would have done happens anyway: the list is the running count of what
+is in, and the staged copy of the file ages out on its own
+(Import::Staged::LIFETIME). So a walk ends by being over or by being
+left, and the rows nobody opened are left behind with this copy of the
+file, which the importer has their own of.
 
 One thing is settled up front, and that is the group for the lot:
 every Save files its contact under it. It is named when the import
