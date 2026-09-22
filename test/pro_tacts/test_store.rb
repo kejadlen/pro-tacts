@@ -328,18 +328,18 @@ class StoreTest < Minitest::Test
 
   ## The editor's write
 
-  # rewrite is the store's own editor's path: the bytes land byte for
+  # save_edit is the store's own editor's path: the bytes land byte for
   # byte, the change-log entry carries the composed etag a client
   # would download, and the action names the side that wrote it — put
   # is a client's submission, edit is the admin's save. The birthday
   # passed beside the card is the model's whole new state
   # (docs/plans/2026-09-07-web-birthday-editor.md), so the caller
   # handing back the current one is the card-only save.
-  def test_a_rewrite_stores_the_card_and_logs_the_composed_etag
+  def test_an_edit_stores_the_card_and_logs_the_composed_etag
     with_store({"aiden" => AIDEN_BORN}) do |store|
       edited = AIDEN.sub("FN:Aiden", "FN:Aiden Smith")
 
-      contact = store.rewrite("aiden", vcard(edited), birthday: ProTacts::Birthday.new(year: 1985, month: 4, day: 12))
+      contact = store.save_edit("aiden", vcard(edited), birthday: ProTacts::Birthday.new(year: 1985, month: 4, day: 12))
 
       assert_equal edited, card_row(store, "aiden").fetch(:vcard)
       composed = edited.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n")
@@ -351,16 +351,16 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The hazard rewrite exists for: an editor's save carries no BDAY
+  # The hazard save_edit exists for: an editor's save carries no BDAY
   # line by construction, and put reads exactly that as a birthday the
   # client dropped — so running the save through put would delete the
-  # model row and the contact's birthday with it. rewrite writes the
+  # model row and the contact's birthday with it. save_edit writes the
   # birthday it is handed, so the caller passing the current model —
   # what a card-only save does — keeps the row.
-  def test_a_rewrite_writing_the_current_birthday_keeps_it
+  def test_an_edit_writing_the_current_birthday_keeps_it
     with_store({"aiden" => AIDEN_BORN}) do |store|
-      store.rewrite("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")),
-                    birthday: ProTacts::Birthday.new(year: 1985, month: 4, day: 12))
+      store.save_edit("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")),
+                      birthday: ProTacts::Birthday.new(year: 1985, month: 4, day: 12))
 
       assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), birthday_row(store, "aiden")
       assert_includes store.contact("aiden").vcard.to_s, "BDAY:1985-04-12"
@@ -371,11 +371,11 @@ class StoreTest < Minitest::Test
   # it: the composed BDAY lands at the new value, the stored bytes do
   # not move at all, and the change-log entry carries the new composed
   # etag — a client's token has to see what a device would download.
-  def test_a_rewrite_with_a_new_birthday_moves_the_served_card_only
+  def test_an_edit_with_a_new_birthday_moves_the_served_card_only
     with_store({"aiden" => AIDEN_BORN}) do |store|
       stored = AIDEN_BORN.sub("BDAY:1985-04-12\r\n", "")
 
-      contact = store.rewrite("aiden", vcard(stored), birthday: ProTacts::Birthday.new(month: 4, day: 12))
+      contact = store.save_edit("aiden", vcard(stored), birthday: ProTacts::Birthday.new(month: 4, day: 12))
 
       assert_equal stored, card_row(store, "aiden").fetch(:vcard)
       assert_includes contact.vcard.to_s, "BDAY;X-APPLE-OMIT-YEAR=1604:1604-04-12\r\n"
@@ -386,11 +386,11 @@ class StoreTest < Minitest::Test
 
   # Nil is the row's blank-equals-absent: the model row goes, and the
   # composed card with it.
-  def test_a_rewrite_with_no_birthday_deletes_the_row
+  def test_an_edit_with_no_birthday_deletes_the_row
     with_store({"aiden" => AIDEN_BORN}) do |store|
       stored = AIDEN_BORN.sub("BDAY:1985-04-12\r\n", "")
 
-      contact = store.rewrite("aiden", vcard(stored), birthday: nil)
+      contact = store.save_edit("aiden", vcard(stored), birthday: nil)
 
       assert_nil birthday_row(store, "aiden")
       refute_includes contact.vcard.to_s, "BDAY"
@@ -1196,7 +1196,7 @@ class StoreTest < Minitest::Test
       FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
       put = store.put("aiden", vcard(store.contact("aiden").vcard.to_s))
-      edit = store.rewrite("aiden", vcard(AIDEN), birthday: nil)
+      edit = store.save_edit("aiden", vcard(AIDEN), birthday: nil)
       logged = database(store)[:changes].where(card_id: "aiden").order(:sequence).all
 
       assert_equal [put.etag, edit.etag], logged.last(2).map { it[:etag] }
@@ -2054,7 +2054,7 @@ class StoreTest < Minitest::Test
         assert_empty store.changes
 
         store.put("aiden", vcard(AIDEN))
-        store.rewrite("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")), birthday: nil)
+        store.save_edit("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")), birthday: nil)
         change = store.changes.last
         assert_equal %w[aiden edit], [change.card_id, change.action]
         assert_equal 2, change.sequence

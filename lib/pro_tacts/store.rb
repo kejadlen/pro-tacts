@@ -45,6 +45,17 @@ module ProTacts
     # @rbs skip
     Change = Data.define(:sequence, :card_id, :action, :etag, :diff, :created_at)
 
+    # What an entry says happened. The four the schema admits and no
+    # fifth — the CHECK constraint's own list
+    # (db/migrations/006_change_diffs.rb), which is what refuses one
+    # this does not name.
+    module Action
+      PUT = "put" #: String
+      EDIT = "edit" #: String
+      DELETE = "delete" #: String
+      GROUP = "group" #: String
+    end
+
     # A contact paired with when its card last changed. Contact itself
     # carries no timestamp — it is derived from the card alone, see its
     # own comment — so a surface that sorts or displays recency (the
@@ -438,21 +449,18 @@ module ProTacts
     # `client` marks a client's write: a card it creates joins `sync:*`,
     # created on first use
     # (docs/plans/2026-09-15-client-creates-join-everyone.md). A
-    # rewrite of a card that exists joins nothing.
+    # put over a card that exists joins nothing.
     #: (String id, VCard vcard, ?client: bool) -> Contact
     def put(id, vcard, client: false)
       existing = birthday_of(id)
-      # The card as it stands before this write, read once for the
-      # three things that want it: the birthday split, which reports
-      # what a rewrite drops; the subtraction after it, which accounts
-      # for the member's own lines before attributing any to a group;
-      # and the card the change log records this write as replacing.
-      own = stored_card(id)
-      birthday, stored = split_birthday(vcard, existing, own)
+      # Read once for the three that want it: the birthday split, the
+      # subtraction after it, and the card this write replaces.
+      stored_before = stored_card(id)
+      birthday, stored = split_birthday(vcard, existing, stored_before)
 
       # The other half of the split, the same shape as the birthday's:
       # what the groups lend comes back out of the submission before it
-      # is stored, so a rewrite cannot materialize a group's lines into
+      # is stored, so a write cannot materialize a group's lines into
       # the member's own card.
       #
       # The Contact this returns is the composed one — those lines put
@@ -461,17 +469,17 @@ module ProTacts
       # it downloads.
       lent = lent_of(id)
       inherited = inheritance(lent)
-      # The card this write replaces, composed from the parts already
-      # read here rather than through #contact, which would read all
-      # three again. Membership cannot move during a put, so the
-      # inheritance either side of it is the one read above.
-      before = own && Contact.new(id:, stored: own, birthday: existing, inherited:)
-      stored, edits = subtract_inherited(stored, lent, own)
+      # Composed from the parts already read here rather than through
+      # #contact, which would read all three again. Membership cannot
+      # move during a put, so the inheritance either side of it is the
+      # one read above.
+      replaced = stored_before && Contact.new(id:, stored: stored_before, birthday: existing, inherited:)
+      stored, edits = subtract_inherited(stored, lent, stored_before)
       # Built before the transaction as well as inside it, because its
       # constructor is where an id that could not be served is refused
       # and a refusal from inside a transaction reaches the caller
       # wearing Sequel's own error class. Composition is lazy, so the
-      # one that gets replaced below cost nothing to make.
+      # one the fan-out throws away below cost nothing to make.
       contact = Contact.new(id:, stored:, birthday:, inherited:)
       @database.transaction do
         # The groups move first, so that everything composed below is
@@ -488,19 +496,23 @@ module ProTacts
         # before the log entry, which records the card composed with
         # whatever the group lends. The put's entry is the card's arrival
         # in the book, so the join writes none of its own.
-        if client && own.nil?
+        if client && stored_before.nil?
           group_members.insert(group_id: everyone_group_id, card_id: contact.id)
           contact = Contact.new(id:, stored:, birthday:, inherited: inherited_of(contact.id))
         end
         write_birthday(contact.id, birthday)
-        record(contact.id, "put", contact.etag, CardDiff.between(before&.vcard, contact.vcard))
+        record(
+          contact.id,
+          action: Action::PUT,
+          etag: contact.etag,
+          diff: CardDiff.between(replaced&.vcard, contact.vcard),
+        )
         reindex(contact.id, stored)
         contact
       end
     end
 
-    # The store's own editor changed a contact, against #put's "a
-    # client submitted a card" — why the two paths cannot be one is
+    # Why this and #put cannot be one path is
     # docs/plans/2026-09-05-web-card-editor.md, "Two write paths
     # through the store". The card input is the stored one by
     # definition, and `birthday:` is the model's whole new state, an
@@ -510,13 +522,18 @@ module ProTacts
     # make this save, and re-reading its bytes here would walk them
     # again to reach what the caller already had.
     #: (String id, VCard vcard, birthday: Birthday?) -> Contact
-    def rewrite(id, vcard, birthday:)
+    def save_edit(id, vcard, birthday:)
       before = contact(id)
       contact = Contact.new(id:, stored: vcard, birthday:, inherited: inherited_of(id))
       @database.transaction do
         upsert_card(contact.id, vcard)
         write_birthday(contact.id, birthday)
-        record(contact.id, "edit", contact.etag, CardDiff.between(before&.vcard, contact.vcard))
+        record(
+          contact.id,
+          action: Action::EDIT,
+          etag: contact.etag,
+          diff: CardDiff.between(before&.vcard, contact.vcard),
+        )
         reindex(contact.id, vcard)
       end
       contact
@@ -531,7 +548,7 @@ module ProTacts
       @database.transaction do
         before = contact(id)
         deleted = cards.where(id:).delete.positive?
-        record(id, "delete", nil, CardDiff.between(before&.vcard, nil)) if deleted
+        record(id, action: Action::DELETE, etag: nil, diff: CardDiff.between(before&.vcard, nil)) if deleted
         deleted
       end
     end
@@ -585,8 +602,13 @@ module ProTacts
             # parameters follow their properties away on the cascade.
             card_properties.where(card_id: id).delete
             after = contact_from(cards.where(id: new_id).sole, birthday_of(new_id), inherited_of(new_id))
-            record(id, "delete", nil, CardDiff.between(before.vcard, nil))
-            record(new_id, "put", after.etag, CardDiff.between(before.vcard, after.vcard))
+            record(id, action: Action::DELETE, etag: nil, diff: CardDiff.between(before.vcard, nil))
+            record(
+              new_id,
+              action: Action::PUT,
+              etag: after.etag,
+              diff: CardDiff.between(before.vcard, after.vcard),
+            )
             reindex(new_id, stored)
           end
           return new_id
@@ -864,8 +886,8 @@ module ProTacts
     # off a `before` and an `after`: only the caller knows which two
     # cards its write was between, and a delete's `after` is nothing at
     # all.
-    #: (String card_id, String action, String? etag, CardDiff diff) -> void
-    def record(card_id, action, etag, diff)
+    #: (String card_id, action: String, etag: String?, diff: CardDiff) -> void
+    def record(card_id, action:, etag:, diff:)
       change_log.insert(card_id:, action:, etag:, diff: diff.to_json)
     end
 
@@ -888,15 +910,15 @@ module ProTacts
     def fan_out(cards, except: nil, moved: [])
       ids = cards - [except].compact
       before = ids.to_h {
-        [it, composed(it)] #: [String, Contact]
+        [it, contact!(it)] #: [String, Contact]
       }
       yield
       ids.each do |id|
         was = before.fetch(id)
-        now = composed(id)
+        now = contact!(id)
         next if was.vcard.to_s == now.vcard.to_s && !moved.include?(id)
 
-        record(id, "group", now.etag, CardDiff.between(was.vcard, now.vcard))
+        record(id, action: Action::GROUP, etag: now.etag, diff: CardDiff.between(was.vcard, now.vcard))
       end
     end
 
@@ -976,12 +998,11 @@ module ProTacts
         .map { it.fetch(:card_id).to_s }
     end
 
-    # A member's card as it composes right now. #contact's read without
-    # the rescue it makes: a group_members row names a card by foreign
-    # key, so no row here is the corruption `sole` exists to raise on
-    # rather than the ordinary miss an href off the wire is.
+    # A group_members row names a card by foreign key, so a missing
+    # row here is the corruption `sole` exists to raise on rather than
+    # the ordinary miss an href off the wire is.
     #: (String id) -> Contact
-    def composed(id)
+    def contact!(id)
       contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
     end
 
@@ -1032,16 +1053,16 @@ module ProTacts
     #
     # No BDAY is a client that was sent the birthday removing it, or
     # one that was never sent it and so cannot have. A BDAY line left
-    # in the stored card goes with the rewrite, which is worth saying.
+    # in the stored card goes with the write, which is worth saying.
     #
     # case/when rather than case/in, BirthdayLine's own rule: Steep
     # does not check the bodies of case/in branches, and these are the
     # ones worth checking — which is what the last arm is for.
-    #: (VCard vcard, Birthday? existing, VCard? own) -> [Birthday?, VCard]
-    def split_birthday(vcard, existing, own)
+    #: (VCard vcard, Birthday? existing, VCard? stored_before) -> [Birthday?, VCard]
+    def split_birthday(vcard, existing, stored_before)
       bdays, rest = vcard.extract("BDAY")
       if bdays.empty?
-        report_lost_bday_lines(own)
+        report_lost_bday_lines(stored_before)
         return [existing && !existing.served? ? existing : nil, vcard]
       end
 
@@ -1114,11 +1135,11 @@ module ProTacts
     # this leaves keep their positions, so a submission that was the
     # served card round-trips to the bytes it was composed from and the
     # PUT can answer with a strong etag (RFC 6352 section 6.3.2.3).
-    #: (VCard vcard, Array[Lent] lent, VCard? own) -> [VCard, Array[GroupEdit]]
-    def subtract_inherited(vcard, lent, own)
+    #: (VCard vcard, Array[Lent] lent, VCard? stored_before) -> [VCard, Array[GroupEdit]]
+    def subtract_inherited(vcard, lent, stored_before)
       return [vcard, []] if lent.empty?
 
-      unaccounted = unaccounted_lines(vcard, own)
+      unaccounted = unaccounted_lines(vcard, stored_before)
       taken = [] #: Array[VCard::Parser::Line]
 
       moved = lent.reject { |row|
@@ -1289,16 +1310,16 @@ module ProTacts
       property.types.sort
     end
 
-    # The submission's lines that the member's own stored card does not
-    # already explain — one struck per stored line of the same bytes,
+    # The submission's lines the card as it stood before this write
+    # does not already explain — one struck per stored line of the same bytes,
     # so a card that stores one of something and submits two leaves one
     # over. What is left is what the groups lent plus whatever the
     # client wrote beside it, which is the pool a lent line is
     # attributed from. Everything for a card being created, which has
     # no stored lines to explain anything.
-    #: (VCard vcard, VCard? own) -> Array[VCard::Parser::Line]
-    def unaccounted_lines(vcard, own)
-      stored = own ? own.lines.map { it.verbatim.chomp } : [] #: Array[String]
+    #: (VCard vcard, VCard? stored_before) -> Array[VCard::Parser::Line]
+    def unaccounted_lines(vcard, stored_before)
+      stored = stored_before ? stored_before.lines.map { it.verbatim.chomp } : [] #: Array[String]
       vcard.lines.reject { |line|
         index = stored.index(line.verbatim.chomp)
         stored.delete_at(index) if index
@@ -1350,17 +1371,17 @@ module ProTacts
       )
     end
 
-    # The loss report, the rewrite's half of the arrival one: a BDAY
-    # line still in the stored card is one the model did not take, and a
-    # rewrite without it is about to drop it with nobody told.
-    #: (VCard? own) -> void
-    def report_lost_bday_lines(own)
-      return if own.nil?
+    # The loss report, the write's half of the arrival one: a BDAY line
+    # still in the stored card is one the model did not take, and a
+    # write without it is about to drop it with nobody told.
+    #: (VCard? stored_before) -> void
+    def report_lost_bday_lines(stored_before)
+      return if stored_before.nil?
 
-      lines, = own.extract("BDAY")
+      lines, = stored_before.extract("BDAY")
       return if lines.empty?
 
-      Sentry.capture_message("a rewrite dropped #{lines.length} BDAY line(s) the model did not take", level: :warning)
+      Sentry.capture_message("a write dropped #{lines.length} BDAY line(s) the model did not take", level: :warning)
     end
 
     # The birthday travels beside the card rather than inside it, and

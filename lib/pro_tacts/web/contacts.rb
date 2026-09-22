@@ -182,7 +182,7 @@ module ProTacts
         return edit_screen(contact, notice: "This contact's card carries its own birthday spelling; nothing was saved.")
       end
 
-      store.rewrite(id, Admin::CardForm.contact_card(contact, first, middle, last, r.params), birthday:)
+      store.save_edit(id, Admin::CardForm.contact_card(contact, first, middle, last, r.params), birthday:)
       r.redirect "/contacts/#{id}", 303
     end
 

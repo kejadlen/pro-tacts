@@ -3,6 +3,7 @@ require "open3"
 require "pathname"
 
 require "pro_tacts/change_id"
+require "pro_tacts/contact"
 require "pro_tacts/import/card"
 require "pro_tacts/import/plan"
 require "pro_tacts/vcard/parser"
@@ -206,7 +207,7 @@ module ProTacts
         # The post office box leads the value and has no field; a card
         # carrying one does not get this far (see ADR's value check).
         _po_box, *parts = property.components
-        Card::ADDRESS_KEYS.zip(parts).to_h { |key, value|
+        Contact::ADDRESS_COMPONENTS.zip(parts).to_h { |key, value|
           [key, value.to_s] #: [String, String]
         }.reject { |_key, value| value.empty? }
       end

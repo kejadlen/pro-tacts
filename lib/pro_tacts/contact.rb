@@ -93,6 +93,14 @@ module ProTacts
       :line,
     )
 
+    # An ADR's editable components, in the order the value spells them
+    # (RFC 2426 section 3.2.1). The post office box heads that value
+    # and is not among them — no screen shows one, and a save
+    # preserves its bytes rather than letting a form field near them —
+    # so a component's position in the value is one past its index
+    # here.
+    ADDRESS_COMPONENTS = %w[extended street locality region postal_code country].freeze #: Array[String]
+
     #: (VCard vcard) -> String
     def self.etag_for(vcard)
       %("#{Digest::SHA256.hexdigest(vcard.to_s)}")

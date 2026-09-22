@@ -1,4 +1,5 @@
 require "pro_tacts/birthday"
+require "pro_tacts/contact"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
@@ -13,21 +14,6 @@ module ProTacts
     #
     # Not a view, unlike its neighbours, so the Steepfile checks it.
     module CardForm
-      # ADR's editable components: field name to position in the value
-      # (RFC 2426 section 3.2.1, minus the leading po box at position 0
-      # — no screen shows one, and the save preserves its bytes rather
-      # than letting a form field near them). In the value's own order,
-      # which is the order a rebuilt line's components join in.
-      ADDRESS_COMPONENTS = {
-        "extended" => 1,
-        "street" => 2,
-        "locality" => 3,
-        "region" => 4,
-        "postal_code" => 5,
-        "country" => 6,
-      }.freeze #: Hash[String, Integer]
-      private_constant :ADDRESS_COMPONENTS
-
       # A created contact's card: the envelope RFC 2426 section 4
       # requires — BEGIN, VERSION, and the N and FN that section makes
       # mandatory — plus the UID this server's id model is (see
@@ -189,7 +175,7 @@ module ProTacts
 
       #: (Contact::Address address, untyped submitted) -> bool
       def self.address_unchanged?(address, submitted)
-        ADDRESS_COMPONENTS.keys.all? { |name|
+        Contact::ADDRESS_COMPONENTS.all? { |name|
           submitted[name].to_s.strip == address.public_send(name).to_s
         }
       end
@@ -216,7 +202,8 @@ module ProTacts
           components = VCard.split_raw_components(property.value)
         end
         components << "" while components.length < 7
-        ADDRESS_COMPONENTS.each do |name, position|
+        Contact::ADDRESS_COMPONENTS.each_with_index do |name, index|
+          position = index + 1
           value = submitted[name].to_s.strip
           current = address && address.public_send(name).to_s
           components[position] = value == current ? components.fetch(position) : VCard.escape(value)

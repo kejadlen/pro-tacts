@@ -1,7 +1,7 @@
-require "digest"
 require "nokogiri"
 
 require "pro_tacts/dav_xml"
+require "pro_tacts/sync_token"
 
 module ProTacts
   # The CardDAV half of the router: service discovery and the one
@@ -163,7 +163,7 @@ module ProTacts
             # client back through multiget, so no address-data here.
             #
             # The token carries the change log's sequence and whose book
-            # it was issued for (see #sync_token), and the delta is the
+            # it was issued for (SyncToken), and the delta is the
             # log after the sequence, answered from the requester's book
             # as it is now: a card that left it answers as removed
             # (section 3.5.2), and so does one that never was in it,
@@ -190,9 +190,8 @@ module ProTacts
                   etag_response(d, it)
                 end
               end
-            elsif (sequence = token[%r{\Ahttp://pro-tacts/sync/(\d+)/#{book_digest}\z}, 1]) &&
-                sequence.to_i <= store.latest_sequence
-              net = store.changes(after: sequence.to_i).map { it.card_id }.uniq
+            elsif (sequence = SyncToken.read(token, book_digest)) && sequence <= store.latest_sequence
+              net = store.changes(after: sequence).map { it.card_id }.uniq
               multistatus("card", sync_token:) do |d|
                 net.each do |id|
                   contact = contacts.find { it.id == id }
@@ -346,22 +345,16 @@ module ProTacts
       @ctag ||= store.ctag
     end
 
-    # Sync tokens are opaque to the client (RFC 6578 section 3); the URI
-    # form is conventional. Built on the ctag so a client polling either
-    # one sees changes at the same points, and on the requester's login
-    # so that a token is refused by any other book, the one a rename
-    # leaves a user with included (docs/plans/2026-09-12-per-user-books.md,
-    # "The wire").
+    # This request's token, minted at the ctag read above so that the
+    # one served here and the one a delta is measured from agree.
     #: () -> String
     def sync_token
-      "http://pro-tacts/sync/#{ctag}/#{book_digest}"
+      SyncToken.mint(ctag, book_digest)
     end
 
-    # The name half of a sync token: the first 16 hex digits of the
-    # SHA-256 of the requester's login.
     #: () -> String
     def book_digest
-      Digest::SHA256.hexdigest(@login)[0, 16].to_s
+      SyncToken.book(@login)
     end
 
     # The whole of the PUT route: a private method because a Roda route

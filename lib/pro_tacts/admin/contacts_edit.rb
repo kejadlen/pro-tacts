@@ -55,13 +55,12 @@ module ProTacts
       private_constant :FORM
 
       # The address row's component fields, stacked in the value
-      # column in the order an address form reads — RFC 2426 section
-      # 3.2.1's own order minus the po box, which no screen shows and
-      # the save splices around. Field name to placeholder: a
-      # component is not an attribute and earns no type column of its
-      # own, so the placeholder is the label and the conventional
-      # order carries it. Public because a group's address rows are
-      # these same rows (Admin::GroupsEdit).
+      # column in the order an address form reads, which is not the
+      # order the value spells them in (Contact::ADDRESS_COMPONENTS).
+      # Field name to placeholder: a component is not an attribute and
+      # earns no type column of its own, so the placeholder is the
+      # label and the conventional order carries it. Public because a
+      # group's address rows are these same rows (Admin::GroupsEdit).
       ADDRESS_FIELDS = [
         ["street", "street"],
         ["extended", "street 2"],
