@@ -82,11 +82,19 @@ class AdminImportPagesTest < Minitest::Test
     last_response.body.scan(/name="#{Regexp.escape(name)}" value="([^"]*)" checked(?! disabled)/).flatten
   end
 
+  # The screen about the file rather than about a contact: what the
+  # whole of it is losing, and the way to stop. An upload goes
+  # straight past it into the first contact, so a test that is about
+  # it asks for it.
+  def summary(id)
+    get "/import/#{id}"
+  end
+
   # The group this import files its arrivals under, read off the
   # screen that states it — there is no form for it, and the name is
   # the moment the upload happened.
   def import_group(id)
-    get "/import/#{id}"
+    summary(id)
     last_response.body[/Coming in as ([^.<]+)\./, 1].to_s
   end
 
@@ -98,20 +106,38 @@ class AdminImportPagesTest < Minitest::Test
     assert_includes last_response.body, %(<input type="file" name="vcf" accept=".vcf,text/vcard">)
   end
 
-  def test_an_upload_is_looked_over_before_anything_is_written
+  # Straight into the walk: a list built from a file nobody has looked
+  # at yet is a stop on the way to the same place, and it stands
+  # beside every card anyway.
+  def test_an_upload_opens_on_the_first_contact_having_written_nothing
     with_contacts({}) do |store|
       id = upload(JANE + PLAIN)
 
       assert_equal 303, last_response.status
+      assert_equal "/import/#{id}/0", last_response.headers["location"]
       follow_redirect!
 
       assert_equal 200, last_response.status
-      assert_includes last_response.body, "2 contacts"
       assert_includes last_response.body, "Jane Booles"
       assert_includes last_response.body, "Sam Booles"
-      assert_includes last_response.body, %(href="/import/#{id}/0")
-      assert_includes last_response.body, "Nothing has come in yet."
+      assert_includes last_response.body, %(href="/import/#{id}/1")
       assert_empty store.changes
+    end
+  end
+
+  # And the file's own screen is a click back up the list.
+  def test_the_file_itself_is_a_screen_the_list_links_to
+    with_contacts({}) do |_store|
+      id = upload(JANE + PLAIN)
+      follow_redirect!
+
+      assert_includes last_response.body, %(<a href="/import/#{id}" class="type-label">contacts</a>)
+
+      summary(id)
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "2 contacts"
+      assert_includes last_response.body, "Nothing has come in yet."
     end
   end
 
@@ -122,7 +148,7 @@ class AdminImportPagesTest < Minitest::Test
       upload(JANE + PLAIN)
       follow_redirect!
 
-      assert_includes last_response.body, %(<span class="type-mono diff-removed">-3</span>)
+      assert_includes last_response.body, %(<span class="type-label diff-removed">-3</span>)
       assert_equal 1, last_response.body.scan("diff-removed").length
     end
   end
@@ -136,22 +162,27 @@ class AdminImportPagesTest < Minitest::Test
       get "/import/#{id}/0"
 
       assert_includes last_response.body, %(<div class="walk">)
-      assert_includes last_response.body, %(<nav class="walk-list">)
+      assert_includes last_response.body, %(<nav class="record walk-list">)
       assert_includes last_response.body, "Sam Booles"
       assert_includes last_response.body, %(href="/import/#{id}/1")
       # And says which row you are on.
-      assert_includes last_response.body, %(<a href="/import/#{id}/0" aria-current="page">)
+      assert_includes last_response.body,
+                      %(<a href="/import/#{id}/0" aria-current="page" data-state="unsaved">)
     end
   end
 
   # Everything is unsaved until its own screen says otherwise, and a
-  # walk broken off overnight has to say which rows those are.
+  # walk broken off overnight has to say which rows those are. The
+  # rail says it on screen; the word is there for a reader that
+  # cannot see one.
   def test_a_row_that_is_not_in_the_book_says_so
     with_contacts({}) do |_store|
       upload(JANE + PLAIN)
       follow_redirect!
 
-      assert_equal 2, last_response.body.scan(%(data-state="unsaved">not saved)).length
+      assert_equal 2, last_response.body.scan(%(data-state="unsaved")).length
+      assert_equal 2, last_response.body.scan(%(<span class="gl-visually-hidden">not saved</span>)).length
+      refute_includes last_response.body, %(<span class="type-label">not saved</span>)
     end
   end
 
@@ -159,8 +190,7 @@ class AdminImportPagesTest < Minitest::Test
   # whether the list is worth working down at all.
   def test_the_list_names_the_properties_the_file_is_losing
     with_contacts({}) do |_store|
-      upload(JANE)
-      follow_redirect!
+      summary(upload(JANE))
 
       assert_includes last_response.body, "X-ABRELATEDNAMES"
       assert_includes last_response.body, "X-SOCIALPROFILE"
@@ -170,8 +200,7 @@ class AdminImportPagesTest < Minitest::Test
 
   def test_a_file_this_book_reads_whole_says_so
     with_contacts({}) do |_store|
-      upload(PLAIN)
-      follow_redirect!
+      summary(upload(PLAIN))
 
       assert_includes last_response.body, "Nothing in this file needs reading before it comes in."
       refute_includes last_response.body, "diff-removed"
@@ -183,8 +212,7 @@ class AdminImportPagesTest < Minitest::Test
   # counted, so a file losing nothing else reads as losing nothing.
   def test_a_file_losing_only_its_exporters_name_asks_for_nothing
     with_contacts({}) do |_store|
-      upload(PLAIN.sub("VERSION:3.0\r\n", "VERSION:3.0\r\nPRODID:-//Apple Inc.//macOS 15.0//EN\r\n"))
-      follow_redirect!
+      summary(upload(PLAIN.sub("VERSION:3.0\r\n", "VERSION:3.0\r\nPRODID:-//Apple Inc.//macOS 15.0//EN\r\n")))
 
       assert_includes last_response.body, "Nothing in this file needs reading before it comes in."
       refute_includes last_response.body, "diff-removed"
@@ -265,7 +293,8 @@ class AdminImportPagesTest < Minitest::Test
       follow_redirect!
 
       assert_includes last_response.body, %(href="/contacts/#{jane.id}")
-      assert_includes last_response.body, %(data-state="saved">saved</span>)
+      assert_includes last_response.body, %(data-state="saved")
+      assert_includes last_response.body, %(<span class="gl-visually-hidden">saved</span>)
       assert_includes last_response.body, %(href="/import/#{id}/1")
       assert_includes last_response.body, "1 contact in the book."
     end
@@ -488,7 +517,7 @@ class AdminImportPagesTest < Minitest::Test
   def test_the_group_for_the_import_cannot_be_renamed
     with_contacts({}) do |_store|
       id = upload(JANE)
-      follow_redirect!
+      summary(id)
 
       assert_includes last_response.body, "Coming in as import-"
       refute_includes last_response.body, %(name="group")

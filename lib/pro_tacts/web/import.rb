@@ -116,9 +116,17 @@ module ProTacts
         # and a contact at a time (#import_picker).
         group: Import::Write.default_group,
       )
+      # Straight to the first contact rather than to the screen about
+      # the file: the walk is the point, and a list that has just been
+      # built from a file nobody has looked at yet is a stop on the
+      # way to the same place. What the whole file is losing is on the
+      # screen that list links back to, and the list itself stands
+      # beside every card anyway (Admin::ImportSidebar). A file with
+      # no contacts in it has no first one to open.
+      #
       # A 303, the other writes' answer, because what follows is a
       # walk: every screen of it is a GET a back button can revisit.
-      r.redirect "/import/#{id}", 303
+      r.redirect(cards.empty? ? "/import/#{id}" : "/import/#{id}/0", 303)
     end
 
     # What the whole file is losing, what it is coming in under, and
@@ -209,7 +217,7 @@ module ProTacts
         # The submit says where the card is going, because it is not
         # there yet: this is the one editor in the app whose Save
         # creates the record rather than amending it, and the row
-        # beside it reads "not saved" until it has been pressed
+        # beside it wears the unsaved rail until it has been pressed
         # (Admin::ImportSidebar).
         save: "save to the book",
         aside: Admin::ImportOriginal.new(card: original, dropped: Import::Vcf.read(original).dropped),

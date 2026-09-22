@@ -866,44 +866,68 @@ dialog > .field-stack > input[type="search"] {
    so it names a width for the first and gives the rest to the second,
    and collapses to one column where the two cannot both stand. The
    sidebar goes on top there rather than under: it is how you got to
-   what is below it. */
+   what is below it.
+
+   Both columns are .record blocks, caption row over card, so their
+   cards start at the same height -- two columns beginning a rung
+   apart read as a mistake before they read as anything else. */
 .walk {
   display: grid;
-  grid-template-columns: minmax(0, 17rem) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
   gap: var(--gl-space-m);
   align-items: start;
 }
 
-@media (max-width: 56rem) {
-  .walk {
+/* Wider than the wide column, because three things stand in it: the
+   list, the card as exported, and the editor. The editor's own widest
+   row is sized against the value column the reading width names (see
+   .admin-main below), so squeezing it to a third of 68rem is what put
+   the pair one under the other in the first place. */
+.admin-main:has(.walk) {
+  max-width: 92rem;
+}
+
+/* The pair inside the walk is two columns or one, never the auto-fit
+   in between: at this width the fallback was always the stack, and a
+   card read beside its own source is the whole point of the screen.
+   It collapses with the walk itself, on the walk's own breakpoint. */
+.walk .paired {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+@media (max-width: 64rem) {
+  .walk,
+  .walk .paired {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-/* The row being read: the hover fill it already knows, plus a rail in
-   the accent down its inside edge. A rail rather than a filled row,
-   because the fill is the hover gesture and a row wearing it at rest
-   reads as hovered; drawn as an inset shadow rather than a border so
-   the text of one row stays in line with the others. accent-soft
-   would have said it in one declaration and is not an option here --
-   tokens.css never derives it again in dark mode (see the accent
-   block above). */
-.walk-list a[aria-current] {
-  background: var(--gl-color-surface-fill-2);
+/* Whether a row is in the book yet, which is the one thing the walk
+   turns on: a rail in the accent down the inside edge of every row
+   that is not. Drawn as an inset shadow rather than a border so the
+   text of one row stays in line with the others, and it is the rows
+   still to do that wear it -- a list starts out entirely unsaved, and
+   what is worth marking is what is left. The word is still in the row
+   for a screen reader, which cannot see a rail. */
+.walk-list a[data-state="unsaved"] {
   box-shadow: inset 3px 0 0 var(--gl-color-accent);
 }
 
-/* Whether a row is in the book yet, which is the one thing the walk
-   turns on. The unsaved state is the page's own text color rather
-   than the muted grey a type-label takes: everything here is unsaved
-   until its own screen says otherwise, and a state nobody notices is
-   the silence this list exists to undo. Saved goes quiet, and green,
-   the status color being one of the two tokens that never swap with
-   the accent. The words carry it either way and the color is the
-   second telling, the rule the diff marks beside them follow. */
-.walk-list [data-state="unsaved"] {
-  color: var(--gl-color-text-primary);
+/* The row being read. The fill is the hover gesture too, so the name
+   takes the weight that says this one is not merely under a pointer.
+   accent-soft would have said it in one declaration and is not an
+   option here: tokens.css never derives it again in dark mode (see
+   the accent block above). */
+.walk-list a[aria-current] {
+  background: var(--gl-color-surface-fill-2);
 }
-.walk-list [data-state="saved"] {
-  color: var(--gl-color-success);
+.walk-list a[aria-current] > div {
+  font-weight: 700;
+}
+
+/* The count a row is losing, at its trailing edge: a type-label in
+   the danger color, the pairing a struck line on the card as exported
+   already wears (.card-lines above). */
+.walk-list .diff-removed {
+  white-space: nowrap;
 }

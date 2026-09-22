@@ -44,8 +44,8 @@ the file wrote it beside the card that is coming in, with the lines no
 screen here shows struck, and this book's groups as a filtered list of
 boxes to tick — the group made for the import and everyone's book among
 them, ticked. That contact's own Save is what writes it through the
-store, so each row reads "saved" or "not saved" and stopping halfway
-keeps everything already in (docs/plans/2026-09-21-import-a-vcf.md).
+store, so every row still to do wears a rail and stopping halfway keeps
+everything already in (docs/plans/2026-09-21-import-a-vcf.md).
 The `import:*` tasks, the Swift reader they drove Contacts.app with,
 and the plan directories they wrote are gone.
 

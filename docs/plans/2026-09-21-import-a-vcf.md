@@ -97,25 +97,25 @@ importer actually wants is to look at a contact and fix it.
 
 So the review is a walk, three screens rather than a submission:
 
-1. **Choose the file.**
-2. **What the whole file is losing**, and beside it the contacts it
-   holds, one row each.
-3. **One contact, two cards.** On the left, the card exactly as the
-   file wrote it: content lines in monospace, with every line that is
-   not coming in struck in Gloss's danger color and labelled "not
-   imported" beside it, a strike on its own being a color. On the
-   right, the contact editor, pre-filled with what was read and
-   pointed at the import, with this book's groups under its fields as
-   a filtered list of boxes to tick, the filter doubling as the way to
-   name one it does not have yet. Read the spouse's name off the left
-   card and type it into the note on the right, in your own words, and
-   put the contact where it belongs while you are looking at it. The
-   Save on that screen is the import of that contact: it goes into
-   the book there and then, in whatever the boxes beside it say. It
-   is the one editor in the app whose Save creates the record rather
-   than amending it, so it says where the card is going — "save to
-   the book" — and the row beside it reads "not saved" until it has
-   been pressed.
+1. **Choose the file**, which opens straight into the first contact
+   in it. A list built from a file nobody has looked at yet is a stop
+   on the way to the same place, and it stands beside every card
+   anyway.
+2. **What the whole file is losing**, a click back up that list.
+3. **One contact, two cards**, side by side. On the left, the card exactly
+   as the file wrote it: content lines in monospace, with every line that is
+   not coming in struck in Gloss's danger color and labelled "not imported"
+   beside it, a strike on its own being a color. On the right, the contact
+   editor, pre-filled with what was read and pointed at the import, with
+   this book's groups under its fields as a filtered list of boxes to tick,
+   the filter doubling as the way to name one it does not have yet. Read the
+   spouse's name off the left card and type it into the note on the right,
+   in your own words, and put the contact where it belongs while you are
+   looking at it. The Save on that screen is the import of that contact: it
+   goes into the book there and then, in whatever the boxes beside it say.
+   It is the one editor in the app whose Save creates the record rather than
+   amending it, so it says where the card is going — "save to the book" —
+   and the row beside it wears the unsaved rail until it has been pressed.
 
 The right-hand card is `Admin::ContactsEdit` itself, not a copy of it.
 A second editor for imports would be a place where the two could
@@ -147,21 +147,36 @@ contacts and only some of them will have anything worth looking at,
 so the list is what says which rows are worth opening — and that is
 a thing to read *while* reading one, not instead of.
 
+It is a `.record` block like the thing beside it, caption row over
+card, so the two columns' cards start at the same height. Two columns
+beginning a rung apart read as a mistake before they read as anything
+else. Its caption is the link back to the screen about the file,
+which has no row of its own to be reached from.
+
 Two facts per row, and the walk turns on both.
 
-**Whether the contact is in the book**, said in words. Everything is
-unsaved until its own screen says otherwise, and a walk broken off
-overnight and come back to has to say which rows those are; a state
-nobody notices is the silence this screen exists to undo, so the
-unsaved rows stand in the page's own text color and the saved ones go
-quiet and green. The colors are the second telling: the words are
-"not saved" and "saved".
+**Whether the contact is in the book** — a rail in the accent down the
+inside edge of every row that is not. Everything is unsaved until its
+own screen says otherwise, and a walk broken off overnight and come
+back to has to say which rows those are. Words were the first try and
+were too much: "not saved" on every row of a list that starts out
+entirely unsaved is a column of the same sentence, and it took the one
+slot the row's other fact wants. It is the rows still to do that wear
+the mark, because what is worth marking is what is left. The word is
+still in the row for a screen reader, which cannot see a rail.
 
-**What the card is losing**, as a diff's own mark — `-3` against the
-contact's name, in the sign-and-color shape a change-log entry wears
-(`.diff-removed` in admin.css). A sentence for it made every marked
-row a line of prose to read, and the number is the whole of what a row
-has to say about it: how many, and that it is a loss.
+**What the card is losing**, as a diff's own mark at the row's
+trailing edge — `-3`, in the sign-and-color shape a change-log entry
+wears (`.diff-removed` in admin.css). A sentence for it made every
+marked row a line of prose to read, and the number is the whole of
+what a row has to say about it: how many, and that it is a loss.
+
+The walk is wider than the reading column the rest of the app gets,
+because three things stand in it: the list, the card as exported, and
+the editor. Those last two are two columns or one and never the
+auto-fit in between — squeezed to a third of the ordinary wide page
+the fallback was always the stack, and a card read beside its own
+source is the whole point of the screen.
 
 ## Nothing waits for the end
 

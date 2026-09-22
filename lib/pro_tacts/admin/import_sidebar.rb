@@ -16,15 +16,22 @@ module ProTacts
     # is open.
     #
     # Each row carries the two facts the walk turns on. Whether the
-    # contact is in the book, said in words rather than left to be
-    # inferred from where the row leads: everything here is unsaved
-    # until its own screen says otherwise, and a walk broken off
-    # overnight has to say which rows those are. And what the card is
-    # losing, as a diff's own mark — `-3` against the contact's name,
-    # in the sign-and-color shape a change log entry wears
-    # (Admin::ContactsShow#diff_lines, .diff-removed in admin.css) —
-    # because the number is the whole of what a row has to say about
-    # it and a sentence for it made every marked row a line of prose.
+    # contact is in the book — a rail in the accent down the inside
+    # edge of every row that is not, because everything here is
+    # unsaved until its own screen says otherwise and a walk broken
+    # off overnight has to say which rows those are. Words for it were
+    # the first try and were too much: "not saved" on every row of a
+    # list that starts out entirely unsaved is a column of the same
+    # sentence, and it took the one slot the row's other fact wants.
+    # The word is still there for a screen reader, which cannot see a
+    # rail (.gl-visually-hidden).
+    #
+    # And what the card is losing, as a diff's own mark — `-3` at the
+    # row's trailing edge, in the sign-and-color shape a change log
+    # entry wears (Admin::ContactsShow#diff_lines, .diff-removed in
+    # admin.css) — because the number is the whole of what a row has
+    # to say about it and a sentence for it made every marked row a
+    # line of prose.
     class ImportSidebar < Phlex::HTML
       # @rbs @upload: String
       # @rbs @rows: Array[[::ProTacts::Contact, Integer]]
@@ -44,10 +51,16 @@ module ProTacts
         @current = current
       end
 
+      # A record's own shape — caption row over card — because the
+      # thing beside this is one too, and two columns whose cards
+      # start at different heights read as a mistake before they read
+      # as anything else (.record in admin.css). The caption is the
+      # way back to what the file as a whole is losing, that screen
+      # having no row of its own to be reached from.
       def view_template
-        nav(class: "walk-list") do
-          div(class: "section-head") do
-            h2(class: "type-label") { "contacts" }
+        nav(class: "record walk-list") do
+          div(class: "record-nav") do
+            a(href: "/import/#{@upload}", class: "type-label") { "contacts" }
           end
           ul(class: "card") do
             @rows.each_with_index do |(contact, dropped), index|
@@ -70,14 +83,11 @@ module ProTacts
           # which is the one thing a list beside its own content has
           # to say that a list on a page of its own does not.
           a(href: stored ? "/contacts/#{stored}" : "/import/#{@upload}/#{index}",
-            aria_current: ("page" if index == @current)) do
-            div(style: "flex: 1; min-width: 0; font-weight: 550;") do
-              div { Format.name_label(contact) }
-              span(class: "type-mono diff-removed") { "-#{dropped}" } if dropped.positive?
-            end
-            span(class: "type-label", data: {state: stored ? "saved" : "unsaved"}) do
-              stored ? "saved" : "not saved"
-            end
+            aria_current: ("page" if index == @current),
+            data: {state: stored ? "saved" : "unsaved"}) do
+            div(style: "flex: 1; min-width: 0; font-weight: 550;") { Format.name_label(contact) }
+            span(class: "gl-visually-hidden") { stored ? "saved" : "not saved" }
+            span(class: "type-label diff-removed") { "-#{dropped}" } if dropped.positive?
           end
         end
       end
