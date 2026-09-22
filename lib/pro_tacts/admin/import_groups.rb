@@ -17,12 +17,14 @@ module ProTacts
     # (Admin::GroupDialog) — there the card exists and a membership is
     # a write of its own, here neither is true until the confirm.
     #
-    # A filter over a box per group this book has, then a box per
-    # group this import has been told to make and has not made yet,
-    # then the filter itself offered as another. The filter is the
-    # dialog's own (Admin::GroupFilter): a book with three hundred
-    # groups is a screen either picker would otherwise bury, and this
-    # one is walked once per contact.
+    # A box per group this book has, then a box per group this import
+    # has been told to make and has not made yet, then the filter
+    # itself offered as another. The filter, the cap on how many rows
+    # stand shown and the button that lifts it are the dialog's
+    # (Admin::GroupFilter,
+    # docs/plans/2026-09-22-a-few-groups-at-a-time.md): a book with
+    # three hundred groups buries either picker, and this is the one
+    # the walk opens once per contact.
     #
     # A named group is not created here: it is made at the confirm
     # (Import::Write#group_id), because a group created while the walk
@@ -33,17 +35,25 @@ module ProTacts
       # @rbs @groups: Array[Store::GroupChoice]
       # @rbs @joined: Array[String]
       # @rbs @named: Array[String]
+      # @rbs @capped: Array[String]
 
       # Alphabetical, the groups dialog's own order: this is a list to
       # find a name in, and nothing here stays put across a rename.
       # `groups` is every group as a choice, no members read
       # (Store#group_choices); `joined` the ids ticked so far, `named`
       # the groups this import is making that do not exist yet.
+      #
+      # Both of those are rows the cap spares, for the dialog's own
+      # reason: a box this contact has already been given is one the
+      # walk came back to untick. The names take rows from the limit
+      # without being in the list the cap reads, so they are counted
+      # into it rather than listed in it.
       #: (groups: Array[Store::GroupChoice], joined: Array[String], named: Array[String]) -> void
       def initialize(groups:, joined:, named:)
         @groups = groups.sort_by { it.label.downcase }
         @joined = joined
         @named = named
+        @capped = GroupFilter.capped(@groups.map(&:id), joined:, shown: named.length)
       end
 
       def view_template
@@ -56,7 +66,7 @@ module ProTacts
           render GroupFilter.new(in_form: true)
           div(class: "field-stack", x_ref: "options") do
             @groups.each do |group|
-              label(**GroupFilter.row(group.label)) do
+              label(**GroupFilter.row(group.label, capped: @capped.include?(group.id))) do
                 input(type: "checkbox", name: "groups[]", value: group.id,
                       checked: @joined.include?(group.id))
                 render GroupLabel.new(group:)
@@ -67,7 +77,7 @@ module ProTacts
             # ones above it, and the styling is what says this one is
             # about to be made. Filterable like them too, so that a
             # name this import is already making is not offered as a
-            # name to make.
+            # name to make, and never capped, being ticked.
             @named.each do |name|
               label(**GroupFilter.row(name)) do
                 input(type: "checkbox", name: "named[]", value: name, checked: true)
@@ -77,6 +87,7 @@ module ProTacts
             render GroupFilter::Fresh.new
           end
           render GroupFilter::Empty.new(any: @groups.any? || @named.any?)
+          render GroupFilter::Rest.new(count: @groups.length) if @capped.any?
         end
       end
     end

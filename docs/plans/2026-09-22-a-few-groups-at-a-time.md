@@ -61,6 +61,29 @@ Two things, and they are not the same gesture:
   and the dialog re-renders on every open, so the list comes back
   capped next time.
 
+## Both pickers, not just the dialog
+
+The import's per-contact picker (`Admin::ImportGroups`) asks the same
+question of the same list, on the screen the import walk opens once
+per contact, so it gets the same treatment rather than a second answer
+to it. The filter, the cap, the `show all` button, the offer to create
+what the filter names, and the "no groups match" line all live in
+`Admin::GroupFilter` and are rendered by both.
+
+Two differences stay, and both are about where the picker sits. The
+dialog keeps its filter box outside the form it filters, because Enter
+in a form's text box would save mid-filter; the import's boxes are the
+contact editor's own fields, so there is no outside and it guards the
+key instead. And the dialog resets itself on close, a popover being
+hidden rather than rebuilt; the import's picker is on a page that is
+loaded afresh per contact, so there is nothing to reset.
+
+The rows the cap spares are the same rule read twice: for the dialog,
+the groups the contact is in; for the import, the boxes the walk has
+already ticked, plus the names it has been told to make, which are
+ticked too and take rows from the limit without being in the list the
+cap reads.
+
 ## Non-goals
 
 - Paging. A cap that the filter lifts needs no page two, and pages
@@ -68,7 +91,9 @@ Two things, and they are not the same gesture:
   guess.
 - A scroller on the popover. It would fix the overflow and leave the
   reading problem, and the filter is the answer to that.
-- Anything server-side: no limit on `Store#all_groups`, no second
-  read, no query. The dialog already has the list.
+- Anything server-side: no limit on the list, no paging query. The
+  picker already has it, and reads it in one go — `Store#group_choices`
+  narrowed that read to the group row and its label, but it is still
+  one read of every group, which is what the client-side filter needs.
 - The group list at `/groups` (`Admin::GroupsIndex`), which is a page
   and scrolls like one.

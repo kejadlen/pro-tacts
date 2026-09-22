@@ -313,6 +313,49 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # The cap the dialog got (docs/plans/2026-09-22-a-few-groups-at-a-time.md),
+  # over the picker the walk opens once per contact: eight rows stand
+  # shown, the ninth is marked for the filter to reach, and the button
+  # counts the whole list. A group already ticked for this contact
+  # takes a row from the cap rather than standing outside it.
+  def test_the_groups_beside_a_card_show_a_few_at_a_time
+    with_contacts({}) do |store|
+      ("a".."h").each { store.create_group(name: "Group #{it}") }
+      zulus = store.create_group(name: "Zulus")
+      id = upload(JANE)
+
+      get "/import/#{id}/0"
+
+      # Alphabetical, so Zulus is the ninth and the one that goes under.
+      assert_includes last_response.body, %(<label data-label="zulus" data-capped :hidden="!visible($el)">)
+      assert_equal 1, last_response.body.scan("data-capped").length
+      assert_includes last_response.body, "show all 9 groups"
+
+      post "/import/#{id}/0",
+           "etag" => etag, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "nickname" => "", "note" => "", "groups" => [zulus]
+
+      # Ticked, so Zulus is spared and Group h goes under in its place.
+      get "/import/#{id}/0"
+
+      assert_includes last_response.body, %(<label data-label="zulus" :hidden="!visible($el)">)
+      assert_includes last_response.body, %(<label data-label="group h" data-capped :hidden="!visible($el)">)
+      assert_equal 1, last_response.body.scan("data-capped").length
+    end
+  end
+
+  def test_the_groups_beside_a_card_offer_no_such_thing_uncapped
+    with_contacts({}) do |store|
+      ("a".."h").each { store.create_group(name: "Group #{it}") }
+      id = upload(JANE)
+
+      get "/import/#{id}/0"
+
+      refute_includes last_response.body, "show all"
+      refute_includes last_response.body, "data-capped"
+    end
+  end
+
   # A group that does not exist yet is named beside the contact and
   # made at the confirm, not before: a group created while the walk
   # is still going is one left behind by an import that was

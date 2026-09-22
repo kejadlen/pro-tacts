@@ -192,11 +192,12 @@ dialog make:
 
    The per-contact boxes ride in the editor's own form, so one Save
    writes the card and its groups together and there is no second
-   button to wonder about. They are filtered, the groups dialog's own
-   filter rather than a second one (`Admin::GroupFilter`, which both
-   pickers now render): a book with three hundred groups is the same
-   screen as a book with three, and this is the screen the walk opens
-   once per contact.
+   button to wonder about. They are filtered and capped, the groups
+   dialog's own filter and cap rather than a second set
+   (`Admin::GroupFilter`, which both pickers now render — see
+   `2026-09-22-a-few-groups-at-a-time.md`): a book with three hundred
+   groups is the same screen as a book with three, and this is the
+   screen the walk opens once per contact.
 
    The filter is also how a group this book does not have yet is
    asked for. Naming no group exactly, it offers itself as one to
