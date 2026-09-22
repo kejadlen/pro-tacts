@@ -12,7 +12,16 @@ data
 log
 tmp
 docs
+# The suite and the recorded exchanges stay out, but demo.ru seeds the
+# preview's book from the fixture cards, so those and the seeder have to
+# be in the image — fixture_data.rb reaches for nothing else under test/.
+# Only the preview runs demo.ru; a deployment runs config.ru, which reads
+# neither. The cards are spelled twice because a re-included directory
+# and the files under it are separate matches.
 test
+!test/fixture_data.rb
+!test/fixtures/cards
+!test/fixtures/cards/**
 servers
 clients
 monica

@@ -1,13 +1,16 @@
 # The per-PR preview app (fly-pr-review-apps overrides the name with the
-# PR's). No volume, so the database is the ephemeral one config.ru builds
-# in the image on boot and every deploy starts empty. Nothing writes the
-# Remote-User header in front of it, so PRO_TACTS_DEFAULT_LOGIN names the
-# login StubLogin stands in with (config.ru); the preview serves that one
-# demo book to anyone who opens the URL.
+# PR's). It runs demo.ru rather than the image's own config.ru, which is
+# the whole of what makes it a demo: the fixture book seeded on first
+# boot, and a stand-in login, the same two the dev server gets. No
+# volume, so every deploy starts from the fixtures again, and the one
+# demo book is served to anyone who opens the URL.
 app = 'pro-tacts-preview'
 primary_region = 'sjc'
 
 [build]
+
+[processes]
+  app = 'rackup -o 0.0.0.0 demo.ru'
 
 [http_service]
   internal_port = 9292
@@ -25,4 +28,3 @@ primary_region = 'sjc'
 [env]
   PRO_TACTS_INSTANCE_NAME = 'pro-tacts (preview)'
   PRO_TACTS_ACCENT = 'clay'
-  PRO_TACTS_DEFAULT_LOGIN = 'demo@example.com'

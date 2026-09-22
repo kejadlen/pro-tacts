@@ -34,19 +34,6 @@ module ProTacts
       !value.nil? && value.match?(TRUTHY)
     end
 
-    # A login to answer requests that name nobody, PRO_TACTS_DEFAULT_LOGIN;
-    # nil when unset. A deployment behind a proxy leaves it unset, so the
-    # proxy's Remote-User is the only identity (ProxyAuth). A deployment
-    # with nothing in front — the preview app — names one, and StubLogin
-    # writes it onto every request that arrives without the header, so the
-    # app is reachable without a proxy. Never set where real data is
-    # served: it hands every anonymous caller that login's address book.
-    #: () -> String?
-    def default_login
-      value = @env.fetch("PRO_TACTS_DEFAULT_LOGIN", nil)
-      value unless value.nil? || value.strip.empty?
-    end
-
     # Root data directory: holds the contacts database, and the exported
     # card mirror once there is one. Overridable with
     # PRO_TACTS_DATA_DIR.

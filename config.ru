@@ -8,7 +8,6 @@ require "sentry-ruby"
 $LOAD_PATH.unshift(Pathname.new(__dir__) / "lib")
 require "pro_tacts/web"
 require "pro_tacts/store"
-require "pro_tacts/stub_login"
 
 config = ProTacts.config
 
@@ -52,15 +51,5 @@ Sentry.init do |sentry|
 end
 
 ProTacts::Web.plugin :common_logger, $stderr
-
-# A deployment with nothing in front to write the identity header (the
-# preview app) names a login in PRO_TACTS_DEFAULT_LOGIN, and StubLogin
-# writes it onto every request that arrives without one, so the app
-# answers rather than refusing everyone (ProxyAuth). Left unset where the
-# proxy is the only way in, which is every deployment that serves real
-# data.
-if (login = config.default_login)
-  use ProTacts::StubLogin, login
-end
 
 run ProTacts::Web.freeze.app
