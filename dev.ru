@@ -1,10 +1,11 @@
 # config.ru for `rake dev`, which has no proxy in front of it to write
-# the login (ProTacts::DevLogin). Deployments run config.ru alone.
+# the login (ProTacts::StubLogin). Deployments run config.ru alone; the
+# preview one reaches the same middleware through PRO_TACTS_DEFAULT_LOGIN.
 require "pathname"
 
 $LOAD_PATH.unshift(Pathname.new(__dir__) / "lib")
 require "pro_tacts"
-require "pro_tacts/dev_login"
+require "pro_tacts/stub_login"
 
 # The change being worked on names a dev build, the way a release's tag
 # names an image; a change id holds still while its content is edited.
@@ -20,5 +21,5 @@ ProTacts.config = ProTacts::Config.new({
   "VERSION" => change,
 }.merge(ENV))
 
-use ProTacts::DevLogin
+use ProTacts::StubLogin
 run Rack::Builder.parse_file(File.expand_path("config.ru", __dir__))
