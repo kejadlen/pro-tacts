@@ -40,9 +40,9 @@ profiles, so leave those to the user.
 Importing is not a task at all: a .vcf is uploaded at `/import` in the
 app, and reviewed there contact by contact — the card as the file wrote
 it beside the card that is coming in, with the lines no screen here
-shows struck, and this book's groups as boxes to tick beside a box for a
-new one — before the lot is written through the store, into a group made
-for the import and whichever groups each contact was given
+shows struck, and this book's groups as a filtered list of boxes to tick
+— before the lot is written through the store, into a group made for the
+import and whichever groups each contact was given
 (docs/plans/2026-09-21-import-a-vcf.md). The `import:*` tasks, the Swift
 reader they drove Contacts.app with, and the plan directories they wrote
 are gone.

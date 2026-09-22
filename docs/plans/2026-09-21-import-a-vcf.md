@@ -109,10 +109,10 @@ So the review is a walk, four screens rather than a submission:
    imported" beside it, a strike on its own being a color. On the
    right, the contact editor, pre-filled with what was read and
    pointed at the import, with this book's groups under its fields as
-   boxes to tick and a box to name one it does not have yet. Read the
-   spouse's name off the left card and type it
-   into the note on the right, in your own words, and put the contact
-   where it belongs while you are looking at it.
+   a filtered list of boxes to tick, the filter doubling as the way to
+   name one it does not have yet. Read the spouse's name off the left
+   card and type it into the note on the right, in your own words, and
+   put the contact where it belongs while you are looking at it.
 4. **Confirm**, under a group for the lot, and the cards are written as
    the walk left them.
 
@@ -192,16 +192,25 @@ dialog make:
 
    The per-contact boxes ride in the editor's own form, so one Save
    writes the card and its groups together and there is no second
-   button to wonder about. Under them is a box for a group this book
-   does not have yet, and what it writes is a name rather than a
-   group: nothing is in the store until the confirm, and a group
-   created while the walk was still going is one left behind by an
-   import that was abandoned. A name waiting like that shows as a box
-   of its own, ticked and in the italic the groups dialog gives a name
-   that is not a group yet, so it can be taken off again. What each
-   contact is joining is read back on its row in the list, because the
-   walk is a screen at a time and the list is where ten screens' worth
-   of decisions are seen at once.
+   button to wonder about. They are filtered, the groups dialog's own
+   filter rather than a second one (`Admin::GroupFilter`, which both
+   pickers now render): a book with three hundred groups is the same
+   screen as a book with three, and this is the screen the walk opens
+   once per contact.
+
+   The filter is also how a group this book does not have yet is
+   asked for. Naming no group exactly, it offers itself as one to
+   make, and what that writes is a name rather than a group: nothing
+   is in the store until the confirm, and a group created while the
+   walk was still going is one left behind by an import that was
+   abandoned. A name waiting like that shows as a box of its own,
+   ticked and in the italic the groups dialog gives a name that is not
+   a group yet, so it can be taken off again — and filtered alongside
+   the real groups, so a name this import is already making is not
+   offered a second time as a name to make. What each contact is
+   joining is read back on its row in the list, because the walk is a
+   screen at a time and the list is where ten screens' worth of
+   decisions are seen at once.
 
 Importing is not idempotent and cannot be. A `.vcf` carries no id this
 server minted, so a second upload of the same file is a second set of
