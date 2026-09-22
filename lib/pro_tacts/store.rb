@@ -348,15 +348,12 @@ module ProTacts
     end
 
     # `sole` rather than `first`: the id is the primary key, so a second
-    # row is a corruption and not a choice to make quietly. It raises on
-    # no row too, which here is the ordinary answer for an href nobody
-    # has — the 404 path — so that one is caught and turned back into
-    # nil.
+    # row is a corruption and not a choice to make quietly. No row is
+    # the ordinary answer for an href nobody has — the 404 path.
     #: (String id) -> Contact?
     def contact(id)
-      contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
-    rescue Sequel::NoMatchingRow
-      nil
+      row = cards.where(id:).sole_or_nil
+      row && contact_from(row, birthday_of(id), inherited_of(id))
     end
 
     # The groups a contact belongs to, whole — a tag names one and
@@ -401,9 +398,8 @@ module ProTacts
     # is set either way.
     #: (String login) -> String
     def book_name(login)
-      books.where(login:).sole.fetch(:name).to_s
-    rescue Sequel::NoMatchingRow
-      login
+      row = books.where(login:).sole_or_nil
+      row ? row.fetch(:name).to_s : login
     end
 
     # Sets the name a login's book goes by, or with nil or a blank goes
@@ -436,9 +432,8 @@ module ProTacts
     # cards sharing a UID is a corruption to raise on, not a choice.
     #: (String uid) -> String?
     def card_id_with_uid(uid)
-      card_properties.where(name: "UID", value: uid).sole.fetch(:card_id).to_s
-    rescue Sequel::NoMatchingRow
-      nil
+      row = card_properties.where(name: "UID", value: uid).sole_or_nil
+      row && row.fetch(:card_id).to_s
     end
 
     # Stores a card and everything that has to move with it: the
@@ -452,7 +447,7 @@ module ProTacts
     # it back in (docs/plans/2026-08-31-partial-birthdays.md).
     #
     # A card rather than its bytes, so the reading a caller already
-    # made is the one the split below decides from: a PUT has asked
+    # made is the one #split_birthday decides from: a PUT has asked
     # whether the bytes are a card at all and whose UID they carry
     # before it gets here (Web#write_card), and taking the card it
     # asked those of leaves the walk behind them made once.
@@ -473,43 +468,14 @@ module ProTacts
     # A rewrite of a card that exists joins nothing.
     #: (String id, VCard vcard, ?client: bool) -> Contact
     def put(id, vcard, client: false)
-      # The birthday half of the split a write makes
-      # (docs/plans/2026-09-11-every-birthday-in-the-model.md). A card
-      # holds at most one BDAY, and one that reads as a birthday leaves
-      # the card for the model. Any other stays in the card byte for
-      # byte, reported, with the model emptied so nothing composes a
-      # second BDAY beside it (RFC 6352 section 6.3.2.2).
       existing = birthday_of(id)
-      # The card as it stands before this write, read once for the two
-      # halves that need it: the no-BDAY arm below, which reports what
-      # it drops, and the subtraction after it, which accounts for the
-      # member's own lines before attributing any to a group.
+      # The card as it stands before this write, read once for the
+      # three things that want it: the birthday split, which reports
+      # what a rewrite drops; the subtraction after it, which accounts
+      # for the member's own lines before attributing any to a group;
+      # and the card the change log records this write as replacing.
       own = stored_card(id)
-      bdays, rest = vcard.extract("BDAY")
-      birthday, stored =
-        if bdays.empty?
-          # No BDAY: a client that was sent the birthday removed it, and
-          # one that was never sent it cannot have. A BDAY line left in
-          # the stored card goes with the rewrite, which is worth saying.
-          report_lost_bday_lines(own)
-          [existing && !existing.served? ? existing : nil, vcard]
-        elsif bdays.length > 1
-          report_many_bday_lines(bdays.length)
-          [nil, vcard]
-        else
-          line = BirthdayLine.read(bdays.fetch(0))
-          case line
-          when BirthdayLine::Modeled
-            [line.birthday, rest]
-          when BirthdayLine::Unrecognized
-            report_unrecognized_bday_line
-            [nil, vcard]
-          when BirthdayLine::Unreadable
-            [nil, vcard]
-          else
-            raise "no arm for #{line.class}"
-          end
-        end
+      birthday, stored = split_birthday(vcard, existing, own)
 
       # The other half of the split, the same shape as the birthday's:
       # what the groups lend comes back out of the submission before it
@@ -544,9 +510,7 @@ module ProTacts
           fan_out(member_ids(edits.map(&:group_id).uniq), except: id) { apply_group_edits(edits) }
           contact = Contact.new(id:, stored:, birthday:, inherited: inheritance(lent_of(id)))
         end
-        cards
-          .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
-          .insert(id: contact.id, vcard: stored.to_s)
+        upsert_card(contact.id, stored)
         # After the card, which the membership names by foreign key, and
         # before the log entry, which records the card composed with
         # whatever the group lends. The put's entry is the card's arrival
@@ -577,9 +541,7 @@ module ProTacts
       before = contact(id)
       contact = Contact.new(id:, stored: vcard, birthday:, inherited: inherited_of(id))
       @database.transaction do
-        cards
-          .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
-          .insert(id: contact.id, vcard: vcard.to_s)
+        upsert_card(contact.id, vcard)
         write_birthday(contact.id, birthday)
         record(contact.id, "edit", contact.etag, CardDiff.between(before&.vcard, contact.vcard))
         reindex(contact.id, vcard)
@@ -705,9 +667,8 @@ module ProTacts
     # #contact's own shape.
     #: (String id) -> Group?
     def group(id)
-      load_groups([groups.select(*GROUP_COLUMNS, group_label.as(:label)).where(id:).sole]).fetch(0)
-    rescue Sequel::NoMatchingRow
-      nil
+      row = groups.select(*GROUP_COLUMNS, group_label.as(:label)).where(id:).sole_or_nil
+      row && load_groups([row]).fetch(0)
     end
 
     # A group's name, or none — NULL being the one spelling of
@@ -801,7 +762,10 @@ module ProTacts
     # the ordinary miss, #delete's shape.
     #: (String id) -> bool
     def delete_group(id)
-      name = groups.where(id:).sole.fetch(:name).to_s
+      row = groups.where(id:).sole_or_nil
+      return false if row.nil?
+
+      name = row.fetch(:name).to_s
       # Refused before the transaction, #name_book's reason for the
       # same refusal: Sequel wraps what a rollback raises.
       raise EveryonesBookName, "#{EVERYONE} is everyone's book, not a group to delete" if name == EVERYONE
@@ -813,8 +777,6 @@ module ProTacts
         }
         true
       end
-    rescue Sequel::NoMatchingRow
-      false
     end
 
     # A card's side of #edit_group: one transaction, leavers first and
@@ -915,6 +877,16 @@ module ProTacts
       @database[:group_properties]
     end
 
+    # A card written where one may already stand. The stamp is set
+    # again on the way past because SQLite has no ON UPDATE and the
+    # column default only fires on insert (NOW).
+    #: (String id, VCard vcard) -> void
+    def upsert_card(id, vcard)
+      cards
+        .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
+        .insert(id:, vcard: vcard.to_s)
+    end
+
     # The diff comes in already computed rather than being taken here
     # off a `before` and an `after`: only the caller knows which two
     # cards its write was between, and a delete's `after` is nothing at
@@ -1001,14 +973,13 @@ module ProTacts
       }
     end
 
-    # The id of the `sync:*` group, created on first use. `sole` because
-    # a group's name is unique (db/migrations/008_group_names.rb), and
-    # no row is the ordinary answer for the first create.
+    # The id of the `sync:*` group, created on first use. One row
+    # because a group's name is unique
+    # (db/migrations/008_group_names.rb).
     #: () -> String
     def everyone_group_id
-      groups.where(name: EVERYONE).sole.fetch(:id).to_s
-    rescue Sequel::NoMatchingRow
-      create_group(name: EVERYONE)
+      row = groups.where(name: EVERYONE).sole_or_nil
+      row ? row.fetch(:id).to_s : create_group(name: EVERYONE)
     end
 
     # The group name that puts cards in this login's book alone.
@@ -1088,6 +1059,48 @@ module ProTacts
     #: () -> void
     def migrate
       Sequel::Migrator.run(@database, MIGRATIONS.to_s)
+    end
+
+    # The birthday half of the split a write makes
+    # (docs/plans/2026-09-11-every-birthday-in-the-model.md): the
+    # model's new birthday, and the card to store beside it. A card
+    # holds at most one BDAY, and one that reads as a birthday leaves
+    # the card for the model. Any other stays in the card byte for
+    # byte, reported, with the model emptied so nothing composes a
+    # second BDAY beside it (RFC 6352 section 6.3.2.2).
+    #
+    # No BDAY is a client that was sent the birthday removing it, or
+    # one that was never sent it and so cannot have. A BDAY line left
+    # in the stored card goes with the rewrite, which is worth saying.
+    #
+    # case/when rather than case/in, BirthdayLine's own rule: Steep
+    # does not check the bodies of case/in branches, and these are the
+    # ones worth checking — which is what the last arm is for.
+    #: (VCard vcard, Birthday? existing, VCard? own) -> [Birthday?, VCard]
+    def split_birthday(vcard, existing, own)
+      bdays, rest = vcard.extract("BDAY")
+      if bdays.empty?
+        report_lost_bday_lines(own)
+        return [existing && !existing.served? ? existing : nil, vcard]
+      end
+
+      if bdays.length > 1
+        report_many_bday_lines(bdays.length)
+        return [nil, vcard]
+      end
+
+      line = BirthdayLine.read(bdays.fetch(0))
+      case line
+      when BirthdayLine::Modeled
+        [line.birthday, rest]
+      when BirthdayLine::Unrecognized
+        report_unrecognized_bday_line
+        [nil, vcard]
+      when BirthdayLine::Unreadable
+        [nil, vcard]
+      else
+        raise "no arm for #{line.class}"
+      end
     end
 
     # The card currently stored for an id, or nil for a card being
@@ -1211,7 +1224,7 @@ module ProTacts
       return :unshareable unless shareable?(edited)
 
       taken << strike(unaccounted, edited)
-      GroupEdit.new(group_id: row.group_id, position: row.position, line: content_line(edited))
+      GroupEdit.new(group_id: row.group_id, position: row.position, line: edited.content)
     end
 
     # The line out of the pool, so no second lent line is attributed
@@ -1223,18 +1236,6 @@ module ProTacts
         unaccounted.index(line) #: Integer
       )
       line
-    end
-
-    # A line as a group holds one: unfolded and shorn of its
-    # terminator, the same unit CardDiff records a write in and the
-    # shape db/migrations/004_groups.rb's own rows are written in.
-    # The bytes are the client's, not a re-render under the group's old
-    # header — a relabel is one of the edits this carries, and
-    # rebuilding the header would propagate the value and drop the
-    # label (the plan's "What a propagated edit stores").
-    #: (VCard::Parser::Line line) -> String
-    def content_line(line)
-      VCard::Parser.unfold(line.verbatim).sub(/(\r\n|[\r\n])\z/, "")
     end
 
     # Whether a group could hold this line: one of the names
@@ -1333,22 +1334,17 @@ module ProTacts
       STRUCTURED_VALUES.include?(property.name.upcase) ? property.components : [property.text]
     end
 
-    # A line's TYPE values, as the set the round trip preserves:
-    # casefolded, `pref` dropped as the client's own addition, and
-    # sorted because `TYPE=home;TYPE=pref` and `TYPE=pref,home` are one
-    # thing (RFC 2426 section 3.2.1, which the parser reads into pairs
-    # either way). Empty for a line that would not read, which has no
+    # A line's TYPE values as the set the round trip preserves, sorted
+    # because `TYPE=home;TYPE=pref` and `TYPE=pref,home` are one thing
+    # (RFC 2426 section 3.2.1, which the parser reads into pairs either
+    # way). Empty for a line that would not read, which has no
     # parameters to compare.
     #: (VCard::Parser::Line line) -> Array[String]
     def types_of(line)
       property = line.property
       return [] if property.nil?
 
-      property.parameters
-        .filter_map { |name, value| value.downcase if name.casecmp?("TYPE") }
-        .reject { it == "pref" }
-        .uniq
-        .sort
+      property.types.sort
     end
 
     # The submission's lines that the member's own stored card does not
@@ -1383,8 +1379,7 @@ module ProTacts
     # attribute — two lines of that name arrived that the member's card
     # does not explain, and calling either the edit would be a guess.
     # The card is stored as it arrived and the line is news, the same
-    # bargain report_unrecognized_bday_line makes, and carries no card
-    # content for the same reason (config.ru).
+    # bargain report_unrecognized_bday_line makes.
     #: (Integer count) -> void
     def report_ambiguous_inherited_lines(count)
       return if count.zero?
@@ -1402,8 +1397,7 @@ module ProTacts
     # under one — which comes back as a property group with an
     # `X-ABLabel` beside it (#kept_types?), and the news is worth
     # having because that member now serves the line twice — its own
-    # copy and the group's — until someone reconciles them. No card
-    # content, the ambiguity report's own line.
+    # copy and the group's — until someone reconciles them.
     #: (Integer count) -> void
     def report_unshareable_lines(count)
       return if count.zero?

@@ -99,6 +99,19 @@ module ProTacts
             .filter_map { |parameter, value| value if parameter.casecmp?(name) }
             .first
         end
+
+        # The TYPE values naming a kind of line (RFC 2426 section
+        # 3.3.1), casefolded because the spelling is the card's and
+        # every reader wants one. `pref` is not one of them: it ranks a
+        # line rather than naming a kind, and the client adds it on its
+        # own (docs/apple-contacts.md, "The client rewrites every card
+        # it touches").
+        #: () -> Array[String]
+        def types
+          parameters
+            .filter_map { |name, value| value.downcase if name.casecmp?("TYPE") }
+            .uniq - ["pref"]
+        end
       end
 
       # One logical line of a card, parsed beside the exact bytes that
@@ -150,6 +163,18 @@ module ProTacts
         # the one pair of lines no address can tell apart.
         #: () -> String
         def digest = Digest::SHA256.hexdigest(verbatim)
+
+        # The line as a group holds one: unfolded and shorn of its
+        # terminator, the unit CardDiff records a write in and the
+        # shape db/migrations/004_groups.rb's own rows are written in.
+        # The bytes are the ones that arrived, not a re-render under an
+        # old header — a relabel is one of the edits a member's save
+        # carries, and rebuilding the header would propagate the value
+        # and drop the label
+        # (docs/plans/2026-09-09-group-edits-propagate.md, "What a
+        # propagated edit stores").
+        #: () -> String
+        def content = Parser.unfold(verbatim).sub(/#{LINE_BREAK}\z/, "")
       end
 
       # The content line, RFC 2426 section 4:
@@ -242,14 +267,15 @@ module ProTacts
           .reject { it == "" }
       end
 
-      # Physical lines with their terminators attached, so the split
-      # cannot lose or normalize a line break.
+      # Physical lines with their terminators attached, so no split of
+      # a card can lose or normalize a line break. Public for VCard,
+      # whose surgery on a card's bytes wants the same split.
       #: (String card) -> Array[String]
       def self.physical_lines(card)
         card.split(/(?<=\n)/, -1)
       end
 
-      private_class_method :line_of, :logical_lines, :physical_lines
+      private_class_method :line_of, :logical_lines
 
       #: (String logical_line) -> void
       def initialize(logical_line)

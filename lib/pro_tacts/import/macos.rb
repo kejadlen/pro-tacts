@@ -313,7 +313,8 @@ module ProTacts
       # `item2.` are one spelling, since the number counts a card's
       # groups rather than saying anything about the line, and a
       # trailing `type=pref` is left off, ranking a line rather than
-      # naming a kind (Contact#types_of drops it for the same reason).
+      # naming a kind (VCard::Parser::Property#types drops it for the
+      # same reason).
       FORMS = {
         "FN" => ["FN"],
         "N" => ["N"],

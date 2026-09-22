@@ -173,32 +173,13 @@ module ProTacts
                     input(type: "text", name: "nickname", value: @own.nickname,
                           placeholder: @own.nickname ? "removed on save" : nil)
                   end
-                  # A phone row edits its value and nothing else: the
-                  # TYPE parameters ride in the line's own header,
-                  # which the save keeps (VCard.header_of) — a header
-                  # rebuilt from form fields would drop the parameters
-                  # no field models, and macOS writes three TYPE
-                  # parameters on one TEL. The digest in the field's
-                  # name is the row's address, and a blank value
-                  # removes the line. Identical duplicate lines share a
-                  # digest and therefore a field name, and Rack keeps
-                  # the last value of a duplicated name — editing one
-                  # of a pair of byte-identical rows means blanking
-                  # one, saving, then editing the other.
                   @own.phones.each do |phone|
-                    label(class: "field", data: {blank_removes: true}) do
-                      span { Format.type_label(phone.label, phone.types, "phone") }
-                      input(type: "tel", name: "phone[#{phone.line.digest}]",
-                            value: phone.value, placeholder: "removed on save")
-                    end
+                    value_row(Format.type_label(phone.label, phone.types, "phone"),
+                              type: "tel", name: "phone[#{phone.line.digest}]", value: phone.value)
                   end
-                  # An email row, the phone row's own shape over EMAIL.
                   @own.emails.each do |email|
-                    label(class: "field", data: {blank_removes: true}) do
-                      span { Format.type_label(nil, email.types, "email") }
-                      input(type: "email", name: "email[#{email.line.digest}]",
-                            value: email.value, placeholder: "removed on save")
-                    end
+                    value_row(Format.type_label(nil, email.types, "email"),
+                              type: "email", name: "email[#{email.line.digest}]", value: email.value)
                   end
                   @own.addresses.each do
                     address_row(it)
@@ -241,7 +222,7 @@ module ProTacts
       # scaffold docs/DESIGN.md refuses, and a trailing one left over
       # from a row already filled is the same scaffold arriving late.
       # A blank added row is a no-op rather than a removal
-      # (CardForm.edited_phones), so these rows wear no removal state —
+      # (CardForm.edited_values), so these rows wear no removal state —
       # the class comment's exemption.
       # That verb — make a row, now, without a round trip — is what
       # CSS could not do and what Alpine is here for (see Layout).
@@ -298,6 +279,26 @@ module ProTacts
               end
             end
           end
+        end
+      end
+
+      # A standing single-value row — a phone, an email — editing its
+      # value and nothing else: the TYPE parameters ride in the line's
+      # own header, which the save keeps (VCard.header_of), where a
+      # header rebuilt from form fields would drop the parameters no
+      # field models, and macOS writes three TYPE parameters on one
+      # TEL. The digest in the field's name is the row's address, and
+      # a blank value removes the line — the state is unconditional,
+      # a row standing only over a line there is to lose. Identical
+      # duplicate lines share a digest and therefore a field name, and
+      # Rack keeps the last value of a duplicated name — editing one of
+      # a pair of byte-identical rows means blanking one, saving, then
+      # editing the other.
+      #: (String caption, type: String, name: String, value: String) -> void
+      def value_row(caption, type:, name:, value:)
+        label(class: "field", data: {blank_removes: true}) do
+          span { caption }
+          input(type:, name:, value:, placeholder: "removed on save")
         end
       end
 

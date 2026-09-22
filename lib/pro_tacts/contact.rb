@@ -238,7 +238,7 @@ module ProTacts
     # repeats into one issue.
     #: () -> Photo?
     def photo
-      property = properties.find { it.name.casecmp?("PHOTO") }
+      property = vcard.property("PHOTO")
       return if property.nil?
 
       begin
@@ -268,7 +268,7 @@ module ProTacts
     # FN's value (RFC 2426 section 3.1.1), in text form.
     #: () -> String?
     def name
-      text_of(properties.find { it.name.casecmp?("FN") })
+      text_of(vcard.property("FN"))
     end
 
     # N's components (RFC 2426 section 3.1.2: family; given; additional;
@@ -278,7 +278,7 @@ module ProTacts
     # free-text FN.
     #: () -> Array[String?]?
     def name_components
-      property = properties.find { it.name.casecmp?("N") }
+      property = vcard.property("N")
       property && components_of(property)
     end
 
@@ -286,7 +286,7 @@ module ProTacts
     # whole value, as the card spells it, when it comma-lists several.
     #: () -> String?
     def nickname
-      text_of(properties.find { it.name.casecmp?("NICKNAME") })
+      text_of(vcard.property("NICKNAME"))
     end
 
     #: () -> Array[Phone]
@@ -300,7 +300,7 @@ module ProTacts
         Phone.new(
           value:,
           label: group && labels[group],
-          types: types_of(property, except: %w[voice]),
+          types: property.types - %w[voice],
           line:,
         ) if value
       }
@@ -312,7 +312,7 @@ module ProTacts
         value = text_of(property)
         # RFC 2426 section 3.3.2: `internet` is the format every address
         # has by default, so it names none.
-        Email.new(value:, types: types_of(property, except: %w[internet]), line:) if value
+        Email.new(value:, types: property.types - %w[internet], line:) if value
       }
     end
 
@@ -437,20 +437,8 @@ module ProTacts
       return if components.none?
 
       po_box, extended, street, locality, region, postal_code, country = components
-      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: types_of(property), line:)
+      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: property.types, line:)
     end
 
-    # Every TYPE value (RFC 2426 section 3.3.1) that names a kind of
-    # line. `pref` ranks a line instead, and the client adds it on its
-    # own (docs/apple-contacts.md, "The client rewrites every card it
-    # touches"); `except` holds a property's own values that name no
-    # kind either. Downcased: the spelling is the card's, and a screen
-    # shows one.
-    #: (VCard::Parser::Property property, ?except: Array[String]) -> Array[String]
-    def types_of(property, except: [])
-      property.parameters
-        .filter_map { |name, value| value.downcase if name.casecmp?("TYPE") }
-        .uniq - ["pref", *except]
-    end
   end
 end

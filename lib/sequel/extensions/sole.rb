@@ -40,6 +40,18 @@ module Sequel
 
       rows.fetch(0)
     end
+
+    # The same read where no row is the ordinary answer — an href
+    # nobody has, a login whose book was never named — so the caller
+    # says so once here rather than spelling the rescue out again.
+    # Only the empty case: more rows than the filter claimed is still
+    # the broken assumption #sole exists to raise on.
+    #: () -> Hash[Symbol, untyped]?
+    def sole_or_nil
+      sole
+    rescue Sequel::NoMatchingRow
+      nil
+    end
   end
 
   Dataset.register_extension(:sole, Sole)
