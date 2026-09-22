@@ -70,9 +70,10 @@ module ProTacts
         File.binwrite(directory / file_name(ORIGINAL), original)
         File.binwrite(directory / file_name(REVISED), revised)
         # The group is settled here rather than at the end, there
-        # being no end to settle it at any more: the first Save has to
-        # know what to file its contact under, and every Save after it
-        # has to agree (Web#name_import_group). Nothing saved yet, and
+        # being no end to settle it at any more: every Save files its
+        # contact under it, and nothing renames it afterwards — a
+        # rename would leave what is already in the book under the old
+        # name and put the rest somewhere else. Nothing saved yet, and
         # empty rather than absent, so every slot of an import that
         # exists is a file that exists and a write can say which of
         # the two it found (#write).
@@ -104,9 +105,9 @@ module ProTacts
       # is how a screen names one.
       #
       # Still rewritten for a card that was just saved into the store,
-      # rather than dropped from the file: the list renders every row
-      # from these bytes, and a row that has come in is one the list
-      # still has to be able to name (Admin::ImportReview).
+      # rather than dropped from the file: the walk's list renders
+      # every row from these bytes, and a row that has come in is one
+      # it still has to be able to name (Admin::ImportSidebar).
       #: (String id, String revised) -> void
       def self.update(id, revised)
         write(id, REVISED, revised)
@@ -138,17 +139,6 @@ module ProTacts
       def self.record(id, index, contact)
         group, contacts = saved(id)
         write(id, SAVED, JSON.generate({GROUP => group, CONTACTS => contacts.merge(index => contact)}))
-      end
-
-      # The group the import files under, renamed. Only before the
-      # first card is saved, which is the route's rule rather than
-      # this one's (Web#name_import_group): a rename after that would
-      # leave what is already in the book under the old name and put
-      # the rest somewhere else, which is one import in two groups.
-      #: (String id, String group) -> void
-      def self.name_group(id, group)
-        _, contacts = saved(id)
-        write(id, SAVED, JSON.generate({GROUP => group, CONTACTS => contacts}))
       end
 
       # The import, gone: what the walk's last screen leaves behind,

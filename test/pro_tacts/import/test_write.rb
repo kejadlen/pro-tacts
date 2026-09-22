@@ -24,9 +24,9 @@ class ImportWriteTest < Minitest::Test
   # One card, which is what one Save hands over.
   def card = Vcf.cards(JANE).fetch(0)
 
-  def write_card(group: nil, joins: [], named: [])
+  def write_card(joins: [], named: [])
     with_contacts({}) do |store|
-      yield Write.call(store, card, group:, joins:, named:), store
+      yield Write.call(store, card, joins:, named:), store
     end
   end
 
@@ -56,12 +56,13 @@ class ImportWriteTest < Minitest::Test
   end
 
   # A card this creates joins everyone's book the way a client's
-  # create does, and the import's own group besides. One call per
-  # card, so the second card's group is the first card's, found
-  # rather than made again.
+  # create does, and whatever its screen ticked besides — the group
+  # for the import among them (Web#import_picker). One call per card,
+  # so the second card's group is the first card's, found rather than
+  # made again.
   def test_arrivals_join_the_import_group_and_everyones_book
     with_contacts({}) do |store|
-      ids = 2.times.map { Write.call(store, card, group: "import-20260921T031655Z").id }
+      ids = 2.times.map { Write.call(store, card, named: ["import-20260921T031655Z"]).id }
 
       assert_equal 2, ids.uniq.length
       groups = store.all_groups.select { it.members.sort == ids.sort }
@@ -79,7 +80,7 @@ class ImportWriteTest < Minitest::Test
     with_contacts({}) do |store|
       existing = store.create_group(name: "import-20260921T031655Z")
 
-      ids = 2.times.map { Write.call(store, card, group: "import-20260921T031655Z").id }
+      ids = 2.times.map { Write.call(store, card, named: ["import-20260921T031655Z"]).id }
 
       assert_equal ids.sort, store.group(existing).members.sort
       assert_equal 1, store.all_groups.count { it.name == "import-20260921T031655Z" }
@@ -92,7 +93,7 @@ class ImportWriteTest < Minitest::Test
     with_contacts({}) do |store|
       school = store.create_group(name: "school")
 
-      id = Write.call(store, card, group: "import-20260921T031655Z", joins: [school]).id
+      id = Write.call(store, card, named: ["import-20260921T031655Z"], joins: [school]).id
 
       assert_equal [id], store.group(school).members
       assert_equal ["import-20260921T031655Z", "school", ProTacts::Store::EVERYONE],
@@ -132,19 +133,22 @@ class ImportWriteTest < Minitest::Test
     end
   end
 
-  # Two answers can mean one group, and a membership written twice is
-  # a constraint violation rather than a second membership.
-  def test_a_name_that_is_the_imports_own_group_joins_it_once
+  # Two answers can mean one group — a box ticked and a name typed for
+  # the group it already names — and a membership written twice is a
+  # constraint violation rather than a second membership.
+  def test_a_name_that_is_a_chosen_group_joins_it_once
     with_contacts({}) do |store|
-      id = Write.call(store, card, group: "Clarks", named: ["Clarks"]).id
+      clarks = store.create_group(name: "Clarks")
+
+      id = Write.call(store, card, joins: [clarks], named: ["Clarks"]).id
 
       assert_equal 1, store.all_groups.count { it.name == "Clarks" }
-      assert_equal [id], store.all_groups.find { it.name == "Clarks" }.members
+      assert_equal [id], store.group(clarks).members
     end
   end
 
-  # Either, or neither: a chosen group stands on its own when the
-  # import files under no group at all.
+  # Either, or neither: a chosen group stands on its own when no name
+  # is given with it.
   def test_arrivals_join_a_chosen_group_with_no_group_named
     with_contacts({}) do |store|
       school = store.create_group(name: "school")
@@ -156,7 +160,9 @@ class ImportWriteTest < Minitest::Test
     end
   end
 
-  def test_no_group_name_puts_the_card_in_everyones_book_alone
+  # Nothing ticked is nothing joined, the group for the import
+  # included: a card in no group is still in everyone's book.
+  def test_no_group_at_all_puts_the_card_in_everyones_book_alone
     write_card do |imported, store|
       assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
       assert_equal [imported.id], store.all_groups.fetch(0).members

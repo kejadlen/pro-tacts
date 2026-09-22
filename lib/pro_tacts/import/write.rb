@@ -26,7 +26,6 @@ module ProTacts
     # rather than back into the editor (Web#open_card).
     class Write
       # @rbs @store: Store
-      # @rbs @group: String?
       # @rbs @group_ids: Hash[String, String]
 
       # The group an import offers to put its arrivals in, named for
@@ -38,24 +37,24 @@ module ProTacts
         "import-#{now.utc.strftime("%Y%m%dT%H%M%SZ")}"
       end
 
-      # `group` is a group named rather than chosen — this server's
-      # own by that name, or a new one — and it takes in every card of
-      # the import, that being the one thing they all have in common.
-      # `joins` is the rest: the ids of groups this book already has,
-      # as the walk ticked them beside this card. `named` is the same
-      # answer in names, for the groups the walk asked for that do not
-      # exist yet, made here because here is where the card they were
-      # asked for is written. Any of them, or none: a card in no group
-      # is still in everyone's book (#call).
-      #: (Store store, VCard card, ?group: String?, ?joins: Array[String], ?named: Array[String]) -> Contact
-      def self.call(store, card, group: nil, joins: [], named: [])
-        new(store, group:).call(card, joins, named)
+      # `joins` is the ids of groups this book already has, as the
+      # screen beside this card ticked them. `named` is the same
+      # answer in names, for the groups that screen asked for that do
+      # not exist yet, made here because here is where the card they
+      # were asked for is written. The group for the import is one of
+      # the two, whichever it has become by now
+      # (Web#import_picker) — nothing here knows it from any other
+      # answer, there being nothing this can do about it that it does
+      # not do about the rest. Either list, or neither: a card in no
+      # group is still in everyone's book (#call).
+      #: (Store store, VCard card, ?joins: Array[String], ?named: Array[String]) -> Contact
+      def self.call(store, card, joins: [], named: [])
+        new(store).call(card, joins, named)
       end
 
-      #: (Store store, ?group: String?) -> void
-      def initialize(store, group: nil)
+      #: (Store store) -> void
+      def initialize(store)
         @store = store
-        @group = group
         @group_ids = {} #: Hash[String, String]
       end
 
@@ -70,15 +69,13 @@ module ProTacts
         # nobody's book (docs/plans/2026-09-15-client-creates-join-everyone.md).
         @store.put(id, identified(card, id), client: true)
 
-        # The chosen ids need no resolving, the walk having read them
-        # off this same store. Deduplicated because two of these can
-        # mean one group — a contact's own new group named what the
-        # import's group is named, say — and a membership written
+        # The chosen ids need no resolving, the screen having read
+        # them off this same store. Deduplicated because two of these
+        # can mean one group — a name typed for a group that the box
+        # above it already offers, say — and a membership written
         # twice is a constraint violation rather than a second
         # membership.
-        group = @group
         join = [*chosen, *named.map { group_id(it) }]
-        join << group_id(group) if group
         @store.regroup(id, join: join.uniq, leave: []) unless join.empty?
 
         # Read back rather than kept from the put, because the group
@@ -103,19 +100,18 @@ module ProTacts
         rest.insert(["UID:#{id}\r\n"])
       end
 
-      # Looked up before it is made, so an import naming a group this
+      # Looked up before it is made, so a card naming a group this
       # server already has joins that one rather than colliding with
-      # its name (db/migrations/008_group_names.rb). That is what
-      # carries the group for the lot across the walk: the first Save
-      # makes it, and every Save after that finds it.
+      # its name (db/migrations/008_group_names.rb). That is also what
+      # carries the group for the import across the walk: the first
+      # Save makes it, and from then on it is an ordinary box.
       #
       # The lookup is per name rather than a list read once up front,
       # because the put above makes a group of its own: the first card
       # into an empty store creates `sync:*` (Store#everyone_group_id),
       # and a list read before that would send this to create it again.
-      # Memoized so that a card whose own new group is named what the
-      # import's group is named reads the list once rather than making
-      # the group twice. The choices read, not the whole groups read:
+      # Memoized so that a card given the same name twice reads the
+      # list once rather than making the group twice. The choices read, not the whole groups read:
       # the match is on name, and a group's members are no part of it
       # (Store#group_choices).
       #: (String name) -> String

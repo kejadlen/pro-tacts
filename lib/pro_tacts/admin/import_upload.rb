@@ -16,7 +16,8 @@ module ProTacts
     #
     # The form takes one .vcf and nothing else. Looking over what is
     # in it needs the file open, so that is the next screen's
-    # (ImportReview, and the pair of cards a row there opens).
+    # (ImportReview, over the walk's list of its contacts and the pair
+    # of cards a row there opens).
     #
     # `imported` is what the import that just ended brought in — the
     # rows its walk saved, and not the ones it left behind — rendered

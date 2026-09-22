@@ -38,15 +38,16 @@ rake profile:install  # Download carddav.mobileconfig from the app and
 profiles, so leave those to the user.
 
 Importing is not a task at all: a .vcf is uploaded at `/import` in the
-app, and worked down there contact by contact — the card as the file
-wrote it beside the card that is coming in, with the lines no screen
-here shows struck, and this book's groups as a filtered list of boxes to
-tick. Each contact's own Save is what writes it through the store, into
-a group made for the import and whichever groups that contact was given,
-so the list says which rows are in the book and stopping halfway keeps
-every one of them (docs/plans/2026-09-21-import-a-vcf.md). The `import:*`
-tasks, the Swift reader they drove Contacts.app with, and the plan
-directories they wrote are gone.
+app, and worked down there contact by contact, the file's contacts
+standing in a sidebar beside whatever is open. A row opens the card as
+the file wrote it beside the card that is coming in, with the lines no
+screen here shows struck, and this book's groups as a filtered list of
+boxes to tick — the group made for the import and everyone's book among
+them, ticked. That contact's own Save is what writes it through the
+store, so each row reads "saved" or "not saved" and stopping halfway
+keeps everything already in (docs/plans/2026-09-21-import-a-vcf.md).
+The `import:*` tasks, the Swift reader they drove Contacts.app with,
+and the plan directories they wrote are gone.
 
 ## Task management
 

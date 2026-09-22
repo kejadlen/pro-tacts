@@ -17,10 +17,12 @@ module ProTacts
     #
     # So this module owes two readings. The split into cards, and then
     # per card the split #read makes: what is coming in, and what is
-    # being left behind. The review screen shows both at once — the
-    # card as it was exported with the doomed lines struck, beside the
-    # card that is coming in, open in the editor — so nothing is lost
-    # without having been shown first (Admin::ImportOriginal).
+    # being left behind. A contact's own screen shows both at once —
+    # the card as it was exported with the doomed lines struck, beside
+    # the card that is coming in, open in the editor — so nothing is
+    # lost without having been shown first (Admin::ImportOriginal),
+    # and the count of what one is losing is the mark its row in the
+    # walk wears (Admin::ImportSidebar).
     module Vcf
       # A file that is not a set of vCards.
       class Invalid < StandardError; end

@@ -858,3 +858,52 @@ dialog > .field-stack > input[type="search"] {
 .diff-added {
   color: var(--gl-color-success);
 }
+
+/* The import's walk: the contacts down one side, whatever is being
+   read beside them (Admin::ImportSidebar). Asymmetric where .paired
+   and .dashboard are even, because these columns are not peers -- one
+   is a place in a list and the other is the thing being looked at --
+   so it names a width for the first and gives the rest to the second,
+   and collapses to one column where the two cannot both stand. The
+   sidebar goes on top there rather than under: it is how you got to
+   what is below it. */
+.walk {
+  display: grid;
+  grid-template-columns: minmax(0, 17rem) minmax(0, 1fr);
+  gap: var(--gl-space-m);
+  align-items: start;
+}
+
+@media (max-width: 56rem) {
+  .walk {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The row being read: the hover fill it already knows, plus a rail in
+   the accent down its inside edge. A rail rather than a filled row,
+   because the fill is the hover gesture and a row wearing it at rest
+   reads as hovered; drawn as an inset shadow rather than a border so
+   the text of one row stays in line with the others. accent-soft
+   would have said it in one declaration and is not an option here --
+   tokens.css never derives it again in dark mode (see the accent
+   block above). */
+.walk-list a[aria-current] {
+  background: var(--gl-color-surface-fill-2);
+  box-shadow: inset 3px 0 0 var(--gl-color-accent);
+}
+
+/* Whether a row is in the book yet, which is the one thing the walk
+   turns on. The unsaved state is the page's own text color rather
+   than the muted grey a type-label takes: everything here is unsaved
+   until its own screen says otherwise, and a state nobody notices is
+   the silence this list exists to undo. Saved goes quiet, and green,
+   the status color being one of the two tokens that never swap with
+   the accent. The words carry it either way and the color is the
+   second telling, the rule the diff marks beside them follow. */
+.walk-list [data-state="unsaved"] {
+  color: var(--gl-color-text-primary);
+}
+.walk-list [data-state="saved"] {
+  color: var(--gl-color-success);
+}

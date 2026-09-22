@@ -98,12 +98,8 @@ importer actually wants is to look at a contact and fix it.
 So the review is a walk, three screens rather than a submission:
 
 1. **Choose the file.**
-2. **The contacts it holds**, one row each, marked with how many of
-   that contact's lines are not coming in — or marked as in the book
-   already, once its own screen has been through — over a summary of
-   which properties the whole file is losing. A book is hundreds of
-   contacts and only some of them will have anything worth looking at,
-   so the list is what says which rows are worth opening.
+2. **What the whole file is losing**, and beside it the contacts it
+   holds, one row each.
 3. **One contact, two cards.** On the left, the card exactly as the
    file wrote it: content lines in monospace, with every line that is
    not coming in struck in Gloss's danger color and labelled "not
@@ -114,9 +110,12 @@ So the review is a walk, three screens rather than a submission:
    name one it does not have yet. Read the spouse's name off the left
    card and type it into the note on the right, in your own words, and
    put the contact where it belongs while you are looking at it. The
-   Save on that screen is the import of that contact: it goes into the
-   book there and then, under the group named for the lot and whatever
-   else was ticked beside it.
+   Save on that screen is the import of that contact: it goes into
+   the book there and then, in whatever the boxes beside it say. It
+   is the one editor in the app whose Save creates the record rather
+   than amending it, so it says where the card is going — "save to
+   the book" — and the row beside it reads "not saved" until it has
+   been pressed.
 
 The right-hand card is `Admin::ContactsEdit` itself, not a copy of it.
 A second editor for imports would be a place where the two could
@@ -136,6 +135,33 @@ contact holds that in the model and serves a card without it; a staged
 contact is only its card, so the save says so and asks for the date
 again once the contact is stored, rather than dropping it the moment
 it was typed.
+
+## The list is a sidebar
+
+The contacts are not a screen of their own. They are a column down
+the side of both screens after the upload, so opening a row never
+costs your place in the list: the row being read is marked, the row
+after it is the next thing to click, and what the last ten screens
+settled is in view while the eleventh is open. A book is hundreds of
+contacts and only some of them will have anything worth looking at,
+so the list is what says which rows are worth opening — and that is
+a thing to read *while* reading one, not instead of.
+
+Two facts per row, and the walk turns on both.
+
+**Whether the contact is in the book**, said in words. Everything is
+unsaved until its own screen says otherwise, and a walk broken off
+overnight and come back to has to say which rows those are; a state
+nobody notices is the silence this screen exists to undo, so the
+unsaved rows stand in the page's own text color and the saved ones go
+quiet and green. The colors are the second telling: the words are
+"not saved" and "saved".
+
+**What the card is losing**, as a diff's own mark — `-3` against the
+contact's name, in the sign-and-color shape a change-log entry wears
+(`.diff-removed` in admin.css). A sentence for it made every marked
+row a line of prose to read, and the number is the whole of what a row
+has to say about it: how many, and that it is a loss.
 
 ## Nothing waits for the end
 
@@ -171,13 +197,14 @@ it early. Either way the rows nobody opened are left behind with this
 copy of the file, which the importer has their own of, and what came in
 is listed on the same page an import has always ended on.
 
-One decision does have to be settled up front, and that is the group
-for the lot: every Save files its contact under it. So it is named when
-the import opens — `import-<timestamp>` by default — and stays editable
-until the first contact is in, after which the list shows it as a fact
-rather than a field. Renaming it halfway would leave what is already in
-the book under the old name and put the rest somewhere else, which is
-one import in two groups.
+One thing is settled up front, and that is the group for the lot:
+every Save files its contact under it. It is named when the import
+opens, `import-<timestamp>`, and nothing renames it. A name typed
+before anything has been looked at is a name for nothing; a name typed
+after the first contact is in would leave that one under the old name
+and put the rest somewhere else, which is one import in two groups.
+What *is* editable is the membership, which belongs beside each
+contact's own card and is a contact at a time.
 
 ## The import waits on the server
 
@@ -222,16 +249,36 @@ the same two writes a client's PUT and the groups dialog make:
    everyone's book the way a client's create does
    (`2026-09-15-client-creates-join-everyone.md`).
 3. `Store#regroup` into whichever groups this contact's screen settled
-   on. Two questions, asked in the two places they belong. The list
-   names one group for the lot, `import-<timestamp>` by default — what
-   arrived together can be found together, and undone together — and it
-   is emptiable, a name this server already has joining that group
-   rather than colliding with it. Beside each contact's own card, every
+   on — all of them, the group for the import included, `Import::Write`
+   knowing that one from no other answer because there is nothing it
+   could do about it that it does not do about the rest. The import's
+   own group is named when the upload happens, `import-<timestamp>`, so
+   what arrived together can be found together and undone together; a
+   name this server already has joins that group rather than colliding
+   with it. Beside each contact's own card, every
    group this book already has as a box to tick: an import is as often
    "these three are from the school list" as it is a batch that only
    needs finding again, and which people those are is exactly what the
    walk is for. Neither is required, and a card in no group is still in
    everyone's book.
+
+   Both groups a card comes in under stand among those boxes rather
+   than out of sight, because the question this screen answers is what
+   the contact will be in, and leaving one out is the same silence the
+   walk exists to undo. Everyone's book is ticked and fixed —
+   `Store#put`'s `client: true` joins it whatever the form says, so a
+   box that could be cleared would be a box that lies, and disabling
+   it is also what keeps the value out of the submission. The group
+   for the import is ticked and can be unticked: an arrival that does
+   not belong with the lot is exactly the kind of thing the walk is
+   for deciding. That one is a name rather than an id until something
+   makes it, which is the first Save to go in under it, so it rides as
+   one of the staged names on that first screen and as an ordinary box
+   on every screen after. Everyone's book is missing from the list on
+   one screen in the life of a server — the first card of the first
+   import into an empty book, where that same put is what creates it —
+   and a row for a group that does not exist would be a worse answer
+   than none.
 
    The per-contact boxes ride in the editor's own form, so one Save
    writes the card and its groups together and there is no second

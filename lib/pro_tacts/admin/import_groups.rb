@@ -17,9 +17,15 @@ module ProTacts
     # (Admin::GroupDialog) — there the card exists and a membership is
     # a write of its own, here neither exists until that Save.
     #
-    # A box per group this book has, then a box per group this import
+    # A box per group this book has, then a box per group this card
     # has been told to make and has not made yet, then the filter
-    # itself offered as another. The filter, the cap on how many rows
+    # itself offered as another. The two a card comes in under
+    # whatever else is ticked stand among them rather than out of
+    # sight: everyone's book, which every card this creates joins
+    # (Store#put's `client: true`) and which is therefore ticked and
+    # fixed, and the group for the import, which is ticked and can be
+    # unticked — an arrival that does not belong with the lot is a
+    # thing the walk is for deciding. The filter, the cap on how many rows
     # stand shown and the button that lifts it are the dialog's
     # (Admin::GroupFilter,
     # docs/plans/2026-09-22-a-few-groups-at-a-time.md): a book with
@@ -36,6 +42,7 @@ module ProTacts
       # @rbs @groups: Array[Store::GroupChoice]
       # @rbs @joined: Array[String]
       # @rbs @named: Array[String]
+      # @rbs @fixed: Array[String]
       # @rbs @capped: Array[String]
 
       # Alphabetical, the groups dialog's own order: this is a list to
@@ -50,17 +57,26 @@ module ProTacts
       # the Save that would have staged it is the Save that writes the
       # contact.
       #
-      # Both are rows the cap spares, for the dialog's own reason: a
-      # box this contact has already been given is one the walk came
-      # back to untick. The names take rows from the limit without
-      # being in the list the cap reads, so they are counted into it
-      # rather than listed in it.
-      #: (groups: Array[Store::GroupChoice], joined: Array[String], named: Array[String]) -> void
-      def initialize(groups:, joined:, named:)
+      # `fixed` is the ids ticked that cannot be unticked, which is
+      # everyone's book and nothing else: a card this writes joins it
+      # whatever the form says, so a box that could be cleared would
+      # be a box that lies. Fixed rather than hidden because the
+      # question this screen answers is what the contact will be in,
+      # and leaving one out is the same silence the walk exists to
+      # undo.
+      #
+      # All three are rows the cap spares, for the dialog's own
+      # reason: a box this contact has already been given is one the
+      # walk came back to untick. The names take rows from the limit
+      # without being in the list the cap reads, so they are counted
+      # into it rather than listed in it.
+      #: (groups: Array[Store::GroupChoice], joined: Array[String], named: Array[String], ?fixed: Array[String]) -> void
+      def initialize(groups:, joined:, named:, fixed: [])
         @groups = groups.sort_by { it.label.downcase }
         @joined = joined
         @named = named
-        @capped = GroupFilter.capped(@groups.map(&:id), joined:, shown: named.length)
+        @fixed = fixed
+        @capped = GroupFilter.capped(@groups.map(&:id), joined: joined + fixed, shown: named.length)
       end
 
       def view_template
@@ -73,9 +89,15 @@ module ProTacts
           render GroupFilter.new(in_form: true)
           div(class: "field-stack", x_ref: "options") do
             @groups.each do |group|
+              # A fixed box is disabled, so the browser does not send
+              # it back and the save never reads it: the membership is
+              # the store's doing rather than this form's, and a value
+              # submitted for it would only be something to filter out
+              # again (Web#save_card).
+              fixed = @fixed.include?(group.id)
               label(**GroupFilter.row(group.label, capped: @capped.include?(group.id))) do
                 input(type: "checkbox", name: "groups[]", value: group.id,
-                      checked: @joined.include?(group.id))
+                      checked: fixed || @joined.include?(group.id), disabled: fixed)
                 render GroupLabel.new(group:)
               end
             end

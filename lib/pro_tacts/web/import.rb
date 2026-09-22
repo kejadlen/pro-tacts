@@ -3,6 +3,7 @@ require "pro_tacts/admin/contacts_edit"
 require "pro_tacts/admin/import_groups"
 require "pro_tacts/admin/import_original"
 require "pro_tacts/admin/import_review"
+require "pro_tacts/admin/import_sidebar"
 require "pro_tacts/admin/import_upload"
 require "pro_tacts/birthday"
 require "pro_tacts/import/write"
@@ -20,12 +21,15 @@ module ProTacts
     # the machine holding it is whichever one the browser is on.
     #
     # Three screens, because an import is a walk rather than a
-    # submission: choose the file, look down the contacts it holds,
-    # and open any of them beside the card it arrived as. The Save on
-    # that last screen is the import of that one contact — not a note
-    # kept until a confirm at the end — so the list is a list of what
-    # is in the book and what is not yet, and what is left when the
-    # walk stops is only the part nobody looked at.
+    # submission: choose the file, read what the whole of it is
+    # losing, and open any of its contacts beside the card it arrived
+    # as. The Save on that last screen is the import of that one
+    # contact — not a note kept until a confirm at the end — so the
+    # walk's list says what is in the book and what is not yet, and
+    # what is left when the walk stops is only the part nobody looked
+    # at. That list is a sidebar rather than a screen of its own
+    # (Admin::ImportSidebar): it stands beside the two later screens
+    # both, so opening a row never costs your place in it.
     #
     # Under the same identity gate as every other route (web.rb),
     # which is also where the arrivals' books come from: a card this
@@ -46,10 +50,6 @@ module ProTacts
         # Before the index below, and distinguishable from one: a
         # path segment is what says which request this is, not which
         # fields a form happened to carry.
-        r.post "group" do
-          name_import_group(r, upload)
-        end
-
         r.post "done" do
           finish_import(upload)
         end
@@ -107,10 +107,13 @@ module ProTacts
       id = Import::Staged.open(
         original: bytes,
         revised: joined(cards.map { Import::Vcf.read(it).card }),
-        # Named here and not at the end, there being no end to name it
-        # at: the first Save has to know what to file its contact
-        # under. Still the importer's to change until that first Save
-        # (#name_import_group).
+        # Named here and not at the end, there being no end to name
+        # it at: every Save files its contact under it. Not the
+        # importer's to rename either — a name typed before anything
+        # has been looked at is a name for nothing, and one typed
+        # after would split an import across two groups. What is
+        # editable is the membership, beside each contact's own card
+        # and a contact at a time (#import_picker).
         group: Import::Write.default_group,
       )
       # A 303, the other writes' answer, because what follows is a
@@ -118,8 +121,9 @@ module ProTacts
       r.redirect "/import/#{id}", 303
     end
 
-    # The contacts the file holds: what each is losing, and whether it
-    # is in the book yet.
+    # What the whole file is losing, what it is coming in under, and
+    # the way to stop. The contacts themselves are the sidebar beside
+    # it, which every screen of the walk carries.
     #: (String upload, ?notice: String?) -> String
     def review_screen(upload, notice: nil)
       staged = staged_cards(upload)
@@ -127,22 +131,32 @@ module ProTacts
 
       originals, revised = staged
       group, saved = Import::Staged.saved(upload)
+
+      response["Content-Type"] = "text/html; charset=utf-8"
+      Admin::ImportReview.call(
+        upload:,
+        contacts: revised.length,
+        saved: saved.length,
+        unknown: Import::Vcf.unknown(originals),
+        group:,
+        sidebar: walk_sidebar(upload, originals, revised, saved),
+        notice:,
+      )
+    end
+
+    # The walk's list of contacts, as every screen of it shows them:
+    # the contact each card will be written as, how many of its
+    # original's lines are not coming with it, and which rows are in
+    # the book already. `current` is the row whose screen is open.
+    #: (String upload, Array[VCard] originals, Array[VCard] revised, Hash[String, String] saved, ?current: Integer?) -> Admin::ImportSidebar
+    def walk_sidebar(upload, originals, revised, saved, current: nil)
       rows = revised.each_with_index.map { |card, index|
         # A literal of several elements is an Array until something
         # says otherwise, and an inline annotation needs its own line.
         dropped = Import::Vcf.read(originals.fetch(index)).dropped
         [import_contact(card, index), Import::Vcf.losses(dropped).length] #: [Contact, Integer]
       }
-
-      response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::ImportReview.call(
-        upload:,
-        rows:,
-        unknown: Import::Vcf.unknown(originals),
-        group:,
-        saved:,
-        notice:,
-      )
+      Admin::ImportSidebar.new(upload:, rows:, saved:, current:)
     end
 
     # A row opened: the card it arrived as beside the card that is
@@ -165,13 +179,14 @@ module ProTacts
     # copy of it: a field the two disagreed about would be a field an
     # import writes and an edit cannot undo.
     #
-    # `joined` and `named` are the groups a refused save had ticked.
-    # Empty on the way in, because a card that is not in the book is a
-    # card nothing has been decided about yet — there is no staged
-    # answer to read back, the Save that would have written one being
-    # the Save that writes the contact.
-    #: (String upload, Integer index, ?notice: String?, ?joined: Array[String], ?named: Array[String]) -> String?
-    def card_screen(upload, index, notice: nil, joined: [], named: [])
+    # `joined` and `named` are the groups a refused save had ticked,
+    # and none on the way in: nothing is staged between screens, the
+    # Save that would have written an answer being the Save that
+    # writes the contact, so a card opened afresh is asked the
+    # question with the defaults ticked (#import_picker) rather than
+    # with an earlier answer read back.
+    #: (String upload, Integer index, ?notice: String?, ?joined: Array[String]?, ?named: Array[String]?) -> String?
+    def card_screen(upload, index, notice: nil, joined: nil, named: nil)
       staged = staged_cards(upload)
       return expired_screen if staged.nil?
 
@@ -183,14 +198,50 @@ module ProTacts
       # has.
       return nil if original.nil? || card.nil?
 
+      group, saved = Import::Staged.saved(upload)
+
       response["Content-Type"] = "text/html; charset=utf-8"
       Admin::ContactsEdit.call(
         contact: import_contact(card, index),
         notice:,
         action: "/import/#{upload}/#{index}",
         back: ["/import/#{upload}", "the import"],
+        # The submit says where the card is going, because it is not
+        # there yet: this is the one editor in the app whose Save
+        # creates the record rather than amending it, and the row
+        # beside it reads "not saved" until it has been pressed
+        # (Admin::ImportSidebar).
+        save: "save to the book",
         aside: Admin::ImportOriginal.new(card: original, dropped: Import::Vcf.read(original).dropped),
-        fields: Admin::ImportGroups.new(groups: store.group_choices, joined:, named:),
+        fields: import_picker(group, joined, named),
+        sidebar: walk_sidebar(upload, originals, revised, saved, current: index),
+      )
+    end
+
+    # The groups beside one card: this book's own list, with the two
+    # an arrival comes in under already ticked.
+    #
+    # Everyone's book is ticked and fixed, `Store#put`'s `client:
+    # true` joining it whatever this form says. It is missing from
+    # the list on one screen in the life of a server — the first card
+    # of the first import into an empty book, where that put is what
+    # creates it — and a row for a group that does not exist would be
+    # a worse answer than none.
+    #
+    # The group for the import is ticked and can be unticked. It is a
+    # name rather than an id until something makes it, which is the
+    # first Save to go in under it (Import::Write#group_id), so it
+    # rides as one of the staged names on that first screen and as an
+    # ordinary box on every screen after.
+    #: (String group, Array[String]? joined, Array[String]? named) -> Admin::ImportGroups
+    def import_picker(group, joined, named)
+      choices = store.group_choices
+      lot = group.empty? ? nil : choices.find { it.name == group }
+      Admin::ImportGroups.new(
+        groups: choices,
+        joined: joined || [lot&.id].compact,
+        named: named || [(group unless lot || group.empty?)].compact,
+        fixed: choices.select { it.name == Store::EVERYONE }.map(&:id),
       )
     end
 
@@ -207,7 +258,7 @@ module ProTacts
       card = revised[index]
       return nil if card.nil?
 
-      group, saved = Import::Staged.saved(upload)
+      _group, saved = Import::Staged.saved(upload)
       # A Save pressed twice, or a back button onto the screen of a
       # contact that is already in the book: a second write here would
       # be a second contact rather than an edit of the first, there
@@ -221,9 +272,11 @@ module ProTacts
       # Save (Admin::ImportGroups): a card the walk has looked at is
       # decided about in both ways at once. Only ids naming a group,
       # #apply_groups' own rule, and the boxes are the whole answer —
-      # none ticked is none joined. A name typed into the filter joins
-      # the names already standing for this contact, and is made by
-      # the write below (Import::Write#group_id).
+      # none ticked is none joined, the group for the import included,
+      # which is a box like any other here (#import_picker). A name
+      # typed into the filter joins the names already standing for
+      # this contact, and is made by the write below
+      # (Import::Write#group_id).
       #
       # Read before the refusals rather than after, so a card sent
       # back to be fixed comes back with its boxes as they were
@@ -296,7 +349,7 @@ module ProTacts
       # is still a row the list has to be able to name.
       revised[index] = edited
       Import::Staged.update(upload, joined(revised))
-      written = Import::Write.call(store, edited, group: group.empty? ? nil : group, joins: ticked, named: wanted)
+      written = Import::Write.call(store, edited, joins: ticked, named: wanted)
       Import::Staged.record(upload, index.to_s, written.id)
 
       # The last one: there is nothing left to come back to, so the
@@ -304,30 +357,6 @@ module ProTacts
       # the same thing and a button under them.
       return finish_import(upload) if saved.length + 1 == revised.length
 
-      r.redirect "/import/#{upload}", 303
-    end
-
-    # The group the arrivals are filed under, named. Only while the
-    # import has written nothing: the name is what every Save files
-    # its contact under, and changing it halfway would leave what is
-    # already in the book under the old name and put the rest
-    # somewhere else, which is one import in two groups.
-    #: (untyped r, String upload) -> untyped
-    def name_import_group(r, upload)
-      return expired_screen if Import::Staged.read(upload, Import::Staged::SAVED).nil?
-
-      group, saved = Import::Staged.saved(upload)
-      if saved.any?
-        settled =
-          if group.empty?
-            "Contacts from this import are in the book already, in no group of their own."
-          else
-            "Contacts from this import are in #{group} already, and the rest join them."
-          end
-        return review_screen(upload, notice: settled)
-      end
-
-      Import::Staged.name_group(upload, r.params["group"].to_s.strip)
       r.redirect "/import/#{upload}", 303
     end
 

@@ -64,12 +64,30 @@ class AdminImportPagesTest < Minitest::Test
 
   # A row opened and its Save pressed, which is the import of that one
   # contact: the fields the editor always sends, over the etag the
-  # page it came from was rendered with.
+  # page it came from was rendered with, and the boxes that page came
+  # with sent back the way a browser sends them — a card arrives with
+  # the groups it comes in under already ticked (Web#import_picker).
   def save(id, index, first:, last:, **params)
     get "/import/#{id}/#{index}"
     post "/import/#{id}/#{index}",
          {"etag" => etag, "first" => first, "middle" => "", "last" => last,
-          "nickname" => "", "note" => ""}.merge(params)
+          "nickname" => "", "note" => "",
+          "groups" => ticked("groups[]"), "named" => ticked("named[]")}.merge(params)
+  end
+
+  # The values of the boxes the last page rendered ticked. A fixed box
+  # is disabled and a browser sends none of those back, so neither
+  # does this (Admin::ImportGroups).
+  def ticked(name)
+    last_response.body.scan(/name="#{Regexp.escape(name)}" value="([^"]*)" checked(?! disabled)/).flatten
+  end
+
+  # The group this import files its arrivals under, read off the
+  # screen that states it — there is no form for it, and the name is
+  # the moment the upload happened.
+  def import_group(id)
+    get "/import/#{id}"
+    last_response.body[/Coming in as ([^.<]+)\./, 1].to_s
   end
 
   def test_the_screen_asks_for_a_vcf
@@ -97,15 +115,43 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
-  # The row says what opening it would be for: a contact losing
-  # nothing does not need a visit.
-  def test_the_list_marks_the_contacts_losing_something
+  # The row says what opening it would be for, in a diff's own mark: a
+  # contact losing nothing does not need a visit, and wears nothing.
+  def test_the_walk_marks_what_each_contact_is_losing
     with_contacts({}) do |_store|
       upload(JANE + PLAIN)
       follow_redirect!
 
-      assert_includes last_response.body, "3 lines left behind"
-      assert_equal 1, last_response.body.scan("left behind").length
+      assert_includes last_response.body, %(<span class="type-mono diff-removed">-3</span>)
+      assert_equal 1, last_response.body.scan("diff-removed").length
+    end
+  end
+
+  # The contacts stand beside whatever is open, rather than on a page
+  # of their own: opening a row never costs your place in the list.
+  def test_the_walk_stands_beside_the_card_being_read
+    with_contacts({}) do |_store|
+      id = upload(JANE + PLAIN)
+
+      get "/import/#{id}/0"
+
+      assert_includes last_response.body, %(<div class="walk">)
+      assert_includes last_response.body, %(<nav class="walk-list">)
+      assert_includes last_response.body, "Sam Booles"
+      assert_includes last_response.body, %(href="/import/#{id}/1")
+      # And says which row you are on.
+      assert_includes last_response.body, %(<a href="/import/#{id}/0" aria-current="page">)
+    end
+  end
+
+  # Everything is unsaved until its own screen says otherwise, and a
+  # walk broken off overnight has to say which rows those are.
+  def test_a_row_that_is_not_in_the_book_says_so
+    with_contacts({}) do |_store|
+      upload(JANE + PLAIN)
+      follow_redirect!
+
+      assert_equal 2, last_response.body.scan(%(data-state="unsaved">not saved)).length
     end
   end
 
@@ -128,7 +174,7 @@ class AdminImportPagesTest < Minitest::Test
       follow_redirect!
 
       assert_includes last_response.body, "Nothing in this file needs reading before it comes in."
-      refute_includes last_response.body, "left behind"
+      refute_includes last_response.body, "diff-removed"
     end
   end
 
@@ -141,7 +187,7 @@ class AdminImportPagesTest < Minitest::Test
       follow_redirect!
 
       assert_includes last_response.body, "Nothing in this file needs reading before it comes in."
-      refute_includes last_response.body, "left behind"
+      refute_includes last_response.body, "diff-removed"
       refute_includes last_response.body, "PRODID"
     end
   end
@@ -184,6 +230,8 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body, %(<form action="/import/#{id}/0" method="post")
       assert_includes last_response.body, %(value="+1 555 0100")
       assert_includes last_response.body, %(href="/import/#{id}")
+      # The one editor in the app whose Save creates the record.
+      assert_includes last_response.body, "save to the book"
     end
   end
 
@@ -217,7 +265,7 @@ class AdminImportPagesTest < Minitest::Test
       follow_redirect!
 
       assert_includes last_response.body, %(href="/contacts/#{jane.id}")
-      assert_includes last_response.body, %(<span class="type-label">saved</span>)
+      assert_includes last_response.body, %(data-state="saved">saved</span>)
       assert_includes last_response.body, %(href="/import/#{id}/1")
       assert_includes last_response.body, "1 contact in the book."
     end
@@ -384,13 +432,90 @@ class AdminImportPagesTest < Minitest::Test
   def test_a_group_named_beside_a_card_is_made_with_it
     with_contacts({}) do |store|
       id = upload(JANE)
-      post "/import/#{id}/group", "group" => ""
 
-      save(id, 0, first: "Jane", last: "Booles", "new" => " Clarks ")
+      save(id, 0, first: "Jane", last: "Booles", "named" => [], "new" => " Clarks ")
 
       clarks = store.all_groups.find { it.name == "Clarks" }
 
       assert_equal [store.contacts.fetch(0).id], clarks.members
+    end
+  end
+
+  # The group for the import is one of the boxes beside the card, not
+  # a field on a screen of its own: it is named when the upload
+  # happens, ticked for every card, and shown rather than applied
+  # behind the walk's back.
+  def test_the_group_for_the_import_is_ticked_beside_every_card
+    with_contacts({}) do |store|
+      id = upload(JANE + PLAIN)
+      lot = import_group(id)
+
+      assert_match(/\Aimport-\d{8}T\d{6}Z\z/, lot)
+
+      # On the first card it is a name, nothing having made it yet.
+      get "/import/#{id}/0"
+
+      assert_includes last_response.body, %(<input type="checkbox" name="named[]" value="#{lot}" checked>)
+
+      save(id, 0, first: "Jane", last: "Booles")
+      made = store.all_groups.find { it.name == lot }
+
+      assert_equal [store.contacts.fetch(0).id], made.members
+
+      # On the next one it is an ordinary box, ticked.
+      get "/import/#{id}/1"
+
+      assert_includes last_response.body,
+                      %(<input type="checkbox" name="groups[]" value="#{made.id}" checked>)
+    end
+  end
+
+  # And it can be unticked: an arrival that does not belong with the
+  # lot is a thing the walk is for deciding.
+  def test_an_arrival_can_be_kept_out_of_the_import_group
+    with_contacts({}) do |store|
+      id = upload(JANE)
+
+      save(id, 0, first: "Jane", last: "Booles", "named" => [])
+
+      assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
+    end
+  end
+
+  # Renaming it is not offered. A name typed before anything has been
+  # looked at is a name for nothing, and one typed after would leave
+  # what is already in the book under the old name.
+  def test_the_group_for_the_import_cannot_be_renamed
+    with_contacts({}) do |_store|
+      id = upload(JANE)
+      follow_redirect!
+
+      assert_includes last_response.body, "Coming in as import-"
+      refute_includes last_response.body, %(name="group")
+
+      post "/import/#{id}/group", "group" => "somewhere else"
+
+      assert_equal 404, last_response.status
+    end
+  end
+
+  # Everyone's book is shown with the rest, ticked and fixed: every
+  # card this writes joins it whatever the form says, so a box that
+  # could be cleared would be a box that lies.
+  def test_everyones_book_is_shown_beside_a_card_and_cannot_be_cleared
+    with_contacts({}) do |store|
+      id = upload(JANE + PLAIN)
+      save(id, 0, first: "Jane", last: "Booles")
+      everyone = store.all_groups.find { it.name == ProTacts::Store::EVERYONE }
+
+      get "/import/#{id}/1"
+
+      assert_includes last_response.body,
+                      %(<input type="checkbox" name="groups[]" value="#{everyone.id}" checked disabled>)
+
+      save(id, 1, first: "Sam", last: "Booles")
+
+      assert_equal store.contacts.map(&:id).sort, store.group(everyone.id).members.sort
     end
   end
 
@@ -439,9 +564,11 @@ class AdminImportPagesTest < Minitest::Test
 
   # The cap the dialog got (docs/plans/2026-09-22-a-few-groups-at-a-time.md),
   # over the picker the walk opens once per contact: eight rows stand
-  # shown, the ninth is marked for the filter to reach, and the button
+  # shown, the rest are marked for the filter to reach, and the button
   # counts the whole list. A group already ticked for this contact
-  # takes a row from the cap rather than standing outside it.
+  # takes a row from the cap rather than standing outside it, and so
+  # does the group for the import, which is ticked and not yet in the
+  # list the cap reads.
   def test_the_groups_beside_a_card_show_a_few_at_a_time
     with_contacts({}) do |store|
       ("a".."h").each { store.create_group(name: "Group #{it}") }
@@ -450,16 +577,18 @@ class AdminImportPagesTest < Minitest::Test
 
       get "/import/#{id}/0"
 
-      # Alphabetical, so Zulus is the ninth and the one that goes under.
+      # Alphabetical, and the import's own name takes the eighth row,
+      # so Group h and Zulus are the two that go under.
       assert_includes last_response.body, %(<label data-label="zulus" data-capped :hidden="!visible($el)">)
-      assert_equal 1, last_response.body.scan("data-capped").length
+      assert_equal 2, last_response.body.scan("data-capped").length
       assert_includes last_response.body, "show all 9 groups"
 
-      # Ticked on a save that came back to be fixed, so Zulus is
-      # spared and Group h goes under in its place.
+      # Ticked on a save that came back to be fixed — and the import's
+      # own name unticked with it — so Zulus is spared and Group h
+      # goes under alone.
       post "/import/#{id}/0",
            "etag" => "not the etag", "first" => "Jane", "middle" => "", "last" => "Booles",
-           "nickname" => "", "note" => "", "groups" => [zulus]
+           "nickname" => "", "note" => "", "groups" => [zulus], "named" => []
 
       assert_includes last_response.body, %(<label data-label="zulus" :hidden="!visible($el)">)
       assert_includes last_response.body, %(<label data-label="group h" data-capped :hidden="!visible($el)">)
@@ -469,7 +598,8 @@ class AdminImportPagesTest < Minitest::Test
 
   def test_the_groups_beside_a_card_offer_no_such_thing_uncapped
     with_contacts({}) do |store|
-      ("a".."h").each { store.create_group(name: "Group #{it}") }
+      # Seven, the import's own name being the eighth row.
+      ("a".."g").each { store.create_group(name: "Group #{it}") }
       id = upload(JANE)
 
       get "/import/#{id}/0"
@@ -487,9 +617,9 @@ class AdminImportPagesTest < Minitest::Test
     with_contacts({}) do |store|
       school = store.create_group(name: "school")
       id = upload(JANE + PLAIN)
-      post "/import/#{id}/group", "group" => "import-20260921T031655Z"
+      lot = import_group(id)
 
-      save(id, 0, first: "Jane", last: "Booles", "groups" => [school, "zzzz"])
+      save(id, 0, first: "Jane", last: "Booles", "groups" => [school, "zzzz"], "named" => [lot])
       save(id, 1, first: "Sam", last: "Booles")
 
       assert_equal 200, last_response.status
@@ -497,9 +627,9 @@ class AdminImportPagesTest < Minitest::Test
       sam = store.contacts.find { it.name == "Sam Booles" }
 
       assert_equal [jane.id], store.group(school).members
-      assert_equal ["import-20260921T031655Z", "school", ProTacts::Store::EVERYONE],
+      assert_equal [lot, "school", ProTacts::Store::EVERYONE],
                    store.all_groups.select { it.members.include?(jane.id) }.map(&:name).sort
-      assert_equal ["import-20260921T031655Z", ProTacts::Store::EVERYONE],
+      assert_equal [lot, ProTacts::Store::EVERYONE],
                    store.all_groups.select { it.members.include?(sam.id) }.map(&:name).sort
     end
   end
@@ -510,7 +640,6 @@ class AdminImportPagesTest < Minitest::Test
     with_contacts({}) do |store|
       school = store.create_group(name: "school")
       id = upload(JANE)
-      post "/import/#{id}/group", "group" => ""
       get "/import/#{id}/0"
       sent = etag
       store.delete_group(school)
@@ -520,59 +649,6 @@ class AdminImportPagesTest < Minitest::Test
            "nickname" => "", "note" => "", "groups" => [school]
 
       assert_equal 200, last_response.status
-      assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
-    end
-  end
-
-  # The group for the lot is named before anything comes in, so one
-  # import can be found — or undone — apart from the next.
-  def test_the_group_for_the_lot_is_named_before_anything_comes_in
-    with_contacts({}) do |_store|
-      id = upload(JANE)
-      follow_redirect!
-
-      assert_includes last_response.body, %(<form action="/import/#{id}/group" method="post")
-      assert_includes last_response.body, %(name="group" value="import-)
-
-      post "/import/#{id}/group", "group" => "the Booles"
-
-      assert_equal 303, last_response.status
-      follow_redirect!
-
-      assert_includes last_response.body, %(name="group" value="the Booles")
-    end
-  end
-
-  # And not after: a rename halfway would leave what is already in
-  # the book under the old name and put the rest somewhere else.
-  def test_the_group_for_the_lot_is_settled_once_a_contact_is_in
-    with_contacts({}) do |store|
-      id = upload(JANE + PLAIN)
-      post "/import/#{id}/group", "group" => "the Booles"
-      save(id, 0, first: "Jane", last: "Booles")
-
-      post "/import/#{id}/group", "group" => "somewhere else"
-
-      assert_equal 200, last_response.status
-      assert_includes last_response.body, "Contacts from this import are in the Booles already"
-      assert_includes last_response.body, "Coming in as the Booles."
-
-      save(id, 1, first: "Sam", last: "Booles")
-
-      refute_includes store.all_groups.map(&:name), "somewhere else"
-      assert_equal store.contacts.map(&:id).sort,
-                   store.all_groups.find { it.name == "the Booles" }.members.sort
-    end
-  end
-
-  # Emptiable, for an import that is not worth a group of its own.
-  def test_an_import_can_come_in_with_no_group_of_its_own
-    with_contacts({}) do |store|
-      id = upload(JANE)
-      post "/import/#{id}/group", "group" => ""
-
-      save(id, 0, first: "Jane", last: "Booles")
-
       assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
     end
   end

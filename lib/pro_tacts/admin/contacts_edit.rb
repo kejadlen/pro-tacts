@@ -72,6 +72,8 @@ module ProTacts
 
       # @rbs @contact: Contact
       # @rbs @own: Contact
+      # @rbs @sidebar: Phlex::HTML?
+      # @rbs @save: String
       # @rbs @notice: String?
       # @rbs @first: String?
       # @rbs @middle: String?
@@ -81,24 +83,30 @@ module ProTacts
       # @rbs @aside: Phlex::HTML?
       # @rbs @fields: Phlex::HTML?
 
-      # `action`, `back`, `aside` and `fields` are the import's: the
-      # same editor, over a card that is not stored yet, saving into
-      # the import rather than into a contact, rendered beside the
-      # card as it was exported (Admin::ImportOriginal) and carrying
-      # what the walk decides about a contact that a card cannot hold
-      # — which groups it joins (Admin::ImportGroups), inside this
-      # form so that one Save writes the lot. One editor rather than a
+      # The last six are the import's: the same editor, over a card
+      # that is not stored yet, saving into the import rather than
+      # into a contact, rendered beside the card as it was exported
+      # (Admin::ImportOriginal) and carrying what the walk decides
+      # about a contact that a card cannot hold — which groups it
+      # joins (Admin::ImportGroups), inside this form so that one Save
+      # writes the lot. `sidebar` is the walk's own list of contacts,
+      # standing beside the pair (Admin::ImportSidebar), and `save`
+      # the submit's words, which on an import say where the card is
+      # going because it is not there yet. One editor rather than a
       # second one for imports, because a field the two disagreed
       # about is a field an import writes and an edit cannot undo.
       # Defaulted to the contact's own, so the ordinary edit says
       # nothing about any of it.
-      #: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: Phlex::HTML?, ?fields: Phlex::HTML?) -> void
-      def initialize(contact:, notice: nil, action: nil, back: nil, aside: nil, fields: nil)
+      #: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: Phlex::HTML?, ?fields: Phlex::HTML?, ?sidebar: Phlex::HTML?, ?save: String?) -> void
+      def initialize(contact:, notice: nil, action: nil, back: nil, aside: nil, fields: nil,
+                     sidebar: nil, save: nil)
         @contact = contact
         @action = action || "/contacts/#{contact.id}"
         @back = back || ["/contacts/#{contact.id}", contact.name || contact.id]
         @aside = aside
         @fields = fields
+        @sidebar = sidebar
+        @save = save || "Save"
         # The rows are the contact's own, never what a group lends it
         # (Contact#own); the details page is where an inherited row is
         # read (Admin::ContactsShow). The etag below is still the
@@ -121,7 +129,7 @@ module ProTacts
         # width a single column wants is still what one card gets
         # (admin.css).
         render Layout.new(title: "Edit #{@contact.name || @contact.id}",
-                          wide: !@aside.nil?, notice: @notice) do
+                          wide: !@aside.nil? || !@sidebar.nil?, notice: @notice) do
           # The editor's Alpine scope, wrapping the record and the add
           # dialog both: the dialog names a type and the form grows a
           # row for it, so the two have to share state, and Alpine
@@ -135,6 +143,7 @@ module ProTacts
             # same place, and the same shape, as the details page's
             # edit link. Each mode's row names the other thing you can
             # do to the record from it.
+            walked do
             div(class: "record") do
             div(class: "record-nav") do
               href, label = @back
@@ -218,8 +227,9 @@ module ProTacts
               # opts into.
               footer do
                 a(href: @back.fetch(0), class: "btn") { "Cancel" }
-                button(type: "submit", form: FORM, data: {variant: "primary"}) { "Save" }
+                button(type: "submit", form: FORM, data: {variant: "primary"}) { @save }
               end
+            end
             end
             end
             end
@@ -229,6 +239,21 @@ module ProTacts
       end
 
       private
+
+      # The walk's list of contacts, and the record beside it when
+      # there is one — the sidebar grid (admin.css). Skipped rather
+      # than rendered around one column for the reason #paired is:
+      # an ordinary edit has no walk to stand in.
+      #: () { () -> void } -> void
+      def walked
+        sidebar = @sidebar
+        return yield if sidebar.nil?
+
+        div(class: "walk") do
+          render sidebar
+          yield
+        end
+      end
 
       # The editor's card, and what stands beside it when something
       # does — the two-column grid the dashboard uses, for its reason
