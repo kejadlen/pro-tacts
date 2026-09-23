@@ -206,14 +206,19 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   configuration as it loads, since the exchange log is given its path at
   class-definition time. Set it afterwards and the failed exchanges land
   in `log/` instead of a tmpdir.
-- Only three things in the database cannot be rebuilt: the cards, the
-  change log, and the birthdays — a partial date has no vCard 3.0
-  spelling, so it lives beside its card rather than in it (see
-  docs/plans/2026-08-31-partial-birthdays.md). Everything else is a
-  projection of the cards that `rake index:rebuild` will make again,
-  so no repair is ever needed for it. A write that touches a card must
-  land its change-log entry in the same transaction, because a client's
-  sync token silently skips whatever the log missed.
+- Only five things in the database cannot be rebuilt: the cards, the
+  change log, the birthdays, the groups, and the books — a partial
+  date has no vCard 3.0 spelling, so the birthday lives beside its
+  card rather than in it (docs/plans/2026-08-31-partial-birthdays.md);
+  a group's membership and the lines it lends are facts no stored card
+  carries (docs/plans/2026-08-24-vcard-storage-and-groups.md); and
+  only the `books` row says whose book a name is for
+  (docs/plans/2026-09-19-books-in-the-dump.md). Everything else
+  is a projection of the cards that `rake index:rebuild` will make
+  again, so no repair is ever needed for it. A write that touches a
+  card must land its change-log entry in the same transaction,
+  because a client's sync token silently skips whatever the log
+  missed.
 - A read whose filter is meant to identify one row uses `sole`, not
   `first` — `first` answers with one of several rather than saying the
   filter was too loose. `sole` raises either way it is wrong:

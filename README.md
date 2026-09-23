@@ -33,11 +33,12 @@ END:VCARD
 Storing the card rather than a parse of it is what lets the server keep
 properties it does not model, which RFC 6352 section 6.3.2.2 requires of
 anything accepting writes; `docs/plans/2026-08-24-vcard-storage-and-groups.md`
-makes the case at length. The same database holds the change log and
-the birthdays — the two things in it that cannot be rebuilt, the
-birthdays because a partial date has no vCard 3.0 spelling — and an
-index of parsed properties, which can: `rake index:rebuild` derives
-that again from the stored cards alone. `rake db:dump` writes the
+makes the case at length. The same database holds the change log, the
+birthdays, the groups, and the books — the four things in it besides
+the cards that cannot be rebuilt, the birthdays because a partial
+date has no vCard 3.0 spelling — and an index of parsed properties,
+which can: `rake index:rebuild` derives that again from the stored
+cards alone. `rake db:dump` writes the
 cards, birthdays, groups, and books out as plain files, into
 `data/dump` unless `DUMP` names another directory, and commits them to
 that directory's own repository, so a snapshot is something to revert

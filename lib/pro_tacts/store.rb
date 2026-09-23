@@ -17,13 +17,14 @@ module ProTacts
   # The transactional store: one SQLite database holding each contact's
   # card exactly as it was submitted.
   #
-  # Four kinds of state live here and they are not equally precious.
-  # Only the cards, the change log, the birthdays, and the groups
-  # cannot be rebuilt, and each is argued where it was decided: the
-  # first two in docs/plans/2026-08-25-sqlite-schema.md, "What the
-  # tables are for", the birthdays in
+  # Five kinds of state live here and they are not equally precious.
+  # Only the cards, the change log, the birthdays, the groups, and
+  # the books cannot be rebuilt, and each is argued where it was
+  # decided: the first two in docs/plans/2026-08-25-sqlite-schema.md,
+  # "What the tables are for", the birthdays in
   # docs/plans/2026-08-31-partial-birthdays.md, the groups in
-  # docs/plans/2026-08-24-vcard-storage-and-groups.md. Everything else
+  # docs/plans/2026-08-24-vcard-storage-and-groups.md, the books in
+  # docs/plans/2026-09-19-books-in-the-dump.md. Everything else
   # is an index derived from the cards, and #rebuild_index will make
   # it again from nothing.
   #
