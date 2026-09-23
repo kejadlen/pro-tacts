@@ -1,14 +1,10 @@
 require "pro_tacts/admin/phlex"
 
-require "pro_tacts/admin/avatar"
-require "pro_tacts/admin/format"
 require "pro_tacts/admin/layout"
-require "pro_tacts/admin/list_item"
 
 module ProTacts
   module Admin
-    # GET /import — the screen an address book arrives on, and the page
-    # a finished import answers with
+    # GET /import — the screen an address book arrives on
     # (docs/plans/2026-09-21-import-a-vcf.md).
     # Until this existed an import meant rake tasks reading Contacts.app
     # on a Mac and carrying a plan to a host over HTTP; now it is the
@@ -19,16 +15,15 @@ module ProTacts
     # (ImportReview, over the walk's list of its contacts and the pair
     # of cards a row there opens).
     #
-    # `imported` is what the import that just ended brought in — the
-    # rows its walk saved, and not the ones it left behind — rendered
-    # below the form that is still there to run another.
+    # Nothing comes back here at the end of a walk. What arrived is
+    # the group the import filed it under, a page that lists the same
+    # contacts and is still there tomorrow, so the walk ends on that
+    # rather than on a copy of it under this form (Web#close_walk).
     class ImportUpload < Phlex::HTML
-      # @rbs @imported: Array[Contact]?
       # @rbs @notice: String?
 
-      #: (?imported: Array[Contact]?, ?notice: String?) -> void
-      def initialize(imported: nil, notice: nil)
-        @imported = imported
+      #: (?notice: String?) -> void
+      def initialize(notice: nil)
         @notice = notice
       end
 
@@ -39,7 +34,6 @@ module ProTacts
               a(href: "/", class: "type-label") { "‹ contacts" }
             end
             upload_card
-            imported_list if @imported
           end
         end
       end
@@ -62,30 +56,6 @@ module ProTacts
                 input(type: "file", name: "vcf", accept: ".vcf,text/vcard")
               end
               button(type: "submit", data: {variant: "primary"}) { "read the file" }
-            end
-          end
-        end
-      end
-
-      # What came in, contact by contact, each linked to the record it
-      # became — so the next thing to do, reading one or fixing one, is
-      # a click away.
-      #: () -> void
-      def imported_list
-        imported = @imported or return
-
-        section do
-          div(class: "section-head") do
-            h2(class: "type-label") { "imported (#{imported.length})" }
-          end
-          ul(class: "card") do
-            imported.each do |contact|
-              render ListItem.new(
-                href: "/contacts/#{contact.id}",
-                avatar: Avatar.new(contact:, size: "lg"),
-              ) do
-                div { Format.name_label(contact) }
-              end
             end
           end
         end

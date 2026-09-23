@@ -362,37 +362,35 @@ module ProTacts
       Import::Staged.record(upload, index.to_s, written.id)
 
       # The last one: there is nothing left to come back to, so the
-      # import ends here rather than on a list of rows that all say
-      # the same thing.
-      return closing_screen(upload) if saved.length + 1 == revised.length
+      # walk is over rather than a list of rows that all say the same
+      # thing.
+      return close_walk(r, upload) if saved.length + 1 == revised.length
 
       r.redirect "/import/#{upload}", 303
     end
 
-    # The end of the walk: what it wrote, listed, and the file and
-    # the walk's own notes gone. Reached one way only, by saving the
-    # last card there was to save, because that is the only end a walk
-    # has. Leaving one needs no screen and no button: the staged file
-    # expires on its own (Import::Staged::LIFETIME), and what has come
-    # in has come in. A control whose only power is to throw away the
-    # rows nobody has read yet has nothing to gain by being pressed.
+    # The end of the walk: the file and the walk's own notes gone, and
+    # the group the import filed under standing where the walk stood.
+    # Reached one way only, by saving the last card there was to save,
+    # because that is the only end a walk has. Leaving one needs no
+    # screen and no button: the staged file expires on its own
+    # (Import::Staged::LIFETIME), and what has come in has come in.
     #
-    # Answered with the page rather than a 303, and has to be: the
-    # staged import is gone, so the re-submission a back button offers
-    # has nothing left to close, and there is no other page holding
-    # what just arrived.
-    #: (String upload) -> String
-    def closing_screen(upload)
+    # There is no screen of its own for what arrived, because the
+    # group for the import is that screen and outlives this one — a
+    # list of the same contacts, rendered once rather than twice, on a
+    # page that is still there tomorrow. A walk whose every card was
+    # saved out of that group has none, and the whole book is where
+    # they went.
+    #: (untyped r, String upload) -> untyped
+    def close_walk(r, upload)
       return expired_screen if Import::Staged.read(upload, Import::Staged::SAVED).nil?
 
-      _group, saved = Import::Staged.saved(upload)
-      # In the file's own order rather than the order the walk got to
-      # them in, which is the order the list they are read back
-      # instead of was in.
-      imported = saved.keys.sort_by(&:to_i).filter_map { store.contact(saved.fetch(it)) }
+      group, _saved = Import::Staged.saved(upload)
       Import::Staged.close(upload)
+      filed = store.group_choices.find { it.name == group }
 
-      import_screen(imported:)
+      r.redirect(filed ? "/groups/#{filed.id}" : "/contacts", 303)
     end
 
     # The import's two readings, or none when it is gone — swept out
@@ -457,12 +455,13 @@ module ProTacts
       param if param.is_a?(Hash) && param[:tempfile]
     end
 
-    # The screen a file is chosen on, and the page a finished import
-    # answers with.
-    #: (?imported: Array[Contact]?, ?notice: String?) -> String
-    def import_screen(imported: nil, notice: nil)
+    # The screen a file is chosen on, which is all this path is: a
+    # walk that has ended has a group to land on rather than a page
+    # here saying it ended (#close_walk).
+    #: (?notice: String?) -> String
+    def import_screen(notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::ImportUpload.call(imported:, notice:)
+      Admin::ImportUpload.call(notice:)
     end
 
     #: () -> String

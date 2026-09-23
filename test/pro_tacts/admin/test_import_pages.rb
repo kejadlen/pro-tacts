@@ -345,28 +345,48 @@ class AdminImportPagesTest < Minitest::Test
   end
 
   # Saving the last row ends the walk: there is nothing left to come
-  # back to, so the import closes itself and says what came in.
+  # back to, so the import closes itself and leaves the walk for the
+  # group it filed everything under, which is the list of what came
+  # in and is still there tomorrow.
   def test_saving_the_last_row_ends_the_import
     with_contacts({}) do |store|
       id = upload(JANE + PLAIN)
       save(id, 0, first: "Jane", last: "Booles")
       save(id, 1, first: "Sam", last: "Booles")
 
-      assert_equal 200, last_response.status
-      assert_includes last_response.body, "imported (2)"
       assert_equal 2, store.contacts.length
+      filed = store.all_groups.find { it.name.to_s.start_with?("import-") }
+
+      assert_equal "/groups/#{filed.id}", last_response.headers["location"]
+      assert_equal store.contacts.map(&:id).sort, filed.members.sort
 
       jane = store.contacts.find { it.name == "Jane Booles" }
 
       assert_includes jane.vcard.to_s, "TEL;type=CELL:+1 555 0100"
       refute_includes jane.vcard.to_s, "X-SOCIALPROFILE"
       refute_includes jane.vcard.to_s, "X-ABRELATEDNAMES"
+
+      follow_redirect!
+
       assert_includes last_response.body, %(href="/contacts/#{jane.id}")
 
       # And the walk is gone with it.
       get "/import/#{id}"
 
       assert_includes last_response.body, "That import is no longer here."
+    end
+  end
+
+  # Every card saved out of the group the import named leaves no group
+  # to land on, so the walk ends on the book itself.
+  def test_a_walk_that_filed_nothing_ends_on_the_contacts
+    with_contacts({}) do |store|
+      id = upload(JANE)
+      save(id, 0, first: "Jane", last: "Booles", "named" => [], "groups" => [])
+
+      assert_equal "/contacts", last_response.headers["location"]
+      assert_equal 1, store.contacts.length
+      assert_empty store.all_groups.map(&:name).grep(/\Aimport-/)
     end
   end
 

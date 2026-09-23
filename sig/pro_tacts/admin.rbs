@@ -42,7 +42,7 @@ module ProTacts
     end
 
     class ImportUpload
-      def self.call: (?imported: Array[Contact]?, ?notice: String?) -> String
+      def self.call: (?notice: String?) -> String
     end
 
     class ImportReview
