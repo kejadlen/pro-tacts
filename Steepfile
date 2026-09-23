@@ -23,7 +23,7 @@ target :lib do
   ignore(*%w[
     avatar contact_card contact_dialog contacts_edit contacts_index contacts_show dashboard device_setup format
     group_dialog group_filter group_label groups_edit groups_index groups_show icons import_groups import_original import_saved import_sidebar
-    import_upload layout list_item phlex record_card upcoming_birthdays
+    import_target import_upload layout list_item phlex record_card upcoming_birthdays
   ].map { "lib/pro_tacts/admin/#{it}.rb" }, inline: true)
   signature "sig"
 

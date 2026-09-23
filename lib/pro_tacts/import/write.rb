@@ -100,6 +100,31 @@ module ProTacts
         @store.contact(id) || raise("#{id} was written and is not stored")
       end
 
+      # The other Save a row can make: its card folded into a contact
+      # the book already has, rather than written as a new one
+      # (Import::Merge, docs/plans/2026-09-23-merging-on-import.md).
+      # The contact editor's own write, Store#save_edit, because this
+      # is that contact edited — its id, its UID and its change-log
+      # entry stay its own — and then its groups moved the way the
+      # groups dialog moves them: `joins` and `leaves` are what the
+      # boxes beside it changed, `named` the groups they asked to be
+      # made.
+      #: (Store store, String id, VCard card, birthday: Birthday?, ?joins: Array[String], ?leaves: Array[String], ?named: Array[String]) -> Contact
+      def self.update(store, id, card, birthday:, joins: [], leaves: [], named: [])
+        new(store).update(id, card, birthday, joins, leaves, named)
+      end
+
+      #: (String id, VCard card, Birthday? birthday, Array[String] chosen, Array[String] leaving, Array[String] named) -> Contact
+      def update(id, card, birthday, chosen, leaving, named)
+        @store.save_edit(id, card, birthday:)
+
+        join = [*chosen, *named.map { group_id(it) }]
+        @store.regroup(id, join: join.uniq, leave: leaving) unless join.empty? && leaving.empty?
+
+        # Read back for #call's reason: the groups moved what it serves.
+        @store.contact(id) || raise("#{id} was edited and is not stored")
+      end
+
       private
 
       # The card under the id it is stored as. The source's UID goes

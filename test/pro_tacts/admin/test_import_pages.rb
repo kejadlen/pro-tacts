@@ -35,6 +35,17 @@ class AdminImportPagesTest < Minitest::Test
     END:VCARD
   CARD
 
+  # Someone the book already has, whom JANE looks like.
+  STORED_JANE = <<~CARD.gsub("\n", "\r\n")
+    BEGIN:VCARD
+    VERSION:3.0
+    N:Booles;Jane;;;
+    FN:Jane Booles
+    EMAIL;type=INTERNET:jane@example.com
+    UID:jane
+    END:VCARD
+  CARD
+
   def app
     ProTacts::Web
   end
@@ -67,17 +78,26 @@ class AdminImportPagesTest < Minitest::Test
   # page it came from was rendered with, and the boxes that page came
   # with sent back the way a browser sends them — a card arrives with
   # the groups it comes in under already ticked (Web#import_picker).
-  def save(id, index, first:, last:, **params)
-    get "/import/#{id}/#{index}"
+  # `into` opens the row folded into that contact rather than as a new
+  # one (Admin::ImportTarget), and the page's own hidden fields go
+  # back with the rest.
+  def save(id, index, first:, last:, into: nil, **params)
+    get "/import/#{id}/#{index}#{"?into=#{into}" if into}"
     post "/import/#{id}/#{index}",
          {"etag" => etag, "first" => first, "middle" => "", "last" => last,
           "nickname" => "", "note" => "",
-          "groups" => ticked("groups[]"), "named" => ticked("named[]")}.merge(params)
+          "groups" => ticked("groups[]"), "named" => ticked("named[]"),
+          "into" => hidden("into").first.to_s, "was" => hidden("was[]")}.merge(params)
   end
 
   # The values of the boxes the last page rendered ticked.
   def ticked(name)
     last_response.body.scan(/name="#{Regexp.escape(name)}" value="([^"]*)" checked/).flatten
+  end
+
+  # The values of the last page's hidden fields of that name.
+  def hidden(name)
+    last_response.body.scan(/<input type="hidden" name="#{Regexp.escape(name)}" value="([^"]*)">/).flatten
   end
 
   # The group this import files its arrivals under, named when the
@@ -823,6 +843,141 @@ class AdminImportPagesTest < Minitest::Test
   # Swept out from under a screen left open, or come back to after
   # its last row was saved: the import is gone and only the person
   # has another copy.
+  # A card that looks like someone already in the book offers to
+  # update them instead, at the top of its editor, and that offer is
+  # the default: a row opened with no choice made folds into the best
+  # match, and new contact is the choice made against it
+  # (docs/plans/2026-09-23-update-is-the-default.md).
+  def test_a_row_opens_folded_into_the_contact_it_looks_like_most
+    with_contacts({"jane" => STORED_JANE}) do |_store|
+      id = upload(JANE)
+
+      get "/import/#{id}/0"
+
+      assert_includes last_response.body, %(<div role="tablist" aria-label="Import as" data-variant="segmented">)
+      assert_includes last_response.body,
+                      %(<a href="/import/#{id}/0?into=" role="tab" aria-selected="false">new contact</a>)
+      assert_includes last_response.body,
+                      %(<a href="/import/#{id}/0?into=jane" role="tab" aria-selected="true">update Jane Booles</a>)
+      assert_includes last_response.body, %(<input type="hidden" name="into" value="jane">)
+      assert_includes last_response.body, %(>Update</button>)
+    end
+  end
+
+  # New contact stays a choice, asked for with an empty `into` where
+  # the update sides name a contact: the editor over the arriving
+  # card alone.
+  def test_a_new_contact_is_chosen_against_the_default
+    with_contacts({"jane" => STORED_JANE}) do |_store|
+      id = upload(JANE)
+
+      get "/import/#{id}/0?into="
+
+      assert_includes last_response.body,
+                      %(<a href="/import/#{id}/0?into=" role="tab" aria-selected="true">new contact</a>)
+      assert_includes last_response.body,
+                      %(<a href="/import/#{id}/0?into=jane" role="tab" aria-selected="false">update Jane Booles</a>)
+      refute_includes last_response.body, %(name="into")
+      assert_includes last_response.body, %(>Import</button>)
+    end
+  end
+
+  # A toggle with one side is not a choice.
+  def test_a_card_like_nobody_in_the_book_offers_nothing_to_update
+    with_contacts({"theo" => STORED_JANE.sub("Booles;Jane", "Marsh;Theo").sub("FN:Jane Booles", "FN:Theo Marsh")
+                                        .sub("jane@example.com", "theo@elsewhere.org")}) do |_store|
+      id = upload(JANE)
+
+      get "/import/#{id}/0"
+
+      refute_includes last_response.body, %(role="tablist")
+    end
+  end
+
+  # The update is the contact's own editor with the card folded in:
+  # the contact's name and email, the card's phone beside them, and
+  # the card's lines that the contact's own stood in for struck on
+  # the card as exported.
+  def test_updating_opens_the_contact_with_the_card_folded_in
+    with_contacts({"jane" => STORED_JANE}) do |_store|
+      id = upload(JANE.sub("FN:Jane Booles", "FN:Jane B. Booles"))
+
+      get "/import/#{id}/0?into=jane"
+
+      assert_includes last_response.body,
+                      %(<a href="/import/#{id}/0?into=jane" role="tab" aria-selected="true">update Jane Booles</a>)
+      assert_includes last_response.body, %(<input type="hidden" name="into" value="jane">)
+      assert_includes last_response.body, %(value="jane@example.com")
+      assert_includes last_response.body, %(value="+1 555 0100")
+      assert_includes last_response.body, %(<li data-dropped><span>FN:Jane B. Booles</span>)
+      assert_includes last_response.body, %(>Update</button>)
+    end
+  end
+
+  # Its Save edits that contact rather than adding one: the row is
+  # in, it leads to the contact it was folded into, and the contact
+  # joins the group the import files under beside the groups it was
+  # already in.
+  def test_saving_an_update_changes_the_contact_rather_than_adding_one
+    with_contacts({"jane" => STORED_JANE}) do |store|
+      school = store.create_group(name: "school")
+      store.add_member(school, "jane")
+      id = upload(JANE + PLAIN)
+
+      save(id, 0, first: "Jane", last: "Booles", into: "jane")
+
+      assert_equal 303, last_response.status
+      assert_equal "/import/#{id}/1", last_response.headers["location"]
+      assert_equal ["jane"], store.contacts.map(&:id)
+      jane = store.contact("jane")
+
+      assert_equal ["+1 555 0100"], jane.phones.map(&:value)
+      assert_equal ["jane@example.com"], jane.emails.map(&:value)
+      assert_equal [import_group(id), "school"], store.groups_of("jane").map(&:name).sort
+
+      get "/import/#{id}/0"
+
+      assert_includes last_response.body, %(<dl class="detail-grid">)
+      assert_includes last_response.body, %(<a href="/import/#{id}/0" aria-current="page" data-state="saved">)
+    end
+  end
+
+  # The fold is derived again at the Save, so a contact edited since
+  # the page loaded refuses it the way any stale editor does.
+  def test_an_update_over_a_contact_changed_since_is_refused
+    with_contacts({"jane" => STORED_JANE}) do |store|
+      id = upload(JANE)
+      get "/import/#{id}/0?into=jane"
+      sent = etag
+      store.put("jane", ProTacts::VCard.new(STORED_JANE.sub("END:VCARD", "NICKNAME:Jay\r\nEND:VCARD")))
+
+      post "/import/#{id}/0",
+           "etag" => sent, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "nickname" => "", "note" => "", "into" => "jane"
+
+      assert_includes last_response.body, "This card changed since the page loaded; nothing was saved."
+      assert_includes last_response.body, %(<input type="hidden" name="into" value="jane">)
+      assert_empty store.contact("jane").phones
+    end
+  end
+
+  # And one deleted since is not quietly a new contact instead.
+  def test_an_update_whose_contact_is_gone_is_refused
+    with_contacts({"jane" => STORED_JANE}) do |store|
+      id = upload(JANE)
+      get "/import/#{id}/0?into=jane"
+      sent = etag
+      store.delete("jane")
+
+      post "/import/#{id}/0",
+           "etag" => sent, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "nickname" => "", "note" => "", "into" => "jane"
+
+      assert_includes last_response.body, "The contact this card was updating is gone; nothing was saved."
+      assert_empty store.contacts
+    end
+  end
+
   def test_a_walk_that_is_gone_says_so
     with_contacts({}) do |store|
       id = upload(JANE)

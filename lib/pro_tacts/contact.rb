@@ -175,6 +175,15 @@ module ProTacts
       @own = self.class.new(id: @id, stored: @stored, birthday: @birthday, inherited: [])
     end
 
+    # The same contact over another card and birthday, still lent what
+    # its groups lend it: what an import proposes this contact become
+    # (Import::Merge), composed the way the stored one is so that the
+    # editor rendered over it carries the etag its save will recompute.
+    #: (stored: VCard, birthday: Birthday?) -> Contact
+    def with(stored:, birthday:)
+      self.class.new(id: @id, stored:, birthday:, inherited: @inherited)
+    end
+
     #: () -> String
     def etag
       return @etag if defined?(@etag)

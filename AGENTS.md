@@ -45,7 +45,10 @@ screen here shows struck, and this book's groups as a filtered list of
 boxes to tick — the group made for the import and everyone's book among
 them, ticked. That contact's own Save is what writes it through the
 store, so every row still to do wears a rail and stopping halfway keeps
-everything already in (docs/plans/2026-09-21-import-a-vcf.md).
+everything already in (docs/plans/2026-09-21-import-a-vcf.md). A row
+whose card looks like someone the book already has offers, above its
+editor, to update them instead, the card folded into theirs
+(docs/plans/2026-09-23-merging-on-import.md).
 The `import:*` tasks, the Swift reader they drove Contacts.app with,
 and the plan directories they wrote are gone.
 
@@ -69,7 +72,8 @@ lib/pro_tacts/
 ├── web/setup.rb    # The device setup screen and its profile
 ├── web/import.rb   # The import screens: a .vcf, uploaded and saved
 ├── web/api.rb      # JSON for scripts: the group list
-├── import/         # Reading an uploaded .vcf, and writing its cards
+├── import/         # Reading an uploaded .vcf, matching its cards to
+│                   # contacts the book has, and writing them
 ├── admin/          # The Phlex views those screens render, plus
 │                   # card_form.rb, which reads a form back into a card
 ├── store.rb        # Sequel over SQLite: cards, change log, derived index

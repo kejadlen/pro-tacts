@@ -181,6 +181,29 @@ class ImportWriteTest < Minitest::Test
     end
   end
 
+  # The other Save a row can make: its card folded into a contact the
+  # book has (Import::Merge), written as that contact's own edit — its
+  # id stays its own and the change log says it was edited — with its
+  # groups moved by what the boxes beside it changed.
+  def test_an_update_edits_the_contact_it_names
+    with_contacts({}) do |store|
+      school = store.create_group(name: "school")
+      jane = Write.call(store, card, joins: [school])
+
+      updated = Write.update(store, jane.id, jane.stored.insert(["TEL:555 0100"]),
+                             birthday: ProTacts::Birthday.new(month: 4, day: 12),
+                             leaves: [school], named: ["import-20260923T000000Z"])
+
+      assert_equal jane.id, updated.id
+      assert_equal 1, store.contacts.length
+      assert_includes updated.vcard.to_s, "TEL:555 0100\r\n"
+      assert_equal ProTacts::Birthday.new(month: 4, day: 12), updated.birthday
+      assert_includes store.changes_of(jane.id).map(&:action), ProTacts::Store::Action::EDIT
+      assert_empty store.group(school).members
+      assert_equal [jane.id], store.all_groups.find { it.name == "import-20260923T000000Z" }.members
+    end
+  end
+
   # Named for when it happened, so what imported together can be found
   # together.
   def test_the_default_group_is_named_for_the_moment

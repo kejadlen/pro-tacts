@@ -42,6 +42,7 @@ module ProTacts
       # @rbs @joined: Array[String]
       # @rbs @named: Array[String]
       # @rbs @capped: Array[String]
+      # @rbs @was: Array[String]
 
       # Largest first, and alphabetical among groups the same size:
       # the groups an arrival is likeliest to belong in are the ones
@@ -64,17 +65,26 @@ module ProTacts
       # back to untick. The names take rows from the limit without
       # being in the list the cap reads, so they are counted into it
       # rather than listed in it.
-      #: (groups: Array[Store::GroupChoice], joined: Array[String], named: Array[String]) -> void
-      def initialize(groups:, joined:, named:)
+      #
+      # `was` is the groups a contact the book already has is in, for a
+      # card being folded into it (Import::Merge): sent back beside the
+      # boxes, the groups dialog's own `was[]`, so the save moves only
+      # what was toggled (Web#apply_groups). A new contact is in none.
+      #: (groups: Array[Store::GroupChoice], joined: Array[String], named: Array[String], ?was: Array[String]) -> void
+      def initialize(groups:, joined:, named:, was: [])
         @groups = groups.sort_by { [-it.member_count, it.label.downcase] }
         @joined = joined
         @named = named
+        @was = was
         @capped = GroupFilter.capped(@groups.map(&:id), joined:, shown: named.length)
       end
 
       def view_template
         div(class: "field-stack", x_data: GroupFilter::STATE) do
           span(class: "type-label") { "groups" }
+          @was.each do |id|
+            input(type: "hidden", name: "was[]", value: id)
+          end
           # Enter guarded rather than the filter moved: the dialog
           # keeps its filter outside the form it filters, and here
           # there is no outside — the boxes are the editor's own

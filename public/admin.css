@@ -999,3 +999,27 @@ dialog > .field-stack > input[type="search"] {
 .walk-list .diff-removed {
   white-space: nowrap;
 }
+
+/* What a walk's row saves into (Admin::ImportTarget): Gloss's
+   segmented tabs, whose track is one line of its own width, centered
+   over the editor it asks its question for — and a wrapped track
+   centers its lines with it. A match is a person's whole name and
+   there can be three of them, so the track wraps between segments
+   rather than inside one — a name broken over two lines reads as two
+   segments. The track is a filled pill among the stack's one-line
+   rows, so it takes a step past the field rhythm under it, and it
+   rides the card's top edge at that same step, pulled up out of the
+   body's own padding — a pill is a strip of chrome, not a field.
+   The form's own selector for the weight over Gloss's `all: unset`. */
+.import-target {
+  text-align: center;
+  margin-top: calc(var(--gl-space-2xs) - var(--gl-space-m));
+  margin-bottom: var(--gl-space-2xs);
+}
+.card-body form [role="tablist"][data-variant="segmented"] {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.card-body form [role="tablist"][data-variant="segmented"] [role="tab"] {
+  white-space: nowrap;
+}
