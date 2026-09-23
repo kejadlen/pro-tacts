@@ -72,8 +72,10 @@
    and the m of air above it read as blank space rather than as
    room to read in (the detail-header, both on the contact's own
    page and in a walk's read screen — ContactCard, the one
-   renderer). */
-.card-body:has(> .detail-header:first-child) {
+   renderer). Only over a grid: a group that lends nothing renders
+   none (Admin::GroupsShow), and its name alone keeps the body's
+   even padding, centered in the card. */
+.card-body:has(> .detail-header:first-child + .detail-grid) {
   padding-block-start: var(--gl-space-s);
 }
 
@@ -647,6 +649,73 @@ section > h2 {
   inset-inline-end: 0;
   translate: 0 -50%;
 }
+/* An action that is a type-label link rather than a button — a group
+   page's "edit members" — is the heading's own size, so it needs none
+   of the pinning above: in flow at the right edge, on the heading's
+   baseline. */
+.section-head:has(> a.type-label) {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+/* /contacts' rows, one card per first letter (ContactsIndex's
+   letter_groups), the letter in a narrow column at the card's left
+   rather than a heading over it: a heading row between every pair of
+   cards spread the list out, and at the side the letter still marks
+   where its card starts. The column fits "#" and a W alike. The
+   letter sits on the first row's name line: the row's own top
+   padding, then a line box as tall as the row's (Gloss's .card > li
+   sets step--1, the body's 1.55 carries), so the label's text
+   centers where the name's does. */
+.letter-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-s);
+}
+.letter-groups > section {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  column-gap: var(--gl-space-xs);
+  align-items: start;
+}
+.letter-groups h3 {
+  margin: 0;
+  padding-block-start: var(--gl-space-xs);
+  line-height: calc(var(--gl-step--1) * 1.55);
+}
+
+/* A row with links inside it (ContactsIndex's rows, whose group
+   chips open their groups): Gloss's whole-row control is an anchor
+   that is the row's only child, and an anchor cannot hold the chips'
+   anchors. So the row keeps Gloss's own padding and flex, the name is
+   the link, and its ::after stretches over the whole row to take a
+   click anywhere on it; the chips, positioned after it in the tree,
+   paint and take clicks above it. The hover fill moves to the row,
+   where the one-anchor row draws it, and does not light for a chip,
+   which is its own target. The focus ring stays Gloss's one ring, on
+   the name. */
+.linked-row {
+  position: relative;
+  transition: background-color var(--gl-dur-fast) var(--gl-ease);
+}
+.linked-row .row-link {
+  display: block;
+  color: inherit;
+  font-weight: 550;
+  text-decoration: none;
+}
+.linked-row .row-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.linked-row:has(.row-link:hover) {
+  background: var(--gl-color-surface-fill);
+}
+.linked-row a.tag {
+  position: relative;
+}
 
 /* base/typography.css's `li + li { margin-top: var(--gl-space-3xs); }`
    is a prose-list rule (Markdown bullet lists) that also matches
@@ -761,12 +830,10 @@ span.avatar[data-size="lg"] {
 
    Baseline-aligned: a grid item blockifies, so the tag's inline-flex
    becomes a flex container, which takes its baseline from its first
-   item — the tag's text — and so shares the value's. A group card's
-   "edit members" takes the same place, and is plain text with a
-   baseline of its own; a contact card's "edit groups" button takes
-   it too, a flex container like the tag. */
+   item — the tag's text — and so shares the value's. A contact
+   card's "edit groups" button takes the same place, a flex container
+   like the tag. */
 .detail-grid dd:has(> .tag),
-.detail-grid dd:has(> a.type-label),
 .detail-grid dd:has(> button) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -774,13 +841,11 @@ span.avatar[data-size="lg"] {
   column-gap: var(--gl-space-s);
 }
 .detail-grid dd > .tag,
-.detail-grid dd > a.type-label,
 .detail-grid dd > button {
   grid-column: 2;
   grid-row: 1;
 }
 .detail-grid dd:has(> .tag) > div,
-.detail-grid dd:has(> a.type-label) > div,
 .detail-grid dd:has(> button) > div {
   grid-column: 1;
 }

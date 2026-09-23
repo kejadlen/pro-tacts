@@ -130,10 +130,23 @@ class AdminGroupsPagesTest < Minitest::Test
       assert_equal 200, last_response.status
       assert_includes body, "7 Calculus Close"
       assert_includes body, "Gate code 1854."
-      assert_includes body, %(<a href="/contacts/george" class="tag">George Boole</a>)
-      assert_includes body, %(<a href="/contacts/mary" class="tag">Mary Boole</a>)
+      assert_includes body, "members (2)"
+      assert_match %r{<a href="/contacts/george">.*?George Boole</div>}, body
+      assert_match %r{<a href="/contacts/mary">.*?Mary Boole</div>}, body
       assert_includes body, "edit members"
       refute_includes body, "Ada Lovelace"
+    end
+  end
+
+  # The members list the way /contacts does (Format.sort_key), not in
+  # the store's id order. Seeded so the two disagree.
+  def test_the_members_list_in_name_order
+    with_contacts(BOOLES.merge("zz" => "Alice Aardvark")) do |store|
+      id = household(store, members: %w[mary zz george])
+
+      get "/groups/#{id}"
+
+      assert_equal %w[zz george mary], last_response.body.scan(%r{<a href="/contacts/([^"]+)">}).flatten
     end
   end
 
@@ -143,7 +156,21 @@ class AdminGroupsPagesTest < Minitest::Test
 
       get "/groups/#{id}"
 
+      assert_includes last_response.body, "members (0)"
+      assert_includes last_response.body, "No members yet."
       assert_includes last_response.body, "edit members"
+    end
+  end
+
+  # A group that lends nothing renders no grid, so its name is not
+  # held above an empty one (.detail-header in admin.css).
+  def test_a_card_that_lends_nothing_has_no_grid
+    with_contacts(BOOLES) do |store|
+      id = store.create_group(name: "Booles")
+
+      get "/groups/#{id}"
+
+      refute_includes last_response.body, "detail-grid"
     end
   end
 

@@ -92,7 +92,7 @@ module ProTacts
       Admin::GroupsEdit.call(group:, notice:)
     end
 
-    # A group's members as contacts, in the listing's own order.
+    # A group's members as contacts; the page puts them in order.
     #: (Store::Group group) -> Array[Contact]
     def members_of(group)
       store.contacts.select { group.members.include?(it.id) }
