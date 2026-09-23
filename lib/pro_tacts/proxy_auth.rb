@@ -1,14 +1,12 @@
 require "pro_tacts"
 
 module ProTacts
-  # Who is asking: the login on Remote-User, which the proxy in front of
-  # this app writes (docs/plans/2026-09-15-identity-from-one-header.md).
-  #
-  # The Caddy site's `header_up` sets Remote-User, overwriting whatever
-  # arrived, so a client cannot supply its own. That makes the header
-  # trustworthy, but only behind such a proxy: reached directly, the app
-  # trusts whatever it is handed. The app must not be listening anywhere
-  # but localhost.
+  # Who is asking: the login on Remote-User, which the proxy in front
+  # of this app writes, and which is trustworthy only behind such a
+  # proxy — reached directly the app trusts whatever it is handed, so
+  # it must not be listening anywhere but localhost
+  # (docs/plans/2026-09-15-identity-from-one-header.md, "Which
+  # header").
   #
   # A request that names nobody is refused at the top of Web's route
   # (Web#unauthorized). That covers the two cases Tailscale documents as

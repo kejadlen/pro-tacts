@@ -741,8 +741,8 @@ class AdminContactsPagesTest < Minitest::Test
   # the action for, rendered here.
   def test_the_change_log_leads_with_the_latest_entry
     with_contacts({"ada" => ADA}) do |store|
-      store.rewrite("ada", ProTacts::VCard.new(ADA.sub("Ada Lovelace", "Ada L.")),
-                    birthday: store.contact("ada").birthday)
+      store.save_edit("ada", ProTacts::VCard.new(ADA.sub("Ada Lovelace", "Ada L.")),
+                      birthday: store.contact("ada").birthday)
 
       get "/contacts/ada"
 
@@ -771,8 +771,8 @@ class AdminContactsPagesTest < Minitest::Test
   # and signed rather than only colored.
   def test_the_change_log_shows_what_each_write_moved
     with_contacts({"ada" => ADA}) do |store|
-      store.rewrite("ada", ProTacts::VCard.new(ADA.sub("FN:Ada Lovelace", "FN:Ada L.")),
-                    birthday: store.contact("ada").birthday)
+      store.save_edit("ada", ProTacts::VCard.new(ADA.sub("FN:Ada Lovelace", "FN:Ada L.")),
+                      birthday: store.contact("ada").birthday)
 
       get "/contacts/ada"
 
@@ -1282,7 +1282,7 @@ class AdminContactsPagesTest < Minitest::Test
   # The save is addressed operations, and this is the whole design:
   # the four properties the form names are replaced, every other line
   # of the stored card is byte-identical, and the write lands through
-  # Store#rewrite with its change-log entry.
+  # Store#save_edit with its change-log entry.
   def test_saving_the_edit_replaces_only_the_addressed_properties
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "King", nickname: "Countess",
@@ -1840,7 +1840,7 @@ class AdminContactsPagesTest < Minitest::Test
   # A birthday edit is a model write: the served card composes the new
   # BDAY, the stored bytes never move, and the change-log entry carries
   # the new composed etag — a client's token sees what a device
-  # downloads (Store#rewrite).
+  # downloads (Store#save_edit).
   def test_saving_a_changed_birthday_moves_the_served_card_only
     with_contacts({"ada" => ADA}) do |store|
       before = store.contact("ada").stored.to_s

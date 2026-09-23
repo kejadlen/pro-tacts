@@ -144,7 +144,15 @@ module ProTacts
     # already assumes for them.
     #: () -> String?
     def uid
-      properties.find { it.name.casecmp?("UID") }&.value
+      property("UID")&.value
+    end
+
+    # The first property naming `name`, or nil where the card carries
+    # none — the read every caller after a property a card holds one of
+    # makes. Names match without case (RFC 2426 section 4).
+    #: (String name) -> Parser::Property?
+    def property(name)
+      properties.find { it.name.casecmp?(name) }
     end
 
     # The lines naming `name`, and the card without them: the split
@@ -189,15 +197,10 @@ module ProTacts
       first = all.index { it.names?(name) }
       return insert(lines) if first.nil?
 
-      # The replaced line's own terminator, so a card written in one
-      # line-break convention stays single-convention; a terminated
-      # replacement line keeps its own, folds and all.
-      terminator = terminator_of(all.fetch(first).verbatim)
-      replacements = lines.map { it.end_with?("\n") ? it : it + terminator }
       kept = all.reject { it.names?(name) }.map(&:verbatim)
       # `first` still names the splice point: the lines before it are
       # untouched, and every line it counted past was a named one.
-      kept.insert(first, *replacements)
+      kept.insert(first, *terminate(lines, all.fetch(first).verbatim))
       VCard.new(kept.join)
     end
 
@@ -210,28 +213,23 @@ module ProTacts
     # the snapshot guard makes a miss news, not an ordinary case. A
     # card carrying the same line twice is addressed as one row by
     # both copies (they hash alike), and this substitutes the first;
-    # the digests cannot tell identical bytes apart. A replacement
-    # line with no terminator of its own takes the substituted line's,
-    # #replace's own convention rule.
+    # the digests cannot tell identical bytes apart.
     #: (String digest, Array[String] lines) -> VCard
     def substitute(digest, lines)
       all = self.lines
       index = all.index { it.digest == digest }
       raise KeyError, "no line of this card hashes to #{digest}" if index.nil?
 
-      terminator = terminator_of(all.fetch(index).verbatim)
-      replacements = lines.map { it.end_with?("\n") ? it : it + terminator }
+      replacements = terminate(lines, all.fetch(index).verbatim)
       kept = all.map(&:verbatim)
       kept.delete_at(index)
       kept.insert(index, *replacements)
       VCard.new(kept.join)
     end
 
-    # Lines into the card immediately before END:VCARD. A line with no
-    # terminator of its own takes the END line's, so a card stays
-    # single-convention; a terminated line keeps its own, folds and
-    # all. With no END to anchor to there is no envelope worth
-    # respecting, and the lines are appended with CRLF.
+    # Lines into the card immediately before END:VCARD. With no END to
+    # anchor to there is no envelope worth respecting, and the lines
+    # are appended to the end.
     #
     # A card back, like #extract's remainder: text with text put into it
     # is still text, so there is nothing here for a caller to re-read or
@@ -240,31 +238,25 @@ module ProTacts
     def insert(lines)
       return self if lines.empty?
 
-      physical = physical_lines
+      physical = Parser.physical_lines(@bytes)
       index = physical.rindex { it.match?(END_LINE) }
-      if index
-        terminator = terminator_of(physical.fetch(index))
-        physical.insert(index, *lines.map { it.end_with?("\n") ? it : it + terminator })
-        VCard.new(physical.join)
-      else
-        VCard.new(@bytes + lines.map { it.end_with?("\n") ? it : it + "\r\n" }.join)
-      end
+      return VCard.new(@bytes + terminate(lines).join) if index.nil?
+
+      physical.insert(index, *terminate(lines, physical.fetch(index)))
+      VCard.new(physical.join)
     end
 
     private
 
-    # Physical lines with their terminators attached, so surgery on them
-    # cannot lose or normalize a line break.
-    #: () -> Array[String]
-    def physical_lines
-      @bytes.split(/(?<=\n)/, -1)
-    end
-
-    # The line break a line ends with, for the line inserted beside it
-    # to match. CRLF when it has none, being the grammar's own.
-    #: (String line) -> String
-    def terminator_of(line)
-      line[/\r?\n\z/] || "\r\n"
+    # The given lines, each with a terminator on it that has none,
+    # taken from the line it lands beside — so a card written in one
+    # line-break convention stays single-convention. A line that came
+    # with its own keeps it, folds and all, and with no neighbour to
+    # match the terminator is CRLF, the grammar's own.
+    #: (Array[String] lines, ?String neighbour) -> Array[String]
+    def terminate(lines, neighbour = "\r\n")
+      terminator = neighbour[/\r?\n\z/] || "\r\n"
+      lines.map { it.end_with?("\n") ? it : it + terminator }
     end
   end
 end

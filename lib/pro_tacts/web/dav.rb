@@ -1,7 +1,7 @@
-require "digest"
 require "nokogiri"
 
 require "pro_tacts/dav_xml"
+require "pro_tacts/sync_token"
 
 module ProTacts
   # The CardDAV half of the router: service discovery and the one
@@ -163,7 +163,7 @@ module ProTacts
             # client back through multiget, so no address-data here.
             #
             # The token carries the change log's sequence and whose book
-            # it was issued for (see #sync_token), and the delta is the
+            # it was issued for (SyncToken), and the delta is the
             # log after the sequence, answered from the requester's book
             # as it is now: a card that left it answers as removed
             # (section 3.5.2), and so does one that never was in it,
@@ -190,9 +190,8 @@ module ProTacts
                   etag_response(d, it)
                 end
               end
-            elsif (sequence = token[%r{\Ahttp://pro-tacts/sync/(\d+)/#{book_digest}\z}, 1]) &&
-                sequence.to_i <= store.latest_sequence
-              net = store.changes(after: sequence.to_i).map { it.card_id }.uniq
+            elsif (sequence = SyncToken.read(token, book_digest)) && sequence <= store.latest_sequence
+              net = store.changes(after: sequence).map { it.card_id }.uniq
               multistatus("card", sync_token:) do |d|
                 net.each do |id|
                   contact = contacts.find { it.id == id }
@@ -255,7 +254,8 @@ module ProTacts
         # Read on its own rather than through the collection: serving
         # one href has no reason to load every other contact first.
         r.get String do |filename|
-          contact = member(filename.delete_suffix(".vcf"))
+          id = member_id(filename)
+          contact = id && member(id)
 
           if contact
             response["Content-Type"] = "text/vcard; charset=utf-8"
@@ -273,19 +273,16 @@ module ProTacts
         # carrying the strong etag it was last served — see
         # docs/apple-contacts.md, "What a write looks like on the wire".
         r.put String do |filename|
-          id = filename.delete_suffix(".vcf")
-          # A last segment that is not this server's <id>.vcf shape
-          # cannot address a resource here, created or read — the
-          # same fall-through-to-404 the GET handler gives it.
-          write_card(id) if id.match?(Contact::ID_FORMAT)
+          id = member_id(filename)
+          write_card(id) if id
         end
 
         # DELETE removes the card at the member URI (RFC 4918 section
         # 9.6) — the DAV:unbind privilege the collection advertises,
         # and what iOS sends when a contact is deleted on the phone.
         r.delete String do |filename|
-          id = filename.delete_suffix(".vcf")
-          remove_card(id) if id.match?(Contact::ID_FORMAT)
+          id = member_id(filename)
+          remove_card(id) if id
         end
       end
     end
@@ -333,27 +330,31 @@ module ProTacts
       store.contact(id) if book.include?(id)
     end
 
+    # The contact id a member URI's last segment names, or nil for a
+    # segment that is not this server's <id>.vcf shape and so addresses
+    # no resource here, created or read — every route under the
+    # collection falling through to the same 404.
+    #: (String filename) -> String?
+    def member_id(filename)
+      id = filename.delete_suffix(".vcf")
+      id if id.match?(Contact::ID_FORMAT)
+    end
+
     #: () -> String
     def ctag
       @ctag ||= store.ctag
     end
 
-    # Sync tokens are opaque to the client (RFC 6578 section 3); the URI
-    # form is conventional. Built on the ctag so a client polling either
-    # one sees changes at the same points, and on the requester's login
-    # so that a token is refused by any other book, the one a rename
-    # leaves a user with included (docs/plans/2026-09-12-per-user-books.md,
-    # "The wire").
+    # This request's token, minted at the ctag read above so that the
+    # one served here and the one a delta is measured from agree.
     #: () -> String
     def sync_token
-      "http://pro-tacts/sync/#{ctag}/#{book_digest}"
+      SyncToken.mint(ctag, book_digest)
     end
 
-    # The name half of a sync token: the first 16 hex digits of the
-    # SHA-256 of the requester's login.
     #: () -> String
     def book_digest
-      Digest::SHA256.hexdigest(@login)[0, 16].to_s
+      SyncToken.book(@login)
     end
 
     # The whole of the PUT route: a private method because a Roda route
@@ -419,10 +420,12 @@ module ProTacts
       # macOS sends If-Match on updates and If-None-Match: * on creates;
       # a PUT carrying neither is unconditional and allowed to proceed.
       if_match = request.env["HTTP_IF_MATCH"]
-      return plain_412 if if_match && !if_match_satisfied?(if_match, existing)
+      return plain_412 if if_match && !etag_matches?(if_match, existing)
 
+      # The create — If-None-Match: * against an unmapped URI — is the
+      # case CardDAV clients send (RFC 6352 section 6.3.2).
       if_none_match = request.env["HTTP_IF_NONE_MATCH"]
-      return plain_412 if if_none_match && if_none_match_failed?(if_none_match, existing)
+      return plain_412 if if_none_match && etag_matches?(if_none_match, existing)
 
       report_unreadable_lines(vcard)
       report_broken_assumptions(vcard)
@@ -442,9 +445,7 @@ module ProTacts
       # it sent, and the client refetches.
       response["ETag"] = stored.etag if stored.vcard.to_s == vcard.to_s
 
-      # A returned "" would land in the body and pin text/html and
-      # content-length onto the 204, which a bodyless status must not
-      # carry (Rack 3's lint rejects both); nil leaves it bodyless.
+      # Bodyless either way, #no_content's reason.
       nil
     end
 
@@ -469,15 +470,21 @@ module ProTacts
       # because ignoring the header is the lost update it exists to
       # refuse, and the PUT's own check is right here to reuse.
       if_match = request.env["HTTP_IF_MATCH"]
-      return plain_412 if if_match && !if_match_satisfied?(if_match, existing)
+      return plain_412 if if_match && !etag_matches?(if_match, existing)
 
       # The change-log entry Store#delete leaves in the same transaction
       # is what a syncing client is told: sync-collection answers a
       # removed member as href plus 404 (DavXml::DAV#missing).
       store.delete(id)
-      response.status = 204
+      no_content
+    end
 
-      # Bodyless for the 204, write_card's reason.
+    # A 204, bodyless: a returned "" would land in the body and pin
+    # text/html and content-length onto a status that must carry
+    # neither (Rack 3's lint rejects both), where nil leaves it empty.
+    #: () -> nil
+    def no_content
+      response.status = 204
       nil
     end
 
@@ -547,22 +554,13 @@ module ProTacts
       ""
     end
 
-    # RFC 7232 section 3.1: If-Match passes when the current etag is one
-    # of those listed, or, for `*`, when there is a current
-    # representation at all.
+    # Whether the current representation is one the header names: an
+    # etag in its list, or, for `*`, any representation at all. The one
+    # question both conditionals ask, each reading the answer its own
+    # way — If-Match passes on a match (RFC 7232 section 3.1) and
+    # If-None-Match fails on one (section 3.2).
     #: (String header, Contact? existing) -> bool
-    def if_match_satisfied?(header, existing)
-      return !existing.nil? if header.strip == "*"
-
-      !existing.nil? && header.split(",").map(&:strip).include?(existing.etag)
-    end
-
-    # RFC 7232 section 3.2: If-None-Match fails a non-GET request when
-    # the current etag is one of those listed, or, for `*`, whenever the
-    # resource exists. The create — If-None-Match: * against an unmapped
-    # URI — is the case CardDAV clients send (RFC 6352 section 6.3.2).
-    #: (String header, Contact? existing) -> bool
-    def if_none_match_failed?(header, existing)
+    def etag_matches?(header, existing)
       return !existing.nil? if header.strip == "*"
 
       !existing.nil? && header.split(",").map(&:strip).include?(existing.etag)

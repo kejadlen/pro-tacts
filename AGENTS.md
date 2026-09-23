@@ -78,6 +78,8 @@ lib/pro_tacts/
 ├── birthday.rb     # A partial date, the one fact no card can hold
 ├── birthday_line.rb # What a submitted BDAY line is, for Store#put
 ├── card_diff.rb    # The lines a write added and removed
+├── sync_token.rb   # The token a syncing client carries: minted
+│                   # at a ctag for a book, and read back
 ├── vcard.rb        # vCard 3.0 escaping, and what a card is
 ├── vcard/parser.rb # One card's bytes into lines
 ├── proxy_auth.rb   # The login, off the header the proxy writes

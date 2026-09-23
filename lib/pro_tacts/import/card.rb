@@ -28,11 +28,6 @@ module ProTacts
       # so the two are read together and edited in one place.
       SOURCE_KEYS = %w[identifier vcard note contact].freeze #: Array[String]
 
-      # An address's parts, as the editor's own add row names them
-      # (Admin::CardForm's ADDRESS_COMPONENTS, which is private to it).
-      # No post office box: no screen shows one either.
-      ADDRESS_KEYS = %w[extended street locality region postal_code country].freeze #: Array[String]
-
       # A phone's parts: a number, and the label the source card's
       # X-ABLabel gave the row, left out rather than written empty
       # (docs/plans/2026-09-18-phone-labels.md, "The plan card carries
@@ -69,7 +64,7 @@ module ProTacts
         invalid.("phones must be a list, each with a quoted number and an optional label") unless phones.is_a?(Array) && phones.all? { phone?(it) }
         invalid.("emails must be a list of addresses") unless texts?(emails)
         addresses.is_a?(Array) && addresses.all? { address?(it) } or
-          invalid.("addresses must be a list, each with any of #{ADDRESS_KEYS.join(", ")}")
+          invalid.("addresses must be a list, each with any of #{Contact::ADDRESS_COMPONENTS.join(", ")}")
         invalid.("groups must be a list of names") unless texts?(groups) && groups.none? { it.strip.empty? }
         invalid.("note must be text, or blank") unless note.nil? || note.is_a?(String)
         invalid.("photo must be true or false") unless [true, false].include?(photo)
@@ -89,7 +84,7 @@ module ProTacts
 
       #: (untyped value) -> bool
       def self.address?(value)
-        value.is_a?(Hash) && (value.keys - ADDRESS_KEYS).empty? &&
+        value.is_a?(Hash) && (value.keys - Contact::ADDRESS_COMPONENTS).empty? &&
           value.values.all?(String) && value.values.any? { !it.strip.empty? }
       end
 

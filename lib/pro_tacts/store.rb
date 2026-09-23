@@ -18,20 +18,14 @@ module ProTacts
   # card exactly as it was submitted.
   #
   # Four kinds of state live here and they are not equally precious.
-  # The cards are the truth about contact data, and the reason they are
-  # stored as the card rather than a parse of it is
-  # docs/plans/2026-08-24-vcard-storage-and-groups.md. The change log is
-  # the truth about history, and is why this is one database rather than
-  # a directory of files: "what changed since token X" cannot be
-  # recovered from current state, so a card, its etag, and its
-  # change-log entry have to land or fail together. The birthdays are
-  # the third thing that cannot be rebuilt — a partial date has no
-  # vCard 3.0 spelling, so it lives beside its card rather than in it
-  # (docs/plans/2026-08-31-partial-birthdays.md). The groups are the
-  # fourth — membership and the lines a group contributes to its
-  # members' served cards, facts no stored card carries and so nothing
-  # can re-derive. Everything else is an index derived from the cards,
-  # and #rebuild_index will make it again from nothing.
+  # Only the cards, the change log, the birthdays, and the groups
+  # cannot be rebuilt, and each is argued where it was decided: the
+  # first two in docs/plans/2026-08-25-sqlite-schema.md, "What the
+  # tables are for", the birthdays in
+  # docs/plans/2026-08-31-partial-birthdays.md, the groups in
+  # docs/plans/2026-08-24-vcard-storage-and-groups.md. Everything else
+  # is an index derived from the cards, and #rebuild_index will make
+  # it again from nothing.
   #
   # Every Contact this store hands out is composed, never the stored
   # card alone: a birthday and the lines a contact inherits from its
@@ -39,12 +33,6 @@ module ProTacts
   # composes them back in on read — so the vcard and the etag a caller
   # sees, and the etag the change log records, describe the card a
   # client downloads, not the bytes on disk.
-  #
-  # Sequel's transactions join one already open rather than failing on
-  # SQLite's lack of nesting, which is what lets the group fan-out this
-  # design needs — one member's card rewriting its group and every other
-  # member's card — call #put from inside a larger write and still be a
-  # single atomic unit.
   #
   # The signature lives in sig/pro_tacts/store.rbs, for the Change Data
   # class the inline syntax cannot read.
@@ -56,6 +44,17 @@ module ProTacts
     # signature is in sig/pro_tacts/store.rbs with Store's own.
     # @rbs skip
     Change = Data.define(:sequence, :card_id, :action, :etag, :diff, :created_at)
+
+    # What an entry says happened. The four the schema admits and no
+    # fifth — the CHECK constraint's own list
+    # (db/migrations/006_change_diffs.rb), which is what refuses one
+    # this does not name.
+    module Action
+      PUT = "put" #: String
+      EDIT = "edit" #: String
+      DELETE = "delete" #: String
+      GROUP = "group" #: String
+    end
 
     # A contact paired with when its card last changed. Contact itself
     # carries no timestamp — it is derived from the card alone, see its
@@ -173,15 +172,11 @@ module ProTacts
     # no value types — and this is the one caller that compares values.
     STRUCTURED_VALUES = %w[ADR].freeze #: Array[String]
 
-    # The property names a group may lend, which is a second copy of
-    # the CHECK in db/migrations/004_groups.rb and says so here. The
-    # constraint stays the authority; this is the pre-check a
-    # propagated edit passes first, because the line a member's client
-    # hands back is not always one the group can hold — an address
-    # edited in a type Contacts cannot model comes back as an
-    # `item1.ADR` with its label beside it (see #kept_types?), which
-    # the CHECK refuses. Without this the refusal would be an
-    # exception on an ordinary sync
+    # The property names a group may lend, a second copy of the CHECK
+    # in db/migrations/004_groups.rb and saying so here. The constraint
+    # stays the authority; this is the pre-check a propagated edit
+    # passes first, so that a line the group cannot hold is refused
+    # rather than raising on an ordinary sync
     # (docs/plans/2026-09-09-group-edits-propagate.md, "The line a
     # group cannot hold").
     SHAREABLE_NAMES = %w[ADR NOTE].freeze #: Array[String]
@@ -236,14 +231,9 @@ module ProTacts
       # pragma: Sequel turns them on for every SQLite connection it
       # opens, which is what makes the index's cascades fire.
       @database.run("PRAGMA journal_mode = WAL")
-      # BEGIN IMMEDIATE for every transaction, so that the writes which
-      # read before they write serialize instead of one of them dying.
-      # A deferred transaction — SQLite's default — takes no write lock
-      # until its first write, and the busy handler declines to retry
-      # that upgrade because retrying could deadlock, so the second of
-      # two concurrent group edits gets SQLITE_BUSY straight back
-      # however long BUSY_TIMEOUT is. Taking the lock at BEGIN is what
-      # puts the wait back under the timeout
+      # BEGIN IMMEDIATE for every transaction, so the writes that read
+      # before they write serialize instead of one of them dying on
+      # SQLITE_BUSY however long BUSY_TIMEOUT is
       # (docs/plans/2026-09-09-group-edits-propagate.md, "Two edits,
       # one shared value"). Readers are unaffected: WAL is on above.
       @database.transaction_mode = :immediate
@@ -446,74 +436,36 @@ module ProTacts
     # this card hashed to now, and the index rows read off the card. One
     # transaction, because the log entry cannot be rebuilt from anything.
     #
-    # What is stored is the card minus its birthday, which moves into
-    # the birthdays table — vCard 3.0 cannot carry a partial date, so
-    # no stored card carries the model's BDAY and every read composes
-    # it back in (docs/plans/2026-08-31-partial-birthdays.md).
+    # What is stored is the card minus its birthday and minus what its
+    # groups lend it, both composed back in on read
+    # (docs/plans/2026-08-31-partial-birthdays.md,
+    # docs/plans/2026-08-24-vcard-storage-and-groups.md).
     #
     # A card rather than its bytes, so the reading a caller already
-    # made is the one the split below decides from: a PUT has asked
+    # made is the one #split_birthday decides from: a PUT has asked
     # whether the bytes are a card at all and whose UID they carry
-    # before it gets here (Web#write_card), and taking the card it
-    # asked those of leaves the walk behind them made once.
+    # before it gets here (Web#write_card).
     #
-    # The strings are UTF-8 by contract, and the adapter holds the store
-    # to it: the sqlite3 gem encodes every bound value to UTF-8, so a
-    # binary-flagged byte above 7 bits raises at the bind, and bytes
-    # that are not UTF-8 at all stop at the insert, which SQLite refuses
-    # to store as text. The body — the one binary input — is relabelled
-    # and judged in the same breath where it is read, in write_card, so
-    # nothing that is not text gets this far; VCard's own raise, at the
-    # construction the caller makes, is the assertion under that, and
-    # the bind is the third line.
+    # The strings are UTF-8 by contract and the bind is the third line
+    # holding them to it, under Web#write_card's relabel-and-judge and
+    # VCard's own raise. AGENTS.md, "Those tables are STRICT", has the
+    # whole of it.
     #
     # `client` marks a client's write: a card it creates joins `sync:*`,
-    # created on first use, or it would drop out of the collection it
-    # was written to (docs/plans/2026-09-15-client-creates-join-everyone.md).
-    # A rewrite of a card that exists joins nothing.
+    # created on first use
+    # (docs/plans/2026-09-15-client-creates-join-everyone.md). A
+    # put over a card that exists joins nothing.
     #: (String id, VCard vcard, ?client: bool) -> Contact
     def put(id, vcard, client: false)
-      # The birthday half of the split a write makes
-      # (docs/plans/2026-09-11-every-birthday-in-the-model.md). A card
-      # holds at most one BDAY, and one that reads as a birthday leaves
-      # the card for the model. Any other stays in the card byte for
-      # byte, reported, with the model emptied so nothing composes a
-      # second BDAY beside it (RFC 6352 section 6.3.2.2).
       existing = birthday_of(id)
-      # The card as it stands before this write, read once for the two
-      # halves that need it: the no-BDAY arm below, which reports what
-      # it drops, and the subtraction after it, which accounts for the
-      # member's own lines before attributing any to a group.
-      own = stored_card(id)
-      bdays, rest = vcard.extract("BDAY")
-      birthday, stored =
-        if bdays.empty?
-          # No BDAY: a client that was sent the birthday removed it, and
-          # one that was never sent it cannot have. A BDAY line left in
-          # the stored card goes with the rewrite, which is worth saying.
-          report_lost_bday_lines(own)
-          [existing && !existing.served? ? existing : nil, vcard]
-        elsif bdays.length > 1
-          report_many_bday_lines(bdays.length)
-          [nil, vcard]
-        else
-          line = BirthdayLine.read(bdays.fetch(0))
-          case line
-          when BirthdayLine::Modeled
-            [line.birthday, rest]
-          when BirthdayLine::Unrecognized
-            report_unrecognized_bday_line
-            [nil, vcard]
-          when BirthdayLine::Unreadable
-            [nil, vcard]
-          else
-            raise "no arm for #{line.class}"
-          end
-        end
+      # Read once for the three that want it: the birthday split, the
+      # subtraction after it, and the card this write replaces.
+      stored_before = stored_card(id)
+      birthday, stored = split_birthday(vcard, existing, stored_before)
 
       # The other half of the split, the same shape as the birthday's:
       # what the groups lend comes back out of the submission before it
-      # is stored, so a rewrite cannot materialize a group's lines into
+      # is stored, so a write cannot materialize a group's lines into
       # the member's own card.
       #
       # The Contact this returns is the composed one — those lines put
@@ -522,17 +474,17 @@ module ProTacts
       # it downloads.
       lent = lent_of(id)
       inherited = inheritance(lent)
-      # The card this write replaces, composed from the parts already
-      # read here rather than through #contact, which would read all
-      # three again. Membership cannot move during a put, so the
-      # inheritance either side of it is the one read above.
-      before = own && Contact.new(id:, stored: own, birthday: existing, inherited:)
-      stored, edits = subtract_inherited(stored, lent, own)
+      # Composed from the parts already read here rather than through
+      # #contact, which would read all three again. Membership cannot
+      # move during a put, so the inheritance either side of it is the
+      # one read above.
+      replaced = stored_before && Contact.new(id:, stored: stored_before, birthday: existing, inherited:)
+      stored, edits = subtract_inherited(stored, lent, stored_before)
       # Built before the transaction as well as inside it, because its
       # constructor is where an id that could not be served is refused
       # and a refusal from inside a transaction reaches the caller
       # wearing Sequel's own error class. Composition is lazy, so the
-      # one that gets replaced below cost nothing to make.
+      # one the fan-out throws away below cost nothing to make.
       contact = Contact.new(id:, stored:, birthday:, inherited:)
       @database.transaction do
         # The groups move first, so that everything composed below is
@@ -544,26 +496,28 @@ module ProTacts
           fan_out(member_ids(edits.map(&:group_id).uniq), except: id) { apply_group_edits(edits) }
           contact = Contact.new(id:, stored:, birthday:, inherited: inheritance(lent_of(id)))
         end
-        cards
-          .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
-          .insert(id: contact.id, vcard: stored.to_s)
+        upsert_card(contact.id, stored)
         # After the card, which the membership names by foreign key, and
         # before the log entry, which records the card composed with
         # whatever the group lends. The put's entry is the card's arrival
         # in the book, so the join writes none of its own.
-        if client && own.nil?
+        if client && stored_before.nil?
           group_members.insert(group_id: everyone_group_id, card_id: contact.id)
           contact = Contact.new(id:, stored:, birthday:, inherited: inherited_of(contact.id))
         end
         write_birthday(contact.id, birthday)
-        record(contact.id, "put", contact.etag, CardDiff.between(before&.vcard, contact.vcard))
+        record(
+          contact.id,
+          action: Action::PUT,
+          etag: contact.etag,
+          diff: CardDiff.between(replaced&.vcard, contact.vcard),
+        )
         reindex(contact.id, stored)
         contact
       end
     end
 
-    # The store's own editor changed a contact, against #put's "a
-    # client submitted a card" — why the two paths cannot be one is
+    # Why this and #put cannot be one path is
     # docs/plans/2026-09-05-web-card-editor.md, "Two write paths
     # through the store". The card input is the stored one by
     # definition, and `birthday:` is the model's whole new state, an
@@ -573,15 +527,18 @@ module ProTacts
     # make this save, and re-reading its bytes here would walk them
     # again to reach what the caller already had.
     #: (String id, VCard vcard, birthday: Birthday?) -> Contact
-    def rewrite(id, vcard, birthday:)
+    def save_edit(id, vcard, birthday:)
       before = contact(id)
       contact = Contact.new(id:, stored: vcard, birthday:, inherited: inherited_of(id))
       @database.transaction do
-        cards
-          .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
-          .insert(id: contact.id, vcard: vcard.to_s)
+        upsert_card(contact.id, vcard)
         write_birthday(contact.id, birthday)
-        record(contact.id, "edit", contact.etag, CardDiff.between(before&.vcard, contact.vcard))
+        record(
+          contact.id,
+          action: Action::EDIT,
+          etag: contact.etag,
+          diff: CardDiff.between(before&.vcard, contact.vcard),
+        )
         reindex(contact.id, vcard)
       end
       contact
@@ -596,7 +553,7 @@ module ProTacts
       @database.transaction do
         before = contact(id)
         deleted = cards.where(id:).delete.positive?
-        record(id, "delete", nil, CardDiff.between(before&.vcard, nil)) if deleted
+        record(id, action: Action::DELETE, etag: nil, diff: CardDiff.between(before&.vcard, nil)) if deleted
         deleted
       end
     end
@@ -650,8 +607,13 @@ module ProTacts
             # parameters follow their properties away on the cascade.
             card_properties.where(card_id: id).delete
             after = contact_from(cards.where(id: new_id).sole, birthday_of(new_id), inherited_of(new_id))
-            record(id, "delete", nil, CardDiff.between(before.vcard, nil))
-            record(new_id, "put", after.etag, CardDiff.between(before.vcard, after.vcard))
+            record(id, action: Action::DELETE, etag: nil, diff: CardDiff.between(before.vcard, nil))
+            record(
+              new_id,
+              action: Action::PUT,
+              etag: after.etag,
+              diff: CardDiff.between(before.vcard, after.vcard),
+            )
             reindex(new_id, stored)
           end
           return new_id
@@ -801,7 +763,15 @@ module ProTacts
     # the ordinary miss, #delete's shape.
     #: (String id) -> bool
     def delete_group(id)
-      name = groups.where(id:).sole.fetch(:name).to_s
+      # A plain `first` read, #stored_card's reason: id is the primary
+      # key, so there is no ambiguity for `sole` to catch. Read here
+      # rather than rescued around the whole method, which would have
+      # swallowed a NoMatchingRow raised from inside the transaction
+      # below and answered it as an ordinary miss.
+      row = groups.where(id:).first
+      return false if row.nil?
+
+      name = row.fetch(:name).to_s
       # Refused before the transaction, #name_book's reason for the
       # same refusal: Sequel wraps what a rollback raises.
       raise EveryonesBookName, "#{EVERYONE} is everyone's book, not a group to delete" if name == EVERYONE
@@ -813,8 +783,6 @@ module ProTacts
         }
         true
       end
-    rescue Sequel::NoMatchingRow
-      false
     end
 
     # A card's side of #edit_group: one transaction, leavers first and
@@ -915,55 +883,53 @@ module ProTacts
       @database[:group_properties]
     end
 
+    # A card written where one may already stand. The stamp is set
+    # again on the way past because SQLite has no ON UPDATE and the
+    # column default only fires on insert (NOW).
+    #: (String id, VCard vcard) -> void
+    def upsert_card(id, vcard)
+      cards
+        .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
+        .insert(id:, vcard: vcard.to_s)
+    end
+
     # The diff comes in already computed rather than being taken here
     # off a `before` and an `after`: only the caller knows which two
     # cards its write was between, and a delete's `after` is nothing at
     # all.
-    #: (String card_id, String action, String? etag, CardDiff diff) -> void
-    def record(card_id, action, etag, diff)
+    #: (String card_id, action: String, etag: String?, diff: CardDiff) -> void
+    def record(card_id, action:, etag:, diff:)
       change_log.insert(card_id:, action:, etag:, diff: diff.to_json)
     end
 
     # The block's group writes, bracketed by a read of every member
     # they could move: what each served before and what each serves
-    # after, and a `group` entry wherever the two differ. A group edit
-    # moves bytes on cards nobody wrote to, and a client is told a card
-    # changed only by the log — a sync token silently skips whatever
-    # the log missed (see the class comment).
+    # after, and a `group` entry wherever the two differ. Why an entry
+    # only where the bytes moved, why `except` is the writing member,
+    # and why this runs inside the caller's own transaction are
+    # docs/plans/2026-09-09-group-edits-propagate.md, "The fan-out".
     #
-    # An entry only where the bytes actually moved, which is narrower
-    # than one per member: a rename moves nothing and a group that
-    # lends nothing lends nothing to a new member either, and an entry
-    # for either would spend every client's next poll re-fetching a
-    # card that reads the same. `except` is the member doing the
-    # writing, whose own entry already carries this composition
-    # (docs/plans/2026-09-09-group-edits-propagate.md, "The fan-out").
-    #
-    # `moved` is the exception: cards logged whatever their bytes did,
-    # because a `sync:` membership moves a card into or out of a book
-    # without touching what it serves, and the log is the only way a
-    # client's sync token hears of it
+    # `moved` is the exception the plan does not cover: cards logged
+    # whatever their bytes did, because a `sync:` membership moves a
+    # card between books without touching what it serves
     # (docs/plans/2026-09-12-per-user-books.md, "The change log").
     #
     # Card ids rather than groups, because the cards a write can move
     # are not always members yet: a card joining a group is read before
     # the row that makes it one exists.
-    #
-    # Inside whatever transaction the caller has open: Sequel joins one
-    # rather than nesting, which is what lets this run from #put.
     #: (Array[String] cards, ?except: String?, ?moved: Array[String]) { () -> void } -> void
     def fan_out(cards, except: nil, moved: [])
       ids = cards - [except].compact
       before = ids.to_h {
-        [it, composed(it)] #: [String, Contact]
+        [it, contact!(it)] #: [String, Contact]
       }
       yield
       ids.each do |id|
         was = before.fetch(id)
-        now = composed(id)
+        now = contact!(id)
         next if was.vcard.to_s == now.vcard.to_s && !moved.include?(id)
 
-        record(id, "group", now.etag, CardDiff.between(was.vcard, now.vcard))
+        record(id, action: Action::GROUP, etag: now.etag, diff: CardDiff.between(was.vcard, now.vcard))
       end
     end
 
@@ -1001,9 +967,9 @@ module ProTacts
       }
     end
 
-    # The id of the `sync:*` group, created on first use. `sole` because
-    # a group's name is unique (db/migrations/008_group_names.rb), and
-    # no row is the ordinary answer for the first create.
+    # The id of the `sync:*` group, created on first use. One row
+    # because a group's name is unique
+    # (db/migrations/008_group_names.rb).
     #: () -> String
     def everyone_group_id
       groups.where(name: EVERYONE).sole.fetch(:id).to_s
@@ -1044,12 +1010,11 @@ module ProTacts
         .map { it.fetch(:card_id).to_s }
     end
 
-    # A member's card as it composes right now. #contact's read without
-    # the rescue it makes: a group_members row names a card by foreign
-    # key, so no row here is the corruption `sole` exists to raise on
-    # rather than the ordinary miss an href off the wire is.
+    # A group_members row names a card by foreign key, so a missing
+    # row here is the corruption `sole` exists to raise on rather than
+    # the ordinary miss an href off the wire is.
     #: (String id) -> Contact
-    def composed(id)
+    def contact!(id)
       contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
     end
 
@@ -1090,6 +1055,48 @@ module ProTacts
       Sequel::Migrator.run(@database, MIGRATIONS.to_s)
     end
 
+    # The birthday half of the split a write makes
+    # (docs/plans/2026-09-11-every-birthday-in-the-model.md): the
+    # model's new birthday, and the card to store beside it. A card
+    # holds at most one BDAY, and one that reads as a birthday leaves
+    # the card for the model. Any other stays in the card byte for
+    # byte, reported, with the model emptied so nothing composes a
+    # second BDAY beside it (RFC 6352 section 6.3.2.2).
+    #
+    # No BDAY is a client that was sent the birthday removing it, or
+    # one that was never sent it and so cannot have. A BDAY line left
+    # in the stored card goes with the write, which is worth saying.
+    #
+    # case/when rather than case/in, BirthdayLine's own rule: Steep
+    # does not check the bodies of case/in branches, and these are the
+    # ones worth checking — which is what the last arm is for.
+    #: (VCard vcard, Birthday? existing, VCard? stored_before) -> [Birthday?, VCard]
+    def split_birthday(vcard, existing, stored_before)
+      bdays, rest = vcard.extract("BDAY")
+      if bdays.empty?
+        report_lost_bday_lines(stored_before)
+        return [existing && !existing.served? ? existing : nil, vcard]
+      end
+
+      if bdays.length > 1
+        report_many_bday_lines(bdays.length)
+        return [nil, vcard]
+      end
+
+      line = BirthdayLine.read(bdays.fetch(0))
+      case line
+      when BirthdayLine::Modeled
+        [line.birthday, rest]
+      when BirthdayLine::Unrecognized
+        report_unrecognized_bday_line
+        [nil, vcard]
+      when BirthdayLine::Unreadable
+        [nil, vcard]
+      else
+        raise "no arm for #{line.class}"
+      end
+    end
+
     # The card currently stored for an id, or nil for a card being
     # created. A plain `first` read: the primary key leaves `sole`
     # nothing to catch, and no row is the ordinary answer.
@@ -1121,20 +1128,10 @@ module ProTacts
     # minus inherited and a client that PUTs back what it downloaded
     # stores what it started with
     # (docs/plans/2026-08-24-vcard-storage-and-groups.md, "Groups
-    # compose into cards"). Without this a member's rewrite would
-    # materialize the group's lines into its own card, and a later edit
-    # to the group would reach nobody.
-    #
-    # Each lent line is classified against the submission, and three of
-    # the four shapes act. The line coming back saying what the group
-    # lends is the group's, untouched, and it goes. One line of that
-    # name left over is an edit to the shared value: it goes too, and
-    # the group's row takes its bytes, so the member does not end up
-    # carrying its own copy beside the one composition puts back. None
-    # left over is a deletion, and the group's row goes with it
-    # (docs/plans/2026-09-09-group-edits-propagate.md). More than one
-    # left over is a line this cannot attribute at all, and reports
-    # rather than guesses.
+    # compose into cards"). Which of four shapes a lent line came back
+    # as, and what each asks of its group, is #classify — argued in
+    # that plan's "Classifying what came back" and in
+    # docs/plans/2026-09-09-group-edits-propagate.md.
     #
     # Two passes, because one lent line must not be attributed a line
     # another lent line would have matched exactly. A member of two
@@ -1150,11 +1147,11 @@ module ProTacts
     # this leaves keep their positions, so a submission that was the
     # served card round-trips to the bytes it was composed from and the
     # PUT can answer with a strong etag (RFC 6352 section 6.3.2.3).
-    #: (VCard vcard, Array[Lent] lent, VCard? own) -> [VCard, Array[GroupEdit]]
-    def subtract_inherited(vcard, lent, own)
+    #: (VCard vcard, Array[Lent] lent, VCard? stored_before) -> [VCard, Array[GroupEdit]]
+    def subtract_inherited(vcard, lent, stored_before)
       return [vcard, []] if lent.empty?
 
-      unaccounted = unaccounted_lines(vcard, own)
+      unaccounted = unaccounted_lines(vcard, stored_before)
       taken = [] #: Array[VCard::Parser::Line]
 
       moved = lent.reject { |row|
@@ -1211,7 +1208,7 @@ module ProTacts
       return :unshareable unless shareable?(edited)
 
       taken << strike(unaccounted, edited)
-      GroupEdit.new(group_id: row.group_id, position: row.position, line: content_line(edited))
+      GroupEdit.new(group_id: row.group_id, position: row.position, line: edited.content)
     end
 
     # The line out of the pool, so no second lent line is attributed
@@ -1223,18 +1220,6 @@ module ProTacts
         unaccounted.index(line) #: Integer
       )
       line
-    end
-
-    # A line as a group holds one: unfolded and shorn of its
-    # terminator, the same unit CardDiff records a write in and the
-    # shape db/migrations/004_groups.rb's own rows are written in.
-    # The bytes are the client's, not a re-render under the group's old
-    # header — a relabel is one of the edits this carries, and
-    # rebuilding the header would propagate the value and drop the
-    # label (the plan's "What a propagated edit stores").
-    #: (VCard::Parser::Line line) -> String
-    def content_line(line)
-      VCard::Parser.unfold(line.verbatim).sub(/(\r\n|[\r\n])\z/, "")
     end
 
     # Whether a group could hold this line: one of the names
@@ -1258,22 +1243,16 @@ module ProTacts
 
     # Whether a submitted line still says what the group lends, which
     # is a question about what it says and not about its bytes: macOS
-    # re-serializes every card it touches, so `ADR;TYPE=home` comes
-    # back `ADR;type=HOME;type=pref` on an address nobody edited
+    # re-serializes every card it touches
     # (docs/apple-contacts.md, "The client rewrites every card it
-    # touches"). Comparing bytes reads every such line as an edit.
+    # touches"), and comparing bytes reads every such line as an edit.
     #
-    # What a line says is its value and its types: a member who
-    # relabels a lent address from home to work edited the shared line
-    # as surely as one who changed a digit of it, and an edit is the
-    # group's to take (the plan's "Edits propagate to the group"). So a
-    # type that moved is not subtracted, and stays in the member's card
-    # where the propagation will find it.
-    #
-    # Every other parameter goes uncompared, being the half the client
-    # rewrites without being asked: it drops the ones it does not model
-    # — a `NOTE;LANGUAGE=en` comes back bare — and fills in defaults on
-    # the ones it does.
+    # What a line says is its value and its types, because a relabel is
+    # an edit the group takes like any other
+    # (docs/plans/2026-08-24-vcard-storage-and-groups.md, "Edits
+    # propagate to the group"). Every other parameter goes uncompared,
+    # being the half the client rewrites unasked — it drops the ones it
+    # does not model and fills in defaults on the ones it does.
     #
     # A line that will not read has no value to compare and falls back
     # to its bytes, which still recognize the line nobody touched.
@@ -1286,19 +1265,16 @@ module ProTacts
     end
 
     # Whether a submitted line carries the types the group lent it,
-    # across the three rewrites they survive: the values come back
-    # uppercased and `pref` filled in, so neither side's case counts
-    # and neither counts `pref` (types_of drops it). An untyped line
-    # comes back untyped, so no types compares to no types and a
-    # member who labels one has edited it.
+    # across the three rewrites they survive. Two are cosmetic and
+    # Property#types already absorbs them: the values come back
+    # uppercased, and `pref` comes back filled in.
     #
-    # The third: a type Contacts has no field for comes back moved,
-    # not kept — into a property group, `TYPE` parameter gone, the type
-    # the value of an `X-ABLabel` beside it — on an address nobody
-    # touched (docs/apple-contacts.md, "An address type the client
-    # cannot model becomes a custom label"). So that label counts as
-    # one of the line's types, and `ADR;TYPE=dom` coming back as
-    # `item1.ADR` with `item1.X-ABLabel:dom` is unedited.
+    # The third moves the type off the line: a type Contacts has no
+    # field for comes back as an `X-ABLabel` in a property group
+    # (docs/apple-contacts.md, "An address type the client cannot
+    # model becomes a custom label"), so that label counts as one of
+    # the line's types and `ADR;TYPE=dom` coming back as `item1.ADR`
+    # with `item1.X-ABLabel:dom` is unedited.
     #: (VCard::Parser::Line line, VCard::Parser::Line lent, Array[VCard::Parser::Line] pool) -> bool
     def kept_types?(line, lent, pool)
       label = label_of(line, pool)&.property
@@ -1333,34 +1309,29 @@ module ProTacts
       STRUCTURED_VALUES.include?(property.name.upcase) ? property.components : [property.text]
     end
 
-    # A line's TYPE values, as the set the round trip preserves:
-    # casefolded, `pref` dropped as the client's own addition, and
-    # sorted because `TYPE=home;TYPE=pref` and `TYPE=pref,home` are one
-    # thing (RFC 2426 section 3.2.1, which the parser reads into pairs
-    # either way). Empty for a line that would not read, which has no
+    # A line's TYPE values as the set the round trip preserves, sorted
+    # because `TYPE=home;TYPE=pref` and `TYPE=pref,home` are one thing
+    # (RFC 2426 section 3.2.1, which the parser reads into pairs either
+    # way). Empty for a line that would not read, which has no
     # parameters to compare.
     #: (VCard::Parser::Line line) -> Array[String]
     def types_of(line)
       property = line.property
       return [] if property.nil?
 
-      property.parameters
-        .filter_map { |name, value| value.downcase if name.casecmp?("TYPE") }
-        .reject { it == "pref" }
-        .uniq
-        .sort
+      property.types.sort
     end
 
-    # The submission's lines that the member's own stored card does not
-    # already explain — one struck per stored line of the same bytes,
+    # The submission's lines the card as it stood before this write
+    # does not already explain — one struck per stored line of the same bytes,
     # so a card that stores one of something and submits two leaves one
     # over. What is left is what the groups lent plus whatever the
     # client wrote beside it, which is the pool a lent line is
     # attributed from. Everything for a card being created, which has
     # no stored lines to explain anything.
-    #: (VCard vcard, VCard? own) -> Array[VCard::Parser::Line]
-    def unaccounted_lines(vcard, own)
-      stored = own ? own.lines.map { it.verbatim.chomp } : [] #: Array[String]
+    #: (VCard vcard, VCard? stored_before) -> Array[VCard::Parser::Line]
+    def unaccounted_lines(vcard, stored_before)
+      stored = stored_before ? stored_before.lines.map { it.verbatim.chomp } : [] #: Array[String]
       vcard.lines.reject { |line|
         index = stored.index(line.verbatim.chomp)
         stored.delete_at(index) if index
@@ -1383,8 +1354,7 @@ module ProTacts
     # attribute — two lines of that name arrived that the member's card
     # does not explain, and calling either the edit would be a guess.
     # The card is stored as it arrived and the line is news, the same
-    # bargain report_unrecognized_bday_line makes, and carries no card
-    # content for the same reason (config.ru).
+    # bargain report_unrecognized_bday_line makes.
     #: (Integer count) -> void
     def report_ambiguous_inherited_lines(count)
       return if count.zero?
@@ -1402,8 +1372,7 @@ module ProTacts
     # under one — which comes back as a property group with an
     # `X-ABLabel` beside it (#kept_types?), and the news is worth
     # having because that member now serves the line twice — its own
-    # copy and the group's — until someone reconciles them. No card
-    # content, the ambiguity report's own line.
+    # copy and the group's — until someone reconciles them.
     #: (Integer count) -> void
     def report_unshareable_lines(count)
       return if count.zero?
@@ -1414,17 +1383,17 @@ module ProTacts
       )
     end
 
-    # The loss report, the rewrite's half of the arrival one: a BDAY
-    # line still in the stored card is one the model did not take, and a
-    # rewrite without it is about to drop it with nobody told.
-    #: (VCard? own) -> void
-    def report_lost_bday_lines(own)
-      return if own.nil?
+    # The loss report, the write's half of the arrival one: a BDAY line
+    # still in the stored card is one the model did not take, and a
+    # write without it is about to drop it with nobody told.
+    #: (VCard? stored_before) -> void
+    def report_lost_bday_lines(stored_before)
+      return if stored_before.nil?
 
-      lines, = own.extract("BDAY")
+      lines, = stored_before.extract("BDAY")
       return if lines.empty?
 
-      Sentry.capture_message("a rewrite dropped #{lines.length} BDAY line(s) the model did not take", level: :warning)
+      Sentry.capture_message("a write dropped #{lines.length} BDAY line(s) the model did not take", level: :warning)
     end
 
     # The birthday travels beside the card rather than inside it, and

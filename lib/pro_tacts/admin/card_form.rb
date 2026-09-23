@@ -1,4 +1,5 @@
 require "pro_tacts/birthday"
+require "pro_tacts/contact"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
@@ -13,21 +14,6 @@ module ProTacts
     #
     # Not a view, unlike its neighbours, so the Steepfile checks it.
     module CardForm
-      # ADR's editable components: field name to position in the value
-      # (RFC 2426 section 3.2.1, minus the leading po box at position 0
-      # — no screen shows one, and the save preserves its bytes rather
-      # than letting a form field near them). In the value's own order,
-      # which is the order a rebuilt line's components join in.
-      ADDRESS_COMPONENTS = {
-        "extended" => 1,
-        "street" => 2,
-        "locality" => 3,
-        "region" => 4,
-        "postal_code" => 5,
-        "country" => 6,
-      }.freeze #: Hash[String, Integer]
-      private_constant :ADDRESS_COMPONENTS
-
       # A created contact's card: the envelope RFC 2426 section 4
       # requires — BEGIN, VERSION, and the N and FN that section makes
       # mandatory — plus the UID this server's id model is (see
@@ -65,8 +51,8 @@ module ProTacts
         vcard = edited_fn(contact, vcard, first, middle, last)
         vcard = vcard.replace("NICKNAME", text_lines("NICKNAME", nickname))
         vcard = vcard.replace("NOTE", text_lines("NOTE", note))
-        vcard = edited_phones(own, vcard, params)
-        vcard = edited_emails(own, vcard, params)
+        vcard = edited_values(own.phones, "phone", "TEL", vcard, params)
+        vcard = edited_values(own.emails, "email", "EMAIL", vcard, params)
         edited_addresses(own, vcard, params)
       end
 
@@ -81,7 +67,7 @@ module ProTacts
         card = reading.stored.replace("NOTE", text_lines("NOTE", params["note"].to_s.strip))
         card = edited_addresses(reading, card, params)
         card.lines.filter_map {
-          line = VCard::Parser.unfold(it.verbatim).sub(/(\r\n|[\r\n])\z/, "")
+          line = it.content
           line unless line.empty?
         }
       end
@@ -106,81 +92,56 @@ module ProTacts
         Birthday.new(year:, month:, day:)
       end
 
-      # The phones' half of the surgical save: each row names its line
+      # The single-value rows' half of the surgical save, walked once
+      # for the phones and once for the emails: each row names its line
       # by digest, so a row the request leaves out is a line the save
       # never mentions, and an unchanged row is skipped — the line keeps
       # its own bytes by construction, not by careful re-rendering. A
       # blank row removes its line; a changed row swaps the value under
       # the line's own header (VCard.header_of), where the TYPE
-      # parameters no field models ride. The addresses come from the
+      # parameters no field models ride. The rows come from the
       # contact, never the request, so a doctored digest names nothing
       # and a missing one touches nothing.
-      #: (Contact contact, VCard vcard, Hash[String, untyped] params) -> VCard
-      def self.edited_phones(contact, vcard, params)
-        rows = params["phone"]
-        if rows.is_a?(Hash)
-          contact.phones.each do |phone|
+      #
+      # `field` is the form's name for the kind and `name` the property
+      # an added row is written as. The rows the add dialog reveals
+      # (Admin::ContactsEdit) land as bare lines before END:VCARD, and a
+      # blank one inserts nothing — inserting absence is a no-op, the
+      # plan's rule for new rows, and the reason the rows nobody typed
+      # in cost nothing whether they were on screen or not. Array()
+      # because the field is a list and a request carrying one value
+      # is still a list of one.
+      #: (Array[Contact::Phone | Contact::Email] rows, String field, String name, VCard vcard, Hash[String, untyped] params) -> VCard
+      def self.edited_values(rows, field, name, vcard, params)
+        edits = params[field]
+        if edits.is_a?(Hash)
+          rows.each do |row|
             # The property is nil only for a line that would not read,
-            # and phones read from lines that did; the guard is the
+            # and these rows read from lines that did; the guard is the
             # type's honesty, not a reachable case (n_line's own shape).
-            property = phone.line.property
+            property = row.line.property
             next if property.nil?
 
-            submitted = rows[phone.line.digest]
-            next if submitted.nil? || submitted.to_s.strip == phone.value
+            submitted = edits[row.line.digest]
+            next if submitted.nil? || submitted.to_s.strip == row.value
 
             value = submitted.to_s.strip
             vcard = vcard.substitute(
-              phone.line.digest,
-              value.empty? ? [] : ["#{VCard.header_of(property)}#{VCard.escape(value)}"]
-            )
-          end
-        end
-
-        # The rows the add dialog reveals (Admin::ContactsEdit): each
-        # value lands as a bare TEL before END:VCARD, and a blank one
-        # inserts nothing — inserting absence is a no-op, the plan's
-        # rule for new rows, and the reason the rows nobody typed in
-        # cost nothing whether they were on screen or not. Array()
-        # because the field is a list and a request carrying one value
-        # is still a list of one.
-        submitted = Array(params["new_phone"]) #: Array[untyped]
-        added = submitted.filter_map {
-          value = it.to_s.strip
-          "TEL:#{VCard.escape(value)}\r\n" unless value.empty?
-        } #: Array[String]
-        vcard.insert(added)
-      end
-
-      # #edited_phones' walk, over EMAIL.
-      #: (Contact contact, VCard vcard, Hash[String, untyped] params) -> VCard
-      def self.edited_emails(contact, vcard, params)
-        rows = params["email"]
-        if rows.is_a?(Hash)
-          contact.emails.each do |email|
-            property = email.line.property
-            next if property.nil?
-
-            submitted = rows[email.line.digest]
-            next if submitted.nil? || submitted.to_s.strip == email.value
-
-            value = submitted.to_s.strip
-            vcard = vcard.substitute(
-              email.line.digest,
+              row.line.digest,
               value.empty? ? [] : ["#{VCard.header_of(property)}#{VCard.escape(value)}"],
             )
           end
         end
 
-        submitted = Array(params["new_email"]) #: Array[untyped]
+        submitted = Array(params["new_#{field}"]) #: Array[untyped]
         added = submitted.filter_map {
           value = it.to_s.strip
-          "EMAIL:#{VCard.escape(value)}\r\n" unless value.empty?
+          "#{name}:#{VCard.escape(value)}\r\n" unless value.empty?
         } #: Array[String]
         vcard.insert(added)
       end
 
-      # #edited_phones' walk, over a row that is six fields rather than
+      # #edited_values' walk, over a row that is six fields rather than
       # one (Admin::ContactsEdit). Removal is the reader's own rule
       # (Contact#address_of): a row blank throughout, po box included,
       # removes the line, where a partially blanked one keeps it —
@@ -214,7 +175,7 @@ module ProTacts
 
       #: (Contact::Address address, untyped submitted) -> bool
       def self.address_unchanged?(address, submitted)
-        ADDRESS_COMPONENTS.keys.all? { |name|
+        Contact::ADDRESS_COMPONENTS.all? { |name|
           submitted[name].to_s.strip == address.public_send(name).to_s
         }
       end
@@ -241,7 +202,8 @@ module ProTacts
           components = VCard.split_raw_components(property.value)
         end
         components << "" while components.length < 7
-        ADDRESS_COMPONENTS.each do |name, position|
+        Contact::ADDRESS_COMPONENTS.each_with_index do |name, index|
+          position = index + 1
           value = submitted[name].to_s.strip
           current = address && address.public_send(name).to_s
           components[position] = value == current ? components.fetch(position) : VCard.escape(value)
@@ -287,7 +249,7 @@ module ProTacts
       #: (Contact contact, VCard vcard, String first, String middle, String last) -> VCard
       def self.edited_fn(contact, vcard, first, middle, last)
         family, given, additional = contact.name_components || []
-        named = vcard.properties.any? { it.name.casecmp?("FN") }
+        named = !vcard.property("FN").nil?
         return vcard if named && first == given.to_s && middle == additional.to_s && last == family.to_s
 
         vcard.replace("FN", ["FN:#{VCard.escape(display_name(first, middle, last))}\r\n"])
@@ -315,7 +277,7 @@ module ProTacts
       # empties a whole-N writer would leave.
       #: (VCard vcard, String first, String middle, String last) -> String
       def self.n_line(vcard, first, middle, last)
-        property = vcard.properties.find { it.name.casecmp?("N") }
+        property = vcard.property("N")
         components = [] #: Array[String]
         readings = [] #: Array[String]
         if property
@@ -332,7 +294,7 @@ module ProTacts
         "N:#{components.join(";")}\r\n"
       end
 
-      private_class_method :edited_phones, :edited_emails, :edited_addresses, :address_unchanged?,
+      private_class_method :edited_values, :edited_addresses, :address_unchanged?,
                            :address_line, :birthday_component, :text_lines, :edited_fn, :display_name,
                            :n_line
     end

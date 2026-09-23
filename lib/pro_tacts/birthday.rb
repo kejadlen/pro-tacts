@@ -18,9 +18,9 @@ module ProTacts
   # Every well-shaped BDAY a client sends is read into this model, and
   # only the two shapes that survive a round trip through both Apple
   # clients go back out (#to_line); the other four are kept and shown
-  # but never sent. Store moves the line out of the card and composes it
-  # back in. The reasoning is docs/plans/2026-09-11-every-birthday-in-the-model.md;
-  # why a partial date cannot live in a vCard 3.0 card is
+  # but never sent. Why, and why a partial date cannot live in a vCard
+  # 3.0 card at all, are
+  # docs/plans/2026-09-11-every-birthday-in-the-model.md and
   # docs/plans/2026-08-31-partial-birthdays.md.
   #
   # The signature lives in sig/pro_tacts/birthday.rbs: a Data class has
