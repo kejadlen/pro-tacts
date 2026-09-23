@@ -1,0 +1,36 @@
+# The one Fly config, for the two demo apps: the app main deploys (the
+# deploy job in .github/workflows/ci.yml) and the per-PR previews (the
+# review-app action in .github/workflows/preview.yml, which overrides
+# the app name with the PR's). Both run demo.ru rather than the image's
+# own config.ru, which is the whole of what makes them demos: the
+# fixture book seeded on first boot, and a stand-in login, since nothing
+# writes the identity header in front of either. No volume, so every
+# deploy starts from the fixtures again, and the one demo book is
+# served to anyone who opens the URL. What each app calls itself is not
+# here -- demo.ru reads it from the app name the platform hands the
+# machine.
+#
+# The app name is Fly's, not GitHub's, so it has to be unique across all
+# of Fly and a taken one fails the deploy. ci.yml spells it twice more,
+# as FLY_APP to create it on the first deploy and in the environment's
+# URL, so a rename here is a rename in three places.
+app = 'pro-tacts'
+primary_region = 'sjc'
+
+[build]
+
+[processes]
+  app = 'rackup -o 0.0.0.0 demo.ru'
+
+[http_service]
+  internal_port = 9292
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1

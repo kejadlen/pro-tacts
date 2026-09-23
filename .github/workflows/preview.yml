@@ -37,5 +37,5 @@ jobs:
         id: deploy
         uses: superfly/fly-pr-review-apps@f5d85309215d5700e7a42faf9aa5e9a718aaef7c # 1.5.0
         with:
-          config: fly.preview.toml
+          config: fly.toml
           memory: 256

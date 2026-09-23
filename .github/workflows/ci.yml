@@ -87,22 +87,22 @@ jobs:
         run: gh release create "${STEPS_META_OUTPUTS_VERSION}" --target "$GITHUB_SHA" --generate-notes
 
   deploy:
-    name: Deploy base demo
+    name: Deploy main preview
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
-      contents: read # checkout, for fly.base.toml
+      contents: read # checkout, for fly.toml
     environment:
       name: demo
-      url: https://pro-tacts-base.fly.dev
+      url: https://pro-tacts.fly.dev
     # One deploy at a time, and a newer main is the one worth having.
     concurrency:
       group: fly-deploy
       cancel-in-progress: true
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      FLY_APP: pro-tacts-base
+      FLY_APP: pro-tacts
       FLY_ORG: personal
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -119,9 +119,7 @@ jobs:
 
       # The image the build job just pushed, rather than a second build
       # of the same commit: what the demo runs is then the release.
-      # --config is named because the file is not fly.toml; see its head
-      # for why it is not.
       - name: Deploy the released image
         env:
           NEEDS_BUILD_OUTPUTS_IMAGE: ${{ needs.build.outputs.image }}
-        run: flyctl deploy --app "$FLY_APP" --config fly.base.toml --image "$NEEDS_BUILD_OUTPUTS_IMAGE"
+        run: flyctl deploy --app "$FLY_APP" --config fly.toml --image "$NEEDS_BUILD_OUTPUTS_IMAGE"
