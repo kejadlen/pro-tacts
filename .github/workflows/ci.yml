@@ -85,3 +85,43 @@ jobs:
         # --target names the commit explicitly: persist-credentials is
         # false, so the tag cannot ride the leftover git credentials.
         run: gh release create "${STEPS_META_OUTPUTS_VERSION}" --target "$GITHUB_SHA" --generate-notes
+
+  deploy:
+    name: Deploy base demo
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # checkout, for fly.base.toml
+    environment:
+      name: demo
+      url: https://pro-tacts-base.fly.dev
+    # One deploy at a time, and a newer main is the one worth having.
+    concurrency:
+      group: fly-deploy
+      cancel-in-progress: true
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_APP: pro-tacts-base
+      FLY_ORG: personal
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # 1.6
+
+      # Created here rather than by hand, so the app is something this
+      # repository can lose and get back. `status` is how the review-app
+      # action asks the same question.
+      - name: Create the app if it is not there yet
+        run: flyctl status --app "$FLY_APP" >/dev/null 2>&1 || flyctl apps create "$FLY_APP" --org "$FLY_ORG"
+
+      # The image the build job just pushed, rather than a second build
+      # of the same commit: what the demo runs is then the release.
+      # --config is named because the file is not fly.toml; see its head
+      # for why it is not.
+      - name: Deploy the released image
+        env:
+          NEEDS_BUILD_OUTPUTS_IMAGE: ${{ needs.build.outputs.image }}
+        run: flyctl deploy --app "$FLY_APP" --config fly.base.toml --image "$NEEDS_BUILD_OUTPUTS_IMAGE"
