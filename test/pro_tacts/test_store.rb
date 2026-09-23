@@ -1345,18 +1345,17 @@ class StoreTest < Minitest::Test
   end
 
   # The pickers' read: id, name and the same coalesced label a tag
-  # shows, and nothing about who is in a group — a nameless group is
-  # its id here as everywhere. A choice a member joins reads the same
-  # as one nobody is in, the membership being no part of what a picker
-  # shows.
-  def test_group_choices_carry_the_label_without_the_membership
+  # shows, and how many are in a group rather than who — a nameless
+  # group is its id here as everywhere, and one nobody is in counts
+  # nought rather than going missing from the list.
+  def test_group_choices_carry_the_label_and_a_member_count
     with_store({"aiden" => UUID_CARD}) do |store|
       named = store.create_group(name: "Household")
       nameless = store.create_group
       store.add_member(named, "aiden")
 
-      assert_equal({named => ["Household", "Household"], nameless => [nil, nameless]}.sort.to_h,
-                   store.group_choices.to_h { [it.id, [it.name, it.label]] })
+      assert_equal({named => ["Household", "Household", 1], nameless => [nil, nameless, 0]}.sort.to_h,
+                   store.group_choices.to_h { [it.id, [it.name, it.label, it.member_count]] })
     end
   end
 

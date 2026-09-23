@@ -92,6 +92,9 @@ module Sequel
     # as the query builder's rather than Enumerable's own #select.
     def select: (*untyped columns) -> Dataset
     def limit: (Integer count) -> Dataset
+    # A dataset as a subquery under a name, for a column computed in
+    # another dataset's select (Store#group_choices' member count).
+    def as: (Symbol name) -> untyped
     # Hash conditions pair the joined table's column with the source's
     # (`id: :card_id` is cards.id = birthdays.card_id); the array form
     # joins same-named columns.

@@ -663,8 +663,8 @@ class AdminImportPagesTest < Minitest::Test
 
       get "/import/#{id}/0"
 
-      # Alphabetical, and the import's own name takes the eighth row,
-      # so Group h and Zulus are the two that go under.
+      # All empty, so alphabetical, and the import's own name takes
+      # the eighth row, so Group h and Zulus are the two that go under.
       assert_includes last_response.body, %(<label data-label="zulus" data-capped :hidden="!visible($el)">)
       assert_equal 2, last_response.body.scan("data-capped").length
       assert_includes last_response.body, "show all 9 groups"
@@ -679,6 +679,29 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body, %(<label data-label="zulus" :hidden="!visible($el)">)
       assert_includes last_response.body, %(<label data-label="group h" data-capped :hidden="!visible($el)">)
       assert_equal 1, last_response.body.scan("data-capped").length
+    end
+  end
+
+  # The groups most of the book is in are the ones an arrival is
+  # likeliest to join, so they lead the list and stand above the cap;
+  # a tie is alphabetical (Admin::ImportGroups). Everyone's book holds
+  # both stored contacts, as Zulus does, and `sync:*` sorts first.
+  def test_the_groups_beside_a_card_are_largest_first
+    with_contacts({"jane" => JANE, "sam" => PLAIN}) do |store|
+      alpha = store.create_group(name: "alpha")
+      beta = store.create_group(name: "beta")
+      zulus = store.create_group(name: "zulus")
+      store.add_member(zulus, "jane")
+      store.add_member(zulus, "sam")
+      store.add_member(beta, "jane")
+      id = upload(JANE)
+
+      get "/import/#{id}/0"
+
+      shown = last_response.body.scan(/name="groups\[\]" value="([^"]+)"/).flatten
+      everyone = store.group_choices.find { it.name == ProTacts::Store::EVERYONE }.id
+
+      assert_equal [everyone, zulus, beta, alpha], shown
     end
   end
 

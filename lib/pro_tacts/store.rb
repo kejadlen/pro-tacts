@@ -145,12 +145,13 @@ module ProTacts
     # and no more. A Group carries the lines it lends and the ids of
     # its members, two reads beyond the group row itself (#load_groups);
     # a picker is a list of names to tick and needs neither, so
-    # #group_choices reads only the row. The label is the same SQL one
-    # (#group_label), so a choice and a tag never disagree about what
-    # to call a nameless group. Signed in sig/pro_tacts/store.rbs,
-    # being a Data class.
+    # #group_choices reads only the row and a count of who is in it,
+    # which the import's picker sorts by (Admin::ImportGroups). The
+    # label is the same SQL one (#group_label), so a choice and a tag
+    # never disagree about what to call a nameless group. Signed in
+    # sig/pro_tacts/store.rbs, being a Data class.
     # @rbs skip
-    GroupChoice = Data.define(:id, :name, :label)
+    GroupChoice = Data.define(:id, :name, :label, :member_count)
 
     # SQLite has no ON UPDATE, so the column default stamps a row on
     # insert and this stamps it again on the way past. Same expression as
@@ -674,18 +675,22 @@ module ProTacts
       load_groups(groups.select(*GROUP_COLUMNS, group_label.as(:label)).order(:id).all)
     end
 
-    # Every group as a picker needs it: the row and its label, without
-    # the lines it lends or the members it holds. #all_groups' one
-    # read where a picker would otherwise pay for two, the members read
-    # among them being the one that grows with the book — `sync:*`
-    # holds every contact, so listing groups to tick would read the
-    # whole address book to show none of it (Admin::GroupDialog,
-    # Admin::ImportGroups). Ordered by id like #all_groups; a picker
-    # sorts by label itself.
+    # Every group as a picker needs it: the row, its label and how many
+    # are in it, without the lines it lends or the members it holds.
+    # #all_groups' one read where a picker would otherwise pay for two,
+    # the members read among them being the one that grows with the
+    # book — `sync:*` holds every contact, so listing groups to tick
+    # would read the whole address book to show none of it
+    # (Admin::GroupDialog, Admin::ImportGroups). The count is a
+    # subquery SQLite answers from group_members' primary key, which
+    # leads with group_id, so no card is read to make it. Ordered by
+    # id like #all_groups; a picker sorts by what it shows.
     #: () -> Array[GroupChoice]
     def group_choices
-      groups.select(*GROUP_COLUMNS, group_label.as(:label)).order(:id).all.map { |row|
-        GroupChoice.new(id: row.fetch(:id).to_s, name: row.fetch(:name)&.to_s, label: row.fetch(:label).to_s)
+      member_count = group_members.where(group_id: Sequel[:groups][:id]).select(Sequel.function(:count).*)
+      groups.select(*GROUP_COLUMNS, group_label.as(:label), member_count.as(:member_count)).order(:id).all.map { |row|
+        GroupChoice.new(id: row.fetch(:id).to_s, name: row.fetch(:name)&.to_s, label: row.fetch(:label).to_s,
+                        member_count: row.fetch(:member_count).to_i)
       }
     end
 

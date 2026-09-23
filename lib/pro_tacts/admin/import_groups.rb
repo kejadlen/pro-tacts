@@ -43,9 +43,13 @@ module ProTacts
       # @rbs @named: Array[String]
       # @rbs @capped: Array[String]
 
-      # Alphabetical, the groups dialog's own order: this is a list to
-      # find a name in, and nothing here stays put across a rename.
-      # `groups` is every group as a choice, no members read
+      # Largest first, and alphabetical among groups the same size:
+      # the groups an arrival is likeliest to belong in are the ones
+      # most of the book already does, so they are the rows the cap
+      # leaves standing, and the filter reaches the rest. The groups
+      # dialog stays alphabetical — there a contact's groups are
+      # being looked over, not guessed at. `groups` is every group as
+      # a choice, counted rather than its members read
       # (Store#group_choices); `joined` the ids ticked, `named` the
       # groups this card is making that do not exist yet.
       #
@@ -62,7 +66,7 @@ module ProTacts
       # rather than listed in it.
       #: (groups: Array[Store::GroupChoice], joined: Array[String], named: Array[String]) -> void
       def initialize(groups:, joined:, named:)
-        @groups = groups.sort_by { it.label.downcase }
+        @groups = groups.sort_by { [-it.member_count, it.label.downcase] }
         @joined = joined
         @named = named
         @capped = GroupFilter.capped(@groups.map(&:id), joined:, shown: named.length)
