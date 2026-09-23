@@ -133,8 +133,13 @@ module ProTacts
     # Web#write_card is one, and its checks in the same order: the
     # request's own validity first, the conditionals on stored state
     # after.
-    #: (untyped r, String id) -> String?
-    def apply_edit(r, id)
+    #
+    # `refuse` renders the editor back with the notice — this page's
+    # own screen by default; the walk renders its row's card in
+    # place — and `land` is where a successful save redirects, the
+    # contact's page by default.
+    #: (untyped r, String id, ?refuse: ^(Contact, ?notice: String) -> String, ?land: String?) -> String?
+    def apply_edit(r, id, refuse: ->(contact, notice:) { edit_screen(contact, notice:) }, land: nil)
       contact = store.contact(id)
       return if contact.nil?
 
@@ -145,7 +150,7 @@ module ProTacts
       first = r.params["first"].to_s.strip
       middle = r.params["middle"].to_s.strip
       last = r.params["last"].to_s.strip
-      return edit_screen(contact, notice: "A contact needs a name.") if first.empty? && last.empty?
+      return refuse.call(contact, notice: "A contact needs a name.") if first.empty? && last.empty?
 
       # Request validity, standing with the name check rather than the
       # stored-state conditionals below (write_card's ordering rule). A
@@ -158,7 +163,7 @@ module ProTacts
           begin
             Admin::CardForm.birthday(fields)
           rescue ArgumentError
-            return edit_screen(contact, notice: "That birthday is not a shape a date can take.")
+            return refuse.call(contact, notice: "That birthday is not a shape a date can take.")
           end
         else
           contact.birthday
@@ -172,18 +177,18 @@ module ProTacts
       # it. The refusal re-renders from the current card, so the screen
       # shows what changed; the check shares write_card's millisecond
       # race window between check and write, noted there.
-      return edit_screen(contact, notice: "This contact changed since the page loaded; nothing was saved.") if r.params["etag"].to_s != contact.etag
+      return refuse.call(contact, notice: "This contact changed since the page loaded; nothing was saved.") if r.params["etag"].to_s != contact.etag
 
       # The one state the birthday row cannot write, refused whole:
       # docs/plans/2026-09-07-web-birthday-editor.md, "The one hazard:
       # a card that carries its own BDAY", which also records the
       # migration not taken.
       if birthday && contact.stored.lines.any? { it.names?("BDAY") }
-        return edit_screen(contact, notice: "This contact's card carries its own birthday spelling; nothing was saved.")
+        return refuse.call(contact, notice: "This contact's card carries its own birthday spelling; nothing was saved.")
       end
 
       store.save_edit(id, Admin::CardForm.contact_card(contact, first, middle, last, r.params), birthday:)
-      r.redirect "/contacts/#{id}", 303
+      r.redirect land || "/contacts/#{id}", 303
     end
 
     # The dialog's save as what it toggled rather than the set it shows:

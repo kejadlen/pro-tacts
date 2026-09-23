@@ -4,7 +4,7 @@ require "pro_tacts/import/vcf"
 
 module ProTacts
   module Admin
-    # The left-hand card of an import's review: one contact exactly as
+    # The left-hand card of an import's walk: one contact exactly as
     # the file wrote it (docs/plans/2026-09-21-import-a-vcf.md).
     #
     # Content lines rather than a rendered contact, and in the
@@ -40,10 +40,6 @@ module ProTacts
       def view_template
         div(class: "card") do
           div(class: "card-body") do
-            div(class: "section-head") do
-              h2(class: "type-label") { "as exported" }
-              span(class: "type-label") { "#{@dropped.length} not imported" } if @dropped.any?
-            end
             ul(class: "card-lines") do
               @card.lines.each { line(it) }
             end

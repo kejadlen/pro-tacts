@@ -224,7 +224,6 @@ class AdminImportPagesTest < Minitest::Test
 
       assert_equal 200, last_response.status
       assert_includes last_response.body, %(<div class="paired">)
-      assert_includes last_response.body, "as exported"
       # Every line of the original, struck where it is not coming in.
       assert_includes last_response.body, "TEL;type=CELL:+1 555 0100"
       assert_includes last_response.body,
@@ -234,7 +233,7 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body, %(<form action="/import/#{id}/0" method="post")
       assert_includes last_response.body, %(value="+1 555 0100")
       # The one editor in the app whose Save creates the record.
-      assert_includes last_response.body, "save to the book"
+      assert_includes last_response.body, %(>Import</button>)
     end
   end
 
@@ -264,14 +263,18 @@ class AdminImportPagesTest < Minitest::Test
       assert_equal "Jane Booles", jane.name
       # And the walk steps straight to the next row nobody has read,
       # the list beside it saying the row that was saved is in: it
-      # leads to the contact now, and the row nobody has opened still
-      # leads into the walk.
+      # opens in the walk again, and the row nobody has opened still
+      # leads into it.
       assert_equal "/import/#{id}/1", last_response.headers["location"]
       follow_redirect!
 
-      assert_includes last_response.body, %(href="/contacts/#{jane.id}")
+      assert_includes last_response.body, %(href="/import/#{id}/0")
       assert_includes last_response.body, %(data-state="saved")
       assert_includes last_response.body, %(<span class="gl-visually-hidden">saved</span>)
+      # The row's verdict now: the check landed in its circle, and no
+      # count of losses — they were settled by the save.
+      assert_includes last_response.body, %(<path d="m9 12 2 2 4-4">)
+      refute_includes last_response.body, "diff-removed"
     end
   end
 
@@ -290,19 +293,78 @@ class AdminImportPagesTest < Minitest::Test
   # A row already in the book is a contact, edited where every other
   # contact is: the import's editor writes, and writing it a second
   # time would be a second contact rather than an edit of the first.
-  def test_a_row_already_in_the_book_leads_to_the_contact
+  # The row stays in the walk either way — it opens as the contact it
+  # became, read beside the card it arrived as, not as a form again.
+  def test_a_row_already_in_the_book_reads_in_the_walk
+    with_contacts({}) do |_store|
+      id = upload(JANE + PLAIN)
+      save(id, 0, first: "Jane", last: "Booles")
+
+      get "/import/#{id}/0"
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, %(<div class="walk">)
+      # The details it landed with, and the card it arrived as.
+      assert_includes last_response.body, %(<dl class="detail-grid">)
+      assert_includes last_response.body, "+1 555 0100"
+      assert_includes last_response.body, %(data-dropped)
+      # No editor, no dialog, no footer: nothing to submit, and
+      # nothing to change here.
+      refute_includes last_response.body, %(name="etag")
+      refute_includes last_response.body, "edit groups"
+      refute_includes last_response.body, %(<footer>)
+      # And the row's verdict is the check landed in its circle.
+      assert_includes last_response.body, %(<path d="m9 12 2 2 4-4">)
+      # The way into edit mode: the contact page's own edit link, in
+      # the walk's caption row.
+      assert_includes last_response.body,
+                      %(<a href="/import/#{id}/0/edit" class="btn" data-size="sm">edit</a>)
+    end
+  end
+
+  # Edit mode for a stored row: the contact's own editor over the
+  # card it arrived as, posting to the row — where the amend branch
+  # of the save answers — and landing back on the row's read screen.
+  # A row still to do is already its editor, so its edit is the row
+  # screen itself.
+  def test_a_stored_row_edits_in_the_walk
     with_contacts({}) do |store|
       id = upload(JANE + PLAIN)
       save(id, 0, first: "Jane", last: "Booles")
       jane = store.contacts.fetch(0)
 
-      get "/import/#{id}/0"
+      get "/import/#{id}/0/edit"
 
-      assert_equal 302, last_response.status
-      assert_equal "/contacts/#{jane.id}", last_response.headers["location"]
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, %(<form action="/import/#{id}/0" method="post")
+      assert_includes last_response.body, %(name="etag" value="&quot;)
+      assert_includes last_response.body, "Sam Booles"
+      # No group boxes: the amend is #apply_edit's form, and membership
+      # is the contact page's question.
+      refute_includes last_response.body, %(name="groups[]")
+
+      post "/import/#{id}/0",
+           "etag" => etag, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "nickname" => "Jay", "note" => ""
+
+      assert_equal "/import/#{id}/0", last_response.headers["location"]
+      jane = store.contacts.fetch(0)
+
+      assert_equal "Jay", jane.nickname
+
+      # And an unsaved row's edit is the row screen.
+      get "/import/#{id}/1/edit"
+
+      assert_equal 303, last_response.status
+      assert_equal "/import/#{id}/1", last_response.headers["location"]
     end
   end
 
+  # A Save pressed twice is not a second contact: the first makes
+  # the contact, and the second is that row's editor's Save — the
+  # amend the contact's own page would write — met by the etag guard
+  # the editor always carries, the staged card the re-posted form
+  # came from hashing differently than the contact now in the book.
   def test_a_save_pressed_twice_writes_one_contact
     with_contacts({}) do |store|
       id = upload(JANE + PLAIN)
@@ -316,7 +378,8 @@ class AdminImportPagesTest < Minitest::Test
       end
 
       assert_equal 1, store.contacts.length
-      assert_equal "/contacts/#{store.contacts.fetch(0).id}", last_response.headers["location"]
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "This contact changed since the page loaded; nothing was saved."
     end
   end
 

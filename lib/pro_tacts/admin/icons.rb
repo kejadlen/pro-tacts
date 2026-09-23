@@ -18,11 +18,12 @@ module ProTacts
 
       # One glyph's shapes, each an element name and its attributes,
       # verbatim from the lucide-static SVG's own children: x, the
-      # remove control's two strokes, and calendar, the birthday row's
-      # picker. A tag per shape rather than a bare list of path data,
-      # because calendar's frame is a rect and redrawing it as a path
-      # would be this file copying something other than what Lucide
-      # ships.
+      # remove control's two strokes; calendar, the birthday row's
+      # picker; and the import row's verdict, a circle either way and
+      # a check in it when the row is in the book. A tag per shape
+      # rather than a bare list of path data, because calendar's
+      # frame is a rect and redrawing it as a path would be this file
+      # copying something other than what Lucide ships.
       GLYPHS = {
         x: [
           [:path, {d: "M18 6 6 18"}],
@@ -33,6 +34,13 @@ module ProTacts
           [:path, {d: "M16 2v4"}],
           [:rect, {width: 18, height: 18, x: 3, y: 4, rx: 2}],
           [:path, {d: "M3 10h18"}],
+        ],
+        circle: [
+          [:circle, {cx: 12, cy: 12, r: 10}],
+        ],
+        circle_check: [
+          [:circle, {cx: 12, cy: 12, r: 10}],
+          [:path, {d: "m9 12 2 2 4-4"}],
         ],
       } #: Hash[Symbol, Array[[Symbol, Hash[Symbol, untyped]]]]
 

@@ -2,6 +2,7 @@ require "pro_tacts/admin/card_form"
 require "pro_tacts/admin/contacts_edit"
 require "pro_tacts/admin/import_groups"
 require "pro_tacts/admin/import_original"
+require "pro_tacts/admin/import_saved"
 require "pro_tacts/admin/import_sidebar"
 require "pro_tacts/admin/import_upload"
 require "pro_tacts/birthday"
@@ -56,12 +57,21 @@ module ProTacts
         r.on Integer do |index|
           r.is do
             r.get do
-              open_card(r, upload, index)
+              card_screen(upload, index)
             end
 
             r.post do
               save_card(r, upload, index)
             end
+          end
+
+          # The stored contact's editor, reached from its row's read
+          # screen: the same amend the contact's own page's edit link
+          # writes, kept inside the walk (Web#edit_card_screen). A
+          # row still to do is already its editor, so its edit is the
+          # row screen itself.
+          r.get "edit" do
+            edit_card_screen(r, upload, index)
           end
         end
       end
@@ -133,23 +143,20 @@ module ProTacts
 
     # A row opened: the card it arrived as beside the card that is
     # coming in — or the contact itself, for a card this walk has
-    # already saved. The editor here writes into the import, and an
-    # import that has already written this one has nothing left to say
-    # about it: from then on it is a contact, edited where every other
-    # contact is.
-    #: (untyped r, String upload, Integer index) -> untyped
-    def open_card(r, upload, index)
-      _group, saved = Import::Staged.saved(upload)
-      contact = saved[index.to_s]
-      return r.redirect "/contacts/#{contact}" if contact
-
-      card_screen(upload, index)
-    end
-
     # One contact, the card it arrived as beside the card that is
     # coming in. The right-hand half is the contact editor itself, not a
     # copy of it: a field the two disagreed about would be a field an
     # import writes and an edit cannot undo.
+    #
+    # A row this walk has saved opens over the stored contact rather
+    # than the staged card — a look back, not a navigation away from
+    # the list to the contact's own page — and reads: the write
+    # happened at the row's Save, so there is no form to submit and
+    # what it wrote is changed where every other contact is
+    # (Admin::ImportSaved). A stored id naming no contact (deleted
+    # from the book since its Save) is the unsaved screen, there
+    # being nothing stored to open; its Save is the import POST's own
+    # double-write guard to catch.
     #
     # `joined` and `named` are the groups a refused save had ticked,
     # and none on the way in: nothing is staged between screens, the
@@ -171,20 +178,66 @@ module ProTacts
       return nil if original.nil? || card.nil?
 
       group, saved = Import::Staged.saved(upload)
+      stored = saved[index.to_s]
+      contact = stored ? store.contact(stored) : nil
+      aside = Admin::ImportOriginal.new(card: original, dropped: Import::Vcf.read(original).dropped)
+      sidebar = walk_sidebar(upload, originals, revised, saved, current: index)
 
       response["Content-Type"] = "text/html; charset=utf-8"
+      return Admin::ImportSaved.call(
+        contact:,
+        groups: store.groups_of(contact.id),
+        aside:,
+        sidebar:,
+        edit: "/import/#{upload}/#{index}/edit",
+        notice:,
+      ) if contact
+
       Admin::ContactsEdit.call(
         contact: import_contact(card, index),
         notice:,
         action: "/import/#{upload}/#{index}",
-        # The submit says where the card is going, because it is not
-        # there yet: this is the one editor in the app whose Save
-        # creates the record rather than amending it, and the row
-        # beside it wears the unsaved rail until it has been pressed
+        # The submit says what it does — the import of this one
+        # contact — because it is the one editor in the app whose Save
+        # creates the record rather than amending it. The row beside
+        # it wears its check only once this has been pressed
         # (Admin::ImportSidebar).
-        save: "save to the book",
-        aside: Admin::ImportOriginal.new(card: original, dropped: Import::Vcf.read(original).dropped),
+        save: "Import",
+        aside:,
         fields: import_picker(group, joined, named),
+        sidebar:,
+      )
+    end
+
+    # The editor over a stored row's contact, reached from that row's
+    # read screen: #apply_edit's form — the contact's own card, its
+    # etag, no group boxes — posting to the row itself, where the
+    # amend branch of #save_card answers (its `refuse` and `land` are
+    # this screen and the row's). `contact` is the fresh one a
+    # refusal is re-rendering, and none passed means the stored one;
+    # a row with nothing stored is already its editor, so its edit
+    # goes back to the row screen.
+    #: (untyped r, String upload, Integer index, ?contact: Contact?, ?notice: String?) -> untyped
+    def edit_card_screen(r, upload, index, contact: nil, notice: nil)
+      staged = staged_cards(upload)
+      return expired_screen if staged.nil?
+
+      originals, revised = staged
+      original = originals[index]
+      return nil if original.nil?
+
+      _group, saved = Import::Staged.saved(upload)
+      stored = saved[index.to_s]
+      contact ||= stored ? store.contact(stored) : nil
+      return r.redirect "/import/#{upload}/#{index}", 303 if contact.nil?
+
+      response["Content-Type"] = "text/html; charset=utf-8"
+      Admin::ContactsEdit.call(
+        contact:,
+        notice:,
+        action: "/import/#{upload}/#{index}",
+        save: "Save",
+        aside: Admin::ImportOriginal.new(card: original, dropped: Import::Vcf.read(original).dropped),
         sidebar: walk_sidebar(upload, originals, revised, saved, current: index),
       )
     end
@@ -230,12 +283,20 @@ module ProTacts
       return nil if card.nil?
 
       _group, saved = Import::Staged.saved(upload)
-      # A Save pressed twice, or a back button onto the screen of a
-      # contact that is already in the book: a second write here would
-      # be a second contact rather than an edit of the first, there
-      # being no id in the file to recognise it by.
+      # A Save pressed twice, or a back button onto the editor of a
+      # contact that is already in the book: a second write here
+      # would be a second contact rather than an edit of the first,
+      # there being no id in the file to recognise it by, so the POST
+      # over a stored row is that row's own editor's Save instead —
+      # the same amend the contact's own page writes (#apply_edit),
+      # landing back on the row's read screen.
       stored = saved[index.to_s]
-      return r.redirect "/contacts/#{stored}", 303 if stored
+      contact = stored ? store.contact(stored) : nil
+      if contact
+        return apply_edit(r, contact.id,
+                          refuse: ->(fresh, notice:) { edit_card_screen(r, upload, index, contact: fresh, notice:) },
+                          land: "/import/#{upload}/#{index}")
+      end
 
       contact = import_contact(card, index)
 

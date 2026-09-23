@@ -30,11 +30,11 @@ module ProTacts
       # @rbs @heading: String?
       # @rbs @aside: Phlex::HTML?
       # @rbs @sidebar: Phlex::HTML?
-      # @rbs @submit: String
-      # @rbs @form: String
+      # @rbs @submit: String?
+      # @rbs @form: String?
 
-      #: (?back: ([String, (String | Phlex::HTML | Proc)])?, submit: String, form: String, ?nav: (Proc | Phlex::HTML)?, ?heading: String?, ?aside: Phlex::HTML?, ?sidebar: Phlex::HTML?) -> void
-      def initialize(back: nil, submit:, form:, nav: nil, heading: nil, aside: nil, sidebar: nil)
+      #: (?back: ([String, (String | Phlex::HTML | Proc)])?, ?submit: String?, ?form: String?, ?nav: (Proc | Phlex::HTML)?, ?heading: String?, ?aside: Phlex::HTML?, ?sidebar: Phlex::HTML?) -> void
+      def initialize(back: nil, submit: nil, form: nil, nav: nil, heading: nil, aside: nil, sidebar: nil)
         @back = back
         @nav = nav
         @heading = heading
@@ -111,14 +111,18 @@ module ProTacts
             yield
           end
           # A dialog footer's shape (admin.css), outside the form and
-          # reaching it by id. The submit is the form's; Cancel is
-          # navigation — a link in Gloss's `.btn` contract, which is
+          # reaching it by id, and absent outright when there is
+          # nothing to submit and nowhere to cancel to — a card that
+          # only reads (ImportSaved). The submit is the form's; Cancel
+          # is navigation — a link in Gloss's `.btn` contract, which is
           # what an anchor that acts like a button opts into — and
-          # goes where the back link goes, so it is absent when that
-          # is.
-          footer do
-            a(href: @back&.fetch(0), class: "btn") { "Cancel" } if @back
-            button(type: "submit", form: @form, data: {variant: "primary"}) { @submit }
+          # goes where the back link goes, so each is absent when its
+          # half is.
+          if @submit || @back
+            footer do
+              a(href: @back&.fetch(0), class: "btn") { "Cancel" } if @back
+              button(type: "submit", form: @form, data: {variant: "primary"}) { @submit } if @submit
+            end
           end
         end
       end

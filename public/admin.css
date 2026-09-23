@@ -67,6 +67,16 @@
 .card-body h1 { margin: 0; }
 .card-body > h1 { margin-block-end: var(--gl-space-xs); }
 
+/* A record's name sits a step closer to its card's top than the
+   padding the body gives prose: the heading is the card's own edge,
+   and the m of air above it read as blank space rather than as
+   room to read in (the detail-header, both on the contact's own
+   page and in a walk's read screen — ContactCard, the one
+   renderer). */
+.card-body:has(> .detail-header:first-child) {
+  padding-block-start: var(--gl-space-s);
+}
+
 /* The type column both record modes share: the details grid's label
    column and the editor's caption column are the same column, read
    from one place so they cannot drift apart. The one structural rem
@@ -948,22 +958,27 @@ dialog > .field-stack > input[type="search"] {
 }
 
 /* Whether a row is in the book yet, which is the one thing the walk
-   turns on: a rail in the accent down the inside edge of every row
-   that is not. Drawn as an inset shadow rather than a border so the
-   text of one row stays in line with the others, and it is the rows
-   still to do that wear it -- a list starts out entirely unsaved, and
-   what is worth marking is what is left. The word is still in the row
-   for a screen reader, which cannot see a rail.
+   turns on: the verdict at every row's trailing edge, a circle that
+   gains a check when the row is — in the success color, confirmed
+   being that color's one meaning (docs/DESIGN.md) — and the name a
+   step quieter with it, a done thing receding so the rows still to
+   do carry the walk's own ink. The first try was a rail in the
+   accent down the inside edge of every row that was not, which said
+   which ones were left without saying the other half of it. The
+   word is still in the row for a screen reader, which cannot see a
+   check.
 
    Both rules below carry `:only-child` for the specificity rather
    than for the match: a whole-row link is Gloss's `all: unset`
    (components.css, .card > li > a:only-child), which resets
-   box-shadow and background along with everything else, and a
-   selector that does not out-weigh it loses whatever it declares
-   here. The hover rule further up this file names the same shape for
-   the same reason. */
-.walk-list a:only-child[data-state="unsaved"] {
-  box-shadow: inset 3px 0 0 var(--gl-color-accent);
+   color along with everything else, and a selector that does not
+   out-weigh it loses whatever it declares here. The hover rule
+   further up this file names the same shape for the same reason. */
+.walk-list a:only-child[data-state="saved"] > div {
+  color: var(--gl-color-text-secondary);
+}
+.walk-list a:only-child[data-state="saved"] > svg {
+  color: var(--gl-color-success);
 }
 
 /* The row being read. The fill is the hover gesture too, so the name

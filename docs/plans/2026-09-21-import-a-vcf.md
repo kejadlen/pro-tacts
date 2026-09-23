@@ -113,8 +113,8 @@ So the review is a walk, two screens rather than a submission:
    looking at it. The Save on that screen is the import of that contact: it
    goes into the book there and then, in whatever the boxes beside it say.
    It is the one editor in the app whose Save creates the record rather than
-   amending it, so it says where the card is going — "save to the book" —
-   and the row beside it wears the unsaved rail until it has been pressed.
+   amending it, so it says what it does — "Import" — and the row
+   beside it wears its check only once it has been pressed.
 
 The right-hand card is `Admin::ContactsEdit` itself, not a copy of it.
 A second editor for imports would be a place where the two could
@@ -160,21 +160,27 @@ back to yet, the card not being in the book until its Save.
 
 Two facts per row, and the walk turns on both.
 
-**Whether the contact is in the book** — a rail in the accent down the
-inside edge of every row that is not. Everything is unsaved until its
-own screen says otherwise, and a walk broken off overnight and come
-back to has to say which rows those are. Words were the first try and
-were too much: "not saved" on every row of a list that starts out
-entirely unsaved is a column of the same sentence, and it took the one
-slot the row's other fact wants. It is the rows still to do that wear
-the mark, because what is worth marking is what is left. The word is
-still in the row for a screen reader, which cannot see a rail.
+**Whether the contact is in the book** — the verdict at every
+row's trailing edge, a circle that gains a check when the row is,
+in the success color, confirmed being that color's one meaning, and
+the name a step quieter with it: a done thing recedes, so the rows
+still to do carry the walk's own ink. Everything is unsaved until
+its own screen says otherwise, and a walk broken off overnight and
+come back to has to say which rows those are. Words were the first
+try and were too much: "not saved" on every row of a list that
+starts out entirely unsaved is a column of the same sentence, and it
+took the one slot the row's other fact wants. The word is still in
+the row for a screen reader, which cannot see a mark. The mark was a
+rail in the accent down the inside edge of every row that was not,
+first, and it said which ones were left without saying the other
+half of it.
 
-**What the card is losing**, as a diff's own mark at the row's
-trailing edge — `-3`, in the sign-and-color shape a change-log entry
-wears (`.diff-removed` in admin.css). A sentence for it made every
-marked row a line of prose to read, and the number is the whole of
-what a row has to say about it: how many, and that it is a loss.
+**What the card is losing**, as a diff's own mark under the name it
+is about — `-3`, in the sign-and-color shape a change-log entry
+wears (`.diff-removed` in admin.css) — on a row still to do, a
+settled row's losses being settled with it. A sentence for it made
+every marked row a line of prose to read, and the number is the whole
+of what a row has to say about it: how many, and that it is a loss.
 
 The walk is wider than the reading column the rest of the app gets,
 because three things stand in it: the list, the card as exported, and
@@ -206,10 +212,14 @@ what it cost was everything around it.
 
 So the Save is the import. A contact is in the book the moment its own
 screen says so, and the list reads that back: a row that has come in
-says so and leads to the contact rather than back into the editor,
-which is also the answer to what a second Save on it would mean. The
-walk is resumable because nothing is being held back — a tab left
-overnight, a window closed, a crash, all read the same way.
+wears its check and opens in the walk again, the contact it became
+read beside the card it arrived as — with the contact page's own
+edit link to put it back in the editor, the amend landing on the
+row's read screen — not an editor a second time by default, which is
+also the answer to what a second Save on it would mean, and not a
+navigation away to the contact's own page, which would lose the
+list. The walk is resumable because nothing is being held back — a
+tab left overnight, a window closed, a crash, all read the same way.
 
 That makes the end of the walk a thing to say rather than a thing to
 press, and the last Save is what says it. There is no "finish" beside
