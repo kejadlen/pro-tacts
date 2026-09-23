@@ -100,6 +100,11 @@ module ProTacts
                 span(class: "gl-muted", style: "font-style: italic;") { name }
               end
             end
+            # The same row client-side, for names the offer's tick has
+            # committed since this page loaded: the tick is what
+            # commits (Admin::GroupFilter), so the name stands here
+            # rather than riding the filter that named it.
+            render GroupFilter::Named.new
             render GroupFilter::Fresh.new
           end
           render GroupFilter::Empty.new(any: @groups.any? || @named.any?)

@@ -817,13 +817,13 @@ module ProTacts
     end
 
     # A card's side of #edit_group: one transaction, leavers first and
-    # joiners last for that method's reason. A name creates a group to
-    # join inside the same transaction, so a taken name (#create_group)
-    # moves nothing.
-    #: (String card_id, join: Array[String], leave: Array[String], ?create: String?) -> void
-    def regroup(card_id, join:, leave:, create: nil)
+    # joiners last for that method's reason. A named create makes its
+    # group to join inside the same transaction, so a taken name
+    # (#create_group) moves nothing.
+    #: (String card_id, join: Array[String], leave: Array[String], ?create: Array[String]) -> void
+    def regroup(card_id, join:, leave:, create: [])
       @database.transaction do
-        join += [create_group(name: create)] if create
+        join += create.map { create_group(name: it) }
         leave.each { remove_member(it, card_id) }
         join.each { add_member(it, card_id) }
       end

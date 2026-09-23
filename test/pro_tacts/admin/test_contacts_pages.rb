@@ -450,12 +450,17 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  def test_the_groups_dialog_offers_the_filter_as_an_unchecked_new_group
+  def test_the_groups_dialogs_filter_offer_commits_its_name_on_the_tick
     with_contacts({"ada" => ADA}) do
       get "/contacts/ada"
       dialog = last_response.body[%r{<dialog id="edit-groups".*?</dialog>}].to_s
 
-      assert_includes dialog, %(<input type="checkbox" name="new" :value="filter.trim()">)
+      assert_includes dialog,
+                      %(<input type="checkbox" @change="if ($event.target.checked) named.push(filter.trim())">)
+      # And somewhere for the committed name to stand, inside the form
+      # so the save carries it.
+      assert_includes dialog, %(<template x-for="name in named">)
+      assert_includes dialog, %(name="named[]" :value="name" checked)
     end
   end
 
@@ -528,7 +533,7 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/ada"
 
       assert_includes last_response.body,
-                      %(@toggle="if ($event.newState === 'closed') { all = false; filter = '' }")
+                      %(@toggle="if ($event.newState === 'closed') { all = false; filter = ''; named = [] }")
     end
   end
 
@@ -595,16 +600,27 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => ADA}) do |store|
       booles = FixtureData.seed_group(store, name: "Booles")
 
-      post "/contacts/ada/groups", groups: [booles], new: " Clarks "
+      post "/contacts/ada/groups", groups: [booles], named: [" Clarks "]
 
       assert_equal 303, last_response.status
       assert_equal ["Booles", "Clarks"], store.groups_of("ada").map(&:label).sort
     end
   end
 
+  # Several, because the commit is per name: a filter names one group
+  # at a time, and nothing stops a person naming two before the save.
+  def test_several_new_groups_are_created_with_one_save
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada/groups", named: ["Clarks", " Babbages "]
+
+      assert_equal 303, last_response.status
+      assert_equal ["Babbages", "Clarks"], store.groups_of("ada").map(&:label).sort
+    end
+  end
+
   def test_a_blank_new_group_creates_nothing
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada/groups", new: "  "
+      post "/contacts/ada/groups", named: ["  "]
 
       assert_equal 303, last_response.status
       assert_empty store.all_groups
@@ -618,7 +634,7 @@ class AdminContactsPagesTest < Minitest::Test
       booles = FixtureData.seed_group(store, name: "Booles")
       FixtureData.seed_group(store, name: "Clarks")
 
-      post "/contacts/ada/groups", groups: [booles], new: "Clarks"
+      post "/contacts/ada/groups", groups: [booles], named: ["Clarks"]
 
       assert_equal 200, last_response.status
       assert_includes last_response.body, "Another group is already named Clarks; nothing was saved."

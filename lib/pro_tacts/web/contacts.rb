@@ -207,13 +207,26 @@ module ProTacts
       known = store.group_choices.map(&:id)
       checked = ids_in(r.params["groups"]) & known
       was = ids_in(r.params["was"]) & known
-      name = r.params["new"].to_s.strip
+      # The names the picker's offer committed, each made with this
+      # save (Admin::GroupFilter::Named) — a tick is what commits a
+      # name, so there is no single `new` riding the filter to read.
+      names = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
       begin
-        store.regroup(id, join: checked - was, leave: was - checked, create: (name unless name.empty?))
+        store.regroup(id, join: checked - was, leave: was - checked, create: names)
       rescue Sequel::UniqueConstraintViolation
         # A taken name (db/migrations/008_group_names.rb), refused with
-        # the rest of the save in regroup's transaction.
-        return contact_screen(contact, notice: "Another group is already named #{name}; nothing was saved.")
+        # the rest of the save in regroup's transaction. The page's own
+        # list is what keeps the picker from offering a taken name, so
+        # a save that finds one is looking at a list gone stale — the
+        # name is asked of the store rather than of the form.
+        clash = names.find { |name| store.group_choices.any? { it.name == name } }
+        notice =
+          if clash
+            "Another group is already named #{clash}; nothing was saved."
+          else
+            "A group already holds one of those names; nothing was saved."
+          end
+        return contact_screen(contact, notice:)
       end
       r.redirect "/contacts/#{id}", 303
     end

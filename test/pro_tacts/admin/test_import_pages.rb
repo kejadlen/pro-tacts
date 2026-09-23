@@ -502,7 +502,7 @@ class AdminImportPagesTest < Minitest::Test
     with_contacts({}) do |store|
       id = upload(JANE)
 
-      save(id, 0, first: "Jane", last: "Booles", "named" => [], "new" => " Clarks ")
+      save(id, 0, first: "Jane", last: "Booles", "named" => [" Clarks "])
 
       clarks = store.all_groups.find { it.name == "Clarks" }
 
@@ -616,7 +616,7 @@ class AdminImportPagesTest < Minitest::Test
 
       post "/import/#{id}/0",
            "etag" => "not the etag", "first" => "Jane", "middle" => "", "last" => "Booles",
-           "nickname" => "", "note" => "", "groups" => [school], "new" => "Clarks"
+           "nickname" => "", "note" => "", "groups" => [school], "named" => ["Clarks"]
 
       assert_includes last_response.body,
                       %(<input type="checkbox" name="groups[]" value="#{school}" checked>school)
@@ -644,7 +644,12 @@ class AdminImportPagesTest < Minitest::Test
 
       assert_includes last_response.body, %(<input type="search" placeholder="Filter or add groups")
       assert_includes last_response.body, %(data-label="school")
-      assert_includes last_response.body, %(<input type="checkbox" name="new" :value="filter.trim()">)
+      # The offer's tick commits the name into a standing row rather
+      # than leaving it on the filter, where clearing would lose it.
+      assert_includes last_response.body,
+                      %(<input type="checkbox" @change="if ($event.target.checked) named.push(filter.trim())">)
+      assert_includes last_response.body,
+                      %(<input type="checkbox" name="named[]" :value="name" checked @change="named = named.filter(n => n !== name)">)
     end
   end
 

@@ -36,16 +36,22 @@ module ProTacts
       # cap adds to `shows`: a capped row joins the list once the
       # filter is typed into or the whole list is asked for, and a
       # filter is the one of the two that can reach a single group
-      # without the rest.
-      STATE = "{ filter: '', all: false, " \
+      # without the rest. `named` is the names a tick on the offer
+      # committed to making (Named): `creatable` and `none` read it
+      # directly rather than off the rows' `data-label`s, which those
+      # two only re-read when the filter changes — a name committed
+      # since would be invisible to both until the next keystroke.
+      STATE = "{ filter: '', all: false, named: [], " \
               "get needle() { return this.filter.trim().toLowerCase() }, " \
               "get labels() { return [...this.$refs.options.querySelectorAll('[data-label]')]" \
               ".map(row => row.dataset.label) }, " \
               "shows(label) { return label.includes(this.needle) }, " \
               "visible(row) { return this.shows(row.dataset.label) && " \
               "(this.all || this.needle !== '' || !('capped' in row.dataset)) }, " \
-              "get none() { return !this.labels.some(label => this.shows(label)) }, " \
-              "get creatable() { return this.needle !== '' && !this.labels.includes(this.needle) } }" #: String
+              "get none() { return !this.labels.some(label => this.shows(label)) && " \
+              "!this.named.some(name => name.toLowerCase().includes(this.needle)) }, " \
+              "get creatable() { return this.needle !== '' && !this.labels.includes(this.needle) && " \
+              "!this.named.some(name => name.toLowerCase() === this.needle) } }" #: String
 
       # What a filterable row wears: the label to match on, read off
       # the element rather than out of a closure, whether the cap holds
@@ -109,16 +115,43 @@ module ProTacts
       end
 
       # The filter itself, offered as a group to make, under the rows
-      # it matched none of. Inside the form, being a field of it, and
-      # unticked: a filter is as often half a name typed to find a
-      # group as it is a new one, and a save must not make "boo" on
-      # the way to Booles.
+      # it matched none of, and unticked: a filter is as often half a
+      # name typed to find a group as it is a new one, and a save must
+      # not make "boo" on the way to Booles. A tick is the commit
+      # rather than a box the save reads: the name stops riding the
+      # filter — which clearing would otherwise carry it off on, and
+      # so would typing one more letter past the tick — and stands as
+      # one of Named's rows instead.
       class Fresh < Phlex::HTML
         def view_template
           template(x_if: "creatable") do
             label do
-              input(type: "checkbox", name: "new", ":value": "filter.trim()")
+              input(type: "checkbox",
+                    "@change": "if ($event.target.checked) named.push(filter.trim())")
               span(class: "gl-muted", style: "font-style: italic;", x_text: "filter.trim()")
+            end
+          end
+        end
+      end
+
+      # The names a tick on Fresh committed, standing rows in the
+      # shape the import gives the names a refused save sent back
+      # (Admin::ImportGroups): ticked, submitting `named[]`, and
+      # independent of the filter — which is the whole difference
+      # from the offer, whose row lives on the filter's own text. An
+      # untick withdraws the name, back to the offer if the filter
+      # still says it. Never capped, being ticked, and hidden by the
+      # filter like any row — said straight to `shows` rather than
+      # through `data-label`/`visible($el)`, those reading the DOM
+      # the server rendered, and this row being made client-side
+      # where the name is in hand.
+      class Named < Phlex::HTML
+        def view_template
+          template(x_for: "name in named") do
+            label(":hidden": "!shows(name.toLowerCase())") do
+              input(type: "checkbox", name: "named[]", ":value": "name", checked: true,
+                    "@change": "named = named.filter(n => n !== name)")
+              span(class: "gl-muted", style: "font-style: italic;", x_text: "name")
             end
           end
         end

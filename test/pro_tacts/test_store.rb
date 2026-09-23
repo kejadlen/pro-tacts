@@ -1468,11 +1468,11 @@ class StoreTest < Minitest::Test
     end
   end
 
-  def test_a_regroup_creates_the_group_it_names_and_joins_it
+  def test_a_regroup_creates_the_groups_it_names_and_joins_them
     with_store({"aiden" => AIDEN}) do |store|
-      store.regroup("aiden", join: [], leave: [], create: "Clarks")
+      store.regroup("aiden", join: [], leave: [], create: ["Clarks", "Booles"])
 
-      assert_equal ["Clarks"], store.groups_of("aiden").map(&:label)
+      assert_equal ["Booles", "Clarks"], store.groups_of("aiden").map(&:label).sort
     end
   end
 
