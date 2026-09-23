@@ -72,8 +72,10 @@
    and the m of air above it read as blank space rather than as
    room to read in (the detail-header, both on the contact's own
    page and in a walk's read screen — ContactCard, the one
-   renderer). */
-.card-body:has(> .detail-header:first-child) {
+   renderer). Only over a grid: a group that lends nothing renders
+   none (Admin::GroupsShow), and its name alone keeps the body's
+   even padding, centered in the card. */
+.card-body:has(> .detail-header:first-child + .detail-grid) {
   padding-block-start: var(--gl-space-s);
 }
 
