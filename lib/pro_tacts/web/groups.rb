@@ -1,13 +1,17 @@
 require "pro_tacts/admin/card_form"
 require "pro_tacts/admin/groups_edit"
 require "pro_tacts/admin/groups_index"
+require "pro_tacts/admin/groups_members"
 require "pro_tacts/admin/groups_show"
 
 module ProTacts
   class Web < Roda
     # The group screens, the contacts' own shape: the collection's
-    # GET and create, then a record's GET, its editor, and the POST
-    # that applies it. What the writes rest on is
+    # GET and create, then a record's GET, its editor, the POST that
+    # applies it, and the members screen beside both — membership is
+    # a relationship rather than a line the group holds, so it is
+    # edited from the card's own screen, not the editor
+    # (Admin::GroupsShow's reason). What the writes rest on is
     # docs/plans/2026-09-09-group-edits-propagate.md. A create lands
     # on the editor, a new group being nothing until something is
     # added to it.
@@ -33,6 +37,18 @@ module ProTacts
         r.get "edit" do
           group = store.group(id)
           group_edit_screen(group) if group
+        end
+
+        r.get "members" do
+          group = store.group(id)
+          members_screen(group) if group
+        end
+
+        # Membership from the group's side, the members screen's save
+        # (Admin::GroupsMembers). Above the editor's POST, whose bare
+        # verb block would match this path too.
+        r.post "members" do
+          apply_members(r, id)
         end
 
         r.post do
@@ -86,10 +102,34 @@ module ProTacts
       r.redirect "/groups/#{id}", 303
     end
 
+    # The members screen's save, #apply_groups' shape over a group:
+    # the diff of what came back against what the page loaded, so a
+    # membership moved elsewhere since stays as it is, and a stale
+    # page has nothing to revert and no snapshot to refuse. Only ids
+    # that name a card — a membership row is a foreign key
+    # (#apply_group_edit's reason).
+    #: (untyped r, String id) -> String?
+    def apply_members(r, id)
+      group = store.group(id)
+      return if group.nil?
+
+      known = store.contacts.map(&:id)
+      checked = ids_in(r.params["members"]) & known
+      was = ids_in(r.params["was"]) & known
+      store.edit_members(id, join: checked - was, leave: was - checked)
+      r.redirect "/groups/#{id}", 303
+    end
+
     #: (Store::Group group, ?notice: String) -> String
     def group_edit_screen(group, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
       Admin::GroupsEdit.call(group:, notice:)
+    end
+
+    #: (Store::Group group) -> String
+    def members_screen(group)
+      response["Content-Type"] = "text/html; charset=utf-8"
+      Admin::GroupsMembers.call(group:, contacts: store.contacts)
     end
 
     # A group's members as contacts; the page puts them in order.

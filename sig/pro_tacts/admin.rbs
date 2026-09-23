@@ -37,6 +37,10 @@ module ProTacts
       def self.call: (group: Store::Group, ?notice: String?) -> String
     end
 
+    class GroupsMembers
+      def self.call: (group: Store::Group, contacts: Array[Contact]) -> String
+    end
+
     class DeviceSetup
       def self.call: (hostname: String, name: String) -> String
     end

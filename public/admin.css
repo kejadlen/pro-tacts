@@ -717,6 +717,38 @@ section > h2 {
   position: relative;
 }
 
+/* The members screen (Admin::GroupsMembers). The form owns the
+   picker's Alpine state and so wraps both cards — the record's own,
+   holding the filter and the footer, and the list under it —
+   because $refs and the state reach only inside their x-data
+   element. Gloss bounds a bare form at the settings width and
+   spaces its children like fields; this one is a page, so it stacks
+   its cards the way main stacks a record and its sections
+   (.admin-main's own gap) and runs as wide as the column. */
+.member-picker {
+  max-width: none;
+  gap: var(--gl-space-m);
+}
+/* The list card and what trails it — the empty line, the show-all
+   button — one step apart, the dialog's own spacing under its
+   rows. */
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-2xs);
+}
+/* A card list's row, tickable: the label is the row's clickable
+   surface and fills it, .card > li's own geometry doing the rest,
+   and its gap is the row's — the label rule's own 2xs is a settings
+   row's, and a list row's is the li's. The :has matches the label
+   rule's own specificity game, this layer loading after Gloss but
+   order not beating it there. */
+.card > li > label:has(> input[type="checkbox"]) {
+  flex: 1;
+  min-width: 0;
+  gap: var(--gl-space-xs);
+}
+
 /* base/typography.css's `li + li { margin-top: var(--gl-space-3xs); }`
    is a prose-list rule (Markdown bullet lists) that also matches
    Card's row list, adding a stray gap below every row but the last. */

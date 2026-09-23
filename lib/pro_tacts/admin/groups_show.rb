@@ -71,15 +71,16 @@ module ProTacts
 
       # Rendered even with no members, because its head holds the way
       # to add one. Membership is edited here rather than in the
-      # editor, which edits only the lines the group holds. The link
-      # sits where a section's action does (admin.css), and has no
-      # href until the members screen exists.
+      # editor, which edits only the lines the group holds; the link
+      # opens the members screen (Admin::GroupsMembers), this list
+      # made editable. It sits where a section's action does
+      # (admin.css).
       #: () -> void
       def members_list
         section do
           div(class: "section-head") do
             h2(class: "type-label") { "members (#{@members.length})" }
-            a(class: "type-label") { "edit members" }
+            a(href: "/groups/#{@group.id}/members", class: "type-label") { "edit members" }
           end
           if @members.empty?
             p(class: "type-body-sm") { "No members yet." }

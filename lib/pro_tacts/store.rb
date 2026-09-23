@@ -756,6 +756,18 @@ module ProTacts
       end
     end
 
+    # The members screen's save, #regroup's shape over a group: what
+    # it toggled rather than the set it shows, one transaction so a
+    # failure part-way leaves the membership as it was. Leavers first
+    # and joiners last, #edit_group's reason.
+    #: (String id, join: Array[String], leave: Array[String]) -> void
+    def edit_members(id, join:, leave:)
+      @database.transaction do
+        leave.each { remove_member(id, it) }
+        join.each { add_member(id, it) }
+      end
+    end
+
     # A card joins a group, and starts serving what the group lends.
     # Joining twice is joining once. Joining a `sync:` group puts the
     # card in a book, which is logged whether or not its bytes moved.

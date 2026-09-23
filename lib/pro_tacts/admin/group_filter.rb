@@ -2,18 +2,25 @@ require "pro_tacts/admin/phlex"
 
 module ProTacts
   module Admin
-    # Picking groups out of a list too long to read: the filter over
+    # Picking from a list too long to read: the filter over
     # the rows, the cap on how many stand shown, the button that lifts
     # it, and the offer to make the group the filter names
     # (docs/plans/2026-09-22-a-few-groups-at-a-time.md).
     #
-    # Shared by the two places a contact's groups are picked: the
-    # dialog on a stored contact's card (Admin::GroupDialog) and the
-    # boxes beside an arriving one (Admin::ImportGroups). A book with
+    # Shared by the three places too long a list is picked from:
+    # the two where a contact's groups are picked — the dialog on a
+    # stored contact's card (Admin::GroupDialog) and the boxes beside
+    # an arriving one (Admin::ImportGroups) — and the members screen,
+    # where a group's contacts are (Admin::GroupsMembers). A book with
     # three groups and a book with three hundred are the same screen,
     # and the import's is the screen the walk opens once per contact,
     # so the two are the same problem — and a second answer to it
-    # would only be a place where they could disagree.
+    # would only be a place where they could disagree. The members
+    # screen renders the filter, the cap, and the show-all button,
+    # and not the offer to make what the filter names: a filter word
+    # cannot mint a contact — that is the dashboard's dialog, with
+    # its name fields — so its placeholder says nothing about adding,
+    # and `named` idles, nothing rendering Fresh to push onto it.
     #
     # Alpine does the filtering, matching each row's lowercased label
     # in `data-label` so no group's name is ever spliced into script.
@@ -41,19 +48,20 @@ module ProTacts
       # make one vanish would be hiding a decision rather than
       # narrowing a list — and the tick is read off the checkbox at
       # each evaluation, so a row answers the next filter change
-      # already ticked. `rows` is every row standing in the options,
-      # the element list `none` reads: no row visible, which is what
-      # "No groups match" claims. `named` is the names a tick on the
-      # offer committed to making (Named): `creatable` and `none`
-      # read it directly rather than off the rows' `data-label`s,
-      # which those two only re-read when the filter changes — a
-      # name committed since would be invisible to both until the
-      # next keystroke.
+      # already ticked. `rows` is whatever carries `data-label` — a
+      # label in the dialog and the import, an li on the members
+      # screen, whose label sits inside its row — and is the element
+      # list `none` reads: no row visible, which is what "No groups
+      # match" claims. `named` is the names a tick on the offer
+      # committed to making (Named): `creatable` and `none` read it
+      # directly rather than off the rows' `data-label`s, which those
+      # two only re-read when the filter changes — a name committed
+      # since would be invisible to both until the next keystroke.
       STATE = "{ filter: '', all: false, named: [], " \
               "get needle() { return this.filter.trim().toLowerCase() }, " \
               "get labels() { return [...this.$refs.options.querySelectorAll('[data-label]')]" \
               ".map(row => row.dataset.label) }, " \
-              "get rows() { return [...this.$refs.options.querySelectorAll('label')] }, " \
+              "get rows() { return [...this.$refs.options.querySelectorAll('[data-label]')] }, " \
               "shows(label) { return label.includes(this.needle) }, " \
               "visible(row) { return row.querySelector('input[type=checkbox]').checked || " \
               "(this.shows(row.dataset.label) && " \
@@ -66,10 +74,10 @@ module ProTacts
       # What a filterable row wears: the label to match on, read off
       # the element rather than out of a closure, whether the cap holds
       # it back, and the hiding the two of them drive. Every row the
-      # filter is meant to see carries it — a group this book has, and
-      # a name an import is about to make — because `creatable` is
-      # "none of these", and a row the filter cannot see is a row it
-      # would offer to create twice.
+      # filter is meant to see carries it — a group this book has, a
+      # name an import is about to make, a contact the book holds —
+      # because `creatable` is "none of these", and a row the filter
+      # cannot see is a row it would offer to create twice.
       #: (String label, ?capped: bool) -> Hash[untyped, untyped]
       def self.row(label, capped: false)
         {data: {label: label.downcase, capped:}, ":hidden": "!visible($el)"}
@@ -93,6 +101,7 @@ module ProTacts
 
       # @rbs @autofocus: bool
       # @rbs @in_form: bool
+      # @rbs @placeholder: String
 
       # `autofocus` where the picker is a popover that just opened and
       # nothing else wants the caret; not where it is one field among
@@ -103,15 +112,20 @@ module ProTacts
       # find a group is not a save. The dialog needs neither the flag
       # nor the guard, its filter standing outside the form it
       # filters, which is the sturdier answer where it is available.
-      #: (?autofocus: bool, ?in_form: bool) -> void
-      def initialize(autofocus: false, in_form: false)
+      #
+      # `placeholder` where the list is not groups and the filter
+      # cannot offer to make a row of it: the default names the offer,
+      # which is the groups' own.
+      #: (?autofocus: bool, ?in_form: bool, ?placeholder: String) -> void
+      def initialize(autofocus: false, in_form: false, placeholder: "Filter or add groups")
         @autofocus = autofocus
         @in_form = in_form
+        @placeholder = placeholder
       end
 
       def view_template
-        input(type: "search", placeholder: "Filter or add groups",
-              aria_label: "Filter or add groups", autofocus: @autofocus,
+        input(type: "search", placeholder: @placeholder,
+              aria_label: @placeholder, autofocus: @autofocus,
               x_model: "filter", **enter)
       end
 
@@ -167,18 +181,25 @@ module ProTacts
 
       # What the list says when the filter matches nothing and is not
       # a name either — which, the filter being blank, is also what an
-      # empty book says.
+      # empty book says. `offer` where the picker renders Fresh: there
+      # the make-it row stands in for the message while the filter
+      # names something creatable, and the message is held back for
+      # it; where nothing can be made, `none` alone is the message.
       class Empty < Phlex::HTML
         # @rbs @any: bool
+        # @rbs @offer: bool
+        # @rbs @noun: String
 
-        #: (any: bool) -> void
-        def initialize(any:)
+        #: (any: bool, ?offer: bool, ?noun: String) -> void
+        def initialize(any:, offer: true, noun: "groups")
           @any = any
+          @offer = offer
+          @noun = noun
         end
 
         def view_template
-          template(x_if: "none && !creatable") do
-            p(class: "gl-muted") { @any ? "No groups match." : "No groups yet." }
+          template(x_if: @offer ? "none && !creatable" : "none") do
+            p(class: "gl-muted") { @any ? "No #{@noun} match." : "No #{@noun} yet." }
           end
         end
       end
@@ -197,10 +218,12 @@ module ProTacts
       # left to x-text alone, so the button reads before Alpine runs.
       class Rest < Phlex::HTML
         # @rbs @count: Integer
+        # @rbs @noun: String
 
-        #: (count: Integer) -> void
-        def initialize(count:)
+        #: (count: Integer, ?noun: String) -> void
+        def initialize(count:, noun: "groups")
           @count = count
+          @noun = noun
         end
 
         def view_template
@@ -211,7 +234,7 @@ module ProTacts
         private
 
         #: () -> String
-        def label_text = "show all #{@count} groups"
+        def label_text = "show all #{@count} #{@noun}"
       end
     end
   end

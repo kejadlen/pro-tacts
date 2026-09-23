@@ -298,6 +298,129 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
+  ## The members screen
+
+  def test_the_card_links_to_the_members_screen
+    with_contacts(BOOLES) do |store|
+      id = household(store)
+
+      get "/groups/#{id}"
+
+      assert_includes last_response.body, %(<a href="/groups/#{id}/members" class="type-label">edit members</a>)
+    end
+  end
+
+  def test_the_screen_ticks_the_members_and_only_them
+    with_contacts(BOOLES) do |store|
+      id = household(store)
+
+      get "/groups/#{id}/members"
+
+      body = last_response.body
+      assert_equal 200, last_response.status
+      assert_includes body, %(placeholder="Filter contacts")
+      %w[george mary].each do |member|
+        assert_includes body, %(name="members[]" value="#{member}" checked)
+        assert_includes body, %(name="was[]" value="#{member}")
+      end
+      assert_includes body, %(<input type="checkbox" name="members[]" value="ada">)
+      refute_includes body, %(name="was[]" value="ada")
+      # Every row carries the name a person filters by, nickname and all
+      assert_includes body, %(data-label="george boole")
+      assert_includes body, %(data-label="ada lovelace")
+    end
+  end
+
+  def test_the_members_list_in_name_order_on_the_screen_too
+    with_contacts(BOOLES.merge("zz" => "Alice Aardvark")) do |store|
+      id = household(store, members: %w[mary zz george])
+
+      get "/groups/#{id}/members"
+
+      assert_equal ["ada lovelace", "alice aardvark", "george boole", "mary boole"],
+                   last_response.body.scan(%r{<li data-label="([^"]+)"}).flatten
+    end
+  end
+
+  # The whole save: only what was toggled moves, and every card whose
+  # served bytes moved is told so in the change log.
+  def test_a_save_moves_only_what_was_toggled
+    with_contacts(BOOLES) do |store|
+      id = household(store)
+
+      post "/groups/#{id}/members", members: ["george", "ada"], was: %w[george mary]
+
+      assert_equal 303, last_response.status
+      assert_equal "/groups/#{id}", URI(last_response["Location"]).path
+      assert_equal %w[ada george], store.group(id).members.sort
+      assert_equal "group", store.changes_of("mary").first.action
+      assert_equal "group", store.changes_of("ada").first.action
+    end
+  end
+
+  # The `was[]` posture: a membership moved elsewhere since the page
+  # loaded is in neither list, and the save says nothing about it.
+  def test_a_save_leaves_a_membership_moved_elsewhere_alone
+    with_contacts(BOOLES) do |store|
+      id = household(store, members: %w[george])
+      store.add_member(id, "mary")
+
+      post "/groups/#{id}/members", members: %w[george], was: %w[george]
+
+      assert_equal 303, last_response.status
+      assert_equal %w[george mary], store.group(id).members.sort
+    end
+  end
+
+  def test_a_save_ignores_ids_that_name_no_card
+    with_contacts(BOOLES) do |store|
+      id = household(store)
+
+      post "/groups/#{id}/members", members: %w[george nobody], was: %w[george mary]
+
+      assert_equal 303, last_response.status
+      assert_equal %w[george], store.group(id).members
+    end
+  end
+
+  def test_an_empty_book_says_so_on_the_members_screen
+    with_contacts({}) do |store|
+      id = store.create_group(name: "Booles")
+
+      get "/groups/#{id}/members"
+
+      assert_includes last_response.body, "No contacts yet."
+    end
+  end
+
+  # The cap and its lifting (Admin::GroupFilter), over contacts: the
+  # ninth row stands hidden until asked for, and a member is never
+  # capped, however far down the book it sorts.
+  def test_a_long_book_opens_capped_and_offers_the_rest
+    names = ("A".."I").each_with_index.to_h { |letter, i| ["p#{i}", "Person #{letter}"] }
+    with_contacts(names) do |store|
+      id = store.create_group(name: "Booles")
+      store.add_member(id, "p8")
+
+      get "/groups/#{id}/members"
+
+      body = last_response.body
+      assert_includes body, %(<li data-label="person i" :hidden="!visible($el)">)
+      assert_equal 1, body.scan("data-capped").length
+      assert_includes body, "show all 9 contacts"
+    end
+  end
+
+  def test_an_unknown_group_is_a_404_on_the_members_screen
+    with_contacts({}) do
+      get "/groups/zzzz/members"
+      assert_equal 404, last_response.status
+
+      post "/groups/zzzz/members", members: []
+      assert_equal 404, last_response.status
+    end
+  end
+
   ## Search
 
   def test_search_finds_a_group_by_its_name
