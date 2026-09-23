@@ -13,13 +13,16 @@ end
 
 desc "Start development server, reloading on changes"
 task :dev do
-  # The dev server serves the fixture book, rebuilt from
-  # test/fixtures/cards on every start, so a client always sees known
-  # state and the real data/ directory stays out of the dev loop. Only
-  # rackup reloads under entr, so a client's edits survive a restart and
-  # a fresh `rake dev` is what resets to the fixtures. The data lives in
-  # a session-scoped tmpdir: two servers running at once each get their
-  # own database, and the directory goes when the task does.
+  # The dev server serves the fixture book, which demo.ru seeds from
+  # test/fixtures/cards when it finds no database — so a client always
+  # sees known state and the real data/ directory stays out of the dev
+  # loop. Seeded there rather than here because the preview app serves
+  # the same book from the same file. Only rackup reloads under entr, and
+  # a reload finds the database already seeded, so a client's edits
+  # survive a restart and a fresh `rake dev` is what resets to the
+  # fixtures: the data lives in a session-scoped tmpdir, so two servers
+  # running at once each get their own database, the directory goes when
+  # the task does, and the next run starts from no database at all.
   # entr's watch list is fd's snapshot at launch: a file created
   # after `rake dev` starts is never watched, and edits to it never
   # reload the server — restart the task when work adds a file.
@@ -31,14 +34,7 @@ task :dev do
   File.truncate("log/dev.log", 0) if File.exist?("log/dev.log")
 
   Dir.mktmpdir("pro-tacts-dev") do |dir|
-    data_dir = Pathname.new(dir)
-    ENV["PRO_TACTS_DATA_DIR"] = data_dir.to_s
-    require_relative "test/fixture_data"
-    require "pro_tacts/dev_login"
-    store = FixtureData.install(data_dir)
-    # Here rather than in FixtureData, which the tests share.
-    store.name_book(ProTacts::DevLogin::LOGIN, "alpha")
-    store.close
+    ENV["PRO_TACTS_DATA_DIR"] = dir
     sh "fd -e rb . lib | entr -r rackup -o localhost dev.ru"
   end
 end

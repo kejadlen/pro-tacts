@@ -1,0 +1,40 @@
+# The base demo app, deployed from main by the deploy job in
+# .github/workflows/ci.yml, so a pull request's preview has something to
+# be read against: the same app one commit behind, or one design
+# decision behind. It runs demo.ru rather than the image's own
+# config.ru, exactly as the per-PR previews do -- the fixture book
+# seeded on first boot, and a stand-in login, since nothing writes the
+# identity header in front of it either. No volume, so every deploy
+# starts from the fixtures again.
+#
+# Named fly.base.toml rather than fly.toml, and passed to every command
+# with --config: `flyctl launch --copy-config` inside the review-app
+# action reads whatever fly.toml it finds, so a file by that name would
+# put this app's settings in the middle of building a preview's.
+#
+# The app name is Fly's, not GitHub's, so it has to be unique across all
+# of Fly and a taken one fails the deploy. ci.yml spells it twice more,
+# as FLY_APP to create it on the first deploy and in the environment's
+# URL, so a rename here is a rename in three places.
+app = 'pro-tacts-base'
+primary_region = 'sjc'
+
+[processes]
+  app = 'rackup -o 0.0.0.0 demo.ru'
+
+[http_service]
+  internal_port = 9292
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1
+
+[env]
+  PRO_TACTS_INSTANCE_NAME = 'pro-tacts (main)'
+  PRO_TACTS_ACCENT = 'teal'

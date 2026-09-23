@@ -1,18 +1,19 @@
-# config.ru for `rake dev`, which has no proxy in front of it to write
-# the login (ProTacts::DevLogin). Deployments run config.ru alone.
+# config.ru for `rake dev`: the demo entrypoint (demo.ru, which seeds the
+# fixture book and writes the login) plus what marks a dev run. The
+# preview app runs demo.ru with its own branding; deployments run
+# config.ru alone.
 require "pathname"
 
 $LOAD_PATH.unshift(Pathname.new(__dir__) / "lib")
 require "pro_tacts"
-require "pro_tacts/dev_login"
 
 # The change being worked on names a dev build, the way a release's tag
 # names an image; a change id holds still while its content is edited.
 change = `jj log --no-graph -r @ -T 'change_id.short()'`
 fail "jj could not name the working-copy change" unless $?.success?
 
-# What marks a dev run, set before config.ru reads the config. An
-# exported variable still wins over each.
+# What marks a dev run, set before demo.ru and config.ru read the config.
+# An exported variable still wins over each.
 ProTacts.config = ProTacts::Config.new({
   "PRO_TACTS_INSTANCE_NAME" => "pro-tacts (dev)",
   "PRO_TACTS_FAVICON" => "/favicon-dev.svg",
@@ -20,5 +21,4 @@ ProTacts.config = ProTacts::Config.new({
   "VERSION" => change,
 }.merge(ENV))
 
-use ProTacts::DevLogin
-run Rack::Builder.parse_file(File.expand_path("config.ru", __dir__))
+run Rack::Builder.parse_file(File.expand_path("demo.ru", __dir__))
