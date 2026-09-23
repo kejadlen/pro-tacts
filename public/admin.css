@@ -37,16 +37,22 @@
    button in the same place, pinned the way the dashboard's
    section-head pins its action. In flow the control — half again
    taller than a type-label line — grew the row, and the card under
-   it moved with it. Pinning takes it out of flow, which leaves the
-   row at this element's own inherited line box — step-0/1.55, not
-   the inline label's step--2/1 — so both record pages have to wrap
-   the back link in this div. A bare link is a flex item of the
-   label's height instead, a good 15px shorter, and the card jumps
-   between modes. Both the anchor and the button, because the two
-   modes reach for different elements: navigation is a link, and
-   opening a popover is a button. */
+   it moved with it. Pinning takes it out of flow, centered on the
+   row it acts on and straddling it a few pixels either side, into
+   padding above and gap below that nothing else occupies.
+
+   The row is the link's own height — the div is a flex box so the
+   anchor sizes it as an item, at the label's step--2/1 — and not
+   the body-text line box the div would otherwise inherit, which
+   stood a good 15px taller and read as the page's content starting
+   that much lower than a list page's: the site header owes the
+   first ink under it the same distance on every page, and a
+   record's back link is that ink. Navigation is a link and opening
+   a popover is a button, so the pinning rule below reaches for
+   both, and either mode leaves the row the same height. */
 .record-nav {
   position: relative;
+  display: flex;
 }
 .record-nav .btn,
 .record-nav button {
@@ -67,15 +73,22 @@
 .card-body h1 { margin: 0; }
 .card-body > h1 { margin-block-end: var(--gl-space-xs); }
 
-/* A record's name sits a step closer to its card's top than the
-   padding the body gives prose: the heading is the card's own edge,
-   and the m of air above it read as blank space rather than as
-   room to read in (the detail-header, both on the contact's own
-   page and in a walk's read screen — ContactCard, the one
-   renderer). Only over a grid: a group that lends nothing renders
-   none (Admin::GroupsShow), and its name alone keeps the body's
-   even padding, centered in the card. */
-.card-body:has(> .detail-header:first-child + .detail-grid) {
+/* A record card's first content sits a step closer to the card's
+   top than the padding the body gives prose: the heading is the
+   card's own edge, and the m of air above content a page has
+   already headed reads as blank space rather than as room to read
+   in — the detail-header's own reason, both on the contact's page
+   and in a walk's read screen (ContactCard, the one renderer).
+   Every record card takes the step, not only the named ones: this
+   is the gap a page's header owes its content (the record-nav row
+   over the card, held to the s a section-head's list gets) — an
+   editor's fields at the body's m landed a good 10px deeper than
+   a list page's first row, and the page-to-page difference is
+   what the eye reads as the gap changing. The lone name of a
+   group that lends nothing once kept the body's even padding to
+   sit centered in the card; it takes the step now with the rest
+   (Admin::GroupsShow). */
+.record .card-body {
   padding-block-start: var(--gl-space-s);
 }
 
