@@ -20,8 +20,8 @@ module ProTacts
     # `groups` is the contact's membership (Store#groups_of), the row
     # framing the values under it. `dialog` names whether that row
     # carries its "edit groups" button, which needs GroupDialog on the
-    # page: the contact's page has it, a walk's screen does not, and
-    # membership there is the contact page's to change. `card` names
+    # page: the contact's page and a walk's saved row both render it,
+    # each telling the save where to land. `card` names
     # whether this renders the card around its own body or the body
     # alone for a card someone else supplies — the walk's read screen
     # (ImportSaved), whose trunk RecordCard owns.

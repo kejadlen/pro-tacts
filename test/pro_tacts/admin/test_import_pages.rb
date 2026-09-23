@@ -328,11 +328,13 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body, %(<dl class="detail-grid">)
       assert_includes last_response.body, "+1 555 0100"
       assert_includes last_response.body, %(data-dropped)
-      # No editor, no dialog, no footer: nothing to submit, and
-      # nothing to change here.
+      # No editor and no card form to submit; the one write the look
+      # back offers is the groups dialog, the contact page's own,
+      # landed back on the row.
       refute_includes last_response.body, %(name="etag")
-      refute_includes last_response.body, "edit groups"
-      refute_includes last_response.body, %(<footer>)
+      assert_includes last_response.body, "edit groups"
+      assert_includes last_response.body,
+                    %(<input type="hidden" name="land" value="/import/#{id}/0">)
       # And the row's verdict is the check landed in its circle.
       assert_includes last_response.body, %(<path d="m9 12 2 2 4-4">)
       # The way into edit mode: the contact page's own edit link, in
@@ -360,7 +362,7 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body, %(name="etag" value="&quot;)
       assert_includes last_response.body, "Sam Booles"
       # No group boxes: the amend is #apply_edit's form, and membership
-      # is the contact page's question.
+      # is the dialog's question, on the row's read screen.
       refute_includes last_response.body, %(name="groups[]")
 
       post "/import/#{id}/0",
@@ -377,6 +379,51 @@ class AdminImportPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
       assert_equal "/import/#{id}/1", last_response.headers["location"]
+    end
+  end
+
+  # Membership is asked on the look back too, with the contact page's
+  # own dialog: the save lands back on the row, and the row answers
+  # with the tags the write left — a look back not costing the walk
+  # its place.
+  def test_a_saved_rows_groups_are_edited_in_the_walk
+    with_contacts({}) do |store|
+      school = store.create_group(name: "school")
+      id = upload(JANE + PLAIN)
+      save(id, 0, first: "Jane", last: "Booles")
+      jane = store.contacts.find { it.name == "Jane Booles" }
+      get "/import/#{id}/0"
+      joined = ticked("groups[]")
+
+      post "/contacts/#{jane.id}/groups",
+           "groups" => [school, *joined], "was" => joined, "land" => "/import/#{id}/0"
+
+      assert_equal 303, last_response.status
+      assert_equal "/import/#{id}/0", last_response.headers["location"]
+      assert_equal [jane.id], store.group(school).members
+
+      get "/import/#{id}/0"
+
+      assert_includes last_response.body, %(href="/groups/#{school}" class="tag">)
+    end
+  end
+
+  # A refused save renders the screen the dialog was opened from, the
+  # notice landing on the row rather than navigating to the contact's
+  # own page.
+  def test_a_refused_groups_save_from_the_walk_lands_on_the_row
+    with_contacts({}) do |store|
+      store.create_group(name: "Clarks")
+      id = upload(JANE + PLAIN)
+      save(id, 0, first: "Jane", last: "Booles")
+      jane = store.contacts.fetch(0)
+      get "/import/#{id}/0"
+
+      post "/contacts/#{jane.id}/groups", "named" => ["Clarks"], "land" => "/import/#{id}/0"
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "Another group is already named Clarks; nothing was saved."
+      assert_includes last_response.body, %(<div class="walk">)
     end
   end
 

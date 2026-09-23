@@ -653,6 +653,18 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # `land` is a form field, and the redirect is not its to choose: a
+  # path not shaped like a walk row lands on the contact's own page
+  # as though none was sent (Web#walk_row).
+  def test_a_groups_save_ignores_a_land_that_is_not_a_walk_row
+    with_contacts({"ada" => ADA}) do
+      post "/contacts/ada/groups", "land" => "//evil.example"
+
+      assert_equal 303, last_response.status
+      assert_equal "/contacts/ada", last_response.headers["location"]
+    end
+  end
+
   def test_show_labels_untyped_values_with_the_property_name
     untyped = ADA.sub("TEL;TYPE=mobile:", "TEL:").sub("EMAIL;TYPE=home:", "EMAIL:")
 

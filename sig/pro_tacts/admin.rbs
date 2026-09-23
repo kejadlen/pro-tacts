@@ -64,7 +64,7 @@ module ProTacts
     end
 
     class ImportSaved
-      def self.call: (contact: Contact, groups: Array[Store::Group], aside: untyped, sidebar: untyped, edit: String, ?notice: String?) -> String
+      def self.call: (contact: Contact, groups: Array[Store::Group], all_groups: Array[Store::GroupChoice], aside: untyped, sidebar: untyped, edit: String, land: String, ?notice: String?) -> String
     end
 
     # Rendered by Dashboard, not called from checked code; only

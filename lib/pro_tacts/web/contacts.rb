@@ -211,6 +211,11 @@ module ProTacts
       # save (Admin::GroupFilter::Named) — a tick is what commits a
       # name, so there is no single `new` riding the filter to read.
       names = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
+      # The walk's row, when the dialog was opened from one
+      # (Admin::ImportSaved's `land`): where a save returns to and a
+      # refusal renders, so a look back is not a navigation away from
+      # the walk.
+      row = walk_row(r.params["land"].to_s)
       begin
         store.regroup(id, join: checked - was, leave: was - checked, create: names)
       rescue Sequel::UniqueConstraintViolation
@@ -226,9 +231,24 @@ module ProTacts
           else
             "A group already holds one of those names; nothing was saved."
           end
+        if row
+          upload, index = row
+          return card_screen(upload, index, notice:)
+        end
         return contact_screen(contact, notice:)
       end
-      r.redirect "/contacts/#{id}", 303
+      r.redirect(row ? r.params["land"].to_s : "/contacts/#{id}", 303)
+    end
+
+    # A walk row's path (`/import/:upload/:index`), read back into its
+    # parts when the groups dialog's save came from one. Only the
+    # shape this server renders is honored: `land` is a form field,
+    # and the redirect is not its to choose — a path aimed elsewhere
+    # lands on the contact's own page as though none was sent.
+    #: (String land) -> [String, Integer]?
+    def walk_row(land)
+      row = land.match(%r{\A/import/([a-z]+)/(\d+)\z})
+      [row[1], Integer(row[2])] if row
     end
 
     # A form's list of ids, and none for a param absent or not a list.

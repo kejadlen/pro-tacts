@@ -24,6 +24,12 @@ module ProTacts
     # reset a dialog reopens on whatever the last visit left in it — a
     # filter typed ten minutes ago, the whole list still unrolled, or
     # a name committed and then left there by a Cancel.
+    #
+    # `land` is where a save returns to, other than the contact's own
+    # page: the walk's saved row opens this dialog, and a look back at
+    # a row is not a navigation away from the walk — the row's own
+    # screen is where both a save and a refusal belong
+    # (Web#apply_groups).
     class GroupDialog < Phlex::HTML
       ID = "edit-groups" #: String
       FORM = "edit-groups-form" #: String
@@ -32,6 +38,7 @@ module ProTacts
       # @rbs @groups: Array[Store::GroupChoice]
       # @rbs @joined: Array[String]
       # @rbs @capped: Array[String]
+      # @rbs @land: String?
 
       # Alphabetical rather than the id order a tag keeps: this is a list
       # to find a name in, and nothing here stays put across a rename.
@@ -41,11 +48,12 @@ module ProTacts
       # already in, which the show screen already holds (Store#groups_of)
       # and so does not read a second time. `joined` is also what the
       # cap spares: those are the boxes this is opened to untick.
-      #: (contact: Contact, groups: Array[Store::GroupChoice], joined: Array[String]) -> void
-      def initialize(contact:, groups:, joined:)
+      #: (contact: Contact, groups: Array[Store::GroupChoice], joined: Array[String], ?land: String?) -> void
+      def initialize(contact:, groups:, joined:, land: nil)
         @contact = contact
         @groups = groups.sort_by { it.label.downcase }
         @joined = joined
+        @land = land
         @capped = GroupFilter.capped(@groups.map(&:id), joined:)
       end
 
@@ -57,6 +65,7 @@ module ProTacts
             render GroupFilter.new(autofocus: true)
             form(id: FORM, action: "/contacts/#{@contact.id}/groups", method: "post",
                  class: "field-stack", x_ref: "options") do
+              input(type: "hidden", name: "land", value: @land) if @land
               @groups.each do |group|
                 joined = @joined.include?(group.id)
                 label(**GroupFilter.row(group.label, capped: @capped.include?(group.id))) do

@@ -201,9 +201,11 @@ module ProTacts
       return Admin::ImportSaved.call(
         contact:,
         groups: store.groups_of(contact.id),
+        all_groups: store.group_choices,
         aside: Admin::ImportOriginal.new(card: original, dropped:),
         sidebar:,
         edit: "/import/#{upload}/#{index}/edit",
+        land: "/import/#{upload}/#{index}",
         notice:,
       ) if contact
 
