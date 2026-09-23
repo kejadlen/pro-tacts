@@ -52,7 +52,7 @@ module ProTacts
       def self.likeness(arriving, stored)
         [
           closest(names(arriving), names(stored)),
-          closest(emails(arriving), emails(stored)),
+          closest_address(emails(arriving), emails(stored)),
           closest(phones(arriving), phones(stored)),
         ]
       end
@@ -104,17 +104,27 @@ module ProTacts
         [contact.name.to_s.downcase.scan(/[[:alnum:]]+/).sort.join(" ")].reject(&:empty?)
       end
 
-      # An address as the part before its @, without case. The domain
-      # is shared by everyone at it, so over whole addresses
-      # "ada@example.com" is four edits in sixteen from
-      # "mary@example.com" — two people alike for the length of a
-      # domain — while "jane.booles" at two providers is one person.
+      # An address's case is no part of it.
       #: (Contact contact) -> Array[String]
       def self.emails(contact)
-        contact.emails.map {
-          address = it.value.strip.downcase
-          address.include?("@") ? address.rpartition("@").first : address
-        }.reject(&:empty?)
+        contact.emails.map { it.value.strip.downcase }.reject(&:empty?)
+      end
+
+      # Two addresses as alike as the parts before their @, at one
+      # domain, and not alike at all at two: "jane@booles.family" and
+      # "jane@work.example" are different mailboxes, however alike the
+      # names on them. The domain has to agree rather than count
+      # toward the distance, because it is shared by everyone at it —
+      # over whole addresses "ada@example.com" is four edits in
+      # sixteen from "mary@example.com", two people alike for the
+      # length of a provider.
+      #: (Array[String] ours, Array[String] theirs) -> Float
+      def self.closest_address(ours, theirs)
+        ours.product(theirs).map { |a, b|
+          local, _, domain = a.rpartition("@")
+          other, _, other_domain = b.rpartition("@")
+          domain == other_domain ? likeness_of(local, other) : 0.0
+        }.max || 0.0
       end
 
       #: (Contact contact) -> Array[String]
@@ -122,7 +132,7 @@ module ProTacts
         contact.phones.map { phone(it.value) }.reject(&:empty?)
       end
 
-      private_class_method :closest, :likeness_of, :names, :emails, :phones
+      private_class_method :closest, :closest_address, :likeness_of, :names, :emails, :phones
     end
   end
 end

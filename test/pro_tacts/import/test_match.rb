@@ -42,14 +42,15 @@ class ImportMatchTest < Minitest::Test
     assert_equal [jane], Match.candidates(arriving, [jane])
   end
 
-  # The part of an address that names someone is the part before its
-  # @: everyone at a domain shares the rest.
-  def test_an_address_is_alike_by_the_part_before_its_domain
+  # Two addresses are alike by the part before the @, and only at one
+  # domain: another domain is another mailbox, and a shared one says
+  # nothing about the people at it.
+  def test_an_address_is_alike_by_its_mailbox_at_the_same_domain
     jane = contact("jane", "Jane Booles", "EMAIL:jane.booles@example.com")
     ada = contact("ada", "Ada Lovelace", "EMAIL:ada@example.com")
 
     assert_equal [jane], Match.candidates(contact("0", "J", "EMAIL:jane.boole@example.com"), [jane, ada])
-    assert_equal [jane], Match.candidates(contact("0", "J", "EMAIL:jane.booles@elsewhere.org"), [jane, ada])
+    assert_empty Match.candidates(contact("0", "J", "EMAIL:jane.booles@elsewhere.org"), [jane])
     assert_empty Match.candidates(contact("0", "M", "EMAIL:mary@example.com"), [ada])
   end
 

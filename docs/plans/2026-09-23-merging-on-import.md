@@ -26,11 +26,12 @@ card over the three things a person is recognised by:
   written two ways, and an edit distance over the spellings would call
   them strangers.
 - **Each email address**, by Levenshtein distance over the part before
-  its @, without case. The domain is shared by everyone at it: over
-  whole addresses, "ada@example.com" is four edits in sixteen from
-  "mary@example.com", which offered the fixture book's Ada for a card
-  that was Mary's. The same handle at two providers is still one
-  person.
+  its @, and only between addresses at the same domain. Another domain
+  is another mailbox, however alike the names on them, so the domain
+  has to agree. It does not count toward the distance, because it is
+  shared by everyone at it: over whole addresses, "ada@example.com" is
+  four edits in sixteen from "mary@example.com", which offered the
+  fixture book's Ada for a card that was Mary's.
 - **Each phone number**, by Levenshtein distance over its last ten
   digits. A country code or a trunk prefix on one side and not the
   other is still one number, and a digit mistyped is one edit in ten.
