@@ -61,12 +61,12 @@ class ImportMatchTest < Minitest::Test
     assert_equal [mother], Match.candidates(arriving, [mother])
   end
 
-  # One digit off is another line: a household's numbers are often
-  # consecutive.
-  def test_a_phone_number_a_digit_off_is_not_the_same_number
-    arriving = contact("0", "Mom", "TEL:+44 7700 900101")
+  # A digit mistyped is one edit in ten.
+  def test_a_phone_number_a_digit_off_is_offered
+    arriving = contact("0", "Mom", "TEL:+44 7700 900461")
+    george = contact("george", "George Boole", "TEL:+44 7700 900467")
 
-    assert_empty Match.candidates(arriving, [contact("alicia", "Alicia Boole", "TEL:+44 7700 900103")])
+    assert_equal [george], Match.candidates(arriving, [george, contact("mary", "Mary Boole", "TEL:+44 7700 900218")])
   end
 
   def test_nothing_alike_is_nothing_offered

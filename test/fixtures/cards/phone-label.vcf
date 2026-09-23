@@ -4,7 +4,7 @@ N:Hopper;Grace;;;
 FN:Grace Hopper
 item1.TEL;type=CELL:+1-555-0177
 item1.X-ABLabel:Google Voice
-TEL;TYPE=home:+1-555-0101
+TEL;TYPE=home:+1-555-0142
 EMAIL:grace@example.com
 UID:phone-label
 END:VCARD

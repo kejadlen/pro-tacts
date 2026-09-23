@@ -31,15 +31,16 @@ card over the three things a person is recognised by:
   "mary@example.com", which offered the fixture book's Ada for a card
   that was Mary's. The same handle at two providers is still one
   person.
-- **Each phone number**, as its last ten digits, and only when the two
-  agree. A country code or a trunk prefix on one side and not the other
-  is still one number, but a number one digit off is another line
-  rather than a typo of this one: the fixture household's numbers are
-  consecutive, and an edit distance offered every Boole for every
-  other.
+- **Each phone number**, by Levenshtein distance over its last ten
+  digits. A country code or a trunk prefix on one side and not the
+  other is still one number, and a digit mistyped is one edit in ten.
+  The fixture book's numbers were consecutive — a household at 900101,
+  900102 and 900103 — which offered every Boole for every other, so
+  they are spread out now rather than the distance given up; a real
+  book's numbers are not a sequence.
 
-A name or an email is scored as the share of the longer string an edit
-leaves alone, and a phone as 1 or 0. A contact is offered when the best
+Each is scored as the share of the longer string an edit leaves alone.
+A contact is offered when the best
 of any one field clears the threshold — not a sum or a mean. The cases
 worth catching are one field agreeing and the others absent or
 different: the same email under a nickname, the same number under a

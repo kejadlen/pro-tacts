@@ -7,14 +7,12 @@ module ProTacts
     # ones it could update instead of arriving new
     # (docs/plans/2026-09-23-merging-on-import.md).
     #
-    # The three things a person is recognised by — the name, an email
-    # address, a phone number — because what an import meets is the
-    # same person spelled a little differently: a typo, a middle
-    # initial, a dot in an address. Edit distance for the name and
-    # the email; a phone number has to be the same number, its country
-    # code and punctuation aside, because one digit off is a different
-    # line rather than a typo of this one, and a household's lines are
-    # often a digit apart. A contact is offered when any one of the
+    # Edit distance over the three things a person is recognised by —
+    # the name, an email address, a phone number — because what an
+    # import meets is the same person spelled a little differently: a
+    # typo, a middle initial, a dot in an address, a number written
+    # with its country code on one side and without on the other. A
+    # contact is offered when any one of the
     # three comes close enough — the same email under a nickname is
     # the case worth catching, and a sum would bury it — and the
     # offers are ranked by all three, so the one agreeing on more
@@ -55,7 +53,7 @@ module ProTacts
         [
           closest(names(arriving), names(stored)),
           closest(emails(arriving), emails(stored)),
-          phones(arriving).intersect?(phones(stored)) ? 1.0 : 0.0,
+          closest(phones(arriving), phones(stored)),
         ]
       end
 
