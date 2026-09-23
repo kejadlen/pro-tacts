@@ -6,6 +6,7 @@ require "pro_tacts/admin/format"
 require "pro_tacts/admin/icons"
 require "pro_tacts/admin/layout"
 require "pro_tacts/admin/name_pair"
+require "pro_tacts/admin/record_card"
 
 module ProTacts
   module Admin
@@ -137,23 +138,17 @@ module ProTacts
           # this pass, `type` is the radio's binding, and the rest is
           # the name boxes' (NamePair).
           div(x_data: "{ added: [], type: '#{ADDABLE_TYPES.first}', #{NamePair.state(@first, @last)} }") do
-            # The caption-to-card block the details page uses (.record
-            # in admin.css): the back link is this card's caption row,
-            # and the row's one action sits at its right edge — the
-            # same place, and the same shape, as the details page's
-            # edit link. Each mode's row names the other thing you can
-            # do to the record from it.
-            walked do
-            div(class: "record") do
-            div(class: "record-nav") do
-              href, label = @back
-              a(href:, class: "type-label") { "‹ #{label}" }
-              button(type: "button", data_size: "sm",
-                     popovertarget: "add-property") { "add property" }
-            end
-            paired do
-            div(class: "card") do
-              div(class: "card-body") do
+            render RecordCard.new(
+              back: @back,
+              nav: -> {
+                button(type: "button", data_size: "sm",
+                       popovertarget: "add-property") { "add property" }
+              },
+              aside: @aside,
+              sidebar: @sidebar,
+              submit: @save,
+              form: FORM,
+            ) do
                 form(action: @action, method: "post", class: "field-stack", id: FORM) do
                   input(type: "hidden", name: "etag", value: @contact.etag)
                   # The caption is an element rather than bare text
@@ -220,56 +215,12 @@ module ProTacts
                   render @fields if @fields
                 end
               end
-              # The card's action bar, a dialog footer's shape (admin.css),
-              # outside the form and reaching it by id. Save is the form's
-              # submit; Cancel is navigation — a link in Gloss's `.btn`
-              # contract, which is what an anchor that acts like a button
-              # opts into.
-              footer do
-                a(href: @back.fetch(0), class: "btn") { "Cancel" }
-                button(type: "submit", form: FORM, data: {variant: "primary"}) { @save }
-              end
-            end
-            end
-            end
-            end
             add_property_dialog
           end
         end
       end
 
       private
-
-      # The walk's list of contacts, and the record beside it when
-      # there is one — the sidebar grid (admin.css). Skipped rather
-      # than rendered around one column for the reason #paired is:
-      # an ordinary edit has no walk to stand in.
-      #: () { () -> void } -> void
-      def walked
-        sidebar = @sidebar
-        return yield if sidebar.nil?
-
-        div(class: "walk") do
-          render sidebar
-          yield
-        end
-      end
-
-      # The editor's card, and what stands beside it when something
-      # does — the two-column grid the dashboard uses, for its reason
-      # (admin.css). With nothing beside it the wrapper is skipped
-      # rather than rendered around one card: a grid of one is a
-      # different element for no difference on screen.
-      #: () { () -> void } -> void
-      def paired
-        aside = @aside
-        return yield if aside.nil?
-
-        div(class: "paired") do
-          render aside
-          yield
-        end
-      end
 
       # The rows added this pass, rendered by Alpine from `added` —
       # one per type named in the dialog, in the order they were

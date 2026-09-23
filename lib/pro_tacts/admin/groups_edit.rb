@@ -4,6 +4,7 @@ require "pro_tacts/admin/contacts_edit"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
+require "pro_tacts/admin/record_card"
 
 module ProTacts
   module Admin
@@ -42,42 +43,34 @@ module ProTacts
           # The scope wraps the whole record because the add button sits
           # in the caption row above the card, where the contact editor's
           # add button sits, and the row it reveals is inside the form.
-          div(class: "record", x_data: "{ adding: false }") do
-            div(class: "record-nav") do
-              a(href: "/groups/#{@group.id}", class: "type-label") do
-                plain "‹ "
-                render GroupLabel.new(group: @group)
-              end
-              button(type: "button", data_size: "sm", "x-show": "!adding",
-                     "@click": "adding = true") { "add address" }
-            end
-            div(class: "card") do
-              div(class: "card-body") do
-                form(action: "/groups/#{@group.id}", method: "post", class: "field-stack", id: FORM) do
-                  input(type: "hidden", name: "version", value: @group.version)
-                  # The id as the blank's placeholder, because a group
-                  # with no name is shown as its id everywhere else.
-                  label(class: "field") do
-                    span { "Name" }
-                    input(type: "text", name: "name", value: @group.name,
-                          placeholder: @group.id, autofocus: true)
-                  end
-                  @reading.addresses.each { |address| address_row(address) }
-                  added_address_row
-                  # The first NOTE, the contact editor's own rule: this
-                  # row edits one, and a save writes one.
-                  note = @reading.notes.first&.value
-                  label(class: "field", data: {blank_removes: !!note}) do
-                    span { "Note" }
-                    textarea(name: "note", rows: 4,
-                             placeholder: note ? "removed on save" : nil) { note.to_s }
-                  end
+          div(x_data: "{ adding: false }") do
+            render RecordCard.new(
+              back: ["/groups/#{@group.id}", GroupLabel.new(group: @group)],
+              nav: -> {
+                button(type: "button", data_size: "sm", "x-show": "!adding",
+                       "@click": "adding = true") { "add address" }
+              },
+              submit: "Save", form: FORM,
+            ) do
+              form(action: "/groups/#{@group.id}", method: "post", class: "field-stack", id: FORM) do
+                input(type: "hidden", name: "version", value: @group.version)
+                # The id as the blank's placeholder, because a group
+                # with no name is shown as its id everywhere else.
+                label(class: "field") do
+                  span { "Name" }
+                  input(type: "text", name: "name", value: @group.name,
+                        placeholder: @group.id, autofocus: true)
                 end
-              end
-              # ContactsEdit's action bar.
-              footer do
-                a(href: "/groups/#{@group.id}", class: "btn") { "Cancel" }
-                button(type: "submit", form: FORM, data: {variant: "primary"}) { "Save" }
+                @reading.addresses.each { |address| address_row(address) }
+                added_address_row
+                # The first NOTE, the contact editor's own rule: this
+                # row edits one, and a save writes one.
+                note = @reading.notes.first&.value
+                label(class: "field", data: {blank_removes: !!note}) do
+                  span { "Note" }
+                  textarea(name: "note", rows: 4,
+                           placeholder: note ? "removed on save" : nil) { note.to_s }
+                end
               end
             end
           end

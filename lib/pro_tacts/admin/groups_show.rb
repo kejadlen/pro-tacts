@@ -34,7 +34,7 @@ module ProTacts
             div(class: "card") do
               div(class: "card-body") do
                 div(class: "detail-header") do
-                  h1(class: "type-h2", style: "margin: 0;") { render GroupLabel.new(group: @group) }
+                  h1(class: "type-h2") { render GroupLabel.new(group: @group) }
                 end
                 # Never empty, unlike ContactsShow's: the members row
                 # always renders (#members_row).

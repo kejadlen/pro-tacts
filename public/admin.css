@@ -56,6 +56,17 @@
   translate: 0 -50%;
 }
 
+/* A card's h1 carries no margin of its own — Gloss zeroes h3 in a
+   card-body the same way — because every h1 in one is a page's
+   heading and its separation from what follows is the page's rhythm,
+   not the heading element's default. The descendant rule reaches the
+   name inside .detail-header too; the direct-child one adds the one
+   step of air under a card's own heading, which the card-body's gap
+   does not give it — that gap is the prose-block rhythm, and loosening
+   it to air a heading would loosen every paragraph after it. */
+.card-body h1 { margin: 0; }
+.card-body > h1 { margin-block-end: var(--gl-space-xs); }
+
 /* The type column both record modes share: the details grid's label
    column and the editor's caption column are the same column, read
    from one place so they cannot drift apart. The one structural rem

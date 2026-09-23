@@ -61,7 +61,7 @@ module ProTacts
               div(class: "card-body") do
                 div(class: "detail-header") do
                   div do
-                    h1(class: "type-h2", style: "margin: 0;") { @contact.name || @contact.id }
+                    h1(class: "type-h2") { @contact.name || @contact.id }
                     # The nickname rides under the name in the heading
                     # family — type-h3 to the name's h2 — so it reads as
                     # a name rather than a property value; muted, so the

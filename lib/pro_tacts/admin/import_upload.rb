@@ -1,6 +1,7 @@
 require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/layout"
+require "pro_tacts/admin/record_card"
 
 module ProTacts
   module Admin
@@ -22,6 +23,9 @@ module ProTacts
     class ImportUpload < Phlex::HTML
       # @rbs @notice: String?
 
+      FORM = "import-form" #: String
+      private_constant :FORM
+
       #: (?notice: String?) -> void
       def initialize(notice: nil)
         @notice = notice
@@ -29,33 +33,13 @@ module ProTacts
 
       def view_template
         render Layout.new(title: "Import", notice: @notice) do
-          div(class: "record") do
-            div(class: "record-nav") do
-              a(href: "/", class: "type-label") { "‹ contacts" }
-            end
-            upload_card
-          end
-        end
-      end
-
-      private
-
-      #: () -> void
-      def upload_card
-        div(class: "card") do
-          div(class: "card-body") do
-            h1(class: "type-h2", style: "margin: 0;") { "Import contacts" }
-            p(class: "type-body-sm") do
-              "Choose a vCard file — Contacts exports one with File, Export, Export vCard. " \
-                "The next screen says what is in it before anything is added, including what " \
-                "pro-tacts cannot show and will leave behind."
-            end
-            form(action: "/import", method: "post", enctype: "multipart/form-data", class: "field-stack") do
+          render RecordCard.new(back: ["/", "contacts"], heading: "Import contacts",
+                                submit: "Import", form: FORM) do
+            form(action: "/import", method: "post", enctype: "multipart/form-data", id: FORM) do
               label(class: "field") do
-                span(class: "type-label") { "vcard file" }
+                plain "vcard file"
                 input(type: "file", name: "vcf", accept: ".vcf,text/vcard")
               end
-              button(type: "submit", data: {variant: "primary"}) { "read the file" }
             end
           end
         end

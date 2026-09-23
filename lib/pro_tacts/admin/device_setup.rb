@@ -36,7 +36,7 @@ module ProTacts
             end
             div(class: "card") do
               div(class: "card-body") do
-                h1(class: "type-h2", style: "margin: 0;") { "CardDAV profile" }
+                h1(class: "type-h2") { "CardDAV profile" }
                 dl(class: "detail-grid") do
                   dt(class: "type-label") { "server" }
                   dd(class: "type-body-sm") { @hostname }

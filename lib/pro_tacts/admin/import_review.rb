@@ -69,7 +69,7 @@ module ProTacts
       def summary_card
         div(class: "card") do
           div(class: "card-body") do
-            h1(class: "type-h2", style: "margin: 0;") { count(@contacts, "contact") }
+            h1(class: "type-h2") { count(@contacts, "contact") }
             losses
             group_line
             progress
