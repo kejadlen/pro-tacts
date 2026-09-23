@@ -690,7 +690,7 @@ class AdminImportPagesTest < Minitest::Test
       save(id, 0, first: "Jane", last: "Booles", "groups" => [school, "zzzz"], "named" => [lot])
       save(id, 1, first: "Sam", last: "Booles")
 
-      assert_equal 200, last_response.status
+      assert_equal 303, last_response.status
       jane = store.contacts.find { it.name == "Jane Booles" }
       sam = store.contacts.find { it.name == "Sam Booles" }
 
@@ -716,7 +716,9 @@ class AdminImportPagesTest < Minitest::Test
            "etag" => sent, "first" => "Jane", "middle" => "", "last" => "Booles",
            "nickname" => "", "note" => "", "groups" => [school]
 
-      assert_equal 200, last_response.status
+      # The last row there was, so the walk ends: nothing was filed
+      # under a group of its own, and the book is where it went.
+      assert_equal "/contacts", last_response.headers["location"]
       assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
     end
   end
