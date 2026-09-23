@@ -674,6 +674,38 @@ section > h2 {
   line-height: calc(var(--gl-step--1) * 1.55);
 }
 
+/* A row with links inside it (ContactsIndex's rows, whose group
+   chips open their groups): Gloss's whole-row control is an anchor
+   that is the row's only child, and an anchor cannot hold the chips'
+   anchors. So the row keeps Gloss's own padding and flex, the name is
+   the link, and its ::after stretches over the whole row to take a
+   click anywhere on it; the chips, positioned after it in the tree,
+   paint and take clicks above it. The hover fill moves to the row,
+   where the one-anchor row draws it, and does not light for a chip,
+   which is its own target. The focus ring stays Gloss's one ring, on
+   the name. */
+.linked-row {
+  position: relative;
+  transition: background-color var(--gl-dur-fast) var(--gl-ease);
+}
+.linked-row .row-link {
+  display: block;
+  color: inherit;
+  font-weight: 550;
+  text-decoration: none;
+}
+.linked-row .row-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.linked-row:has(.row-link:hover) {
+  background: var(--gl-color-surface-fill);
+}
+.linked-row a.tag {
+  position: relative;
+}
+
 /* base/typography.css's `li + li { margin-top: var(--gl-space-3xs); }`
    is a prose-list rule (Markdown bullet lists) that also matches
    Card's row list, adding a stray gap below every row but the last. */

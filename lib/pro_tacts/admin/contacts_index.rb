@@ -4,7 +4,6 @@ require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
-require "pro_tacts/admin/list_item"
 
 module ProTacts
   module Admin
@@ -57,18 +56,20 @@ module ProTacts
 
       #: (Contact contact) -> void
       def render_row(contact)
-        render ListItem.new(
-          href: "/contacts/#{contact.id}",
-          avatar: Avatar.new(contact:, size: "lg"),
-        ) do
-          div { Format.name_label(contact) }
-          groups = @groups_of[contact.id]
-          if groups
-            # Spans rather than the record page's linked tags, because
-            # the row is a link and an anchor cannot hold one; the
-            # weight reset keeps the chips from inheriting the name's.
-            div(class: "tag-set", style: "margin-top: var(--gl-space-3xs); font-weight: 400;") do
-              groups.each { |group| span(class: "tag") { render GroupLabel.new(group:) } }
+        # Not a ListItem, whose one anchor wraps the whole row, because
+        # the chips are links too and an anchor cannot hold one. The
+        # name is the row's link and stretches over the row
+        # (.linked-row in admin.css); the chips, each a link to its
+        # group's page as on the record page, sit above that stretch.
+        li(class: "linked-row") do
+          render Avatar.new(contact:, size: "lg")
+          div(style: "flex: 1; min-width: 0;") do
+            a(href: "/contacts/#{contact.id}", class: "row-link") { Format.name_label(contact) }
+            groups = @groups_of[contact.id]
+            if groups
+              div(class: "tag-set", style: "margin-top: var(--gl-space-3xs);") do
+                groups.each { |group| a(href: "/groups/#{group.id}", class: "tag") { render GroupLabel.new(group:) } }
+              end
             end
           end
         end

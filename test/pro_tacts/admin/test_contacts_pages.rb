@@ -105,7 +105,7 @@ class AdminContactsPagesTest < Minitest::Test
       assert_equal "text/html; charset=utf-8", last_response["Content-Type"]
       assert_includes last_response.body, "<title>pro-tacts — Contacts</title>"
       assert_includes last_response.body, "contacts (3)"
-      assert_includes last_response.body, %(<a href="/contacts/boole">)
+      assert_includes last_response.body, %(<a href="/contacts/boole" class="row-link">)
       body = last_response.body
       assert body.index("George Boole") < body.index("Mary Shelley")
       assert body.index("Mary Shelley") < body.index("Zed Aileron")
@@ -177,16 +177,15 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The row says what the contact belongs to, as chips under the name
-  # — spans rather than the record page's linked tags, because the row
-  # is already a link and an anchor cannot hold one.
-  def test_contacts_chips_each_row_with_its_groups
+  # The row says what the contact belongs to, as chips under the name,
+  # each opening its group the way the record page's tags do.
+  def test_contacts_chips_each_row_with_links_to_its_groups
     with_contacts({"ada" => ADA}) do |store|
-      FixtureData.seed_group(store, name: "Booles", members: ["ada"])
+      group_id = FixtureData.seed_group(store, name: "Booles", members: ["ada"])
 
       get "/contacts"
 
-      assert_includes last_response.body, %(<span class="tag">Booles</span>)
+      assert_includes last_response.body, %(<a href="/groups/#{group_id}" class="tag">Booles</a>)
     end
   end
 
