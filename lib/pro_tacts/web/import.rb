@@ -367,8 +367,9 @@ module ProTacts
       # #apply_groups' own rule, and the boxes are the whole answer —
       # none ticked is none joined, the group for the import included,
       # which is a box like any other here (#import_picker). A name
-      # typed into the filter joins the names already standing for
-      # this contact, and is made by the write below
+      # typed into the filter is committed by its tick into the
+      # standing names (Admin::GroupFilter), so it survives the
+      # filter being cleared, and is made by the write below
       # (Import::Write#group_id). `was` is the groups a contact being
       # updated was in when the page loaded, #apply_groups' own `was`,
       # and none for a new one.
@@ -381,9 +382,7 @@ module ProTacts
       known = choices.map(&:id)
       ticked = ids_in(r.params["groups"]) & known
       was = ids_in(r.params["was"]) & known
-      standing = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
-      fresh = r.params["new"].to_s.strip
-      wanted = (fresh.empty? ? standing : standing + [fresh]).uniq
+      wanted = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
       # Everyone's book is one of those boxes, and the only one the
       # write cannot take as an id: on the screen where unticking it
       # matters least — the first card into an empty book — the group

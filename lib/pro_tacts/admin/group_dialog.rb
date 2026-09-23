@@ -18,11 +18,12 @@ module ProTacts
     # form here, because Enter in a form's text box would save
     # mid-filter and there is somewhere outside to put it.
     #
-    # Closing the popover puts the cap and the filter back. Alpine's
-    # state belongs to the element, and a popover is hidden rather
-    # than rebuilt, so without the reset a dialog reopens on whatever
-    # the last visit left in it — a filter typed ten minutes ago, or
-    # the whole list still unrolled.
+    # Closing the popover puts the cap, the filter, and any names
+    # ticked into making back. Alpine's state belongs to the element,
+    # and a popover is hidden rather than rebuilt, so without the
+    # reset a dialog reopens on whatever the last visit left in it — a
+    # filter typed ten minutes ago, the whole list still unrolled, or
+    # a name committed and then left there by a Cancel.
     class GroupDialog < Phlex::HTML
       ID = "edit-groups" #: String
       FORM = "edit-groups-form" #: String
@@ -50,7 +51,7 @@ module ProTacts
 
       def view_template
         dialog(id: ID, popover: "auto", x_data: GroupFilter::STATE,
-               "@toggle": "if ($event.newState === 'closed') { all = false; filter = '' }") do
+               "@toggle": "if ($event.newState === 'closed') { all = false; filter = ''; named = [] }") do
           header { "Groups" }
           div(class: "field-stack") do
             render GroupFilter.new(autofocus: true)
@@ -64,6 +65,7 @@ module ProTacts
                 end
                 input(type: "hidden", name: "was[]", value: group.id) if joined
               end
+              render GroupFilter::Named.new
               render GroupFilter::Fresh.new
             end
             render GroupFilter::Empty.new(any: @groups.any?)

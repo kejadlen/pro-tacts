@@ -522,7 +522,7 @@ class AdminImportPagesTest < Minitest::Test
     with_contacts({}) do |store|
       id = upload(JANE)
 
-      save(id, 0, first: "Jane", last: "Booles", "named" => [], "new" => " Clarks ")
+      save(id, 0, first: "Jane", last: "Booles", "named" => [" Clarks "])
 
       clarks = store.all_groups.find { it.name == "Clarks" }
 
@@ -636,7 +636,7 @@ class AdminImportPagesTest < Minitest::Test
 
       post "/import/#{id}/0",
            "etag" => "not the etag", "first" => "Jane", "middle" => "", "last" => "Booles",
-           "nickname" => "", "note" => "", "groups" => [school], "new" => "Clarks"
+           "nickname" => "", "note" => "", "groups" => [school], "named" => ["Clarks"]
 
       assert_includes last_response.body,
                       %(<input type="checkbox" name="groups[]" value="#{school}" checked>school)
@@ -664,7 +664,12 @@ class AdminImportPagesTest < Minitest::Test
 
       assert_includes last_response.body, %(<input type="search" placeholder="Filter or add groups")
       assert_includes last_response.body, %(data-label="school")
-      assert_includes last_response.body, %(<input type="checkbox" name="new" :value="filter.trim()">)
+      # The offer's tick commits the name into a standing row rather
+      # than leaving it on the filter, where clearing would lose it.
+      assert_includes last_response.body,
+                      %(<input type="checkbox" @change="if ($event.target.checked) named.push(filter.trim())">)
+      assert_includes last_response.body,
+                      %(<input type="checkbox" name="named[]" :value="name" checked @change="named = named.filter(n => n !== name)">)
     end
   end
 
@@ -683,8 +688,8 @@ class AdminImportPagesTest < Minitest::Test
 
       get "/import/#{id}/0"
 
-      # Alphabetical, and the import's own name takes the eighth row,
-      # so Group h and Zulus are the two that go under.
+      # All empty, so alphabetical, and the import's own name takes
+      # the eighth row, so Group h and Zulus are the two that go under.
       assert_includes last_response.body, %(<label data-label="zulus" data-capped :hidden="!visible($el)">)
       assert_equal 2, last_response.body.scan("data-capped").length
       assert_includes last_response.body, "show all 9 groups"
@@ -699,6 +704,28 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body, %(<label data-label="zulus" :hidden="!visible($el)">)
       assert_includes last_response.body, %(<label data-label="group h" data-capped :hidden="!visible($el)">)
       assert_equal 1, last_response.body.scan("data-capped").length
+    end
+  end
+
+  # The groups most of the book is in are the ones an arrival is
+  # likeliest to join, so they lead the list and stand above the cap;
+  # a tie is alphabetical (Admin::ImportGroups).
+  def test_the_groups_beside_a_card_are_largest_first
+    with_contacts({"jane" => JANE, "sam" => PLAIN}) do |store|
+      alpha = store.create_group(name: "alpha")
+      charlie = store.create_group(name: "charlie")
+      beta = store.create_group(name: "beta")
+      zulus = store.create_group(name: "zulus")
+      store.add_member(zulus, "jane")
+      store.add_member(zulus, "sam")
+      store.add_member(charlie, "sam")
+      store.add_member(beta, "jane")
+      id = upload(JANE)
+
+      get "/import/#{id}/0"
+
+      assert_equal [zulus, beta, charlie, alpha],
+                   last_response.body.scan(/name="groups\[\]" value="([^"]+)"/).flatten
     end
   end
 

@@ -50,8 +50,9 @@ module ProTacts
       attr_reader id: String
       attr_reader name: String?
       attr_reader label: String
+      attr_reader member_count: Integer
 
-      def self.new: (id: String, name: String?, label: String) -> instance
+      def self.new: (id: String, name: String?, label: String, member_count: Integer) -> instance
     end
 
     class Snapshot

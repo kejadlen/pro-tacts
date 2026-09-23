@@ -44,9 +44,13 @@ module ProTacts
       # @rbs @capped: Array[String]
       # @rbs @was: Array[String]
 
-      # Alphabetical, the groups dialog's own order: this is a list to
-      # find a name in, and nothing here stays put across a rename.
-      # `groups` is every group as a choice, no members read
+      # Largest first, and alphabetical among groups the same size:
+      # the groups an arrival is likeliest to belong in are the ones
+      # most of the book already does, so they are the rows the cap
+      # leaves standing, and the filter reaches the rest. The groups
+      # dialog stays alphabetical — there a contact's groups are
+      # being looked over, not guessed at. `groups` is every group as
+      # a choice, counted rather than its members read
       # (Store#group_choices); `joined` the ids ticked, `named` the
       # groups this card is making that do not exist yet.
       #
@@ -68,7 +72,7 @@ module ProTacts
       # what was toggled (Web#apply_groups). A new contact is in none.
       #: (groups: Array[Store::GroupChoice], joined: Array[String], named: Array[String], ?was: Array[String]) -> void
       def initialize(groups:, joined:, named:, was: [])
-        @groups = groups.sort_by { it.label.downcase }
+        @groups = groups.sort_by { [-it.member_count, it.label.downcase] }
         @joined = joined
         @named = named
         @was = was
@@ -106,6 +110,11 @@ module ProTacts
                 span(class: "gl-muted", style: "font-style: italic;") { name }
               end
             end
+            # The same row client-side, for names the offer's tick has
+            # committed since this page loaded: the tick is what
+            # commits (Admin::GroupFilter), so the name stands here
+            # rather than riding the filter that named it.
+            render GroupFilter::Named.new
             render GroupFilter::Fresh.new
           end
           render GroupFilter::Empty.new(any: @groups.any? || @named.any?)
