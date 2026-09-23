@@ -36,20 +36,30 @@ module ProTacts
       # cap adds to `shows`: a capped row joins the list once the
       # filter is typed into or the whole list is asked for, and a
       # filter is the one of the two that can reach a single group
-      # without the rest. `named` is the names a tick on the offer
-      # committed to making (Named): `creatable` and `none` read it
-      # directly rather than off the rows' `data-label`s, which those
-      # two only re-read when the filter changes — a name committed
-      # since would be invisible to both until the next keystroke.
+      # without the rest. Neither hides a ticked row — a ticked box
+      # submits whether or not it can be seen, so a filter that could
+      # make one vanish would be hiding a decision rather than
+      # narrowing a list — and the tick is read off the checkbox at
+      # each evaluation, so a row answers the next filter change
+      # already ticked. `rows` is every row standing in the options,
+      # the element list `none` reads: no row visible, which is what
+      # "No groups match" claims. `named` is the names a tick on the
+      # offer committed to making (Named): `creatable` and `none`
+      # read it directly rather than off the rows' `data-label`s,
+      # which those two only re-read when the filter changes — a
+      # name committed since would be invisible to both until the
+      # next keystroke.
       STATE = "{ filter: '', all: false, named: [], " \
               "get needle() { return this.filter.trim().toLowerCase() }, " \
               "get labels() { return [...this.$refs.options.querySelectorAll('[data-label]')]" \
               ".map(row => row.dataset.label) }, " \
+              "get rows() { return [...this.$refs.options.querySelectorAll('label')] }, " \
               "shows(label) { return label.includes(this.needle) }, " \
-              "visible(row) { return this.shows(row.dataset.label) && " \
-              "(this.all || this.needle !== '' || !('capped' in row.dataset)) }, " \
-              "get none() { return !this.labels.some(label => this.shows(label)) && " \
-              "!this.named.some(name => name.toLowerCase().includes(this.needle)) }, " \
+              "visible(row) { return row.querySelector('input[type=checkbox]').checked || " \
+              "(this.shows(row.dataset.label) && " \
+              "(this.all || this.needle !== '' || !('capped' in row.dataset))) }, " \
+              "get none() { return !this.named.length && " \
+              "!this.rows.some(row => this.visible(row)) }, " \
               "get creatable() { return this.needle !== '' && !this.labels.includes(this.needle) && " \
               "!this.named.some(name => name.toLowerCase() === this.needle) } }" #: String
 
@@ -140,15 +150,13 @@ module ProTacts
       # independent of the filter — which is the whole difference
       # from the offer, whose row lives on the filter's own text. An
       # untick withdraws the name, back to the offer if the filter
-      # still says it. Never capped, being ticked, and hidden by the
-      # filter like any row — said straight to `shows` rather than
-      # through `data-label`/`visible($el)`, those reading the DOM
-      # the server rendered, and this row being made client-side
-      # where the name is in hand.
+      # still says it. Never capped and never filtered, being ticked
+      # — `visible`'s own rule — so the row needs no attrs to say it:
+      # a bare label, always standing.
       class Named < Phlex::HTML
         def view_template
           template(x_for: "name in named") do
-            label(":hidden": "!shows(name.toLowerCase())") do
+            label do
               input(type: "checkbox", name: "named[]", ":value": "name", checked: true,
                     "@change": "named = named.filter(n => n !== name)")
               span(class: "gl-muted", style: "font-style: italic;", x_text: "name")

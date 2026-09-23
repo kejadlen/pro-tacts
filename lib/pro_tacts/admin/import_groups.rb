@@ -91,9 +91,10 @@ module ProTacts
             # Italic and muted, the shape the groups dialog gives a
             # name that is not a group yet: the box behaves like the
             # ones above it, and the styling is what says this one is
-            # about to be made. Filterable like them too, so that a
-            # name this import is already making is not offered as a
-            # name to make, and never capped, being ticked.
+            # about to be made. Always shown and never capped, being
+            # ticked (`visible`'s own rule); the `data-label` is for
+            # `creatable`, so that a name this import is already
+            # making is not offered as a name to make.
             @named.each do |name|
               label(**GroupFilter.row(name)) do
                 input(type: "checkbox", name: "named[]", value: name, checked: true)

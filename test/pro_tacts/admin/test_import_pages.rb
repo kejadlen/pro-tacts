@@ -697,6 +697,11 @@ class AdminImportPagesTest < Minitest::Test
                       %(<input type="checkbox" @change="if ($event.target.checked) named.push(filter.trim())">)
       assert_includes last_response.body,
                       %(<input type="checkbox" name="named[]" :value="name" checked @change="named = named.filter(n => n !== name)">)
+      # A committed name is a ticked row, and a ticked row answers
+      # neither the filter nor the cap: a decision the form still
+      # submits is never hidden.
+      assert_includes last_response.body, %(<template x-for="name in named"><label>)
+      assert_includes last_response.body, %(row.querySelector('input[type=checkbox]').checked)
     end
   end
 
