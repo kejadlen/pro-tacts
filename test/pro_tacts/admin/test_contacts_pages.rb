@@ -112,6 +112,59 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  def test_contacts_files_each_contact_under_the_first_letter_of_its_last_name
+    boole = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:George Boole\r\nN:Boole;George;;;\r\nUID:boole\r\nEND:VCARD\r\n"
+    babbage = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Charles Babbage\r\nN:Babbage;Charles;;;\r\nUID:babbage\r\nEND:VCARD\r\n"
+    shelley = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Mary Shelley\r\nN:shelley;Mary;;;\r\nUID:shelley\r\nEND:VCARD\r\n"
+
+    with_contacts({"shelley" => shelley, "boole" => boole, "babbage" => babbage}) do
+      get "/contacts"
+
+      body = last_response.body
+      assert_equal 2, body.scan(%(<ul class="card">)).length
+      assert body.index(%(<h3 class="type-label">B</h3>)) < body.index("Charles Babbage")
+      assert body.index("George Boole") < body.index(%(<h3 class="type-label">S</h3>))
+      assert body.index(%(<h3 class="type-label">S</h3>)) < body.index("Mary Shelley")
+    end
+  end
+
+  def test_contacts_files_a_card_with_no_last_name_under_its_name
+    zed = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Zed Aileron\r\nUID:zed\r\nEND:VCARD\r\n"
+
+    with_contacts({"zed" => zed}) do
+      get "/contacts"
+
+      assert_includes last_response.body, %(<h3 class="type-label">Z</h3>)
+    end
+  end
+
+  def test_contacts_files_an_accented_last_name_under_its_base_letter
+    eve = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Eve Evans\r\nN:Evans;Eve;;;\r\nUID:eve\r\nEND:VCARD\r\n"
+    emile = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Émile Écrivain\r\nN:Écrivain;Émile;;;\r\nUID:emile\r\nEND:VCARD\r\n"
+
+    with_contacts({"emile" => emile, "eve" => eve}) do
+      get "/contacts"
+
+      body = last_response.body
+      assert_equal 1, body.scan(%(<ul class="card">)).length
+      assert_includes body, %(<h3 class="type-label">E</h3>)
+      assert body.index("Eve Evans") < body.index("Émile Écrivain")
+    end
+  end
+
+  def test_contacts_files_a_last_name_that_is_no_letter_under_a_hash_after_z
+    agency = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:3M\r\nUID:agency\r\nEND:VCARD\r\n"
+    zed = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Zed Aileron\r\nN:Zuse;Zed;;;\r\nUID:zed\r\nEND:VCARD\r\n"
+
+    with_contacts({"agency" => agency, "zed" => zed}) do
+      get "/contacts"
+
+      body = last_response.body
+      assert body.index(%(<h3 class="type-label">Z</h3>)) < body.index(%(<h3 class="type-label">#</h3>))
+      assert body.index(%(<h3 class="type-label">#</h3>)) < body.index("3M")
+    end
+  end
+
   # The row shows the same composition the dashboard's rows do
   # (Format.name_label).
   def test_contacts_lists_a_nicknamed_contact_as_name_and_nickname

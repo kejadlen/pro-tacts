@@ -648,6 +648,20 @@ section > h2 {
   translate: 0 -50%;
 }
 
+/* /contacts' rows, one card per first letter (ContactsIndex's
+   letter_groups). The letter is a caption for its card the way a
+   section's heading is for its list, so it keeps a tighter step to
+   its own card than the cards keep to each other: each letter reads
+   as the head of the card under it, not the foot of the one above. */
+.letter-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-m);
+}
+.letter-groups h3 {
+  margin-bottom: var(--gl-space-2xs);
+}
+
 /* base/typography.css's `li + li { margin-top: var(--gl-space-3xs); }`
    is a prose-list rule (Markdown bullet lists) that also matches
    Card's row list, adding a stray gap below every row but the last. */
