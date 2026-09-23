@@ -42,26 +42,23 @@ module ProTacts
       # many of its original's lines are not coming with it; `saved`
       # the contact each row that has come in was written as, by the
       # row's place in the file; `current` the row whose screen is
-      # open, or none on the screen that is about the file itself.
-      #: (upload: String, rows: Array[[::ProTacts::Contact, Integer]], saved: Hash[String, String], ?current: Integer?) -> void
-      def initialize(upload:, rows:, saved:, current: nil)
+      # open.
+      #: (upload: String, rows: Array[[::ProTacts::Contact, Integer]], saved: Hash[String, String], current: Integer) -> void
+      def initialize(upload:, rows:, saved:, current:)
         @upload = upload
         @rows = rows
         @saved = saved
         @current = current
       end
 
-      # A record's own shape — caption row over card — because the
-      # thing beside this is one too, and two columns whose cards
-      # start at different heights read as a mistake before they read
-      # as anything else (.record in admin.css). The caption is the
-      # way back to what the file as a whole is losing, that screen
-      # having no row of its own to be reached from.
+      # The record's own column shape (.record in admin.css), the
+      # thing beside it being a record too — but no caption row: the
+      # rows are self-evidently contacts, and the screen about the
+      # file they came from is gone, so there is nothing for a
+      # caption over the list to name or reach. What sits over the
+      # editor is its own action's row and nothing else.
       def view_template
         nav(class: "record walk-list") do
-          div(class: "record-nav") do
-            a(href: "/import/#{@upload}", class: "type-label") { "contacts" }
-          end
           ul(class: "card") do
             @rows.each_with_index do |(contact, dropped), index|
               row(contact, dropped, index)

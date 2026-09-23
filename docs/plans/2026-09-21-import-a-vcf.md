@@ -95,14 +95,13 @@ the wrong remedy: it asks about `X-ABRELATEDNAMES` in the abstract,
 and the answer it can give back is a line this app composed. What the
 importer actually wants is to look at a contact and fix it.
 
-So the review is a walk, three screens rather than a submission:
+So the review is a walk, two screens rather than a submission:
 
 1. **Choose the file**, which opens straight into the first contact
    in it. A list built from a file nobody has looked at yet is a stop
    on the way to the same place, and it stands beside every card
    anyway.
-2. **What the whole file is losing**, a click back up that list.
-3. **One contact, two cards**, side by side. On the left, the card exactly
+2. **One contact, two cards**, side by side. On the left, the card exactly
    as the file wrote it: content lines in monospace, with every line that is
    not coming in struck in Gloss's danger color and labelled "not imported"
    beside it, a strike on its own being a color. On the right, the contact
@@ -139,19 +138,25 @@ it was typed.
 ## The list is a sidebar
 
 The contacts are not a screen of their own. They are a column down
-the side of both screens after the upload, so opening a row never
+the side of the card screens, so opening a row never
 costs your place in the list: the row being read is marked, the row
 after it is the next thing to click, and what the last ten screens
 settled is in view while the eleventh is open. A book is hundreds of
 contacts and only some of them will have anything worth looking at,
 so the list is what says which rows are worth opening — and that is
-a thing to read *while* reading one, not instead of.
+a thing to read *while* reading one, not instead of. What the file
+as a whole is losing was a screen of its own first — a click back up
+this list, and a stop between every save — and is gone: its facts
+live on the rows (the dropped count) and on the cards (the struck
+lines), which repeat them on every screen the walk has, and a save
+now steps straight to the next row nobody has read.
 
-It is a `.record` block like the thing beside it, caption row over
-card, so the two columns' cards start at the same height. Two columns
-beginning a rung apart read as a mistake before they read as anything
-else. Its caption is the link back to the screen about the file,
-which has no row of its own to be reached from.
+It is a `.record` block like the thing beside it, but with no
+caption row: the rows are evidently contacts, and the screen about
+the file they came from is gone, so a caption over the list would
+name what the screen already shows. What sits above the editor is
+its own action's row and nothing else — there is no contact to go
+back to yet, the card not being in the book until its Save.
 
 Two facts per row, and the walk turns on both.
 

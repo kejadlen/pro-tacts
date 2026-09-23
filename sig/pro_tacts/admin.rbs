@@ -45,10 +45,6 @@ module ProTacts
       def self.call: (?notice: String?) -> String
     end
 
-    class ImportReview
-      def self.call: (contacts: Integer, saved: Integer, unknown: Array[::ProTacts::Import::Vcf::Unknown], group: String, sidebar: untyped, ?notice: String?) -> String
-    end
-
     # Rendered into ContactsEdit rather than called, so these are the
     # views here whose `new` is what checked code reaches for.
     class ImportOriginal
@@ -60,7 +56,7 @@ module ProTacts
     end
 
     class ImportSidebar
-      def self.new: (upload: String, rows: Array[[Contact, Integer]], saved: Hash[String, String], ?current: Integer?) -> instance
+      def self.new: (upload: String, rows: Array[[Contact, Integer]], saved: Hash[String, String], current: Integer) -> instance
     end
 
     # Rendered by Dashboard, not called from checked code; only

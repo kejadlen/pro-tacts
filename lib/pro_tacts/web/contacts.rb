@@ -71,7 +71,7 @@ module ProTacts
           # not_found handler fills in, same as the page below.
           if contact
             response["Content-Type"] = "text/html; charset=utf-8"
-            Admin::ContactsEdit.call(contact:)
+            Admin::ContactsEdit.call(contact:, back: edit_back(contact))
           end
         end
 
@@ -234,7 +234,15 @@ module ProTacts
     #: (Contact contact, ?notice: String) -> String
     def edit_screen(contact, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::ContactsEdit.call(contact:, notice:)
+      Admin::ContactsEdit.call(contact:, notice:, back: edit_back(contact))
+    end
+
+    # The edit's way back, named by the route rather than left to the
+    # view: the import's editor passes none, its navigation being the
+    # list beside it.
+    #: (Contact contact) -> [String, String]
+    def edit_back(contact)
+      ["/contacts/#{contact.id}", contact.name || contact.id]
     end
   end
 end

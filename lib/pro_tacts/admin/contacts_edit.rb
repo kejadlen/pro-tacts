@@ -80,7 +80,7 @@ module ProTacts
       # @rbs @middle: String?
       # @rbs @last: String?
       # @rbs @action: String
-      # @rbs @back: [String, String]
+      # @rbs @back: ([String, String])?
       # @rbs @aside: Phlex::HTML?
       # @rbs @fields: Phlex::HTML?
 
@@ -103,7 +103,7 @@ module ProTacts
                      sidebar: nil, save: nil)
         @contact = contact
         @action = action || "/contacts/#{contact.id}"
-        @back = back || ["/contacts/#{contact.id}", contact.name || contact.id]
+        @back = back
         @aside = aside
         @fields = fields
         @sidebar = sidebar

@@ -33,8 +33,7 @@ module ProTacts
 
       def view_template
         render Layout.new(title: "Import", notice: @notice) do
-          render RecordCard.new(back: ["/", "contacts"], heading: "Import contacts",
-                                submit: "Import", form: FORM) do
+          render RecordCard.new(heading: "Import contacts", submit: "Import", form: FORM) do
             form(action: "/import", method: "post", enctype: "multipart/form-data", id: FORM) do
               label(class: "field") do
                 plain "vcard file"

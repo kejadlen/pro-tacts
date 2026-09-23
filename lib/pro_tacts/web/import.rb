@@ -2,7 +2,6 @@ require "pro_tacts/admin/card_form"
 require "pro_tacts/admin/contacts_edit"
 require "pro_tacts/admin/import_groups"
 require "pro_tacts/admin/import_original"
-require "pro_tacts/admin/import_review"
 require "pro_tacts/admin/import_sidebar"
 require "pro_tacts/admin/import_upload"
 require "pro_tacts/birthday"
@@ -20,16 +19,19 @@ module ProTacts
     # .vcf is what every address book on earth already exports, and
     # the machine holding it is whichever one the browser is on.
     #
-    # Three screens, because an import is a walk rather than a
-    # submission: choose the file, read what the whole of it is
-    # losing, and open any of its contacts beside the card it arrived
-    # as. The Save on that last screen is the import of that one
-    # contact — not a note kept until a confirm at the end — so the
-    # walk's list says what is in the book and what is not yet, and
-    # what is left when the walk stops is only the part nobody looked
-    # at. That list is a sidebar rather than a screen of its own
-    # (Admin::ImportSidebar): it stands beside the two later screens
-    # both, so opening a row never costs your place in it.
+    # Two screens, because an import is a walk rather than a
+    # submission: choose the file, and open any of its contacts
+    # beside the card it arrived as. The Save on that screen is the
+    # import of that one contact — not a note kept until a confirm
+    # at the end — and then the walk is on the next row nobody has
+    # read, so what is left when the walk stops is only the part
+    # nobody looked at. The list is a sidebar rather than a screen
+    # of its own (Admin::ImportSidebar): it stands beside every
+    # card, so opening a row never costs your place in it, and what
+    # the file is losing is said on the rows (the dropped count) and
+    # on the cards (the struck lines) rather than on a screen about
+    # the file — a stop between saves that repeated what the list
+    # beside every card already said.
     #
     # Under the same identity gate as every other route (web.rb),
     # which is also where the arrivals' books come from: a card this
@@ -47,12 +49,6 @@ module ProTacts
       end
 
       r.on String do |upload|
-        r.is do
-          r.get do
-            review_screen(upload)
-          end
-        end
-
         # The contact's place in the file is its name here, until its
         # own Save mints one. The file's own order is the one thing
         # about a card that cannot change under the walk: the editor's
@@ -77,7 +73,7 @@ module ProTacts
     # anything is staged, the old `execute`'s rule that a source which
     # will not read brings in nothing. What it stages is both readings —
     # the file as it arrived, and the cards pared to what this book
-    # shows — and then it is the review screen's walk.
+    # shows — and then it is the walk's first card.
     #: (untyped r) -> untyped
     def stage_upload(r)
       upload = file_in(r.params["vcf"])
@@ -109,47 +105,23 @@ module ProTacts
         # and a contact at a time (#import_picker).
         group: Import::Write.default_group,
       )
-      # Straight to the first contact rather than to the screen about
+      # Straight to the first contact rather than to a screen about
       # the file: the walk is the point, and a list that has just been
       # built from a file nobody has looked at yet is a stop on the
-      # way to the same place. What the whole file is losing is on the
-      # screen that list links back to, and the list itself stands
-      # beside every card anyway (Admin::ImportSidebar). A file with
-      # no contacts in it has no first one to open.
+      # way to the same place — the list stands beside every card
+      # anyway (Admin::ImportSidebar).
       #
       # A 303, the other writes' answer, because what follows is a
       # walk: every screen of it is a GET a back button can revisit.
-      r.redirect(cards.empty? ? "/import/#{id}" : "/import/#{id}/0", 303)
-    end
-
-    # What the whole file is losing, what it is coming in under, and
-    # the way to stop. The contacts themselves are the sidebar beside
-    # it, which every screen of the walk carries.
-    #: (String upload, ?notice: String?) -> String
-    def review_screen(upload, notice: nil)
-      staged = staged_cards(upload)
-      return expired_screen if staged.nil?
-
-      originals, revised = staged
-      group, saved = Import::Staged.saved(upload)
-
-      response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::ImportReview.call(
-        contacts: revised.length,
-        saved: saved.length,
-        unknown: Import::Vcf.unknown(originals),
-        group:,
-        sidebar: walk_sidebar(upload, originals, revised, saved),
-        notice:,
-      )
+      r.redirect "/import/#{id}/0", 303
     end
 
     # The walk's list of contacts, as every screen of it shows them:
     # the contact each card will be written as, how many of its
     # original's lines are not coming with it, and which rows are in
     # the book already. `current` is the row whose screen is open.
-    #: (String upload, Array[VCard] originals, Array[VCard] revised, Hash[String, String] saved, ?current: Integer?) -> Admin::ImportSidebar
-    def walk_sidebar(upload, originals, revised, saved, current: nil)
+    #: (String upload, Array[VCard] originals, Array[VCard] revised, Hash[String, String] saved, current: Integer) -> Admin::ImportSidebar
+    def walk_sidebar(upload, originals, revised, saved, current:)
       rows = revised.each_with_index.map { |card, index|
         # A literal of several elements is an Array until something
         # says otherwise, and an inline annotation needs its own line.
@@ -205,7 +177,6 @@ module ProTacts
         contact: import_contact(card, index),
         notice:,
         action: "/import/#{upload}/#{index}",
-        back: ["/import/#{upload}", "the import"],
         # The submit says where the card is going, because it is not
         # there yet: this is the one editor in the app whose Save
         # creates the record rather than amending it, and the row
@@ -366,7 +337,15 @@ module ProTacts
       # thing.
       return close_walk(r, upload) if saved.length + 1 == revised.length
 
-      r.redirect "/import/#{upload}", 303
+      # Onto the next row nobody has read, in the file's own order —
+      # the walk steps from card to card, a screen between saves
+      # having only ever repeated what the list beside every card
+      # says. `saved` was read before this write, so the row just
+      # written is named here too; a `fetch` rather than a `first`
+      # because empty is the case the line above took, and reaching
+      # it is a broken assumption rather than a screen to render.
+      remaining = (0...revised.length).reject { |i| saved.key?(i.to_s) || i == index }
+      r.redirect "/import/#{upload}/#{remaining.fetch(0)}", 303
     end
 
     # The end of the walk: the file and the walk's own notes gone, and

@@ -80,20 +80,12 @@ class AdminImportPagesTest < Minitest::Test
     last_response.body.scan(/name="#{Regexp.escape(name)}" value="([^"]*)" checked/).flatten
   end
 
-  # The screen about the file rather than about a contact: what the
-  # whole of it is losing, and the way to stop. An upload goes
-  # straight past it into the first contact, so a test that is about
-  # it asks for it.
-  def summary(id)
-    get "/import/#{id}"
-  end
-
-  # The group this import files its arrivals under, read off the
-  # screen that states it — there is no form for it, and the name is
-  # the moment the upload happened.
+  # The group this import files its arrivals under, named when the
+  # upload happens: every Save ticks it, so the name is read off the
+  # staged files themselves — there is no form for it, and no screen
+  # that states it apart from the boxes beside each card.
   def import_group(id)
-    summary(id)
-    last_response.body[/Coming in as ([^.<]+)\./, 1].to_s
+    ProTacts::Import::Staged.saved(id).first
   end
 
   def test_the_screen_asks_for_a_vcf
@@ -123,20 +115,18 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
-  # And the file's own screen is a click back up the list.
-  def test_the_file_itself_is_a_screen_the_list_links_to
+  # A file with no contacts in it has no walk to walk: nothing is
+  # staged, and the screen that asked for the file says why it has it
+  # again — the reader's own message, the same one any file that will
+  # not read gets.
+  def test_a_file_with_no_contacts_in_it_comes_back_unstaged
     with_contacts({}) do |store|
-      id = upload(JANE + PLAIN)
-      follow_redirect!
-
-      assert_includes last_response.body, %(<a href="/import/#{id}" class="type-label">contacts</a>)
-
-      summary(id)
+      id = upload("")
 
       assert_equal 200, last_response.status
-      assert_includes last_response.body, "2 contacts"
-      assert_includes last_response.body, "Nothing has come in yet."
-      assert_empty store.contacts
+      assert_includes last_response.body, "this file holds no vCards"
+      assert_nil id
+      assert_empty store.changes
     end
   end
 
@@ -154,6 +144,9 @@ class AdminImportPagesTest < Minitest::Test
 
   # The contacts stand beside whatever is open, rather than on a page
   # of their own: opening a row never costs your place in the list.
+  # The list carries no caption — the rows are self-evidently
+  # contacts — and the editor's caption row only its action, there
+  # being no contact to go back to yet.
   def test_the_walk_stands_beside_the_card_being_read
     with_contacts({}) do |_store|
       id = upload(JANE + PLAIN)
@@ -161,10 +154,14 @@ class AdminImportPagesTest < Minitest::Test
       get "/import/#{id}/0"
 
       assert_includes last_response.body, %(<div class="walk">)
-      assert_includes last_response.body, %(<nav class="record walk-list">)
+      assert_includes last_response.body, %(<nav class="record walk-list"><ul)
       assert_includes last_response.body, "Sam Booles"
       assert_includes last_response.body, %(href="/import/#{id}/1")
-      # And says which row you are on.
+      # The editor's caption row carries only its action, and its
+      # footer only the submit: the contact this card will become
+      # does not exist to go back to.
+      refute_includes last_response.body, %(href="/contacts/0")
+      assert_includes last_response.body, %(<footer><button type="submit" form="contact-form")
       assert_includes last_response.body,
                       %(<a href="/import/#{id}/0" aria-current="page" data-state="unsaved">)
     end
@@ -185,37 +182,17 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
-  # The same fact for the file as a whole, read before deciding
-  # whether the list is worth working down at all.
-  def test_the_list_names_the_properties_the_file_is_losing
-    with_contacts({}) do |_store|
-      summary(upload(JANE))
-
-      assert_includes last_response.body, "X-ABRELATEDNAMES"
-      assert_includes last_response.body, "X-SOCIALPROFILE"
-      assert_includes last_response.body, "1 line"
-    end
-  end
-
-  def test_a_file_this_book_reads_whole_says_so
-    with_contacts({}) do |_store|
-      summary(upload(PLAIN))
-
-      assert_includes last_response.body, "Nothing in this file needs reading before it comes in."
-      refute_includes last_response.body, "diff-removed"
-    end
-  end
-
   # Every export names the program that wrote it, and nobody is
   # going to copy that into a card: it is dropped without being
-  # counted, so a file losing nothing else reads as losing nothing.
+  # counted, so a file losing nothing else reads as losing nothing —
+  # no row wears a mark, and the struck line on the card itself is
+  # the whole of what this file is losing.
   def test_a_file_losing_only_its_exporters_name_asks_for_nothing
     with_contacts({}) do |_store|
-      summary(upload(PLAIN.sub("VERSION:3.0\r\n", "VERSION:3.0\r\nPRODID:-//Apple Inc.//macOS 15.0//EN\r\n")))
+      upload(PLAIN.sub("VERSION:3.0\r\n", "VERSION:3.0\r\nPRODID:-//Apple Inc.//macOS 15.0//EN\r\n"))
+      follow_redirect!
 
-      assert_includes last_response.body, "Nothing in this file needs reading before it comes in."
       refute_includes last_response.body, "diff-removed"
-      refute_includes last_response.body, "PRODID"
     end
   end
 
@@ -256,7 +233,6 @@ class AdminImportPagesTest < Minitest::Test
       # And the editor, pre-filled and pointed at the import.
       assert_includes last_response.body, %(<form action="/import/#{id}/0" method="post")
       assert_includes last_response.body, %(value="+1 555 0100")
-      assert_includes last_response.body, %(href="/import/#{id}")
       # The one editor in the app whose Save creates the record.
       assert_includes last_response.body, "save to the book"
     end
@@ -286,16 +262,16 @@ class AdminImportPagesTest < Minitest::Test
       jane = store.contacts.fetch(0)
 
       assert_equal "Jane Booles", jane.name
-      # And the list it comes back to says so: the row leads to the
-      # contact now, and the one nobody has opened still leads into
-      # the walk.
+      # And the walk steps straight to the next row nobody has read,
+      # the list beside it saying the row that was saved is in: it
+      # leads to the contact now, and the row nobody has opened still
+      # leads into the walk.
+      assert_equal "/import/#{id}/1", last_response.headers["location"]
       follow_redirect!
 
       assert_includes last_response.body, %(href="/contacts/#{jane.id}")
       assert_includes last_response.body, %(data-state="saved")
       assert_includes last_response.body, %(<span class="gl-visually-hidden">saved</span>)
-      assert_includes last_response.body, %(href="/import/#{id}/1")
-      assert_includes last_response.body, "1 of 2 contacts in the book."
     end
   end
 
@@ -370,10 +346,10 @@ class AdminImportPagesTest < Minitest::Test
 
       assert_includes last_response.body, %(href="/contacts/#{jane.id}")
 
-      # And the walk is gone with it.
+      # And the walk is gone with it: no screen at all answers the id.
       get "/import/#{id}"
 
-      assert_includes last_response.body, "That import is no longer here."
+      assert_equal 404, last_response.status
     end
   end
 
@@ -387,27 +363,6 @@ class AdminImportPagesTest < Minitest::Test
       assert_equal "/contacts", last_response.headers["location"]
       assert_equal 1, store.contacts.length
       assert_empty store.all_groups.map(&:name).grep(/\Aimport-/)
-    end
-  end
-
-  # A walk is over when its last row is saved, and left when it is
-  # left: there is nothing to press, and nothing whose only power
-  # would be to throw away the rows nobody has read.
-  def test_the_walk_says_how_far_down_the_file_it_is_and_offers_no_button
-    with_contacts({}) do |store|
-      id = upload(JANE + PLAIN)
-      save(id, 0, first: "Jane", last: "Booles")
-      summary(id)
-
-      assert_includes last_response.body, "1 of 2 contacts in the book."
-      # Nothing to press at all: this screen only says things.
-      refute_includes last_response.body, %(type="submit")
-      refute_includes last_response.body, "/done"
-      assert_equal 1, store.contacts.length
-
-      post "/import/#{id}/done"
-
-      assert_equal 404, last_response.status
     end
   end
 
@@ -458,9 +413,9 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
-  # The whole file's group is named on the review screen; which of
-  # this book's own groups a contact joins is asked beside that
-  # contact's card, and written by the same Save as its fields.
+  # The group for the import is named when the file is uploaded;
+  # which of this book's own groups a contact joins is asked beside
+  # that contact's card, and written by the same Save as its fields.
   def test_a_contact_is_put_in_its_groups_beside_its_own_card
     with_contacts({}) do |store|
       school = store.create_group(name: "school")
@@ -539,9 +494,9 @@ class AdminImportPagesTest < Minitest::Test
   def test_the_group_for_the_import_cannot_be_renamed
     with_contacts({}) do |_store|
       id = upload(JANE)
-      summary(id)
 
-      assert_includes last_response.body, "Coming in as import-"
+      get "/import/#{id}/0"
+
       refute_includes last_response.body, %(name="group")
 
       post "/import/#{id}/group", "group" => "somewhere else"
@@ -731,7 +686,7 @@ class AdminImportPagesTest < Minitest::Test
       id = upload(JANE)
       save(id, 0, first: "Jane", last: "Booles")
 
-      summary(id)
+      get "/import/#{id}/0"
 
       assert_includes last_response.body, "That import is no longer here."
       assert_equal 1, store.contacts.length
@@ -744,7 +699,7 @@ class AdminImportPagesTest < Minitest::Test
     with_contacts({}) do |store|
       refute ProTacts::ChangeId.minted?("notminted")
 
-      get "/import/notminted"
+      get "/import/notminted/0"
 
       assert_includes last_response.body, "That import is no longer here."
       assert_empty store.changes

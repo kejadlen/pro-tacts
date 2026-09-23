@@ -16,13 +16,16 @@ module ProTacts
     #
     # `back` names the caption row's link, `[href, label]`, the label
     # a string or whatever `render` takes (GroupsEdit's is a
-    # GroupLabel). `nav`, when something is passed, is the row's one
-    # action at its right edge. The footer's Cancel goes where the
-    # back link goes — the editors' own rule — and the submit reaches
-    # the form by id rather than sitting in it, so the action bar is
-    # the card's and not the form's.
+    # GroupLabel); a card with neither back nor `nav` — the walk's
+    # editor, whose navigation is the list beside it — renders no
+    # caption row at all. `nav`, when something is passed, is the
+    # row's one action at its right edge. The footer's Cancel goes
+    # where the back link goes — the editors' own rule, and absent
+    # with it — and the submit reaches the form by id rather than
+    # sitting in it, so the action bar is the card's and not the
+    # form's.
     class RecordCard < Phlex::HTML
-      # @rbs @back: [String, (String | Phlex::HTML | Proc)]
+      # @rbs @back: ([String, (String | Phlex::HTML | Proc)])?
       # @rbs @nav: (Proc | Phlex::HTML)?
       # @rbs @heading: String?
       # @rbs @aside: Phlex::HTML?
@@ -30,8 +33,8 @@ module ProTacts
       # @rbs @submit: String
       # @rbs @form: String
 
-      #: (back: [String, (String | Phlex::HTML | Proc)], submit: String, form: String, ?nav: (Proc | Phlex::HTML)?, ?heading: String?, ?aside: Phlex::HTML?, ?sidebar: Phlex::HTML?) -> void
-      def initialize(back:, submit:, form:, nav: nil, heading: nil, aside: nil, sidebar: nil)
+      #: (?back: ([String, (String | Phlex::HTML | Proc)])?, submit: String, form: String, ?nav: (Proc | Phlex::HTML)?, ?heading: String?, ?aside: Phlex::HTML?, ?sidebar: Phlex::HTML?) -> void
+      def initialize(back: nil, submit:, form:, nav: nil, heading: nil, aside: nil, sidebar: nil)
         @back = back
         @nav = nav
         @heading = heading
@@ -69,13 +72,17 @@ module ProTacts
       # row names the other thing you can do to the record from it.
       def record(&)
         div(class: "record") do
-          div(class: "record-nav") do
-            href, label = @back
-            a(href:, class: "type-label") do
-              plain "‹ "
-              render label
+          href, label = @back
+          if href || @nav
+            div(class: "record-nav") do
+              if href
+                a(href:, class: "type-label") do
+                  plain "‹ "
+                  render label
+                end
+              end
+              render @nav if @nav
             end
-            render @nav if @nav
           end
           paired(&)
         end
@@ -106,9 +113,11 @@ module ProTacts
           # A dialog footer's shape (admin.css), outside the form and
           # reaching it by id. The submit is the form's; Cancel is
           # navigation — a link in Gloss's `.btn` contract, which is
-          # what an anchor that acts like a button opts into.
+          # what an anchor that acts like a button opts into — and
+          # goes where the back link goes, so it is absent when that
+          # is.
           footer do
-            a(href: @back.fetch(0), class: "btn") { "Cancel" }
+            a(href: @back&.fetch(0), class: "btn") { "Cancel" } if @back
             button(type: "submit", form: @form, data: {variant: "primary"}) { @submit }
           end
         end
