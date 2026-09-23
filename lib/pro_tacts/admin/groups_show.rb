@@ -1,17 +1,21 @@
 require "pro_tacts/admin/phlex"
 
+require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
+require "pro_tacts/admin/list_item"
 
 module ProTacts
   module Admin
-    # GET /groups/:id — a group's card. Groups are records, not labels
-    # (docs/DESIGN.md, "Relationships are navigable"), so this is a
-    # contact's card in every way that carries over: what the group
-    # lends on the same type-and-value grid, and an attribute with no
-    # data gets no row. Its members are tags that open their records,
-    # the other half of the tags on a member's own card.
+    # GET /groups/:id — a group's card, and under it the contacts it
+    # holds. Groups are records, not labels (docs/DESIGN.md,
+    # "Relationships are navigable"), so the card is a contact's card
+    # in every way that carries over: what the group lends on the same
+    # type-and-value grid, and an attribute with no data gets no row.
+    # The members are what a group is, so they are a list rather than a
+    # row: /contacts' rows, narrowed to this group and in its order
+    # (Format.sort_key).
     class GroupsShow < Phlex::HTML
       # @rbs @group: Store::Group
       # @rbs @reading: Contact
@@ -21,7 +25,7 @@ module ProTacts
       def initialize(group:, members:)
         @group = group
         @reading = group.reading
-        @members = members
+        @members = members.sort_by { [Format.sort_key(it), it.id] }
       end
 
       def view_template
@@ -36,22 +40,25 @@ module ProTacts
                 div(class: "detail-header") do
                   h1(class: "type-h2") { render GroupLabel.new(group: @group) }
                 end
-                # Never empty, unlike ContactsShow's: the members row
-                # always renders (#members_row).
-                dl(class: "detail-grid") { rows }
+                # No grid for a group that lends nothing, so its name
+                # sits alone in the card (.detail-header in admin.css).
+                dl(class: "detail-grid") { rows } if lends?
               end
             end
           end
+          members_list
         end
       end
 
       private
 
-      # Members first, the order a contact's card puts its groups in:
-      # the relationship frames the rows under it.
+      #: () -> bool
+      def lends?
+        @reading.addresses.any? || @reading.notes.any?
+      end
+
       #: () -> void
       def rows
-        members_row
         @reading.addresses.each do |address|
           row(Format.type_label(nil, address.types, "address")) do
             Format.address_lines(address).each { |line| div { line } }
@@ -62,22 +69,30 @@ module ProTacts
         end
       end
 
-      # Rendered even with no members, because its link is the way to
-      # add one. Membership is edited here rather than in the editor,
-      # which edits only the lines the group holds. The link sits at the
-      # row's right edge where a lent row's badge sits (admin.css), and
-      # has no href until the members screen exists.
+      # Rendered even with no members, because its head holds the way
+      # to add one. Membership is edited here rather than in the
+      # editor, which edits only the lines the group holds. The link
+      # sits where a section's action does (admin.css), and has no
+      # href until the members screen exists.
       #: () -> void
-      def members_row
-        row("members") do
-          if @members.any?
-            div(class: "tag-set") do
+      def members_list
+        section do
+          div(class: "section-head") do
+            h2(class: "type-label") { "members (#{@members.length})" }
+            a(class: "type-label") { "edit members" }
+          end
+          if @members.empty?
+            p(class: "type-body-sm") { "No members yet." }
+          else
+            ul(class: "card") do
               @members.each do |member|
-                a(href: "/contacts/#{member.id}", class: "tag") { member.name || member.id }
+                render ListItem.new(
+                  href: "/contacts/#{member.id}",
+                  avatar: Avatar.new(contact: member, size: "lg"),
+                ) { Format.name_label(member) }
               end
             end
           end
-          a(class: "type-label") { "edit members" }
         end
       end
 

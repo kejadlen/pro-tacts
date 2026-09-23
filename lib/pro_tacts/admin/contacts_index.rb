@@ -10,18 +10,16 @@ module ProTacts
   module Admin
     # GET /contacts — every contact in one list, sorted by last name:
     # the one screen that browses the whole contact set (docs/DESIGN.md,
-    # "The core idea"). The sort key is N's family name (RFC 2426
-    # section 3.1.2), falling back the way Format.initials does — FN
-    # for a card with no N, the id for a card with no name at all.
-    # Rows carry the label the dashboard's rows do (Format.name_label)
-    # and the contact's groups as chips under it.
+    # "The core idea"), in Format.sort_key's order. Rows carry the
+    # label the dashboard's rows do (Format.name_label) and the
+    # contact's groups as chips under it.
     class ContactsIndex < Phlex::HTML
       # @rbs @rows: Array[Contact]
       # @rbs @groups_of: Hash[String, Array[Store::Group]]
 
       #: (contacts: Array[Contact], groups: Array[Store::Group]) -> void
       def initialize(contacts:, groups:)
-        @rows = contacts.sort_by { [sort_key(it), it.id] }
+        @rows = contacts.sort_by { [Format.sort_key(it), it.id] }
         # Whole groups inverted into memberships, the way the dashboard
         # inverts them for search: which groups a contact is in is the
         # store's fact, read from that side once instead of per row.
@@ -51,14 +49,6 @@ module ProTacts
       end
 
       private
-
-      # The order a contact lists under, case-insensitive so the card's
-      # spelling of a family name does not move it.
-      #: (Contact contact) -> String
-      def sort_key(contact)
-        family, = contact.name_components || []
-        (family || contact.name || contact.id).to_s.downcase
-      end
 
       #: (Contact contact) -> void
       def render_row(contact)

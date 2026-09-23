@@ -647,6 +647,15 @@ section > h2 {
   inset-inline-end: 0;
   translate: 0 -50%;
 }
+/* An action that is a type-label link rather than a button — a group
+   page's "edit members" — is the heading's own size, so it needs none
+   of the pinning above: in flow at the right edge, on the heading's
+   baseline. */
+.section-head:has(> a.type-label) {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
 
 /* base/typography.css's `li + li { margin-top: var(--gl-space-3xs); }`
    is a prose-list rule (Markdown bullet lists) that also matches
@@ -761,12 +770,10 @@ span.avatar[data-size="lg"] {
 
    Baseline-aligned: a grid item blockifies, so the tag's inline-flex
    becomes a flex container, which takes its baseline from its first
-   item — the tag's text — and so shares the value's. A group card's
-   "edit members" takes the same place, and is plain text with a
-   baseline of its own; a contact card's "edit groups" button takes
-   it too, a flex container like the tag. */
+   item — the tag's text — and so shares the value's. A contact
+   card's "edit groups" button takes the same place, a flex container
+   like the tag. */
 .detail-grid dd:has(> .tag),
-.detail-grid dd:has(> a.type-label),
 .detail-grid dd:has(> button) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -774,13 +781,11 @@ span.avatar[data-size="lg"] {
   column-gap: var(--gl-space-s);
 }
 .detail-grid dd > .tag,
-.detail-grid dd > a.type-label,
 .detail-grid dd > button {
   grid-column: 2;
   grid-row: 1;
 }
 .detail-grid dd:has(> .tag) > div,
-.detail-grid dd:has(> a.type-label) > div,
 .detail-grid dd:has(> button) > div {
   grid-column: 1;
 }

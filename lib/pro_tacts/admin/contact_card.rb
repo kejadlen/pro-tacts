@@ -106,14 +106,12 @@ module ProTacts
       # belongs to frames the values under it, and several of those
       # values are the group's rather than the contact's. Every tag opens
       # the group it names (docs/DESIGN.md, "Relationships are
-      # navigable"), the other half of the member tags on a group's own
-      # card (Admin::GroupsShow). Rendered for a contact in no group
+      # navigable"), the other half of the member list on a group's own
+      # page (Admin::GroupsShow). Rendered for a contact in no group
       # too when the dialog is on the page, even before any group
-      # exists, because the row holds the way to join or start one —
-      # the group card's members row, for the same reason, with its
-      # "edit members" in the same place. Without the dialog the row
-      # stands only when there is a member to name: an empty row with
-      # nothing to press is nothing at all.
+      # exists, because the row holds the way to join or start one.
+      # Without the dialog the row stands only when there is a member
+      # to name: an empty row with nothing to press is nothing at all.
       #: () -> void
       def groups_row
         dt(class: "type-label") { "groups" }
