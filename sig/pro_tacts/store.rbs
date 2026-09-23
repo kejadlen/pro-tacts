@@ -14,6 +14,16 @@ module ProTacts
       def self.new: (sequence: Integer, card_id: String, action: String, etag: String?, diff: CardDiff, created_at: String) -> instance
     end
 
+    class GroupChange
+      attr_reader sequence: Integer
+      attr_reader group_id: String
+      attr_reader action: String
+      attr_reader detail: Hash[String, untyped]
+      attr_reader created_at: String
+
+      def self.new: (sequence: Integer, group_id: String, action: String, detail: Hash[String, untyped], created_at: String) -> instance
+    end
+
     class RecentContact
       attr_reader contact: Contact
       attr_reader updated_at: String

@@ -76,7 +76,8 @@ lib/pro_tacts/
 │                   # contacts the book has, and writing them
 ├── admin/          # The Phlex views those screens render, plus
 │                   # card_form.rb, which reads a form back into a card
-├── store.rb        # Sequel over SQLite: cards, change log, derived index
+├── store.rb        # Sequel over SQLite: cards, the change log, the
+│                   # group change log, and the derived index
 ├── contact.rb      # the one model of a contact: id, vCard, etag,
 │                   # and the structured accessors over the card
 ├── birthday.rb     # A partial date, the one fact no card can hold
@@ -206,19 +207,24 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   configuration as it loads, since the exchange log is given its path at
   class-definition time. Set it afterwards and the failed exchanges land
   in `log/` instead of a tmpdir.
-- Only five things in the database cannot be rebuilt: the cards, the
-  change log, the birthdays, the groups, and the books — a partial
-  date has no vCard 3.0 spelling, so the birthday lives beside its
-  card rather than in it (docs/plans/2026-08-31-partial-birthdays.md);
+- Only six things in the database cannot be rebuilt: the cards, the
+  change log, the birthdays, the groups, the books, and the group
+  change log — a partial date has no vCard 3.0 spelling, so the
+  birthday lives beside its card rather than in it
+  (docs/plans/2026-08-31-partial-birthdays.md);
   a group's membership and the lines it lends are facts no stored card
-  carries (docs/plans/2026-08-24-vcard-storage-and-groups.md); and
+  carries (docs/plans/2026-08-24-vcard-storage-and-groups.md);
   only the `books` row says whose book a name is for
-  (docs/plans/2026-09-19-books-in-the-dump.md). Everything else
+  (docs/plans/2026-09-19-books-in-the-dump.md); and the group change
+  log's detail is a fact about a write, gone the moment it lands
+  (docs/plans/2026-09-23-group-change-log.md). Everything else
   is a projection of the cards that `rake index:rebuild` will make
   again, so no repair is ever needed for it. A write that touches a
   card must land its change-log entry in the same transaction,
   because a client's sync token silently skips whatever the log
-  missed.
+  missed — and a write that touches a group must land its
+  group-change-log entry there too, because a history with a hole in
+  it is silently wrong the same way.
 - A read whose filter is meant to identify one row uses `sole`, not
   `first` — `first` answers with one of several rather than saying the
   filter was too loose. `sole` raises either way it is wrong:

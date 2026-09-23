@@ -1,4 +1,5 @@
 require "date"
+require "json"
 require "pathname"
 require "sequel"
 require "sentry-ruby"
@@ -17,14 +18,16 @@ module ProTacts
   # The transactional store: one SQLite database holding each contact's
   # card exactly as it was submitted.
   #
-  # Five kinds of state live here and they are not equally precious.
-  # Only the cards, the change log, the birthdays, the groups, and
-  # the books cannot be rebuilt, and each is argued where it was
-  # decided: the first two in docs/plans/2026-08-25-sqlite-schema.md,
+  # Six kinds of state live here and they are not equally precious.
+  # Only the cards, the change log, the birthdays, the groups, the
+  # books, and the group change log cannot be rebuilt, and each is
+  # argued where it was decided: the first two in
+  # docs/plans/2026-08-25-sqlite-schema.md,
   # "What the tables are for", the birthdays in
   # docs/plans/2026-08-31-partial-birthdays.md, the groups in
   # docs/plans/2026-08-24-vcard-storage-and-groups.md, the books in
-  # docs/plans/2026-09-19-books-in-the-dump.md. Everything else
+  # docs/plans/2026-09-19-books-in-the-dump.md, the group change log
+  # in docs/plans/2026-09-23-group-change-log.md. Everything else
   # is an index derived from the cards, and #rebuild_index will make
   # it again from nothing.
   #
@@ -55,6 +58,27 @@ module ProTacts
       EDIT = "edit" #: String
       DELETE = "delete" #: String
       GROUP = "group" #: String
+    end
+
+    # One entry in the group change log: what happened to a group and
+    # at which moment, with a detail shaped by the action — the name a
+    # create or rename left, the lines a `lines` write moved in
+    # CardDiff's spelling, the card a join or leave moved, and a
+    # delete's tombstone carrying the whole group. The signature is in
+    # sig/pro_tacts/store.rbs with Store's own.
+    # @rbs skip
+    GroupChange = Data.define(:sequence, :group_id, :action, :detail, :created_at)
+
+    # What an entry says happened to a group. The six the schema
+    # admits and no seventh — the CHECK constraint's own list
+    # (db/migrations/011_group_change_log.rb), Action's own rule.
+    module GroupAction
+      CREATE = "create" #: String
+      RENAME = "rename" #: String
+      LINES = "lines" #: String
+      JOIN = "join" #: String
+      LEAVE = "leave" #: String
+      DELETE = "delete" #: String
     end
 
     # A contact paired with when its card last changed. Contact itself
@@ -643,6 +667,8 @@ module ProTacts
     # the author's label and optional; a group without one is displayed
     # by its id (see #inherited_rows), and the empty string is refused
     # by the schema rather than kept as a second spelling of nameless.
+    # Logged in the group's own log as every group write is, the
+    # create's detail carrying the name it was created under.
     #
     # The id is minted here rather than taken from the caller, for the
     # shape db/migrations/005_group_identity.rb pins. The insert is
@@ -655,7 +681,10 @@ module ProTacts
       GROUP_ID_ATTEMPTS.times do
         id = ChangeId.mint(4)
         begin
-          groups.insert(id:, name:)
+          @database.transaction do
+            groups.insert(id:, name:)
+            record_group_change(id, action: GroupAction::CREATE, detail: {"name" => name})
+          end
           return id
         rescue Sequel::UniqueConstraintViolation
           # The id collided, or the name did
@@ -710,6 +739,10 @@ module ProTacts
     # card, so no member's bytes move, but a `sync:` name is what puts a
     # card in a book: a rename into, out of, or between them moves every
     # member between books and logs each one (#fan_out's `moved`).
+    # Logged in the group's own log only where the name moved, the log
+    # recording what happened rather than that a save was asked
+    # (docs/plans/2026-09-23-group-change-log.md, "One entry per
+    # primitive").
     #: (String id, name: String?) -> void
     def rename_group(id, name:)
       name = nil if name.to_s.strip.empty?
@@ -721,22 +754,39 @@ module ProTacts
         else
           groups.where(id:).update(name:)
         end
+        record_group_change(id, action: GroupAction::RENAME, detail: {"was" => was, "name" => name}) if was != name
       end
     end
 
     # Replaces what a group lends, wholesale, at positions from zero.
     # Every member serves the new lines from here on, so every member
-    # whose served card moved is logged (#fan_out). A line outside what
-    # a group may hold is refused by the CHECK, which is a caller's bug
-    # — the editor only builds ADR and NOTE lines — and raises.
+    # whose served card moved is logged (#fan_out), and the group's own
+    # log carries the lines the write moved in CardDiff's spelling. A
+    # pure reorder is an entry with an empty diff — the multiset
+    # difference cannot see it, but the lending order moved every
+    # member's composed card, so it is a real write. A rewrite that
+    # stores the same lines in the same order writes no entry, this
+    # log's own bargain against the cards' (the plan's "One entry per
+    # primitive"). A line outside what a group may hold is refused by
+    # the CHECK, which is a caller's bug — the editor only builds ADR
+    # and NOTE lines — and raises.
     #: (String id, Array[String] lines) -> void
     def set_group_lines(id, lines)
       @database.transaction do
+        was = group_properties.where(group_id: id).order(:position).select_map(:line)
+        diff = CardDiff.between_lines(was, lines)
         fan_out(member_ids([id])) do
           group_properties.where(group_id: id).delete
           lines.each.with_index do |line, position|
             group_properties.insert(group_id: id, position:, line:)
           end
+        end
+        if was != lines
+          record_group_change(
+            id,
+            action: GroupAction::LINES,
+            detail: {"added" => diff.added, "removed" => diff.removed},
+          )
         end
       end
     end
@@ -769,15 +819,18 @@ module ProTacts
     end
 
     # A card joins a group, and starts serving what the group lends.
-    # Joining twice is joining once. Joining a `sync:` group puts the
-    # card in a book, which is logged whether or not its bytes moved.
+    # Joining twice is joining once, and only the join that moved
+    # membership is logged in the group's own log. Joining a `sync:`
+    # group puts the card in a book, which the cards' own log carries
+    # whether or not its bytes moved.
     #: (String group_id, String card_id) -> void
     def add_member(group_id, card_id)
       @database.transaction do
-        joining = sync_group?(group_id) && !member?(group_id, card_id)
-        fan_out([card_id], moved: joining ? [card_id] : []) {
+        joining = !member?(group_id, card_id)
+        fan_out([card_id], moved: joining && sync_group?(group_id) ? [card_id] : []) {
           group_members.insert_conflict.insert(group_id:, card_id:)
         }
+        record_group_change(group_id, action: GroupAction::JOIN, detail: {"card" => card_id}) if joining
       end
     end
 
@@ -785,14 +838,17 @@ module ProTacts
     # the one lever the model has for "everyone but this member"
     # (docs/plans/2026-08-24-vcard-storage-and-groups.md, "Edits
     # propagate to the group"). Leaving a `sync:` group takes the card
-    # out of a book, logged the way joining one is.
+    # out of a book, logged the way joining one is, and only the leave
+    # that moved membership reaches the group's own log — leaving a
+    # group never joined is nothing, not news.
     #: (String group_id, String card_id) -> void
     def remove_member(group_id, card_id)
       @database.transaction do
-        leaving = sync_group?(group_id) && member?(group_id, card_id)
-        fan_out([card_id], moved: leaving ? [card_id] : []) {
+        leaving = member?(group_id, card_id)
+        fan_out([card_id], moved: leaving && sync_group?(group_id) ? [card_id] : []) {
           group_members.where(group_id:, card_id:).delete
         }
+        record_group_change(group_id, action: GroupAction::LEAVE, detail: {"card" => card_id}) if leaving
       end
     end
 
@@ -801,10 +857,13 @@ module ProTacts
     # with it (db/migrations/004_groups.rb). Members are logged as
     # leavers are (#remove_member's reason) — a `sync:` group's
     # whatever their bytes did, a book's deletion taking its cards out
-    # of it. Everyone's book is refused, #name_book's reason: every
-    # card a client created joined it, so deleting it would tell every
-    # client to drop every card it ever synced. A group nobody has is
-    # the ordinary miss, #delete's shape.
+    # of it. The group's own log closes with a tombstone carrying the
+    # whole group, the card tombstone's bargain: the entry is the only
+    # record left of what was here, the rows being gone. Everyone's
+    # book is refused, #name_book's reason: every card a client created
+    # joined it, so deleting it would tell every client to drop every
+    # card it ever synced. A group nobody has is the ordinary miss,
+    # #delete's shape.
     #: (String id) -> bool
     def delete_group(id)
       # A plain `first` read, #stored_card's reason: id is the primary
@@ -822,6 +881,12 @@ module ProTacts
 
       @database.transaction do
         members = member_ids([id])
+        lines = group_properties.where(group_id: id).order(:position).select_map(:line)
+        record_group_change(
+          id,
+          action: GroupAction::DELETE,
+          detail: {"name" => row.fetch(:name), "lines" => lines, "members" => members},
+        )
         fan_out(members, moved: sync_name?(name) ? members : []) {
           groups.where(id:).delete
         }
@@ -863,6 +928,17 @@ module ProTacts
     #: (String id) -> Array[Change]
     def changes_of(id)
       change_log.where(card_id: id).order(Sequel.desc(:sequence)).map { change_from(it) }
+    end
+
+    # One group's entries, newest first — the history the group's page
+    # renders, #changes_of's own order for its own reason: a record
+    # someone reads, where the last thing that happened is what they
+    # came for. A group id and not a foreign key (see the migration),
+    # so an id whose group is gone still answers with the history that
+    # ends in its tombstone.
+    #: (String id) -> Array[GroupChange]
+    def group_changes_of(id)
+      group_changes.where(group_id: id).order(Sequel.desc(:sequence)).map { group_change_from(it) }
     end
 
     # Drops the index and derives it again from the stored cards alone.
@@ -927,6 +1003,11 @@ module ProTacts
       @database[:group_properties]
     end
 
+    #: () -> Sequel::Dataset
+    def group_changes
+      @database[:group_changes]
+    end
+
     # A card written where one may already stand. The stamp is set
     # again on the way past because SQLite has no ON UPDATE and the
     # column default only fires on insert (NOW).
@@ -944,6 +1025,14 @@ module ProTacts
     #: (String card_id, action: String, etag: String?, diff: CardDiff) -> void
     def record(card_id, action:, etag:, diff:)
       change_log.insert(card_id:, action:, etag:, diff: diff.to_json)
+    end
+
+    # The group log's half of #record. The detail arrives already
+    # built, action-shaped, for #record's own reason: only the writer
+    # knows what its write moved.
+    #: (String group_id, action: String, detail: Hash[String, untyped]) -> void
+    def record_group_change(group_id, action:, detail:)
+      group_changes.insert(group_id:, action:, detail: detail.to_json)
     end
 
     # The block's group writes, bracketed by a read of every member
@@ -1638,6 +1727,18 @@ module ProTacts
         action: row.fetch(:action).to_s,
         etag: row.fetch(:etag),
         diff: CardDiff.from_json(row.fetch(:diff).to_s),
+        created_at: row.fetch(:created_at).to_s,
+      )
+    end
+
+    #: (Hash[Symbol, untyped] row) -> GroupChange
+    def group_change_from(row)
+      detail = JSON.parse(row.fetch(:detail).to_s) #: Hash[String, untyped]
+      GroupChange.new(
+        sequence: row.fetch(:sequence).to_i,
+        group_id: row.fetch(:group_id).to_s,
+        action: row.fetch(:action).to_s,
+        detail:,
         created_at: row.fetch(:created_at).to_s,
       )
     end

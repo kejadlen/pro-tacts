@@ -43,6 +43,17 @@ module ProTacts
       new(added: without(new_lines, old_lines), removed: without(old_lines, new_lines))
     end
 
+    # The same write over an array of logical lines rather than a
+    # card — a group's own (Store#set_group_lines), which are stored
+    # as the unit this diffs, with no terminator to shed and no fold
+    # to unfold. The cards' path is #between's; this one exists so
+    # the group log's detail is the same multiset difference by the
+    # same code rather than a second spelling of it.
+    #: (Array[String] before, Array[String] after) -> CardDiff
+    def self.between_lines(before, after)
+      new(added: without(after, before), removed: without(before, after))
+    end
+
     # The stored spelling: a JSON object, so a line goes in and comes
     # back byte for byte whatever it holds. A diff is displayed beside
     # the entry it belongs to and never queried, so the column is one

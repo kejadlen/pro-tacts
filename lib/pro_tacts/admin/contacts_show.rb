@@ -17,13 +17,6 @@ module ProTacts
     # keeps its mono type label for now. Revisit once Gloss or this
     # project settles on how icons ship.
     class ContactsShow < Phlex::HTML
-      # A value — a property's or a parameter's — at or under this many
-      # octets renders whole. Anything longer is a wall of folded or
-      # unbroken octets (an inline PHOTO payload, a memoji's binary
-      # plist parameter, a novel-length NOTE) and renders as its count.
-      ELIDE_ABOVE = 120 #: Integer
-      private_constant :ELIDE_ABOVE
-
       # The groups come from the store beside the contact rather than
       # off it: a contact's card carries what its groups lend it, never
       # which groups those are (Store#groups_of). Required, and not
@@ -145,23 +138,9 @@ module ProTacts
           # Named rather than `it`: Phlex yields the component to an
           # element's block, so an inner `it` is this view, not the
           # line.
-          diff.removed.each { |line| div(class: "diff-removed") { "-#{elide_text(line)}" } }
-          diff.added.each { |line| div(class: "diff-added") { "+#{elide_text(line)}" } }
+          diff.removed.each { |line| div(class: "diff-removed") { "-#{Format.elide_text(line)}" } }
+          diff.added.each { |line| div(class: "diff-added") { "+#{Format.elide_text(line)}" } }
         end
-      end
-
-      # A diff's line elided the way the raw card's are. It arrives as
-      # text rather than as a card's line, so it is read back into one
-      # to reach #elide's rebuild — worth the parse: the first entry of
-      # a card with a picture is the whole card, and a base64 payload
-      # is exactly the wall ELIDE_ABOVE exists for. A line the parser
-      # cannot read still elides, by the byte surgery #elide falls back
-      # to; a line the terminator was stripped from keeps none, so the
-      # rebuilt one sheds the CRLF #elide gives it.
-      #: (String text) -> String
-      def elide_text(text)
-        line = VCard::Parser.lines(text).first
-        line ? elide(line).chomp : text
       end
 
       # The stored card for display: byte for byte, except a value long
@@ -169,45 +148,7 @@ module ProTacts
       # it stands in for is not readable text.
       #: () -> String
       def raw_card
-        @contact.vcard.lines.map { elide(it) }.join
-      end
-
-      # One line of the display card: verbatim when nothing in it runs
-      # past ELIDE_ABOVE; rebuilt from its parse when something does,
-      # each long value standing in as its count. The rebuild is the
-      # parser's spelling rather than the bytes' — an elided line is a
-      # rendering — and the line keeps its own terminator so the
-      # card's line-break convention survives.
-      #: (VCard::Parser::Line line) -> String
-      def elide(line)
-        property = line.property
-        return elide_unparsed(line.verbatim) if property.nil?
-
-        long = property.parameters.any? { |_, value| value.bytesize > ELIDE_ABOVE } ||
-          property.value.bytesize > ELIDE_ABOVE
-        return line.verbatim unless long
-
-        header = property.group ? "#{property.group}.#{property.name}" : property.name
-        params = property.parameters.map { |name, value| "#{name}=#{count_octets(value)}" }
-        terminator = line.verbatim[/\r?\n\z/] || "\r\n"
-        "#{[header, *params].join(';')}:#{count_octets(property.value)}#{terminator}"
-      end
-
-      #: (String value) -> String
-      def count_octets(value)
-        value.bytesize > ELIDE_ABOVE ? "[#{value.bytesize} octets elided]" : value
-      end
-
-      # A line that would not parse has no structure to rebuild from,
-      # so its value is elided by surgery on the bytes: everything up
-      # to the first colon stands, and the rest is the count.
-      #: (String verbatim) -> String
-      def elide_unparsed(verbatim)
-        prefix, value = verbatim.split(":", 2)
-        return verbatim if value.nil?
-
-        terminator = value.slice!(/\r?\n\z/) || ""
-        "#{prefix}:#{count_octets(value)}#{terminator}"
+        @contact.vcard.lines.map { Format.elide_line(it) }.join
       end
     end
   end

@@ -30,7 +30,7 @@ module ProTacts
     end
 
     class GroupsShow
-      def self.call: (group: Store::Group, members: Array[Contact]) -> String
+      def self.call: (group: Store::Group, contacts: Array[Contact], changes: Array[Store::GroupChange]) -> String
     end
 
     class GroupsEdit

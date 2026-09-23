@@ -139,14 +139,16 @@ class AdminGroupsPagesTest < Minitest::Test
   end
 
   # The members list the way /contacts does (Format.sort_key), not in
-  # the store's id order. Seeded so the two disagree.
+  # the store's id order. Seeded so the two disagree. The scan takes
+  # the list's own rows — an li's link, not the change log's, which
+  # names the same cards for other reasons.
   def test_the_members_list_in_name_order
     with_contacts(BOOLES.merge("zz" => "Alice Aardvark")) do |store|
       id = household(store, members: %w[mary zz george])
 
       get "/groups/#{id}"
 
-      assert_equal %w[zz george mary], last_response.body.scan(%r{<a href="/contacts/([^"]+)">}).flatten
+      assert_equal %w[zz george mary], last_response.body.scan(%r{<li><a href="/contacts/([^"]+)">}).flatten
     end
   end
 
@@ -162,15 +164,16 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
-  # A group that lends nothing renders no grid, so its name is not
-  # held above an empty one (.detail-header in admin.css).
+  # A group that lends nothing renders no record grid, so its name is
+  # not held above an empty one (.detail-header in admin.css) — the
+  # change log's own grid below does not count, being another card's.
   def test_a_card_that_lends_nothing_has_no_grid
     with_contacts(BOOLES) do |store|
       id = store.create_group(name: "Booles")
 
       get "/groups/#{id}"
 
-      refute_includes last_response.body, "detail-grid"
+      refute_includes last_response.body, %(<dl class="detail-grid">)
     end
   end
 
@@ -418,6 +421,55 @@ class AdminGroupsPagesTest < Minitest::Test
 
       post "/groups/zzzz/members", members: []
       assert_equal 404, last_response.status
+    end
+  end
+
+  ## The change log
+
+  # The contact page's third card in this page's own shape: the
+  # writes that made the group, under the members it holds — the
+  # lines entry as the contact page's diff rows, the joins named and
+  # linked the way the members list names them.
+  def test_the_card_shows_the_groups_change_log
+    with_contacts(BOOLES) do |store|
+      id = household(store)
+
+      get "/groups/#{id}"
+
+      body = last_response.body
+      assert_equal 200, last_response.status
+      assert_includes body, "change log"
+      assert_includes body, "+#{ADDRESS}"
+      assert_includes body, "+#{NOTE}"
+      assert_match %r{<a href="/contacts/mary">Mary Boole</a>}, body
+      assert_match %r{<a href="/contacts/george">George Boole</a>}, body
+    end
+  end
+
+  def test_the_change_log_marks_a_rename_and_a_leave
+    with_contacts(BOOLES) do |store|
+      id = household(store)
+      store.rename_group(id, name: "The Booles")
+      store.remove_member(id, "mary")
+
+      get "/groups/#{id}"
+
+      body = last_response.body
+      assert_includes body, "Booles → The Booles"
+      assert_match %r{<a href="/contacts/mary">Mary Boole</a>}, body
+    end
+  end
+
+  # The tombstone's text: a join's card since deleted has nothing
+  # left to link to, so its id is the row.
+  def test_the_change_log_names_a_gone_card_by_its_id
+    with_contacts(BOOLES) do |store|
+      id = household(store, members: ["ada"])
+      store.delete("ada")
+
+      get "/groups/#{id}"
+
+      assert_includes last_response.body, "<div>ada</div>"
     end
   end
 

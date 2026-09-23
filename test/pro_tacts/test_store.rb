@@ -1492,6 +1492,114 @@ class StoreTest < Minitest::Test
     end
   end
 
+  ## The group change log
+
+  # Every primitive, in the order a hand would write them, ending in
+  # a delete whose tombstone carries the whole group — the card
+  # tombstone's bargain, the entry being the only record left of what
+  # was here.
+  def test_every_group_write_is_logged
+    with_store({"aiden" => AIDEN}) do |store|
+      id = store.create_group(name: "Booles")
+      store.set_group_lines(id, [HOUSEHOLD_ADDRESS])
+      store.add_member(id, "aiden")
+      store.rename_group(id, name: "The Booles")
+      store.remove_member(id, "aiden")
+      store.delete_group(id)
+
+      entries = store.group_changes_of(id)
+      assert_equal %w[delete leave rename join lines create], entries.map(&:action)
+      assert_equal({"name" => "Booles"}, entries.fetch(5).detail)
+      assert_equal [HOUSEHOLD_ADDRESS], entries.fetch(4).detail.fetch("added")
+      assert_equal [], entries.fetch(4).detail.fetch("removed")
+      assert_equal "aiden", entries.fetch(3).detail.fetch("card")
+      assert_equal({"was" => "Booles", "name" => "The Booles"}, entries.fetch(2).detail)
+      assert_equal "aiden", entries.fetch(1).detail.fetch("card")
+      assert_equal(
+        {"name" => "The Booles", "lines" => [HOUSEHOLD_ADDRESS], "members" => []},
+        entries.fetch(0).detail,
+      )
+    end
+  end
+
+  def test_a_group_change_is_stamped_when_it_is_logged
+    with_store do |store|
+      store.create_group
+      assert_match TIMESTAMP, store.group_changes_of(store.all_groups.fetch(0).id).fetch(0).created_at
+    end
+  end
+
+  # The log records what happened, not that a save was asked
+  # (docs/plans/2026-09-23-group-change-log.md, "One entry per
+  # primitive") — the cards' log's own opposite bargain, nothing
+  # syncing from this one to miss a change.
+  def test_writes_that_move_nothing_of_the_group_log_nothing
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      id = store.create_group(name: "Booles")
+      store.set_group_lines(id, [HOUSEHOLD_ADDRESS])
+      store.add_member(id, "aiden")
+      logged = store.group_changes_of(id).length
+
+      store.rename_group(id, name: "Booles")
+      store.set_group_lines(id, [HOUSEHOLD_ADDRESS])
+      store.add_member(id, "aiden")
+      store.remove_member(id, "znorth")
+      store.edit_group(id, name: "Booles", lines: [HOUSEHOLD_ADDRESS], members: ["aiden"])
+
+      assert_equal logged, store.group_changes_of(id).length
+    end
+  end
+
+  # A pure reorder moved every member's composed card — the fan-out
+  # logs them — so it is a real entry, though the multiset difference
+  # sees no line move at all.
+  def test_a_reorder_of_a_groups_lines_is_an_entry_with_an_empty_diff
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+
+      store.set_group_lines(id, [HOUSEHOLD_NOTE, HOUSEHOLD_ADDRESS])
+
+      entry = store.group_changes_of(id).first
+      assert_equal "lines", entry.action
+      assert_equal [], entry.detail.fetch("added")
+      assert_equal [], entry.detail.fetch("removed")
+    end
+  end
+
+  # The composites log as the primitives they run, in the order the
+  # transaction made them — an editor save read in the history as
+  # exactly the moves it made.
+  def test_an_edit_groups_save_logs_each_move_in_the_order_it_made_them
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      id = FixtureData.seed_group(store, name: "Booles", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+
+      store.edit_group(id, name: "The Booles", lines: [HOUSEHOLD_NOTE], members: ["znorth"])
+
+      assert_equal %w[join lines rename leave create], store.group_changes_of(id).map(&:action)
+    end
+  end
+
+  def test_a_rename_to_nameless_is_logged_with_a_null_name
+    with_store do |store|
+      id = store.create_group(name: "Booles")
+
+      store.rename_group(id, name: " ")
+
+      assert_equal({"was" => "Booles", "name" => nil}, store.group_changes_of(id).first.detail)
+    end
+  end
+
+  # A group id and not a foreign key, the card log's reason: the
+  # history outlives the group and ends in its tombstone.
+  def test_a_deleted_groups_changes_still_read
+    with_store do |store|
+      id = store.create_group(name: "Booles")
+      store.delete_group(id)
+
+      assert_equal %w[delete create], store.group_changes_of(id).map(&:action)
+    end
+  end
+
   ## Books
 
   YUKI = AIDEN.sub("FN:Aiden", "FN:Yuki").sub("UID:aiden", "UID:yuki") #: String

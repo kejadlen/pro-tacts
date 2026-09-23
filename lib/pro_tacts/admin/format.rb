@@ -1,6 +1,7 @@
 require "time"
 
 require "pro_tacts/birthday"
+require "pro_tacts/vcard/parser"
 
 module ProTacts
   module Admin
@@ -88,6 +89,65 @@ module ProTacts
 
         types.empty? ? kind : types.join(", ")
       end
+
+      # A value — a property's or a parameter's — at or under this many
+      # octets renders whole. Anything longer is a wall of folded or
+      # unbroken octets (an inline PHOTO payload, a memoji's binary
+      # plist parameter, a novel-length NOTE) and renders as its count.
+      # The count says exactly what is there; what it stands in for is
+      # not readable text.
+      ELIDE_ABOVE = 120 #: Integer
+
+      # A diff's line or a card's, elided: text in, for the lines a
+      # change log holds, a parsed line in for the ones a card does
+      # (#elide_line). Two views render one of these — a contact's raw
+      # card and a group's lent lines — which is why the machinery
+      # lives here rather than in either view.
+      #: (String text) -> String
+      def self.elide_text(text)
+        line = VCard::Parser.lines(text).first
+        line ? elide_line(line).chomp : text
+      end
+
+      # One line of the display card: verbatim when nothing in it runs
+      # past ELIDE_ABOVE; rebuilt from its parse when something does,
+      # each long value standing in as its count. The rebuild is the
+      # parser's spelling rather than the bytes' — an elided line is a
+      # rendering — and the line keeps its own terminator so the
+      # card's line-break convention survives.
+      #: (VCard::Parser::Line line) -> String
+      def self.elide_line(line)
+        property = line.property
+        return elide_unparsed(line.verbatim) if property.nil?
+
+        long = property.parameters.any? { |_, value| value.bytesize > ELIDE_ABOVE } ||
+          property.value.bytesize > ELIDE_ABOVE
+        return line.verbatim unless long
+
+        header = property.group ? "#{property.group}.#{property.name}" : property.name
+        params = property.parameters.map { |name, value| "#{name}=#{count_octets(value)}" }
+        terminator = line.verbatim[/\r?\n\z/] || "\r\n"
+        "#{[header, *params].join(';')}:#{count_octets(property.value)}#{terminator}"
+      end
+
+      # A line that would not parse has no structure to rebuild from,
+      # so its value is elided by surgery on the bytes: everything up
+      # to the first colon stands, and the rest is the count.
+      #: (String verbatim) -> String
+      def self.elide_unparsed(verbatim)
+        prefix, value = verbatim.split(":", 2)
+        return verbatim if value.nil?
+
+        terminator = value.slice!(/\r?\n\z/) || ""
+        "#{prefix}:#{count_octets(value)}#{terminator}"
+      end
+      private_class_method :elide_unparsed
+
+      #: (String value) -> String
+      def self.count_octets(value)
+        value.bytesize > ELIDE_ABOVE ? "[#{value.bytesize} octets elided]" : value
+      end
+      private_class_method :count_octets
 
       # How much of an etag's hash is shown before it is cut. Twelve
       # hex digits is git's own longest short-hash, and this address

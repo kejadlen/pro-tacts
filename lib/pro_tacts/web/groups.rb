@@ -60,7 +60,11 @@ module ProTacts
 
           if group
             response["Content-Type"] = "text/html; charset=utf-8"
-            Admin::GroupsShow.call(group:, members: members_of(group))
+            Admin::GroupsShow.call(
+              group:,
+              contacts: store.contacts,
+              changes: store.group_changes_of(id),
+            )
           end
         end
       end
@@ -130,12 +134,6 @@ module ProTacts
     def members_screen(group)
       response["Content-Type"] = "text/html; charset=utf-8"
       Admin::GroupsMembers.call(group:, contacts: store.contacts)
-    end
-
-    # A group's members as contacts; the page puts them in order.
-    #: (Store::Group group) -> Array[Contact]
-    def members_of(group)
-      store.contacts.select { group.members.include?(it.id) }
     end
   end
 end

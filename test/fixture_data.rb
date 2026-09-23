@@ -156,8 +156,12 @@ module FixtureData
   end
 
   # A group, seeded without a change-log entry for any member it moves
-  # (see MEMBERS for why), and its id. Tests seed theirs here too, so
-  # the change log they assert on holds only what the test wrote.
+  # (see MEMBERS for why). The group's own log — which nothing replays
+  # or syncs from — keeps the create's entry, which is true: the group
+  # really was created, and the fixtures' lines and members land as
+  # though the log had not been invented yet. Tests seed theirs here
+  # too, so the cards' change log they assert on holds only what the
+  # test wrote.
   #: (ProTacts::Store store, ?name: String?, ?lines: Array[String], ?members: Array[String]) -> String
   def self.seed_group(store, name: nil, lines: [], members: [])
     group_id = store.create_group(name:)
