@@ -87,19 +87,51 @@
    than by descent: these rules are the record's, and both dialogs'
    fields keep Gloss's own — a 26rem popover is not a record, and the
    two should not diverge just because one of them opens over this
-   screen. The cap lifts for the same reason: Gloss bounds a bare
-   form at 28rem for the settings-form pattern, and the record's form
-   is the card's whole content — the reading column is its bound
-   (invisible until the column passed 28rem, then half a card of
-   dead space). */
+   screen. The cap lifts for every card-body form for the same
+   reason: Gloss bounds a bare form at 28rem for the settings-form
+   pattern, and a card's form — the record's rows, the upload's one
+   field — is the card's whole content: the reading column is its
+   bound (invisible until the column passed 28rem, then half a card
+   of dead space). */
+.card-body form {
+  max-width: none;
+}
 .card-body form.field-stack {
   gap: var(--gl-space-2xs);
-  max-width: none;
 }
 .card-body form.field-stack > .field > input,
 .card-body form.field-stack > .field > textarea,
 .card-body form.field-stack > .field > .field-stack > input {
   padding-block: var(--gl-space-3xs);
+}
+
+/* The upload's file input (the app's only one): a text input's
+   border would float around nothing — Gloss fills inputs with
+   surface-card, the color of the card body they sit on — so the
+   control reads as a well instead, the one step down a quiet
+   button's own hover tint uses, with the native picker button
+   raised one step out of it in the quiet button's own geometry.
+   Everything else about the control stays the browser's: the two
+   strings and the button-before-name order are not CSS's to change,
+   and the generic input rule's focus ring still draws (a border
+   none only removes the line, not the shadow). */
+.card-body form input[type="file"] {
+  padding: var(--gl-space-2xs);
+  background: var(--gl-color-surface-fill);
+  border: none;
+}
+.card-body form input[type="file"]::file-selector-button {
+  padding: var(--gl-space-2xs) var(--gl-space-xs);
+  border: none;
+  border-radius: var(--gl-radius-sm);
+  background: var(--gl-color-surface-card);
+  color: var(--gl-color-text-primary);
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--1);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  margin-inline-end: var(--gl-space-2xs);
+  cursor: pointer;
 }
 
 /* An editor row is a detail row that happens to be editable: caption
@@ -775,12 +807,14 @@ dialog > :not(header):not(footer) {
 
 /* An editor's card ends in a dialog's action bar (ContactsEdit,
    GroupsEdit), restated for a card, which has no footer of its own.
-   Its sides are the card body's, so Save lines up with the fields. */
+   Padded evenly — the buttons set in from the card body's own m,
+   which the hairline above them already makes room for: the bar
+   reads as its own frame rather than as the body's last row. */
 .card > footer {
   display: flex;
   justify-content: flex-end;
   gap: var(--gl-space-2xs);
-  padding: var(--gl-space-2xs) var(--gl-space-m);
+  padding: var(--gl-space-xs);
   border-top: 1px solid var(--gl-color-border-hairline);
 }
 
