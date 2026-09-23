@@ -999,3 +999,16 @@ dialog > .field-stack > input[type="search"] {
 .walk-list .diff-removed {
   white-space: nowrap;
 }
+
+/* What a walk's row saves into (Admin::ImportTarget): Gloss's
+   segmented tabs, whose track is one line of its own width. A match
+   is a person's whole name and there can be three of them, so the
+   track wraps between segments rather than inside one — a name
+   broken over two lines reads as two segments. The form's own
+   selector for the weight over Gloss's `all: unset`. */
+.card-body form [role="tablist"][data-variant="segmented"] {
+  flex-wrap: wrap;
+}
+.card-body form [role="tablist"][data-variant="segmented"] [role="tab"] {
+  white-space: nowrap;
+}

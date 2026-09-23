@@ -14,7 +14,7 @@ module ProTacts
     # ships no signatures and the views are ignored (see the
     # Steepfile).
     class ContactsEdit
-      def self.call: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: untyped, ?fields: untyped, ?sidebar: untyped, ?save: String?) -> String
+      def self.call: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: untyped, ?fields: untyped, ?lead: untyped, ?sidebar: untyped, ?save: String?) -> String
     end
 
     class Dashboard
@@ -52,7 +52,11 @@ module ProTacts
     end
 
     class ImportGroups
-      def self.new: (groups: Array[::ProTacts::Store::GroupChoice], joined: Array[String], named: Array[String]) -> instance
+      def self.new: (groups: Array[::ProTacts::Store::GroupChoice], joined: Array[String], named: Array[String], ?was: Array[String]) -> instance
+    end
+
+    class ImportTarget
+      def self.new: (row: String, matches: Array[Contact], into: Contact?) -> instance
     end
 
     class ImportSidebar

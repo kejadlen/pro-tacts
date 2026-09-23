@@ -83,14 +83,17 @@ module ProTacts
       # @rbs @back: ([String, String])?
       # @rbs @aside: Phlex::HTML?
       # @rbs @fields: Phlex::HTML?
+      # @rbs @lead: Phlex::HTML?
 
-      # The last six are the import's: the same editor, over a card
+      # The last seven are the import's: the same editor, over a card
       # that is not stored yet, saving into the import rather than
       # into a contact, rendered beside the card as it was exported
       # (Admin::ImportOriginal) and carrying what the walk decides
       # about a contact that a card cannot hold — which groups it
       # joins (Admin::ImportGroups), inside this form so that one Save
-      # writes the lot. `sidebar` is the walk's own list of contacts,
+      # writes the lot, and `lead` what it writes into — a new contact
+      # or one the book already has (Admin::ImportTarget), above the
+      # fields it decides. `sidebar` is the walk's own list of contacts,
       # standing beside the pair (Admin::ImportSidebar), and `save`
       # the submit's words, which on an import say where the card is
       # going because it is not there yet. One editor rather than a
@@ -98,14 +101,15 @@ module ProTacts
       # about is a field an import writes and an edit cannot undo.
       # Defaulted to the contact's own, so the ordinary edit says
       # nothing about any of it.
-      #: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: Phlex::HTML?, ?fields: Phlex::HTML?, ?sidebar: Phlex::HTML?, ?save: String?) -> void
+      #: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: Phlex::HTML?, ?fields: Phlex::HTML?, ?lead: Phlex::HTML?, ?sidebar: Phlex::HTML?, ?save: String?) -> void
       def initialize(contact:, notice: nil, action: nil, back: nil, aside: nil, fields: nil,
-                     sidebar: nil, save: nil)
+                     lead: nil, sidebar: nil, save: nil)
         @contact = contact
         @action = action || "/contacts/#{contact.id}"
         @back = back
         @aside = aside
         @fields = fields
+        @lead = lead
         @sidebar = sidebar
         @save = save || "Save"
         # The rows are the contact's own, never what a group lends it
@@ -151,6 +155,9 @@ module ProTacts
             ) do
                 form(action: @action, method: "post", class: "field-stack", id: FORM) do
                   input(type: "hidden", name: "etag", value: @contact.etag)
+                  # First, and only where something passed it: what the
+                  # save writes into decides every field below it.
+                  render @lead if @lead
                   # The caption is an element rather than bare text
                   # because the row is a grid (admin.css): a text node
                   # would still land in the type column as an
