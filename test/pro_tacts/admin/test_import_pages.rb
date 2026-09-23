@@ -684,24 +684,23 @@ class AdminImportPagesTest < Minitest::Test
 
   # The groups most of the book is in are the ones an arrival is
   # likeliest to join, so they lead the list and stand above the cap;
-  # a tie is alphabetical (Admin::ImportGroups). Everyone's book holds
-  # both stored contacts, as Zulus does, and `sync:*` sorts first.
+  # a tie is alphabetical (Admin::ImportGroups).
   def test_the_groups_beside_a_card_are_largest_first
     with_contacts({"jane" => JANE, "sam" => PLAIN}) do |store|
       alpha = store.create_group(name: "alpha")
+      charlie = store.create_group(name: "charlie")
       beta = store.create_group(name: "beta")
       zulus = store.create_group(name: "zulus")
       store.add_member(zulus, "jane")
       store.add_member(zulus, "sam")
+      store.add_member(charlie, "sam")
       store.add_member(beta, "jane")
       id = upload(JANE)
 
       get "/import/#{id}/0"
 
-      shown = last_response.body.scan(/name="groups\[\]" value="([^"]+)"/).flatten
-      everyone = store.group_choices.find { it.name == ProTacts::Store::EVERYONE }.id
-
-      assert_equal [everyone, zulus, beta, alpha], shown
+      assert_equal [zulus, beta, charlie, alpha],
+                   last_response.body.scan(/name="groups\[\]" value="([^"]+)"/).flatten
     end
   end
 
