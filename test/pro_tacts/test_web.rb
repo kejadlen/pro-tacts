@@ -392,7 +392,7 @@ class WebTest < Minitest::Test
   # back is subtracted before storage and composed again on read, so
   # the resource serves the submitted bytes exactly and the tag is
   # honest — even though what was stored is fewer bytes than arrived
-  # (Arrival#subtract_inherited).
+  # (Lent.subtract).
   def test_a_members_put_of_its_served_card_keeps_the_strong_etag
     address = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
 

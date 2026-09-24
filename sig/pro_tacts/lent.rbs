@@ -1,0 +1,21 @@
+# Lent and Lent::Edit are Data classes, whose members the inline parser
+# cannot read (see sig/pro_tacts/contact.rbs). Both are marked
+# `@rbs skip` in lent.rb and signed here instead; the methods reopened
+# onto Lent carry their own inline types.
+module ProTacts
+  class Lent
+    attr_reader group_id: String
+    attr_reader position: Integer
+    attr_reader line: String
+
+    def self.new: (group_id: String, position: Integer, line: String) -> instance
+
+    class Edit
+      attr_reader group_id: String
+      attr_reader position: Integer
+      attr_reader line: String?
+
+      def self.new: (group_id: String, position: Integer, line: String?) -> instance
+    end
+  end
+end

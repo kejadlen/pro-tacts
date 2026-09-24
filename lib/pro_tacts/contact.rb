@@ -342,7 +342,7 @@ module ProTacts
     # Matched by the line's bytes, which is the same blindness the
     # editor's digests have (VCard::Parser::Line#digest): a stored
     # line whose bytes are a group's line reads as the group's here.
-    # No write makes that state — Arrival#subtract_inherited takes the
+    # No write makes that state — Lent.subtract takes the
     # group's copy back out of a submission — but a member whose own
     # card spells the line exactly as its group does still has one, and
     # naming the group over both copies says something true about the

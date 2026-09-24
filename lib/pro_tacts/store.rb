@@ -3,11 +3,12 @@ require "json"
 require "pathname"
 require "sequel"
 
-require "pro_tacts/arrival"
 require "pro_tacts/birthday"
+require "pro_tacts/birthday_line"
 require "pro_tacts/card_diff"
 require "pro_tacts/change_id"
 require "pro_tacts/contact"
+require "pro_tacts/lent"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
@@ -32,10 +33,11 @@ module ProTacts
   #
   # Every Contact this store hands out is composed, never the stored
   # card alone: a birthday and the lines a contact inherits from its
-  # groups are both subtracted out of a card on the way in (Arrival),
-  # and Contact composes them back in on read — so the vcard and the
-  # etag a caller sees, and the etag the change log records, describe
-  # the card a client downloads, not the bytes on disk.
+  # groups are both subtracted out of a card on the way in
+  # (BirthdayLine.split, Lent.subtract), and Contact composes them back
+  # in on read — so the vcard and the etag a caller sees, and the etag
+  # the change log records, describe the card a client downloads, not
+  # the bytes on disk.
   #
   # The signature lives in sig/pro_tacts/store.rbs, for the Change Data
   # class the inline syntax cannot read.
@@ -438,13 +440,13 @@ module ProTacts
     # transaction, because the log entry cannot be rebuilt from anything.
     #
     # What is stored is the card minus its birthday and minus what its
-    # groups lend it, both composed back in on read; Arrival makes that
-    # split and this applies it.
+    # groups lend it, both composed back in on read
+    # (BirthdayLine.split, Lent.subtract).
     #
     # A card rather than its bytes, so the reading a caller already
-    # made is the one Arrival splits: a PUT has asked whether the bytes
-    # are a card at all and whose UID they carry before it gets here
-    # (Web#write_card).
+    # made is the one BirthdayLine.split decides from: a PUT has asked
+    # whether the bytes are a card at all and whose UID they carry
+    # before it gets here (Web#write_card).
     #
     # The strings are UTF-8 by contract and the bind is the third line
     # holding them to it, under Web#write_card's relabel-and-judge and
@@ -458,23 +460,28 @@ module ProTacts
     #: (String id, VCard vcard, ?client: bool) -> Contact
     def put(id, vcard, client: false)
       existing = birthday_of(id)
-      # Read once for the two that want it: the arrival's split, and
-      # the card this write replaces.
+      # Read once for the three that want it: the birthday split, the
+      # subtraction after it, and the card this write replaces.
       stored_before = stored_card(id)
-      lent = lent_of(id)
-      arrival = Arrival.new(vcard, birthday_before: existing, stored_before:, lent:)
-      stored, birthday, edits = arrival.stored, arrival.birthday, arrival.edits
+      birthday, stored = BirthdayLine.split(vcard, existing, stored_before)
 
-      # The Contact this returns is the composed one — the lent lines put
+      # The other half of the split, the same shape as the birthday's:
+      # what the groups lend comes back out of the submission before it
+      # is stored, so a write cannot materialize a group's lines into
+      # the member's own card.
+      #
+      # The Contact this returns is the composed one — those lines put
       # back, read off membership as it stands at this write — and the
       # logged etag is its hash, so a client's token describes the card
       # it downloads.
+      lent = lent_of(id)
       inherited = inheritance(lent)
       # Composed from the parts already read here rather than through
       # #contact, which would read all three again. Membership cannot
       # move during a put, so the inheritance either side of it is the
       # one read above.
       replaced = stored_before && Contact.new(id:, stored: stored_before, birthday: existing, inherited:)
+      stored, edits = Lent.subtract(stored, lent, stored_before)
       # Built before the transaction as well as inside it, because its
       # constructor is where an id that could not be served is refused
       # and a refusal from inside a transaction reaches the caller
@@ -1029,7 +1036,7 @@ module ProTacts
     # what it lent. A removal leaves a gap in the positions, which
     # costs nothing — position orders a group's lines and is not
     # counted.
-    #: (Array[Arrival::GroupEdit] edits) -> void
+    #: (Array[Lent::Edit] edits) -> void
     def apply_group_edits(edits)
       edits.each do |edit|
         row = group_properties.where(group_id: edit.group_id, position: edit.position)
@@ -1230,8 +1237,8 @@ module ProTacts
 
     # The same read as it stands for a write: the rows a member's edit
     # has to reach back to, before #inheritance drops them to what the
-    # model wants (see Arrival::Lent).
-    #: (String id) -> Array[Arrival::Lent]
+    # model wants (see Lent).
+    #: (String id) -> Array[Lent]
     def lent_of(id)
       inherited_rows.where(card_id: id).map { lent_from(it) }
     end
@@ -1253,7 +1260,7 @@ module ProTacts
     # What a model asks of a group's rows: the group lending each,
     # whole, and the line itself. Which group_properties row lent it is
     # the write path's business and stops here (Contact#group_of).
-    #: (Array[Arrival::Lent] lent, ?Hash[String, Group] lenders) -> Array[Contact::Inherited]
+    #: (Array[Lent] lent, ?Hash[String, Group] lenders) -> Array[Contact::Inherited]
     def inheritance(lent, lenders = groups_by_id(lent.map(&:group_id)))
       lent.map { Contact::Inherited.new(group: lenders.fetch(it.group_id), line: it.line) }
     end
@@ -1301,9 +1308,9 @@ module ProTacts
         )
     end
 
-    #: (Hash[Symbol, untyped] row) -> Arrival::Lent
+    #: (Hash[Symbol, untyped] row) -> Lent
     def lent_from(row)
-      Arrival::Lent.new(
+      Lent.new(
         group_id: row.fetch(:group_id).to_s,
         position: row.fetch(:position).to_i,
         line: row.fetch(:line).to_s,

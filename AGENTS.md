@@ -80,10 +80,11 @@ lib/pro_tacts/
 │                   # group change log, and the derived index
 ├── contact.rb      # the one model of a contact: id, vCard, etag,
 │                   # and the structured accessors over the card
-├── arrival.rb      # A submitted card split back into what the store
-│                   # keeps: the card, the birthday, the group edits
 ├── birthday.rb     # A partial date, the one fact no card can hold
-├── birthday_line.rb # What a submitted BDAY line is, for Arrival
+├── birthday_line.rb # What a submitted BDAY line is, and the split
+│                   # of a card's birthday from it, for Store#put
+├── lent.rb         # A line a group lends a card, and the subtraction
+│                   # that takes it back out of a submitted one
 ├── card_diff.rb    # The lines a write added and removed
 ├── sync_token.rb   # The token a syncing client carries: minted
 │                   # at a ctag for a book, and read back

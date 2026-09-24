@@ -1,47 +1,29 @@
 require "sentry-ruby"
 
-require "pro_tacts/birthday"
-require "pro_tacts/birthday_line"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
 module ProTacts
-  # A card as it arrives at Store#put, split back into what the store
-  # keeps: the card to store, the birthday to hold beside it, and what
-  # the member's edits ask of the groups lending it lines. The inverse
-  # of what Contact composes — served is stored plus inherited plus
-  # birthday, so stored is submitted minus both
-  # (docs/plans/2026-08-31-partial-birthdays.md,
-  # docs/plans/2026-08-24-vcard-storage-and-groups.md).
+  # One line a group lends one card, with the row it is lent from —
+  # the write path's reading of what Store#inherited_of answers as the
+  # model's. A member's edit has to reach the group_properties row the
+  # line came from, which takes the position as well as the group.
   #
-  # Nothing here reads or writes the database. The store hands over
-  # what stood before the write — the card, the birthday, the lines
-  # lent — and applies what comes back inside its own transaction. The
-  # reports go to Sentry from here because this is the arrival
-  # (AGENTS.md, "The one exception is the arrival reports").
-  #
-  # The signature of the two Data classes is in
-  # sig/pro_tacts/arrival.rbs, for the reason Store's are in its own.
-  class Arrival
-    # @rbs @stored: VCard
-    # @rbs @birthday: Birthday?
-    # @rbs @edits: Array[GroupEdit]
+  # The signature lives in sig/pro_tacts/lent.rbs, this being a Data
+  # class.
+  # @rbs skip
+  Lent = Data.define(:group_id, :position, :line)
 
-    # One line a group lends one card, with the row it is lent from —
-    # the write path's reading of what Store#inherited_of answers as
-    # the model's. A member's edit has to reach the group_properties
-    # row the line came from, which takes the position as well as the
-    # group.
-    # @rbs skip
-    Lent = Data.define(:group_id, :position, :line)
-
+  # Reopened rather than defined in the block above, for the reason
+  # VCard::Parser::Property is.
+  class Lent
     # What one classified line asks of the group it came from: the row
     # to write, and the line that replaces it — or nil to remove the
     # row, which is what a member's deletion of a shared line means
     # (docs/plans/2026-09-09-group-edits-propagate.md, "The open
     # question, decided").
     # @rbs skip
-    GroupEdit = Data.define(:group_id, :position, :line)
+    Edit = Data.define(:group_id, :position, :line)
 
     # The property names whose value is structured rather than free
     # text (RFC 2426 section 3.2.1), among the two a group may lend:
@@ -59,107 +41,14 @@ module ProTacts
     # group cannot hold").
     SHAREABLE_NAMES = %w[ADR NOTE].freeze #: Array[String]
 
-    # `stored_before` is the card this write replaces, nil for one
-    # being created: the birthday split asks it about a BDAY the write
-    # is dropping, and the subtraction strikes its lines from the pool.
-    #: (VCard vcard, birthday_before: Birthday?, stored_before: VCard?, lent: Array[Lent]) -> void
-    def initialize(vcard, birthday_before:, stored_before:, lent:)
-      @birthday, rest = split_birthday(vcard, birthday_before, stored_before)
-      @stored, @edits = subtract_inherited(rest, lent, stored_before)
-    end
-
-    # The card to store: the submission minus its birthday and minus
-    # what its groups lend it.
-    attr_reader :stored
-
-    # The model's new birthday, or nil to empty the model.
-    attr_reader :birthday
-
-    # The group rows the member's edits rewrite or remove, empty where
-    # every lent line came back untouched.
-    attr_reader :edits
-
-    private
-
-    # The birthday half of the split
-    # (docs/plans/2026-09-11-every-birthday-in-the-model.md): the
-    # model's new birthday, and the card to store beside it. A card
-    # holds at most one BDAY, and one that reads as a birthday leaves
-    # the card for the model. Any other stays in the card byte for
-    # byte, reported, with the model emptied so nothing composes a
-    # second BDAY beside it (RFC 6352 section 6.3.2.2).
-    #
-    # No BDAY is a client that was sent the birthday removing it, or
-    # one that was never sent it and so cannot have. A BDAY line left
-    # in the stored card goes with the write, which is worth saying.
-    #
-    # case/when rather than case/in, BirthdayLine's own rule: Steep
-    # does not check the bodies of case/in branches, and these are the
-    # ones worth checking — which is what the last arm is for.
-    #: (VCard vcard, Birthday? existing, VCard? stored_before) -> [Birthday?, VCard]
-    def split_birthday(vcard, existing, stored_before)
-      bdays, rest = vcard.extract("BDAY")
-      if bdays.empty?
-        report_lost_bday_lines(stored_before)
-        return [existing && !existing.served? ? existing : nil, vcard]
-      end
-
-      if bdays.length > 1
-        report_many_bday_lines(bdays.length)
-        return [nil, vcard]
-      end
-
-      line = BirthdayLine.read(bdays.fetch(0))
-      case line
-      when BirthdayLine::Modeled
-        [line.birthday, rest]
-      when BirthdayLine::Unrecognized
-        report_unrecognized_bday_line
-        [nil, vcard]
-      when BirthdayLine::Unreadable
-        [nil, vcard]
-      else
-        raise "no arm for #{line.class}"
-      end
-    end
-
-    # The arrival report: a BDAY the model does not take is unexpected
-    # input, and storing it verbatim would be the last anyone heard of
-    # it. The message carries no card content
-    # (the line config.ru draws for Sentry); the value stays on the
-    # machine, where the admin view shows it raw.
-    #: () -> void
-    def report_unrecognized_bday_line
-      Sentry.capture_message("a submitted card carried a BDAY line the model does not take", level: :warning)
-    end
-
-    # A contact has one birthday, so a card with several cannot say
-    # which it means, whatever each line holds.
-    #: (Integer count) -> void
-    def report_many_bday_lines(count)
-      Sentry.capture_message("a submitted card carried #{count} BDAY lines", level: :warning)
-    end
-
-    # The loss report, the write's half of the arrival one: a BDAY line
-    # still in the stored card is one the model did not take, and a
-    # write without it is about to drop it with nobody told.
-    #: (VCard? stored_before) -> void
-    def report_lost_bday_lines(stored_before)
-      return if stored_before.nil?
-
-      lines, = stored_before.extract("BDAY")
-      return if lines.empty?
-
-      Sentry.capture_message("a write dropped #{lines.length} BDAY line(s) the model did not take", level: :warning)
-    end
-
     # The submitted card with the lines its groups lend it taken back
-    # out: served is stored plus inherited, so stored is submitted
+    # out, and the edits the lines that came back changed ask of those
+    # groups: served is stored plus inherited, so stored is submitted
     # minus inherited and a client that PUTs back what it downloaded
     # stores what it started with
     # (docs/plans/2026-08-24-vcard-storage-and-groups.md, "Groups
     # compose into cards"). Which of four shapes a lent line came back
-    # as, and what each asks of its group, is #classify — argued in
+    # as, and what each asks of its group, is .classify — argued in
     # that plan's "Classifying what came back" and in
     # docs/plans/2026-09-09-group-edits-propagate.md.
     #
@@ -177,8 +66,8 @@ module ProTacts
     # this leaves keep their positions, so a submission that was the
     # served card round-trips to the bytes it was composed from and the
     # PUT can answer with a strong etag (RFC 6352 section 6.3.2.3).
-    #: (VCard vcard, Array[Lent] lent, VCard? stored_before) -> [VCard, Array[GroupEdit]]
-    def subtract_inherited(vcard, lent, stored_before)
+    #: (VCard vcard, Array[Lent] lent, VCard? stored_before) -> [VCard, Array[Edit]]
+    def self.subtract(vcard, lent, stored_before)
       return [vcard, []] if lent.empty?
 
       unaccounted = unaccounted_lines(vcard, stored_before)
@@ -201,19 +90,19 @@ module ProTacts
         match
       }
 
-      edits = [] #: Array[GroupEdit]
+      edits = [] #: Array[Edit]
       ambiguous = 0
       unshareable = 0
       moved.each do |row|
         case classify(row, unaccounted, taken)
-        in GroupEdit => edit then edits << edit
+        in Edit => edit then edits << edit
         in :ambiguous then ambiguous += 1
         in :unshareable then unshareable += 1
         end
       end
 
-      report_ambiguous_inherited_lines(ambiguous)
-      report_unshareable_lines(unshareable)
+      report_ambiguous(ambiguous)
+      report_unshareable(unshareable)
       [taken.reduce(vcard) { |rest, line| rest.substitute(line.digest, []) }, edits]
     end
 
@@ -221,31 +110,31 @@ module ProTacts
     # edit the one candidate of its name is, or the deletion no
     # candidate at all is. The two refusals ask nothing — more than one
     # candidate cannot be attributed, and a candidate the group could
-    # not hold must not be tried (#shareable?) — and both leave the
+    # not hold must not be tried (.shareable?) — and both leave the
     # line in the member's own card, where an edit at least is not
     # lost.
     #
     # An edit's line is struck from the pool and carried by the group
     # from here on, so `taken` grows the way it does for an untouched
     # one.
-    #: (Lent row, Array[VCard::Parser::Line] unaccounted, Array[VCard::Parser::Line] taken) -> (GroupEdit | :ambiguous | :unshareable)
-    def classify(row, unaccounted, taken)
+    #: (Lent row, Array[VCard::Parser::Line] unaccounted, Array[VCard::Parser::Line] taken) -> (Edit | :ambiguous | :unshareable)
+    def self.classify(row, unaccounted, taken)
       candidates = unaccounted.select { it.names?(property_name(row.line)) }
-      return GroupEdit.new(group_id: row.group_id, position: row.position, line: nil) if candidates.empty?
+      return Edit.new(group_id: row.group_id, position: row.position, line: nil) if candidates.empty?
       return :ambiguous unless candidates.length == 1
 
       edited = candidates.fetch(0)
       return :unshareable unless shareable?(edited)
 
       taken << strike(unaccounted, edited)
-      GroupEdit.new(group_id: row.group_id, position: row.position, line: edited.content)
+      Edit.new(group_id: row.group_id, position: row.position, line: edited.content)
     end
 
     # The line out of the pool, so no second lent line is attributed
     # it. `index` rather than `delete`, which would take every copy of
     # a line a card carries twice.
     #: (Array[VCard::Parser::Line] unaccounted, VCard::Parser::Line line) -> VCard::Parser::Line
-    def strike(unaccounted, line)
+    def self.strike(unaccounted, line)
       unaccounted.delete_at(
         unaccounted.index(line) #: Integer
       )
@@ -257,7 +146,7 @@ module ProTacts
     # the CHECK's two clauses, read off the parse rather than matched
     # as bytes. A line that would not read is not one to share.
     #: (VCard::Parser::Line line) -> bool
-    def shareable?(line)
+    def self.shareable?(line)
       property = line.property
       return false if property.nil?
 
@@ -267,7 +156,7 @@ module ProTacts
     # A lent line as the parser reads it: one logical line, the group
     # schema admitting no other shape (db/migrations/004_groups.rb).
     #: (String line) -> VCard::Parser::Line
-    def parsed_line(line)
+    def self.parsed_line(line)
       VCard.new(line).lines.fetch(0)
     end
 
@@ -287,7 +176,7 @@ module ProTacts
     # A line that will not read has no value to compare and falls back
     # to its bytes, which still recognize the line nobody touched.
     #: (VCard::Parser::Line line, VCard::Parser::Line lent, Array[VCard::Parser::Line] pool) -> bool
-    def unedited?(line, lent, pool)
+    def self.unedited?(line, lent, pool)
       value = value_of(lent)
       return line.verbatim.chomp == lent.verbatim.chomp if value.nil?
 
@@ -306,7 +195,7 @@ module ProTacts
     # the line's types and `ADR;TYPE=dom` coming back as `item1.ADR`
     # with `item1.X-ABLabel:dom` is unedited.
     #: (VCard::Parser::Line line, VCard::Parser::Line lent, Array[VCard::Parser::Line] pool) -> bool
-    def kept_types?(line, lent, pool)
+    def self.kept_types?(line, lent, pool)
       label = label_of(line, pool)&.property
       types = types_of(line)
       types = (types + [label.text.downcase]).uniq.sort if label
@@ -314,10 +203,10 @@ module ProTacts
     end
 
     # The `X-ABLabel` sharing a property group with `line`, the other
-    # half of the pair #kept_types? reads as one. Nil for an ungrouped
+    # half of the pair .kept_types? reads as one. Nil for an ungrouped
     # line, or a group the pool holds no label for.
     #: (VCard::Parser::Line line, Array[VCard::Parser::Line] pool) -> VCard::Parser::Line?
-    def label_of(line, pool)
+    def self.label_of(line, pool)
       group = line.property&.group
       return if group.nil?
 
@@ -332,7 +221,7 @@ module ProTacts
     # 3.2.1) and a NOTE as its unescaped text (section 2.4.2). Nil for
     # a line that would not read, which has no value at all.
     #: (VCard::Parser::Line line) -> Array[String]?
-    def value_of(line)
+    def self.value_of(line)
       property = line.property
       return nil if property.nil?
 
@@ -345,7 +234,7 @@ module ProTacts
     # way). Empty for a line that would not read, which has no
     # parameters to compare.
     #: (VCard::Parser::Line line) -> Array[String]
-    def types_of(line)
+    def self.types_of(line)
       property = line.property
       return [] if property.nil?
 
@@ -360,7 +249,7 @@ module ProTacts
     # attributed from. Everything for a card being created, which has
     # no stored lines to explain anything.
     #: (VCard vcard, VCard? stored_before) -> Array[VCard::Parser::Line]
-    def unaccounted_lines(vcard, stored_before)
+    def self.unaccounted_lines(vcard, stored_before)
       stored = stored_before ? stored_before.lines.map { it.verbatim.chomp } : [] #: Array[String]
       vcard.lines.reject { |line|
         index = stored.index(line.verbatim.chomp)
@@ -375,7 +264,7 @@ module ProTacts
     # group's, which carry no `item1.` prefix to strip — the schema
     # refuses one (db/migrations/004_groups.rb).
     #: (String line) -> String
-    def property_name(line)
+    def self.property_name(line)
       line[/\A[^;:]*/].to_s
     end
 
@@ -384,9 +273,9 @@ module ProTacts
     # attribute — two lines of that name arrived that the member's card
     # does not explain, and calling either the edit would be a guess.
     # The card is stored as it arrived and the line is news, the same
-    # bargain report_unrecognized_bday_line makes.
+    # bargain BirthdayLine.report_unrecognized makes.
     #: (Integer count) -> void
-    def report_ambiguous_inherited_lines(count)
+    def self.report_ambiguous(count)
       return if count.zero?
 
       Sentry.capture_message(
@@ -400,11 +289,11 @@ module ProTacts
     # keeps what it lent. The known cause is an edit that lands in a
     # type Contacts cannot model — a relabel to one, or a new value
     # under one — which comes back as a property group with an
-    # `X-ABLabel` beside it (#kept_types?), and the news is worth
+    # `X-ABLabel` beside it (.kept_types?), and the news is worth
     # having because that member now serves the line twice — its own
     # copy and the group's — until someone reconciles them.
     #: (Integer count) -> void
-    def report_unshareable_lines(count)
+    def self.report_unshareable(count)
       return if count.zero?
 
       Sentry.capture_message(
@@ -412,5 +301,9 @@ module ProTacts
         level: :warning,
       )
     end
+
+    private_class_method :classify, :strike, :shareable?, :parsed_line, :unedited?, :kept_types?, :label_of,
+                         :value_of, :types_of, :unaccounted_lines, :property_name, :report_ambiguous,
+                         :report_unshareable
   end
 end
