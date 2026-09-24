@@ -49,6 +49,14 @@ class AdminLayoutTest < Minitest::Test
     assert_includes header_html, %(<ul id="user-menu" popover="auto")
   end
 
+  # A link, not a button: clearing the dashboard's search is navigating
+  # to the page with no query.
+  def test_the_search_carries_a_clear
+    with_env({})
+
+    assert_includes header_html, %(<a href="/" class="icon-button search-clear" data-size="sm" aria-label="Clear search">)
+  end
+
   def test_the_account_menu_links_to_the_import_screen
     with_env({})
 

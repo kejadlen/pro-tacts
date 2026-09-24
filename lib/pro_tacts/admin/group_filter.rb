@@ -1,5 +1,7 @@
 require "pro_tacts/admin/phlex"
 
+require "pro_tacts/admin/icons"
+
 module ProTacts
   module Admin
     # Picking from a list too long to read: the filter over
@@ -124,9 +126,20 @@ module ProTacts
       end
 
       def view_template
-        input(type: "search", placeholder: @placeholder,
-              aria_label: @placeholder, autofocus: @autofocus,
-              x_model: "filter", **enter)
+        # The filter and its clear in one box, so the button can be
+        # positioned at the field's end (admin.css). The click empties
+        # the state rather than the box alone — `filter` is what the
+        # rows, the cap, and the offer all read — and the reveal is
+        # CSS on the box, the header search's own (see Layout).
+        div(class: "filter") do
+          input(type: "search", placeholder: @placeholder,
+                aria_label: @placeholder, autofocus: @autofocus,
+                x_model: "filter", **enter)
+          button(type: "button", class: "icon-button search-clear", data_size: "sm",
+                 aria_label: "Clear filter", "@click": "filter = ''") do
+            render Icon.new(:x)
+          end
+        end
       end
 
       private

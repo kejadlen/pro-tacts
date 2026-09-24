@@ -95,9 +95,20 @@ module ProTacts
               # somewhere to be besides the input — and focuses only
               # where the screen asked for it.
               a(href: "/") { "pro-tacts" }
+              # The search and, in the field's end, its clear: a link,
+              # because clearing the dashboard's search is navigating
+              # to the page with no query — the form's own target with
+              # nothing submitted — landing focused on an empty input
+              # again. CSS reveals it the moment there is text to clear
+              # (admin.css), typed-but-unsubmitted included, so the
+              # header needs no script for it; the native cancel WebKit
+              # and Blink draw is suppressed there too, one affordance
+              # rather than two.
               form(action: "/", method: "get", class: "search-form") do
                 input(type: "search", name: "q", value: @query,
                       placeholder: "Search contacts", autofocus: @autofocus)
+                a(href: "/", class: "icon-button search-clear", data_size: "sm",
+                  aria_label: "Clear search") { render Icon.new(:x) }
               end
               # The destinations and the account, at the right edge:
               # the contacts list is the browse surface and the groups

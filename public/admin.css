@@ -635,6 +635,44 @@ body {
   padding-block: var(--gl-space-3xs);
 }
 
+/* Clearing a search field: one affordance for both kinds the app
+   has — the header's search and the lists' filter — Gloss's sm
+   icon-button carrying Lucide's x, overlaid at the field's end.
+   Revealed by :has(:not(:placeholder-shown)) on the box the input
+   and the control share, so it appears the moment there is text to
+   clear, typed-but-unsubmitted included, with no script — the
+   filter's button needs Alpine only for its click, which empties
+   the state the rows read (GroupFilter). The input's end padding
+   reserves the control's width by the sm icon-button's own
+   geometry (2× its 3xs padding + its 1.15×0.8125rem line), so text
+   never runs under it. */
+.search-form,
+.filter {
+  position: relative;
+}
+.search-clear {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: var(--gl-space-2xs);
+  translate: 0 -50%;
+  display: none;
+}
+.search-form:has(input:not(:placeholder-shown)) .search-clear,
+.filter:has(input:not(:placeholder-shown)) .search-clear {
+  display: inline-flex;
+}
+input[type="search"] {
+  padding-inline-end: calc(var(--gl-space-s) + 2 * var(--gl-space-2xs) +
+    2 * var(--gl-space-3xs) + 1.15 * 0.8125rem);
+}
+/* WebKit and Blink draw their own cancel on a search field; Firefox
+   draws none. Ours above is the one affordance everywhere, so the
+   native one goes — a field carrying both would clear twice over
+   the same corner. */
+input[type="search"]::-webkit-search-cancel-button {
+  display: none;
+}
+
 /* The account menu, the header's third region: the button naming the
    login and the popover it opens. The wrapper is the popover's
    positioning context — a popover is promoted to the top layer on
@@ -1014,10 +1052,10 @@ dialog .field-stack {
 dialog form.field-stack {
   gap: var(--gl-space-3xs);
 }
-dialog > .field-stack:has(> input[type="search"]) {
+dialog > .field-stack:has(> .filter) {
   gap: var(--gl-space-xs);
 }
-dialog > .field-stack > input[type="search"] {
+dialog > .field-stack > .filter > input[type="search"] {
   padding-block: var(--gl-space-3xs);
 }
 

@@ -324,6 +324,9 @@ class AdminGroupsPagesTest < Minitest::Test
       body = last_response.body
       assert_equal 200, last_response.status
       assert_includes body, %(placeholder="Filter contacts")
+      # The clear empties the state the rows read, not just the box.
+      assert_includes body, %(aria-label="Clear filter")
+      assert_includes body, %(@click="filter = ''")
       %w[george mary].each do |member|
         assert_includes body, %(name="members[]" value="#{member}" checked)
         assert_includes body, %(name="was[]" value="#{member}")
