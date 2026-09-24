@@ -4,11 +4,10 @@ require "pathname"
 require "sequel"
 
 require "pro_tacts/birthday"
-require "pro_tacts/birthday_line"
 require "pro_tacts/card_diff"
 require "pro_tacts/change_id"
 require "pro_tacts/contact"
-require "pro_tacts/lent"
+require "pro_tacts/edited_contact"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
@@ -34,8 +33,7 @@ module ProTacts
   # Every Contact this store hands out is composed, never the stored
   # card alone: a birthday and the lines a contact inherits from its
   # groups are both subtracted out of a card on the way in
-  # (BirthdayLine.split, Lent.subtract), and Contact composes them back
-  # in on read — so the vcard and the etag a caller sees, and the etag
+  # (EditedContact), and Contact composes them back in on read — so the vcard and the etag a caller sees, and the etag
   # the change log records, describe the card a client downloads, not
   # the bytes on disk.
   #
@@ -440,11 +438,11 @@ module ProTacts
     # transaction, because the log entry cannot be rebuilt from anything.
     #
     # What is stored is the card minus its birthday and minus what its
-    # groups lend it, both composed back in on read
-    # (BirthdayLine.split, Lent.subtract).
+    # groups lend it, both composed back in on read; EditedContact
+    # reads the submission apart and this writes what it answers.
     #
     # A card rather than its bytes, so the reading a caller already
-    # made is the one BirthdayLine.split decides from: a PUT has asked
+    # made is the one EditedContact decides from: a PUT has asked
     # whether the bytes are a card at all and whose UID they carry
     # before it gets here (Web#write_card).
     #
@@ -459,29 +457,19 @@ module ProTacts
     # put over a card that exists joins nothing.
     #: (String id, VCard vcard, ?client: bool) -> Contact
     def put(id, vcard, client: false)
-      existing = birthday_of(id)
-      # Read once for the three that want it: the birthday split, the
-      # subtraction after it, and the card this write replaces.
-      stored_before = stored_card(id)
-      birthday, stored = BirthdayLine.split(vcard, existing, stored_before)
+      # The contact this write replaces, read once for the two that want
+      # it: the edit, which reads the submission against it, and the
+      # change log's diff.
+      before = contact(id)
+      edited = EditedContact.new(vcard, before:)
+      stored, birthday, edits = edited.stored, edited.birthday, edited.group_edits
 
-      # The other half of the split, the same shape as the birthday's:
-      # what the groups lend comes back out of the submission before it
-      # is stored, so a write cannot materialize a group's lines into
-      # the member's own card.
-      #
-      # The Contact this returns is the composed one — those lines put
-      # back, read off membership as it stands at this write — and the
-      # logged etag is its hash, so a client's token describes the card
-      # it downloads.
-      lent = lent_of(id)
-      inherited = inheritance(lent)
-      # Composed from the parts already read here rather than through
-      # #contact, which would read all three again. Membership cannot
-      # move during a put, so the inheritance either side of it is the
-      # one read above.
-      replaced = stored_before && Contact.new(id:, stored: stored_before, birthday: existing, inherited:)
-      stored, edits = Lent.subtract(stored, lent, stored_before)
+      # The Contact this returns is the composed one — the lent lines
+      # put back, read off membership as it stands at this write — and
+      # the logged etag is its hash, so a client's token describes the
+      # card it downloads. Membership cannot move during a put, so the
+      # inheritance either side of it is the one read above.
+      inherited = before&.inherited || [] #: Array[Contact::Inherited]
       # Built before the transaction as well as inside it, because its
       # constructor is where an id that could not be served is refused
       # and a refusal from inside a transaction reaches the caller
@@ -496,14 +484,14 @@ module ProTacts
         # read of every other member either side of them.
         unless edits.empty?
           fan_out(member_ids(edits.map(&:group_id).uniq), except: id) { apply_group_edits(edits) }
-          contact = Contact.new(id:, stored:, birthday:, inherited: inheritance(lent_of(id)))
+          contact = Contact.new(id:, stored:, birthday:, inherited: inherited_of(id))
         end
         upsert_card(contact.id, stored)
         # After the card, which the membership names by foreign key, and
         # before the log entry, which records the card composed with
         # whatever the group lends. The put's entry is the card's arrival
         # in the book, so the join writes none of its own.
-        if client && stored_before.nil?
+        if client && before.nil?
           group_members.insert(group_id: everyone_group_id, card_id: contact.id)
           contact = Contact.new(id:, stored:, birthday:, inherited: inherited_of(contact.id))
         end
@@ -512,7 +500,7 @@ module ProTacts
           contact.id,
           action: Action::PUT,
           etag: contact.etag,
-          diff: CardDiff.between(replaced&.vcard, contact.vcard),
+          diff: CardDiff.between(before&.vcard, contact.vcard),
         )
         reindex(contact.id, stored)
         contact
@@ -831,7 +819,7 @@ module ProTacts
     # #delete's shape.
     #: (String id) -> bool
     def delete_group(id)
-      # A plain `first` read, #stored_card's reason: id is the primary
+      # A plain `first` read, #birthday_of's reason: id is the primary
       # key, so there is no ambiguity for `sole` to catch. Read here
       # rather than rescued around the whole method, which would have
       # swallowed a NoMatchingRow raised from inside the transaction
@@ -1036,7 +1024,7 @@ module ProTacts
     # what it lent. A removal leaves a gap in the positions, which
     # costs nothing — position orders a group's lines and is not
     # counted.
-    #: (Array[Lent::Edit] edits) -> void
+    #: (Array[EditedContact::GroupEdit] edits) -> void
     def apply_group_edits(edits)
       edits.each do |edit|
         row = group_properties.where(group_id: edit.group_id, position: edit.position)
@@ -1153,15 +1141,6 @@ module ProTacts
       Sequel::Migrator.run(@database, MIGRATIONS.to_s)
     end
 
-    # The card currently stored for an id, or nil for a card being
-    # created. A plain `first` read: the primary key leaves `sole`
-    # nothing to catch, and no row is the ordinary answer.
-    #: (String id) -> VCard?
-    def stored_card(id)
-      row = cards.where(id:).first
-      row && VCard.new(row.fetch(:vcard).to_s)
-    end
-
     # The birthday travels beside the card rather than inside it, and
     # Contact composes the served one — its vcard, its etag, everything
     # a caller reads — with the inherited lines beside it, so all
@@ -1232,15 +1211,7 @@ module ProTacts
     # composed card is the same bytes every read.
     #: (String id) -> Array[Contact::Inherited]
     def inherited_of(id)
-      inheritance(lent_of(id))
-    end
-
-    # The same read as it stands for a write: the rows a member's edit
-    # has to reach back to, before #inheritance drops them to what the
-    # model wants (see Lent).
-    #: (String id) -> Array[Lent]
-    def lent_of(id)
-      inherited_rows.where(card_id: id).map { lent_from(it) }
+      inheritance(inherited_rows.where(card_id: id).all)
     end
 
     # Every contact's inheritance in one pass, keyed by card, for the
@@ -1254,15 +1225,20 @@ module ProTacts
       lenders = groups_by_id(rows.map { it.fetch(:group_id).to_s })
       rows
         .group_by { it.fetch(:card_id).to_s }
-        .transform_values { |mine| inheritance(mine.map { lent_from(it) }, lenders) }
+        .transform_values { inheritance(it, lenders) }
     end
 
-    # What a model asks of a group's rows: the group lending each,
-    # whole, and the line itself. Which group_properties row lent it is
-    # the write path's business and stops here (Contact#group_of).
-    #: (Array[Lent] lent, ?Hash[String, Group] lenders) -> Array[Contact::Inherited]
-    def inheritance(lent, lenders = groups_by_id(lent.map(&:group_id)))
-      lent.map { Contact::Inherited.new(group: lenders.fetch(it.group_id), line: it.line) }
+    # Inherited rows as the model reads them: the group lending each,
+    # whole, and the row's position and line.
+    #: (Array[Hash[Symbol, untyped]] rows, ?Hash[String, Group] lenders) -> Array[Contact::Inherited]
+    def inheritance(rows, lenders = groups_by_id(rows.map { it.fetch(:group_id).to_s }))
+      rows.map {
+        Contact::Inherited.new(
+          group: lenders.fetch(it.fetch(:group_id).to_s),
+          position: it.fetch(:position).to_i,
+          line: it.fetch(:line).to_s,
+        )
+      }
     end
 
     # The groups these ids name, whole and keyed by id; no reads at all
@@ -1306,15 +1282,6 @@ module ProTacts
           Sequel[:group_properties][:group_id],
           Sequel[:group_properties][:position],
         )
-    end
-
-    #: (Hash[Symbol, untyped] row) -> Lent
-    def lent_from(row)
-      Lent.new(
-        group_id: row.fetch(:group_id).to_s,
-        position: row.fetch(:position).to_i,
-        line: row.fetch(:line).to_s,
-      )
     end
 
     # A birthday row read as the model. The shape was validated on the

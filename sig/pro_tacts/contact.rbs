@@ -32,9 +32,10 @@ module ProTacts
 
     class Inherited
       attr_reader group: Store::Group
+      attr_reader position: Integer
       attr_reader line: String
 
-      def self.new: (group: Store::Group, line: String) -> instance
+      def self.new: (group: Store::Group, position: Integer, line: String) -> instance
     end
 
     class Photo

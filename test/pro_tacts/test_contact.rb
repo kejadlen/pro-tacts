@@ -30,7 +30,7 @@ class ContactTest < Minitest::Test
   GROUP = ProTacts::Store::Group.new(id: "nous", name: "Booles", label: "Booles", lines: [], members: ["aiden"]) #: ProTacts::Store::Group
 
   def contact(bytes = CARD, id: "aiden", birthday: nil, inherited: [], group: GROUP)
-    lent = inherited.map { ProTacts::Contact::Inherited.new(group:, line: it) }
+    lent = inherited.each_with_index.map { |line, position| ProTacts::Contact::Inherited.new(group:, position:, line:) }
     ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(bytes), birthday:, inherited: lent)
   end
 

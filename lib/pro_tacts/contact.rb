@@ -77,9 +77,11 @@ module ProTacts
     # One line a group lends this contact, and the group that lends it,
     # whole (Store#inheritance). Not its name, because two groups may
     # share one, and a screen marking the line opens the one group that
-    # lent it (docs/DESIGN.md, "Relationships are navigable").
+    # lent it (docs/DESIGN.md, "Relationships are navigable"). The
+    # position is the group_properties row the line came from, which a
+    # member's edit to it writes back to (EditedContact::GroupEdit).
     # @rbs skip
-    Inherited = Data.define(:group, :line)
+    Inherited = Data.define(:group, :position, :line)
     # @rbs skip
     Address = Data.define(
       :po_box,
@@ -139,6 +141,11 @@ module ProTacts
     # carrying an unmodeled BDAY spelling; showing that is
     # #properties' job.
     attr_reader :birthday
+
+    # The lines this contact's groups lend it (Inherited), which a
+    # submitted card is measured against to tell a member's edit to a
+    # shared line from a line of its own (EditedContact).
+    attr_reader :inherited
 
     # The card to serve: the stored one with the inherited lines and
     # the birthday composed back in, in that order, each immediately
@@ -342,7 +349,7 @@ module ProTacts
     # Matched by the line's bytes, which is the same blindness the
     # editor's digests have (VCard::Parser::Line#digest): a stored
     # line whose bytes are a group's line reads as the group's here.
-    # No write makes that state — Lent.subtract takes the
+    # No write makes that state — EditedContact takes the
     # group's copy back out of a submission — but a member whose own
     # card spells the line exactly as its group does still has one, and
     # naming the group over both copies says something true about the
