@@ -121,6 +121,23 @@ module ProTacts
       !to_line.nil?
     end
 
+    # The day this birthday next lands on, today included, so one
+    # already passed this year wraps onto next year rather than going
+    # missing. Only the shapes with both a month and a day land
+    # anywhere: a year alone, a year and month, and a month alone sit on
+    # no calendar day, and a day with no month arrives in no week in
+    # particular, so the four answer nil. A day the month does not
+    # have, February 30 or April 31, is well-shaped but calendar-
+    # nonsense (see .new), and lands on the month's last day; #to_s
+    # still names the day it says.
+    def next_on(today)
+      month, day = self.month, self.day
+      return if month.nil? || day.nil?
+
+      this_year = date_in(today.year, month, day)
+      this_year < today ? date_in(today.year + 1, month, day) : this_year
+    end
+
     # One parsed BDAY property as a birthday, or nil for a line the model
     # does not take — which then stays in the card verbatim (RFC 6352
     # section 6.3.2.2). A grouped `item1.BDAY` is not taken, because its
@@ -171,5 +188,13 @@ module ProTacts
       end
     end
     private_class_method :from_value, :apple_no_year?
+
+    private
+
+    def date_in(year, month, day)
+      Date.new(year, month, day)
+    rescue ArgumentError
+      Date.new(year, month, -1)
+    end
   end
 end

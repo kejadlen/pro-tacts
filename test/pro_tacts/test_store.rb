@@ -1059,20 +1059,6 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # Well-shaped but calendar-nonsense — February 30 — lands on the
-  # month's last day for ordering, the same value Format.birthday
-  # rescues to a raw display of.
-  def test_a_day_the_month_does_not_have_orders_on_the_months_last_day
-    september = Date.new(2026, 9, 3)
-    nonsense = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Nonsense\r\nBDAY:1980-02-30\r\nUID:nonsense\r\nEND:VCARD\r\n"
-
-    with_store({"nonsense" => nonsense, "noyear" => NO_YEAR}) do |store|
-      upcoming = store.upcoming_birthdays(10, today: september)
-
-      assert_equal Date.new(2027, 2, 28), upcoming.fetch(0).occurs_on
-    end
-  end
-
   # The transaction the whole design turns on, now with a third piece:
   # a birthday must not survive a write whose log entry failed.
   def test_a_failed_birthday_write_leaves_no_birthday

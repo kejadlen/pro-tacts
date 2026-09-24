@@ -34,9 +34,10 @@ module ProTacts
   # Every Contact this store hands out is composed, never the stored
   # card alone: a birthday and the lines a contact inherits from its
   # groups are both subtracted out of a card on the way in
-  # (EditedContact), and Contact composes them back in on read — so the vcard and the etag a caller sees, and the etag
-  # the change log records, describe the card a client downloads, not
-  # the bytes on disk.
+  # (EditedContact), and Contact composes them back in on read — so
+  # the vcard and the etag a caller sees, and the etag the change log
+  # records, describe the card a client downloads, not the bytes on
+  # disk.
   #
   # The signature lives in sig/pro_tacts/store.rbs, for the Change Data
   # class the inline syntax cannot read.
@@ -263,13 +264,11 @@ module ProTacts
     # Birthdays that land on a coming calendar day, in arrival order:
     # today's first, and one already passed this year wrapped onto next
     # year rather than dropped — the wrap that keeps "upcoming" a
-    # year-round answer instead of a January one. Only the shapes with
-    # both a month and a day land anywhere: a year alone, a year and
-    # month, and a month alone sit on no calendar day, and a day with
-    # no month arrives in no week in particular, so none of the four is
-    # this list's to place. A birthday is database state rather than a
-    # line in a card (docs/plans/2026-08-31-partial-birthdays.md), so
-    # this reads the table rather than scanning cards for BDAY.
+    # year-round answer instead of a January one. Where each lands, and
+    # which shapes land nowhere, is Birthday#next_on's to say. A
+    # birthday is database state rather than a line in a card
+    # (docs/plans/2026-08-31-partial-birthdays.md), so this reads the
+    # table rather than scanning cards for BDAY.
     #: (Integer limit, ?today: Date) -> Array[UpcomingBirthday]
     def upcoming_birthdays(limit, today: Date.today)
       inherited = inherited_by_id
@@ -1239,30 +1238,14 @@ module ProTacts
     end
 
     # One joined birthday-and-card row as an UpcomingBirthday, or nil
-    # for a shape that lands on no calendar day (see
-    # #upcoming_birthdays).
+    # for a shape that lands on no calendar day (Birthday#next_on).
     #: (Hash[Symbol, untyped] row, Date today, Array[Contact::Inherited] inherited) -> UpcomingBirthday?
     def upcoming_from(row, today, inherited)
       birthday = birthday_from(row)
-      month, day = birthday.month, birthday.day
-      return if month.nil? || day.nil?
+      occurs_on = birthday.next_on(today)
+      return if occurs_on.nil?
 
-      candidate = date_in(today.year, month, day)
-      UpcomingBirthday.new(
-        contact: contact_from(row, birthday, inherited),
-        occurs_on: candidate < today ? date_in(today.year + 1, month, day) : candidate,
-      )
-    end
-
-    # A birthday's month and day as a date in `year`. A day the month
-    # does not have — February 30, April 31 — was stored well-shaped but
-    # calendar-nonsense (see Birthday), and lands on the month's last
-    # day for ordering; what the view shows is the stored value.
-    #: (Integer year, Integer month, Integer day) -> Date
-    def date_in(year, month, day)
-      Date.new(year, month, day)
-    rescue ArgumentError
-      Date.new(year, month, -1)
+      UpcomingBirthday.new(contact: contact_from(row, birthday, inherited), occurs_on:)
     end
 
     #: (Hash[Symbol, untyped] row) -> Change

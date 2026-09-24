@@ -81,6 +81,43 @@ class BirthdayTest < Minitest::Test
     assert_equal "February 30, 1985", ProTacts::Birthday.new(year: 1985, month: 2, day: 30).to_s
   end
 
+  ## next_on
+
+  # A birthday still ahead this year lands this year, and one already
+  # here today lands today rather than a year out.
+  def test_next_on_lands_this_year_from_today_on
+    today = Date.new(2026, 9, 3)
+
+    assert_equal Date.new(2026, 9, 4), ProTacts::Birthday.new(year: 1985, month: 9, day: 4).next_on(today)
+    assert_equal Date.new(2026, 9, 3), ProTacts::Birthday.new(month: 9, day: 3).next_on(today)
+  end
+
+  # One already passed wraps onto next year rather than going missing.
+  def test_next_on_wraps_a_passed_birthday_onto_next_year
+    assert_equal Date.new(2027, 3, 15), ProTacts::Birthday.new(year: 1990, month: 3, day: 15).next_on(Date.new(2026, 9, 3))
+  end
+
+  # Only a month and a day together name a calendar day.
+  def test_next_on_is_nil_for_the_shapes_on_no_calendar_day
+    today = Date.new(2026, 9, 3)
+
+    [
+      ProTacts::Birthday.new(year: 1985, month: 4),
+      ProTacts::Birthday.new(year: 1985),
+      ProTacts::Birthday.new(month: 4),
+      ProTacts::Birthday.new(day: 12),
+    ].each { |birthday| assert_nil birthday.next_on(today) }
+  end
+
+  # Well-shaped but calendar-nonsense lands on the month's last day,
+  # the year's own February deciding which: 29 in a leap year.
+  def test_next_on_puts_a_day_the_month_does_not_have_on_its_last_day
+    nonsense = ProTacts::Birthday.new(year: 1980, month: 2, day: 30)
+
+    assert_equal Date.new(2027, 2, 28), nonsense.next_on(Date.new(2026, 9, 3))
+    assert_equal Date.new(2028, 2, 29), nonsense.next_on(Date.new(2027, 9, 3))
+  end
+
   ## from_property
 
   # A parsed property, the shape a read out of a card takes.
