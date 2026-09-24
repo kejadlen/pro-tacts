@@ -77,8 +77,10 @@ class AdminGroupsPagesTest < Minitest::Test
     with_contacts({}) do
       get "/"
 
-      assert_includes last_response.body, %(<a href="/">pro-tacts</a><a href="/contacts">contacts</a><a href="/groups">groups</a>)
-      refute_includes last_response.body, %(<a href="/groups" class="type-label">)
+      body = last_response.body
+      assert_includes body, %(<a href="/">pro-tacts</a>)
+      assert_includes body, %(<nav><a href="/contacts">contacts</a><a href="/groups">groups</a></nav>)
+      refute_includes body, %(<a href="/groups" class="type-label">)
     end
   end
 

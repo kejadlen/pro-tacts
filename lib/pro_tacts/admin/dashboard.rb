@@ -23,6 +23,7 @@ module ProTacts
       private_constant :RECENT_LIMIT
 
       # @rbs @query: String
+      # @rbs @login: String
       # @rbs @upcoming: Array[Store::UpcomingBirthday]
       # @rbs @labels: Hash[String, Array[String]]
       # @rbs @groups: Array[Store::Group]
@@ -32,9 +33,10 @@ module ProTacts
       # The groups arrive whole because a search answers from both
       # sides of the relationship: a group is findable by its own name,
       # and a contact by the names of the groups it is in.
-      #: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, groups: Array[Store::Group], ?notice: String?) -> void
-      def initialize(recent:, upcoming:, query:, groups:, notice: nil)
+      #: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, login: String, groups: Array[Store::Group], ?notice: String?) -> void
+      def initialize(recent:, upcoming:, query:, login:, groups:, notice: nil)
         @query = query.to_s.strip
+        @login = login
         @upcoming = upcoming
         @notice = notice
         @labels = {}
@@ -45,7 +47,7 @@ module ProTacts
       end
 
       def view_template
-        render Layout.new(title: "Home", wide: true, query: @query,
+        render Layout.new(title: "Home", login: @login, wide: true, query: @query,
                           autofocus: @query.empty?, notice: @notice) do
           div(class: "dashboard") do
             section do

@@ -19,7 +19,7 @@ module ProTacts
       r.is do
         r.get do
           response["Content-Type"] = "text/html; charset=utf-8"
-          Admin::GroupsIndex.call(groups: store.all_groups)
+          Admin::GroupsIndex.call(groups: store.all_groups, login: @login)
         end
 
         r.post do
@@ -29,7 +29,8 @@ module ProTacts
         rescue Sequel::UniqueConstraintViolation
           # A taken name (db/migrations/008_group_names.rb).
           response["Content-Type"] = "text/html; charset=utf-8"
-          Admin::GroupsIndex.call(groups: store.all_groups, notice: "Another group is already named #{name}.")
+          Admin::GroupsIndex.call(groups: store.all_groups, login: @login,
+                                   notice: "Another group is already named #{name}.")
         end
       end
 
@@ -62,6 +63,7 @@ module ProTacts
             response["Content-Type"] = "text/html; charset=utf-8"
             Admin::GroupsShow.call(
               group:,
+              login: @login,
               contacts: store.contacts,
               changes: store.group_changes_of(id),
             )
@@ -127,13 +129,13 @@ module ProTacts
     #: (Store::Group group, ?notice: String) -> String
     def group_edit_screen(group, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::GroupsEdit.call(group:, notice:)
+      Admin::GroupsEdit.call(group:, login: @login, notice:)
     end
 
     #: (Store::Group group) -> String
     def members_screen(group)
       response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::GroupsMembers.call(group:, contacts: store.contacts)
+      Admin::GroupsMembers.call(group:, contacts: store.contacts, login: @login)
     end
   end
 end

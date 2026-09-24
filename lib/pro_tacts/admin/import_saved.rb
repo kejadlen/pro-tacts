@@ -18,6 +18,7 @@ module ProTacts
     # ContactCard's, the one renderer of a contact's record.
     class ImportSaved < Phlex::HTML
       # @rbs @contact: Contact
+      # @rbs @login: String
       # @rbs @groups: Array[Store::Group]
       # @rbs @all_groups: Array[Store::GroupChoice]
       # @rbs @aside: Phlex::HTML
@@ -26,9 +27,10 @@ module ProTacts
       # @rbs @land: String
       # @rbs @notice: String?
 
-      #: (contact: Contact, groups: Array[Store::Group], all_groups: Array[Store::GroupChoice], aside: Phlex::HTML, sidebar: Phlex::HTML, edit: String, land: String, ?notice: String?) -> void
-      def initialize(contact:, groups:, all_groups:, aside:, sidebar:, edit:, land:, notice: nil)
+      #: (contact: Contact, login: String, groups: Array[Store::Group], all_groups: Array[Store::GroupChoice], aside: Phlex::HTML, sidebar: Phlex::HTML, edit: String, land: String, ?notice: String?) -> void
+      def initialize(contact:, login:, groups:, all_groups:, aside:, sidebar:, edit:, land:, notice: nil)
         @contact = contact
+        @login = login
         @groups = groups
         @all_groups = all_groups
         @aside = aside
@@ -40,7 +42,7 @@ module ProTacts
 
       def view_template
         edit = @edit
-        render Layout.new(title: @contact.name || @contact.id, wide: true, notice: @notice) do
+        render Layout.new(title: @contact.name || @contact.id, login: @login, wide: true, notice: @notice) do
           render RecordCard.new(
             nav: -> { a(href: edit, class: "btn", data_size: "sm") { "edit" } },
             aside: @aside,

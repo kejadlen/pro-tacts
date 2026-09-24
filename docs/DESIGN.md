@@ -109,14 +109,17 @@ when the viewport cannot hold two side by side. Every other screen keeps a
 single reading column.
 
 Under every screen sits the footer, the header's counterpart, holding what no
-search can turn up because none of it is a record: the version answering,
-whether debug logging is recording, and a link to device setup. `rake dev`
-names its version after the jj change it runs from, since a working copy
-dressed as the deployment is the confusion the line exists to end. A run
-with its own accent fills the header and footer with it, so the difference
-shows before a word of either is read. Debug
-logging appears only while it is on, written `+debug` — a flag on the build,
-not a sentence beside it — and a quiet log has nothing to say.
+search can turn up because none of it is a record: the version answering and
+whether debug logging is recording, centered and alone — the frame's other
+edge is the build's own label. The destinations that are not records live in
+the account menu at the header's right edge, behind the login the proxy
+vouches for: import and device setup, the two places typing cannot reach.
+`rake dev` names its version after the jj change it runs from, since a
+working copy dressed as the deployment is the confusion the line exists to
+end. A run with its own accent fills the header and footer with it, so the
+difference shows before a word of either is read. Debug logging appears only
+while it is on, written `+debug` — a flag on the build, not a sentence beside
+it — and a quiet log has nothing to say.
 
 ## Records are cards, not forms
 

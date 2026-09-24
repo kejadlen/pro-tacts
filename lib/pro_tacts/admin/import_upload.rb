@@ -21,18 +21,20 @@ module ProTacts
     # contacts and is still there tomorrow, so the walk ends on that
     # rather than on a copy of it under this form (Web#close_walk).
     class ImportUpload < Phlex::HTML
+      # @rbs @login: String
       # @rbs @notice: String?
 
       FORM = "import-form" #: String
       private_constant :FORM
 
-      #: (?notice: String?) -> void
-      def initialize(notice: nil)
+      #: (login: String, ?notice: String?) -> void
+      def initialize(login:, notice: nil)
+        @login = login
         @notice = notice
       end
 
       def view_template
-        render Layout.new(title: "Import", notice: @notice) do
+        render Layout.new(title: "Import", login: @login, notice: @notice) do
           render RecordCard.new(heading: "Import contacts", submit: "Import", form: FORM) do
             form(action: "/import", method: "post", enctype: "multipart/form-data", id: FORM) do
               label(class: "field") do

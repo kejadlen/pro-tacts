@@ -26,9 +26,10 @@ module ProTacts
       # one: a card with no entries is a card whose history was lost,
       # and an empty default would render that as an ordinary quiet
       # record. Every group is the groups dialog's (GroupDialog).
-      #: (Contact contact, Array[Store::Group] groups, Array[Store::GroupChoice] all_groups, Array[Store::Change] changes, ?notice: String?) -> void
-      def initialize(contact:, groups:, all_groups:, changes:, notice: nil)
+      #: (Contact contact, String login, Array[Store::Group] groups, Array[Store::GroupChoice] all_groups, Array[Store::Change] changes, ?notice: String?) -> void
+      def initialize(contact:, login:, groups:, all_groups:, changes:, notice: nil)
         @contact = contact
+        @login = login
         @groups = groups
         @all_groups = all_groups
         @changes = changes
@@ -36,7 +37,7 @@ module ProTacts
       end
 
       def view_template
-        render Layout.new(title: @contact.name || @contact.id, notice: @notice) do
+        render Layout.new(title: @contact.name || @contact.id, login: @login, notice: @notice) do
           # The back-link line and the record card are one block, the
           # line its caption row: spaced like the dashboard's
           # section-head over its card (see .record in admin.css), not

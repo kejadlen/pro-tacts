@@ -14,10 +14,12 @@ module ProTacts
     # contact's groups as chips under it.
     class ContactsIndex < Phlex::HTML
       # @rbs @rows: Array[Contact]
+      # @rbs @login: String
       # @rbs @groups_of: Hash[String, Array[Store::Group]]
 
-      #: (contacts: Array[Contact], groups: Array[Store::Group]) -> void
-      def initialize(contacts:, groups:)
+      #: (contacts: Array[Contact], groups: Array[Store::Group], login: String) -> void
+      def initialize(contacts:, groups:, login:)
+        @login = login
         @rows = contacts.sort_by { [Format.sort_key(it), it.id] }
         # Whole groups inverted into memberships, the way the dashboard
         # inverts them for search: which groups a contact is in is the
@@ -29,7 +31,7 @@ module ProTacts
       end
 
       def view_template
-        render Layout.new(title: "Contacts") do
+        render Layout.new(title: "Contacts", login: @login) do
           section do
             div(class: "section-head") do
               h2(class: "type-label") { "contacts (#{@rows.length})" }

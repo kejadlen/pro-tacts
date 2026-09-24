@@ -6,10 +6,10 @@ require "pro_tacts"
 require "pro_tacts/config"
 require "pro_tacts/web"
 
-# The shell's footer, exercised through /setup: it is the one screen
-# that renders the layout without a store behind it, and the footer is
-# the layout's, so what holds here holds on every screen.
-class AdminFooterTest < Minitest::Test
+# The shell — header and footer — exercised through /setup: it is the
+# one screen that renders the layout without a store behind it, and
+# both bars are the layout's, so what holds here holds on every screen.
+class AdminLayoutTest < Minitest::Test
   include Rack::Test::Methods
 
   def app
@@ -30,16 +30,35 @@ class AdminFooterTest < Minitest::Test
     get "/setup"
   end
 
-  def test_the_footer_links_to_device_setup
-    with_env({})
-
-    assert_includes last_response.body, %(<a href="/setup" class="type-label">device setup</a>)
+  # Everything above the fold, before the screen's own content starts.
+  #: () -> String
+  def header_html
+    last_response.body.split("<main").first
   end
 
-  def test_the_footer_links_to_the_import_screen
+  def test_the_header_names_who_is_logged_in
     with_env({})
 
-    assert_includes last_response.body, %(<a href="/import" class="type-label">import</a>)
+    assert_includes header_html, "test@example.com"
+  end
+
+  def test_the_account_menu_opens_on_the_login
+    with_env({})
+
+    assert_includes header_html, %(popovertarget="user-menu")
+    assert_includes header_html, %(<ul id="user-menu" popover="auto")
+  end
+
+  def test_the_account_menu_links_to_the_import_screen
+    with_env({})
+
+    assert_includes header_html, %(<a href="/import">import</a>)
+  end
+
+  def test_the_account_menu_links_to_device_setup
+    with_env({})
+
+    assert_includes header_html, %(<a href="/setup">device setup</a>)
   end
 
   def test_the_footer_names_the_version_the_image_carries
@@ -51,15 +70,16 @@ class AdminFooterTest < Minitest::Test
   # Blank is what an image built by hand says (see Config#version): the
   # Dockerfile sets the variable from a build arg that was never passed,
   # so it arrives empty rather than absent. Either way there is no
-  # version to name, and the footer does not invent one.
+  # version to name, and the footer does not invent one — but the bar
+  # itself stays, the frame's other edge.
   def test_an_unversioned_run_names_no_version
     with_env("VERSION" => "")
 
-    assert_includes last_response.body, %(<footer class="admin-footer"><a href="/import")
+    assert_includes last_response.body, %(<footer class="admin-footer"></footer>)
 
     with_env({})
 
-    assert_includes last_response.body, %(<footer class="admin-footer"><a href="/import")
+    assert_includes last_response.body, %(<footer class="admin-footer"></footer>)
   end
 
   # The label is a standing notice, not a status: the log is recording

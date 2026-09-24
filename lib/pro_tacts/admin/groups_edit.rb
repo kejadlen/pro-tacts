@@ -24,6 +24,7 @@ module ProTacts
     # (#apply_edit's is-a-Hash posture) and leaves it as it stands.
     class GroupsEdit < Phlex::HTML
       # @rbs @group: Store::Group
+      # @rbs @login: String
       # @rbs @reading: Contact
       # @rbs @notice: String?
 
@@ -31,15 +32,16 @@ module ProTacts
       FORM = "group-form" #: String
       private_constant :FORM
 
-      #: (group: Store::Group, ?notice: String?) -> void
-      def initialize(group:, notice: nil)
+      #: (group: Store::Group, login: String, ?notice: String?) -> void
+      def initialize(group:, login:, notice: nil)
         @group = group
+        @login = login
         @reading = group.reading
         @notice = notice
       end
 
       def view_template
-        render Layout.new(title: "Edit #{@group.label}", notice: @notice) do
+        render Layout.new(title: "Edit #{@group.label}", login: @login, notice: @notice) do
           # The scope wraps the whole record because the add button sits
           # in the caption row above the card, where the contact editor's
           # add button sits, and the row it reveals is inside the form.

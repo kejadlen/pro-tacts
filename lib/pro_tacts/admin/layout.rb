@@ -1,6 +1,7 @@
 require "pro_tacts/admin/phlex"
 
 require "pro_tacts"
+require "pro_tacts/admin/icons"
 
 module ProTacts
   module Admin
@@ -30,9 +31,22 @@ module ProTacts
     # job it keeps doing it: the popovers open and close by the
     # Popover API, not by script.
     class Layout < Phlex::HTML
-      #: (title: String, ?wide: bool, ?query: String?, ?autofocus: bool, ?notice: String?) -> void
-      def initialize(title:, wide: false, query: nil, autofocus: false, notice: nil)
+      # The account menu's popover, opened by the button that names
+      # the login.
+      MENU = "user-menu" #: String
+      private_constant :MENU
+
+      # @rbs @title: String
+      # @rbs @login: String
+      # @rbs @wide: bool
+      # @rbs @query: String?
+      # @rbs @autofocus: bool
+      # @rbs @notice: String?
+
+      #: (title: String, login: String, ?wide: bool, ?query: String?, ?autofocus: bool, ?notice: String?) -> void
+      def initialize(title:, login:, wide: false, query: nil, autofocus: false, notice: nil)
         @title = title
+        @login = login
         @wide = wide
         @query = query
         @autofocus = autofocus
@@ -74,39 +88,68 @@ module ProTacts
           end
           body do
             header(class: "admin-header") do
-              # The groups list rides beside the name because it is
-              # where a group is created, and creating one is a thing
-              # to reach from anywhere; search still finds one by name.
-              # The contacts list is the browse surface (docs/DESIGN.md,
-              # "The core idea").
-              nav do
-                a(href: "/") { "pro-tacts" }
-                a(href: "/contacts") { "contacts" }
-                a(href: "/groups") { "groups" }
-              end
-              # Every screen's chrome, not the dashboard's alone: the
-              # input keeps the query it carries — a results page has
+              # The name and, beside it, the one control every screen
+              # shares: what this app is and how it is asked a
+              # question, on the left where reading starts. The input
+              # keeps the query it carries — a results page has
               # somewhere to be besides the input — and focuses only
               # where the screen asked for it.
+              a(href: "/") { "pro-tacts" }
               form(action: "/", method: "get", class: "search-form") do
                 input(type: "search", name: "q", value: @query,
                       placeholder: "Search contacts", autofocus: @autofocus)
               end
+              # The destinations and the account, at the right edge:
+              # the contacts list is the browse surface and the groups
+              # list is where a group is created — both reachable from
+              # anywhere (docs/DESIGN.md, "The core idea"), search
+              # still finding a group by name — with who is asking
+              # named beside them.
+              nav do
+                a(href: "/contacts") { "contacts" }
+                a(href: "/groups") { "groups" }
+              end
+              # The account the proxy vouches for (ProxyAuth), named
+              # where the session reads as belonging to someone. The
+              # button opens a menu rather than a page because the
+              # account has no page: a login decides which cards sync
+              # to whose devices (docs/plans/2026-09-12-per-user-
+              # books.md) and nothing else, so what hangs off it is
+              # the two destinations that are not records and so
+              # cannot be searched for — import, a handful of times in
+              # a book's life (docs/plans/2026-09-21-import-a-vcf.md),
+              # and device setup. A popover by the Popover API, like
+              # every floated layer here; the list sits beside its
+              # button in the header so it can be positioned from it
+              # (admin.css) while the Popover API still renders it
+              # above everything when open.
+              div(class: "user-menu") do
+                button(type: "button", data_size: "sm", popovertarget: MENU) do
+                  span { @login }
+                  render Icon.new(:chevron_down)
+                end
+                ul(id: MENU, popover: "auto", class: "user-menu-list") do
+                  li { a(href: "/import") { "import" } }
+                  li { a(href: "/setup") { "device setup" } }
+                end
+              end
             end
             main(class: "admin-main", **(@wide ? {data: {wide: true}} : {})) { yield }
-            # The shell's other edge: which build is answering, whether
-            # it is logging what it answers, and the one screen search
-            # cannot reach. All of it read off the environment (see
-            # Config) rather than passed down through every screen's
-            # call — these are the shell's own facts, the same on all
-            # of them.
+            # The shell's other edge: which build is answering and
+            # whether it is logging what it answers, both read off
+            # the environment (see Config) rather than passed down
+            # through every screen's call — these are the shell's own
+            # facts, the same on all of them.
             #
             # The version is the image's tag and the release's name at
             # once, so it stands alone: the commit and the build time
             # are spelled inside it, and a second label repeating either
             # would be the same fact twice. `rake dev` stamps the jj
             # change it runs from instead; a run with neither says
-            # nothing rather than guessing what it is.
+            # nothing rather than guessing what it is. Centered, with
+            # nothing else in the footer: the frame's other edge is
+            # the build's own label, and a build with no label still
+            # draws the edge.
             #
             # Debug logging says so while it is on because it dumps
             # every sync whole, contact data included (see ExchangeLog),
@@ -116,20 +159,10 @@ module ProTacts
             # flag on the version rather than a sentence beside it —
             # "+debug" is a build with something switched on, which is
             # what it is, and the plus is its own separator.
-            #
-            # Device setup belongs here because the dashboard is a
-            # search over contacts and /setup is not a contact — a
-            # header link would put it beside the search on every
-            # screen, at the weight the app's own name has. Import is
-            # here for the same reason and is rarer still: an address
-            # book arrives a handful of times in a book's life
-            # (docs/plans/2026-09-21-import-a-vcf.md).
             footer(class: "admin-footer") do
               version = ProTacts.config.version
               span(class: "type-label") { version } if version
               span(class: "type-label") { "+debug" } if ProTacts.config.debug?
-              a(href: "/import", class: "type-label") { "import" }
-              a(href: "/setup", class: "type-label") { "device setup" }
             end
             # A server-rendered toast, Gloss's [role=status] contract:
             # the one line a refused write leaves behind, fixed to the

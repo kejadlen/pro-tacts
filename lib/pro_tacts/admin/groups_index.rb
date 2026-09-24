@@ -15,10 +15,12 @@ module ProTacts
     # it will hold is added.
     class GroupsIndex < Phlex::HTML
       # @rbs @groups: Array[Store::Group]
+      # @rbs @login: String
       # @rbs @notice: String?
 
-      #: (groups: Array[Store::Group], ?notice: String?) -> void
-      def initialize(groups:, notice: nil)
+      #: (groups: Array[Store::Group], login: String, ?notice: String?) -> void
+      def initialize(groups:, login:, notice: nil)
+        @login = login
         # The `sync:` groups first — the books a client syncs, which
         # are the store's own rather than anything a person made — and
         # the rest alphabetically. Sorted here rather than asked of the
@@ -33,7 +35,7 @@ module ProTacts
       end
 
       def view_template
-        render Layout.new(title: "Groups", notice: @notice) do
+        render Layout.new(title: "Groups", login: @login, notice: @notice) do
           section do
             div(class: "section-head") do
               h2(class: "type-label") { "groups" }

@@ -72,6 +72,7 @@ module ProTacts
       ].freeze #: Array[[String, String]]
 
       # @rbs @contact: Contact
+      # @rbs @login: String
       # @rbs @own: Contact
       # @rbs @sidebar: Phlex::HTML?
       # @rbs @save: String
@@ -101,10 +102,11 @@ module ProTacts
       # about is a field an import writes and an edit cannot undo.
       # Defaulted to the contact's own, so the ordinary edit says
       # nothing about any of it.
-      #: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: Phlex::HTML?, ?fields: Phlex::HTML?, ?lead: Phlex::HTML?, ?sidebar: Phlex::HTML?, ?save: String?) -> void
-      def initialize(contact:, notice: nil, action: nil, back: nil, aside: nil, fields: nil,
+      #: (contact: Contact, login: String, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: Phlex::HTML?, ?fields: Phlex::HTML?, ?lead: Phlex::HTML?, ?sidebar: Phlex::HTML?, ?save: String?) -> void
+      def initialize(contact:, login:, notice: nil, action: nil, back: nil, aside: nil, fields: nil,
                      lead: nil, sidebar: nil, save: nil)
         @contact = contact
+        @login = login
         @action = action || "/contacts/#{contact.id}"
         @back = back
         @aside = aside
@@ -133,7 +135,7 @@ module ProTacts
         # Wide only when something is beside the editor: the reading
         # width a single column wants is still what one card gets
         # (admin.css).
-        render Layout.new(title: "Edit #{@contact.name || @contact.id}",
+        render Layout.new(title: "Edit #{@contact.name || @contact.id}", login: @login,
                           wide: !@aside.nil? || !@sidebar.nil?, notice: @notice) do
           # The editor's Alpine scope, wrapping the record and the add
           # dialog both: the dialog names a type and the form grows a

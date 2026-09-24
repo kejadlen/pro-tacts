@@ -23,7 +23,7 @@ module ProTacts
         # contacts (docs/DESIGN.md, "The core idea").
         r.get do
           response["Content-Type"] = "text/html; charset=utf-8"
-          Admin::ContactsIndex.call(contacts: store.contacts, groups: store.all_groups)
+          Admin::ContactsIndex.call(contacts: store.contacts, groups: store.all_groups, login: @login)
         end
 
         # The browser's create, from the dashboard's dialog: POST is
@@ -71,7 +71,7 @@ module ProTacts
           # not_found handler fills in, same as the page below.
           if contact
             response["Content-Type"] = "text/html; charset=utf-8"
-            Admin::ContactsEdit.call(contact:, back: edit_back(contact))
+            Admin::ContactsEdit.call(contact:, login: @login, back: edit_back(contact))
           end
         end
 
@@ -124,6 +124,7 @@ module ProTacts
         recent: store.contacts_by_recency,
         upcoming: store.upcoming_birthdays(Admin::UpcomingBirthdays::LIMIT),
         query:,
+        login: @login,
         groups: store.all_groups,
         notice:,
       )
@@ -262,6 +263,7 @@ module ProTacts
       response["Content-Type"] = "text/html; charset=utf-8"
       Admin::ContactsShow.call(
         contact:,
+        login: @login,
         groups: store.groups_of(contact.id),
         all_groups: store.group_choices,
         changes: store.changes_of(contact.id),
@@ -272,7 +274,7 @@ module ProTacts
     #: (Contact contact, ?notice: String) -> String
     def edit_screen(contact, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::ContactsEdit.call(contact:, notice:, back: edit_back(contact))
+      Admin::ContactsEdit.call(contact:, login: @login, notice:, back: edit_back(contact))
     end
 
     # The edit's way back, named by the route rather than left to the

@@ -421,7 +421,6 @@ textarea:focus {
 .admin-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--gl-space-s);
   padding: var(--gl-space-2xs) var(--gl-space-m);
   border-bottom: 1px solid var(--gl-color-border-hairline);
@@ -432,20 +431,22 @@ textarea:focus {
   color: var(--gl-color-text-primary);
   text-decoration: none;
 }
-/* The name and the destinations as one group on the left, so the
-   header's space-between still splits two things. The name sits a
-   tier above the links after it — one type step, the identity
-   rendered in type (docs/DESIGN.md) — while they step down a shade:
-   destinations, not the name. */
+/* Two groups in one flex row: the name and the search it carries on
+   the left, the destinations and the account at the right edge — the
+   nav's auto margin is what pushes the second group there, no
+   wrappers to hold. The name sits a tier above the links — one type
+   step, the identity rendered in type (docs/DESIGN.md) — while they
+   step down a shade: destinations, not the name. */
 .admin-header nav {
   display: flex;
   align-items: baseline;
   gap: var(--gl-space-s);
+  margin-left: auto;
 }
-.admin-header nav a:first-child {
+.admin-header > a {
   font-size: var(--gl-step-0);
 }
-.admin-header nav a + a {
+.admin-header nav a {
   color: var(--gl-color-text-secondary);
 }
 
@@ -454,23 +455,18 @@ textarea:focus {
    the two rules read as one frame around the column between them.
    `margin-top: auto` is what pins it to the bottom of a short page —
    the body below is a column tall enough to have a bottom — and on a
-   page taller than the viewport it simply follows the content. */
+   page taller than the viewport it simply follows the content. The
+   version it carries is centered: it is the only thing in the bar,
+   and a build with no label still draws the frame's edge. */
 .admin-footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: var(--gl-space-s);
   margin-top: auto;
   padding: var(--gl-space-2xs) var(--gl-space-m);
   border-top: 1px solid var(--gl-color-border-hairline);
-}
-
-/* The header's own split, upside down: what is true on the left, the
-   one thing to click on the right. At an even gap the link sat a word
-   away from the state beside it, two labels of one weight reading as
-   one phrase; the edge is what tells them apart. */
-.admin-footer a {
-  margin-left: auto;
 }
 
 /* A run with an accent configured (PRO_TACTS_ACCENT; Layout marks the
@@ -491,13 +487,20 @@ textarea:focus {
   background: var(--gl-color-accent);
   border-color: var(--gl-color-accent);
 }
-:root[data-accent] :is(.admin-header a, .admin-footer .type-label) {
+:root[data-accent] :is(.admin-header a, .admin-header .user-menu button,
+.admin-footer .type-label) {
   color: var(--gl-color-accent-fg);
 }
 /* The one focus ring is drawn in the accent, which vanishes against a
    bar filled with it. */
 :root[data-accent] :is(.admin-header, .admin-footer) :focus-visible {
   outline-color: var(--gl-color-accent-fg);
+}
+/* The menu's list is a DOM child of the header but floats over the
+   page, where the accent ring is the one every link off the chrome
+   bars gets — the rule above would reach it by descent alone. */
+:root[data-accent] .admin-header .user-menu ul :focus-visible {
+  outline-color: var(--gl-color-accent);
 }
 
 /* The row hover Gloss gives is surface-fill — which the page repoint
@@ -616,8 +619,8 @@ body {
 
 /* field.css's `form { max-width: 28rem; }` is sized for the
    settings-form pattern; the header's search is a single input, and
-   flex: 1 + a narrower cap puts a deliberate 18rem box at the
-   header's right and lets it shrink on a narrow viewport. */
+   flex: 1 + a narrower cap lets the box grow beside the name toward
+   a deliberate 18rem and shrink on a narrow viewport. */
 .search-form {
   flex: 1;
   max-width: 18rem;
@@ -630,6 +633,54 @@ body {
    relying on stylesheet order. */
 .admin-header .search-form input[type="search"] {
   padding-block: var(--gl-space-3xs);
+}
+
+/* The account menu, the header's third region: the button naming the
+   login and the popover it opens. The wrapper is the popover's
+   positioning context — a popover is promoted to the top layer on
+   opening but keeps its DOM position for `position: absolute`, so
+   the list hangs below the button at the header's right edge with
+   no script and no anchor positioning; closed, the Popover API
+   itself keeps it out of the layout and the tab order. */
+.user-menu {
+  position: relative;
+  display: flex;
+}
+/* The UA popover styles center (`position: fixed; inset: 0; margin:
+   auto`), overridden to open off the button. A card's construction —
+   surface, hairline, the one --gl-shadow-float a floated layer
+   carries (Gloss's dialog, here) — at menu size; the rows take the
+   quiet button's own hover tint. */
+.user-menu ul {
+  position: absolute;
+  inset: auto;
+  inset-block-start: calc(100% + var(--gl-space-2xs));
+  inset-inline-end: 0;
+  margin: 0;
+  padding: var(--gl-space-2xs);
+  background: var(--gl-color-surface-card);
+  border: 1px solid var(--gl-color-border-hairline);
+  border-radius: var(--gl-radius-md);
+  box-shadow: var(--gl-shadow-float);
+}
+.user-menu ul a {
+  display: block;
+  padding: var(--gl-space-2xs) var(--gl-space-xs);
+  border-radius: var(--gl-radius-sm);
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--1);
+  color: var(--gl-color-text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.user-menu ul a:hover {
+  background: var(--gl-color-surface-fill);
+}
+/* The caret says which way the menu opens, and turns around once it
+   has — state the markup can express on its own, the header's own
+   no-script rule holding where nothing else is needed. */
+.user-menu:has(ul:popover-open) svg {
+  rotate: 180deg;
 }
 
 /* Gloss zeroes every heading's margin (base/typography.css), which

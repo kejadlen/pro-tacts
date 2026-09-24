@@ -7,46 +7,46 @@
 module ProTacts
   module Admin
     class ContactsShow
-      def self.call: (contact: Contact, groups: Array[Store::Group], all_groups: Array[Store::GroupChoice], changes: Array[Store::Change], ?notice: String?) -> String
+      def self.call: (contact: Contact, login: String, groups: Array[Store::Group], all_groups: Array[Store::GroupChoice], changes: Array[Store::Change], ?notice: String?) -> String
     end
 
     # `aside` is a Phlex component, which has no type here: phlex
     # ships no signatures and the views are ignored (see the
     # Steepfile).
     class ContactsEdit
-      def self.call: (contact: Contact, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: untyped, ?fields: untyped, ?lead: untyped, ?sidebar: untyped, ?save: String?) -> String
+      def self.call: (contact: Contact, login: String, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: untyped, ?fields: untyped, ?lead: untyped, ?sidebar: untyped, ?save: String?) -> String
     end
 
     class Dashboard
-      def self.call: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, groups: Array[Store::Group], ?notice: String?) -> String
+      def self.call: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, login: String, groups: Array[Store::Group], ?notice: String?) -> String
     end
 
     class ContactsIndex
-      def self.call: (contacts: Array[Contact], groups: Array[Store::Group]) -> String
+      def self.call: (contacts: Array[Contact], groups: Array[Store::Group], login: String) -> String
     end
 
     class GroupsIndex
-      def self.call: (groups: Array[Store::Group], ?notice: String?) -> String
+      def self.call: (groups: Array[Store::Group], login: String, ?notice: String?) -> String
     end
 
     class GroupsShow
-      def self.call: (group: Store::Group, contacts: Array[Contact], changes: Array[Store::GroupChange]) -> String
+      def self.call: (group: Store::Group, contacts: Array[Contact], changes: Array[Store::GroupChange], login: String) -> String
     end
 
     class GroupsEdit
-      def self.call: (group: Store::Group, ?notice: String?) -> String
+      def self.call: (group: Store::Group, login: String, ?notice: String?) -> String
     end
 
     class GroupsMembers
-      def self.call: (group: Store::Group, contacts: Array[Contact]) -> String
+      def self.call: (group: Store::Group, contacts: Array[Contact], login: String) -> String
     end
 
     class DeviceSetup
-      def self.call: (hostname: String, name: String) -> String
+      def self.call: (hostname: String, login: String, name: String) -> String
     end
 
     class ImportUpload
-      def self.call: (?notice: String?) -> String
+      def self.call: (login: String, ?notice: String?) -> String
     end
 
     # Rendered into ContactsEdit rather than called, so these are the
@@ -68,7 +68,7 @@ module ProTacts
     end
 
     class ImportSaved
-      def self.call: (contact: Contact, groups: Array[Store::Group], all_groups: Array[Store::GroupChoice], aside: untyped, sidebar: untyped, edit: String, land: String, ?notice: String?) -> String
+      def self.call: (contact: Contact, login: String, groups: Array[Store::Group], all_groups: Array[Store::GroupChoice], aside: untyped, sidebar: untyped, edit: String, land: String, ?notice: String?) -> String
     end
 
     # Rendered by Dashboard, not called from checked code; only

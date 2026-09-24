@@ -20,16 +20,18 @@ module ProTacts
     # about to carry, not a copy of them.
     class DeviceSetup < Phlex::HTML
       # @rbs @hostname: String
+      # @rbs @login: String
       # @rbs @name: String
 
-      #: (hostname: String, name: String) -> void
-      def initialize(hostname:, name:)
+      #: (hostname: String, login: String, name: String) -> void
+      def initialize(hostname:, login:, name:)
         @hostname = hostname
+        @login = login
         @name = name
       end
 
       def view_template
-        render Layout.new(title: "Device setup") do
+        render Layout.new(title: "Device setup", login: @login) do
           div(class: "record") do
             div(class: "record-nav") do
               a(href: "/", class: "type-label") { "‹ contacts" }

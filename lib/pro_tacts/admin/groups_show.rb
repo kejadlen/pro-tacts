@@ -22,14 +22,16 @@ module ProTacts
     # a person reads; the members list is the narrowing of it.
     class GroupsShow < Phlex::HTML
       # @rbs @group: Store::Group
+      # @rbs @login: String
       # @rbs @reading: Contact
       # @rbs @contacts: Array[Contact]
       # @rbs @members: Array[Contact]
       # @rbs @changes: Array[Store::GroupChange]
 
-      #: (group: Store::Group, contacts: Array[Contact], changes: Array[Store::GroupChange]) -> void
-      def initialize(group:, contacts:, changes:)
+      #: (group: Store::Group, contacts: Array[Contact], changes: Array[Store::GroupChange], login: String) -> void
+      def initialize(group:, contacts:, changes:, login:)
         @group = group
+        @login = login
         @contacts = contacts
         @changes = changes
         @reading = group.reading
@@ -38,7 +40,7 @@ module ProTacts
       end
 
       def view_template
-        render Layout.new(title: @group.label) do
+        render Layout.new(title: @group.label, login: @login) do
           div(class: "record") do
             div(class: "record-nav") do
               a(href: "/groups", class: "type-label") { "‹ groups" }

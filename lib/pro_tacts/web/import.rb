@@ -204,6 +204,7 @@ module ProTacts
       response["Content-Type"] = "text/html; charset=utf-8"
       return Admin::ImportSaved.call(
         contact:,
+        login: @login,
         groups: store.groups_of(contact.id),
         all_groups: store.group_choices,
         aside: Admin::ImportOriginal.new(card: original, dropped:),
@@ -223,6 +224,7 @@ module ProTacts
       merge = target && Import::Merge.new(target, card)
       Admin::ContactsEdit.call(
         contact: merge ? merge.contact : arriving,
+        login: @login,
         notice:,
         action: "/import/#{upload}/#{index}",
         # The submit says what it does — the import of this one
@@ -279,6 +281,7 @@ module ProTacts
       response["Content-Type"] = "text/html; charset=utf-8"
       Admin::ContactsEdit.call(
         contact:,
+        login: @login,
         notice:,
         action: "/import/#{upload}/#{index}",
         save: "Save",
@@ -605,7 +608,7 @@ module ProTacts
     #: (?notice: String?) -> String
     def import_screen(notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::ImportUpload.call(notice:)
+      Admin::ImportUpload.call(login: @login, notice:)
     end
 
     #: () -> String

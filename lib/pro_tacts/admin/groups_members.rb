@@ -32,6 +32,7 @@ module ProTacts
     # being able to mint a contact.
     class GroupsMembers < Phlex::HTML
       # @rbs @group: Store::Group
+      # @rbs @login: String
       # @rbs @contacts: Array[Contact]
       # @rbs @capped: Array[String]
 
@@ -39,9 +40,10 @@ module ProTacts
       FORM = "members-form" #: String
       private_constant :FORM
 
-      #: (group: Store::Group, contacts: Array[Contact]) -> void
-      def initialize(group:, contacts:)
+      #: (group: Store::Group, contacts: Array[Contact], login: String) -> void
+      def initialize(group:, contacts:, login:)
         @group = group
+        @login = login
         # The order the show screen's list reads (Format.sort_key),
         # which is the order the book is browsed in everywhere else.
         @contacts = contacts.sort_by { [Format.sort_key(it), it.id] }
@@ -51,7 +53,7 @@ module ProTacts
       end
 
       def view_template
-        render Layout.new(title: "Members of #{@group.label}") do
+        render Layout.new(title: "Members of #{@group.label}", login: @login) do
           form(action: "/groups/#{@group.id}/members", method: "post",
                class: "member-picker", id: FORM, x_data: GroupFilter::STATE) do
             render RecordCard.new(
