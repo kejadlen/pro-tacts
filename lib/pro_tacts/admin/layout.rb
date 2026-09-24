@@ -131,9 +131,11 @@ module ProTacts
               # a book's life (docs/plans/2026-09-21-import-a-vcf.md),
               # and device setup. A popover by the Popover API, like
               # every floated layer here; the list sits beside its
-              # button in the header so it can be positioned from it
-              # (admin.css) while the Popover API still renders it
-              # above everything when open.
+              # button in the header because a promoted popover is
+              # positioned against the viewport, not the DOM beside
+              # its button, so admin.css anchors it to the wrapper by
+              # name — while the Popover API still renders it above
+              # everything when open.
               div(class: "user-menu") do
                 button(type: "button", data_size: "sm", popovertarget: MENU) do
                   span { @login }

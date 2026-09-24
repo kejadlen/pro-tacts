@@ -674,32 +674,45 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 
 /* The account menu, the header's third region: the button naming the
-   login and the popover it opens. The wrapper is the popover's
-   positioning context — a popover is promoted to the top layer on
-   opening but keeps its DOM position for `position: absolute`, so
-   the list hangs below the button at the header's right edge with
-   no script and no anchor positioning; closed, the Popover API
-   itself keeps it out of the layout and the tab order. */
+   login and the popover it opens. The wrapper names itself the list's
+   anchor because a popover promoted to the top layer is positioned
+   against the viewport, not the boxes beside it in the DOM — a
+   `position: relative` wrapper with an `absolute` list cannot hang
+   the list below the button and instead opens it a full viewport
+   down, at the page's bottom right. Closed, the Popover API itself
+   keeps it out of the layout and the tab order. */
 .user-menu {
-  position: relative;
+  anchor-name: --user-menu;
   display: flex;
 }
 /* The UA popover styles center (`position: fixed; inset: 0; margin:
-   auto`), overridden to open off the button. A card's construction —
-   surface, hairline, the one --gl-shadow-float a floated layer
-   carries (Gloss's dialog, here) — at menu size; the rows take the
-   quiet button's own hover tint. */
+   auto`), overridden to open off the anchor: below the button's
+   bottom edge and inline-end-aligned with it, `anchor()` reading
+   the button's box wherever the header's right edge falls. A card's
+   construction — surface, hairline, the one --gl-shadow-float a
+   floated layer carries (Gloss's dialog, here) — at menu size; the
+   rows take the quiet button's own hover tint. */
 .user-menu ul {
-  position: absolute;
+  position: fixed;
+  position-anchor: --user-menu;
   inset: auto;
-  inset-block-start: calc(100% + var(--gl-space-2xs));
-  inset-inline-end: 0;
+  inset-block-start: calc(anchor(--user-menu bottom) + var(--gl-space-2xs));
+  inset-inline-end: anchor(--user-menu right);
   margin: 0;
   padding: var(--gl-space-2xs);
   background: var(--gl-color-surface-card);
   border: 1px solid var(--gl-color-border-hairline);
   border-radius: var(--gl-radius-md);
   box-shadow: var(--gl-shadow-float);
+}
+/* Without anchor positioning the list cannot find the button at all,
+   so it parks at the page's top right — under the header, where the
+   button lives — rather than the UA popover's dead center. */
+@supports not (anchor-name: --a) {
+  .user-menu ul {
+    inset-block-start: calc(var(--gl-space-l) + var(--gl-space-2xs));
+    inset-inline-end: var(--gl-space-m);
+  }
 }
 .user-menu ul a {
   display: block;
