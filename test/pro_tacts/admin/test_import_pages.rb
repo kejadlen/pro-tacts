@@ -781,6 +781,24 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # However few it holds: the listings' order outranks the size
+  # sort here.
+  def test_the_groups_beside_a_card_lead_with_the_sync_groups
+    with_contacts({"jane" => JANE, "sam" => PLAIN}) do |store|
+      big = store.create_group(name: "big")
+      store.add_member(big, "jane")
+      store.add_member(big, "sam")
+      small_book = store.create_group(name: "sync:alpha")
+      store.add_member(small_book, "jane")
+      id = upload(JANE)
+
+      get "/import/#{id}/0"
+
+      assert_equal [small_book, big],
+                   last_response.body.scan(/name="groups\[\]" value="([^"]+)"/).flatten
+    end
+  end
+
   def test_the_groups_beside_a_card_offer_no_such_thing_uncapped
     with_contacts({}) do |store|
       # Seven, the import's own name being the eighth row.

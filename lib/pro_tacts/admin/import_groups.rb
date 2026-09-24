@@ -44,11 +44,12 @@ module ProTacts
       # @rbs @capped: Array[String]
       # @rbs @was: Array[String]
 
-      # Largest first, and alphabetical among groups the same size:
-      # the groups an arrival is likeliest to belong in are the ones
-      # most of the book already does, so they are the rows the cap
-      # leaves standing, and the filter reaches the rest. The groups
-      # dialog stays alphabetical — there a contact's groups are
+      # The `sync:` groups lead (GroupChoice#<=>), then largest first
+      # and alphabetical among groups the same size: the groups an
+      # arrival is likeliest to belong in are the ones most of the
+      # book already does, so they are the rows the cap leaves
+      # standing, and the filter reaches the rest. The groups dialog
+      # keeps the plain listing order — there a contact's groups are
       # being looked over, not guessed at. `groups` is every group as
       # a choice, counted rather than its members read
       # (Store#group_choices); `joined` the ids ticked, `named` the
@@ -72,7 +73,7 @@ module ProTacts
       # what was toggled (Web#apply_groups). A new contact is in none.
       #: (groups: Array[Store::GroupChoice], joined: Array[String], named: Array[String], ?was: Array[String]) -> void
       def initialize(groups:, joined:, named:, was: [])
-        @groups = groups.sort_by { [-it.member_count, it.label.downcase] }
+        @groups = groups.sort_by { [it.sync? ? 0 : 1, -it.member_count, it.label.downcase] }
         @joined = joined
         @named = named
         @was = was

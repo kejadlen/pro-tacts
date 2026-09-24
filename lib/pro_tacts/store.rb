@@ -114,6 +114,22 @@ module ProTacts
     # @rbs skip
     GroupChoice = Data.define(:id, :name, :label, :member_count)
 
+    # Reopened rather than defined in a block, Group's own reason.
+    class GroupChoice
+      # Group#sync?'s question, over the lighter row a picker holds.
+      #: () -> bool
+      def sync?
+        Group.sync_name?(name)
+      end
+
+      # Group#<=>'s order spelled again for the pickers that sort
+      # choices; keep the two alike.
+      #: (GroupChoice other) -> Integer?
+      def <=>(other)
+        [sync? ? 0 : 1, label.downcase, id] <=> [other.sync? ? 0 : 1, other.label.downcase, other.id]
+      end
+    end
+
     # SQLite has no ON UPDATE, so the column default stamps a row on
     # insert and this stamps it again on the way past. Same expression as
     # the migration's, deliberately: the database keeps the clock, so two

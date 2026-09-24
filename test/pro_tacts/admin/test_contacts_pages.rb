@@ -529,6 +529,19 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  def test_the_groups_dialog_leads_with_the_sync_groups
+    with_contacts({"ada" => ADA}) do |store|
+      %w[zoetrope Abacus sync:alpha barometer sync:*].each { FixtureData.seed_group(store, name: it) }
+      ids = store.all_groups.to_h { [it.name, it.id] }
+
+      get "/contacts/ada"
+      dialog = last_response.body[%r{<dialog id="edit-groups".*?</dialog>}].to_s
+
+      assert_equal %w[sync:* sync:alpha Abacus barometer zoetrope].map { ids.fetch(it) },
+                   dialog.scan(/name="groups\[\]" value="([^"]+)"/).flatten
+    end
+  end
+
   # The cap (docs/plans/2026-09-22-a-few-groups-at-a-time.md): eight
   # rows stand shown and the ninth is marked, rendered for the filter
   # to reach rather than left out of the page.

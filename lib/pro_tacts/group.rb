@@ -42,12 +42,22 @@ module ProTacts
       Contact.new(id:, stored: VCard.new(lines.map { "#{it}\r\n" }.join), birthday: nil, inherited: [])
     end
 
-    # Whether this is one of the `sync:` groups, for the listing that
-    # sets those groups apart from the ones a person made
-    # (Admin::GroupsIndex).
+    # Whether this is one of the `sync:` groups, for the listings
+    # that set those apart from the ones a person made.
     #: () -> bool
     def sync?
       Group.sync_name?(name)
+    end
+
+    # The order every listing of groups reads in: the `sync:` groups
+    # — the books a client syncs, the store's own rather than
+    # anything a person made — first, then the rest alphabetically.
+    # GroupChoice spells this again for the pickers; keep the two
+    # alike. Comparable deliberately left out: its `==` would sit in
+    # front of Data's whole-value one, and `sort` asks only for `<=>`.
+    #: (Group other) -> Integer?
+    def <=>(other)
+      [sync? ? 0 : 1, label.downcase, id] <=> [other.sync? ? 0 : 1, other.label.downcase, other.id]
     end
 
     # The group's etag, for the editor's snapshot guard: a hash of

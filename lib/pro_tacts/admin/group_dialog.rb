@@ -40,18 +40,19 @@ module ProTacts
       # @rbs @capped: Array[String]
       # @rbs @land: String?
 
-      # Alphabetical rather than the id order a tag keeps: this is a list
-      # to find a name in, and nothing here stays put across a rename.
-      # `groups` is every group as a choice — no members read, the
-      # book's whole membership not being this dialog's business
-      # (Store#group_choices) — and `joined` the ids this contact is
-      # already in, which the show screen already holds (Store#groups_of)
-      # and so does not read a second time. `joined` is also what the
-      # cap spares: those are the boxes this is opened to untick.
+      # `GroupChoice#<=>`'s order rather than the id order a tag
+      # keeps — a list to find a name in, and nothing here stays put
+      # across a rename. `groups` is every group as a
+      # choice — no members read, the book's whole membership not
+      # being this dialog's business (Store#group_choices) — and
+      # `joined` the ids this contact is already in, which the show
+      # screen already holds (Store#groups_of) and so does not read a
+      # second time. `joined` is also what the cap spares: those are
+      # the boxes this is opened to untick.
       #: (contact: Contact, groups: Array[Store::GroupChoice], joined: Array[String], ?land: String?) -> void
       def initialize(contact:, groups:, joined:, land: nil)
         @contact = contact
-        @groups = groups.sort_by { it.label.downcase }
+        @groups = groups.sort
         @joined = joined
         @land = land
         @capped = GroupFilter.capped(@groups.map(&:id), joined:)

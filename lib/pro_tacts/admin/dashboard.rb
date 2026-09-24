@@ -42,7 +42,7 @@ module ProTacts
         @labels = {}
         groups.each { |group| group.members.each { (@labels[it] ||= []) << group.label } }
         q = @query.downcase
-        @groups = @query.empty? ? [] : groups.select { it.label.downcase.include?(q) }
+        @groups = @query.empty? ? [] : groups.select { it.label.downcase.include?(q) }.sort
         @rows = @query.empty? ? recent.first(RECENT_LIMIT) : recent.select { matches?(it, @query) }
       end
 
