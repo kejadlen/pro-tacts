@@ -23,7 +23,7 @@ module ProTacts
     # no `members[]`, so a save says nothing about membership
     # (#apply_edit's is-a-Hash posture) and leaves it as it stands.
     class GroupsEdit < Phlex::HTML
-      # @rbs @group: Store::Group
+      # @rbs @group: Group
       # @rbs @login: String
       # @rbs @reading: Contact
       # @rbs @notice: String?
@@ -32,7 +32,7 @@ module ProTacts
       FORM = "group-form" #: String
       private_constant :FORM
 
-      #: (group: Store::Group, login: String, ?notice: String?) -> void
+      #: (group: Group, login: String, ?notice: String?) -> void
       def initialize(group:, login:, notice: nil)
         @group = group
         @login = login

@@ -8,6 +8,7 @@ require "pro_tacts/card_diff"
 require "pro_tacts/change_id"
 require "pro_tacts/contact"
 require "pro_tacts/edited_contact"
+require "pro_tacts/group"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
@@ -99,54 +100,6 @@ module ProTacts
     # @rbs skip
     Snapshot = Data.define(:cards, :birthdays, :groups, :books)
 
-    # A group as the admin screens read one: its own row, the lines it
-    # lends in the order it lends them, and its members' card ids. The
-    # label is the SQL one #group_label computes, so a tag and a
-    # heading can never disagree about what to call a nameless group.
-    # @rbs skip
-    Group = Data.define(:id, :name, :label, :lines, :members)
-
-    # Reopened rather than defined in the block above, for the reason
-    # CardDiff is.
-    class Group
-      # The group's lines read through the one model that knows how to
-      # read an address and a note — a Contact over a card made of
-      # those lines and nothing else — for the screens that render and
-      # edit them. It composes nothing and is never stored or served.
-      #: () -> Contact
-      def reading
-        Contact.new(id:, stored: VCard.new(lines.map { "#{it}\r\n" }.join), birthday: nil, inherited: [])
-      end
-
-      # Whether this is one of the `sync:` groups that choose what a
-      # client syncs — #sync_name?'s rule, said of a group a screen
-      # already holds rather than of a row's name, for the listing that
-      # sets those groups apart from the ones a person made
-      # (Admin::GroupsIndex).
-      #: () -> bool
-      def sync?
-        name&.start_with?(SYNC_PREFIX) == true
-      end
-
-      # The group's etag, for the editor's snapshot guard: a hash of
-      # everything the edit screen shows and the save writes, so a
-      # group edited since the page loaded refuses the stale save
-      # rather than reverting what changed (Web#apply_edit's rule).
-      # Nothing serves it, so nothing has to agree with it but the form.
-      #: () -> String
-      def version
-        Digest::SHA256.hexdigest([name, lines, members].to_json)
-      end
-
-      # What a console session sees for one (console.rb): the Data
-      # class's own inspect would carry every lent line and every
-      # member id, and a listing of groups is unreadable at a prompt.
-      #: () -> String
-      def inspect
-        "#<#{self.class.name} id=#{id.inspect} label=#{label.inspect} members=#{members.length}>"
-      end
-    end
-
     # A group as a picker names it: enough to show it and to submit it,
     # and no more. A Group carries the lines it lends and the ids of
     # its members, two reads beyond the group row itself (#load_groups);
@@ -182,16 +135,6 @@ module ProTacts
     # wider alphabet: a first collision is a broken generator rather
     # than a run of bad draws.
     CONTACT_ID_ATTEMPTS = 8 #: Integer
-
-    # the label is written against the table by name.
-    GROUP_COLUMNS = [Sequel[:groups][:id], Sequel[:groups][:name]].freeze #: Array[untyped]
-
-    # The group names that choose what a client syncs: `sync:*` for
-    # everyone, `sync:<login>` for one user
-    # (docs/plans/2026-09-12-per-user-books.md). Unique like every
-    # group's name (db/migrations/008_group_names.rb).
-    SYNC_PREFIX = "sync:" #: String
-    EVERYONE = "#{SYNC_PREFIX}*" #: String
 
     # A book named `*`, which would be everyone's (#name_book).
     class EveryonesBookName < ArgumentError; end
@@ -345,7 +288,7 @@ module ProTacts
     # nil.
     #: (String id) -> Contact?
     def contact(id)
-      contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
+      contact!(id)
     rescue Sequel::NoMatchingRow
       nil
     end
@@ -361,11 +304,10 @@ module ProTacts
     #: (String id) -> Array[Group]
     def groups_of(id)
       load_groups(
-        groups
+        labeled_groups
           .join(:group_members, group_id: :id)
           .where(card_id: id)
           .order(Sequel[:groups][:id])
-          .select(*GROUP_COLUMNS, group_label.as(:label))
           .all,
       )
     end
@@ -380,7 +322,7 @@ module ProTacts
     # (docs/plans/2026-09-21-books-not-book-names.md).
     #: (String login) -> Set[String]
     def book_cards(login)
-      ids = groups.where(name: [EVERYONE, own_sync_name(login)]).select_map(:id)
+      ids = groups.where(name: [Group::EVERYONE, own_sync_name(login)]).select_map(:id)
       Set.new(group_members.where(group_id: ids).select_map(:card_id).map(&:to_s))
     end
 
@@ -408,7 +350,7 @@ module ProTacts
     def name_book(login, name)
       name = name.to_s.strip
       name = nil if name.empty?
-      raise EveryonesBookName, "#{EVERYONE} is everyone's book, not #{login}'s" if name == "*"
+      raise EveryonesBookName, "#{Group::EVERYONE} is everyone's book, not #{login}'s" if name == "*"
 
       @database.transaction do
         group = groups.where(name: own_sync_name(login)).select_map(:id).first
@@ -564,10 +506,10 @@ module ProTacts
     # keep serving the dead href out of its cache forever.
     #: (String id) -> String
     def reid(id)
-      # `sole` rather than #contact's nil-for-404: a read whose filter
-      # means one row, and no row here is the caller's mistake to hear
-      # about as Sequel::NoMatchingRow, not a request to answer.
-      before = contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
+      # #contact! rather than #contact's nil-for-404: no row here is the
+      # caller's mistake to hear about as Sequel::NoMatchingRow, not a
+      # request to answer.
+      before = contact!(id)
 
       CONTACT_ID_ATTEMPTS.times do
         new_id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
@@ -595,7 +537,7 @@ module ProTacts
             # rather than moved — the deal #reindex always gives it. The
             # parameters follow their properties away on the cascade.
             card_properties.where(card_id: id).delete
-            after = contact_from(cards.where(id: new_id).sole, birthday_of(new_id), inherited_of(new_id))
+            after = contact!(new_id)
             record(id, action: Action::DELETE, etag: nil, diff: CardDiff.between(before.vcard, nil))
             record(
               new_id,
@@ -654,7 +596,7 @@ module ProTacts
     # composition both use, so a rename never moves one.
     #: () -> Array[Group]
     def all_groups
-      load_groups(groups.select(*GROUP_COLUMNS, group_label.as(:label)).order(:id).all)
+      load_groups(labeled_groups.order(:id).all)
     end
 
     # Every group as a picker needs it: the row, its label and how many
@@ -670,7 +612,7 @@ module ProTacts
     #: () -> Array[GroupChoice]
     def group_choices
       member_count = group_members.where(group_id: Sequel[:groups][:id]).select(Sequel.function(:count).*)
-      groups.select(*GROUP_COLUMNS, group_label.as(:label), member_count.as(:member_count)).order(:id).all.map { |row|
+      labeled_groups.select_append(member_count.as(:member_count)).order(:id).all.map { |row|
         GroupChoice.new(id: row.fetch(:id).to_s, name: row.fetch(:name)&.to_s, label: row.fetch(:label).to_s,
                         member_count: row.fetch(:member_count).to_i)
       }
@@ -680,7 +622,7 @@ module ProTacts
     # #contact's own shape.
     #: (String id) -> Group?
     def group(id)
-      load_groups([groups.select(*GROUP_COLUMNS, group_label.as(:label)).where(id:).sole]).fetch(0)
+      load_groups([labeled_groups.where(id:).sole]).fetch(0)
     rescue Sequel::NoMatchingRow
       nil
     end
@@ -700,7 +642,7 @@ module ProTacts
       name = nil if name.to_s.strip.empty?
       @database.transaction do
         was = groups.where(id:).sole.fetch(:name)&.to_s
-        if was != name && (sync_name?(was) || sync_name?(name))
+        if was != name && (Group.sync_name?(was) || Group.sync_name?(name))
           members = member_ids([id])
           fan_out(members, moved: members) { groups.where(id:).update(name:) }
         else
@@ -829,7 +771,7 @@ module ProTacts
       name = row.fetch(:name).to_s
       # Refused before the transaction, #name_book's reason for the
       # same refusal: Sequel wraps what a rollback raises.
-      raise EveryonesBookName, "#{EVERYONE} is everyone's book, not a group to delete" if name == EVERYONE
+      raise EveryonesBookName, "#{Group::EVERYONE} is everyone's book, not a group to delete" if name == Group::EVERYONE
 
       @database.transaction do
         members = member_ids([id])
@@ -839,7 +781,7 @@ module ProTacts
           action: GroupAction::DELETE,
           detail: {"name" => row.fetch(:name), "lines" => lines, "members" => members},
         )
-        fan_out(members, moved: sync_name?(name) ? members : []) {
+        fan_out(members, moved: Group.sync_name?(name) ? members : []) {
           groups.where(id:).delete
         }
         true
@@ -1057,25 +999,20 @@ module ProTacts
     # (db/migrations/008_group_names.rb).
     #: () -> String
     def everyone_group_id
-      groups.where(name: EVERYONE).sole.fetch(:id).to_s
+      groups.where(name: Group::EVERYONE).sole.fetch(:id).to_s
     rescue Sequel::NoMatchingRow
-      create_group(name: EVERYONE)
+      create_group(name: Group::EVERYONE)
     end
 
     # The group name that puts cards in this login's book alone.
     #: (String login) -> String
     def own_sync_name(login)
-      "#{SYNC_PREFIX}#{book_name(login)}"
-    end
-
-    #: (String? name) -> bool
-    def sync_name?(name)
-      name&.start_with?(SYNC_PREFIX) == true
+      "#{Group::SYNC_PREFIX}#{book_name(login)}"
     end
 
     #: (String group_id) -> bool
     def sync_group?(group_id)
-      sync_name?(groups.where(id: group_id).sole.fetch(:name)&.to_s)
+      Group.sync_name?(groups.where(id: group_id).sole.fetch(:name)&.to_s)
     end
 
     #: (String group_id, String card_id) -> bool
@@ -1095,9 +1032,11 @@ module ProTacts
         .map { it.fetch(:card_id).to_s }
     end
 
-    # A group_members row names a card by foreign key, so a missing
-    # row here is the corruption `sole` exists to raise on rather than
-    # the ordinary miss an href off the wire is.
+    # #contact for the callers to whom no row is not an ordinary answer:
+    # it raises Sequel::NoMatchingRow where #contact answers nil. A
+    # group_members row names a card by foreign key, so a missing row
+    # under #fan_out is the corruption `sole` exists to raise on, and
+    # #reid is handed an id its caller says exists.
     #: (String id) -> Contact
     def contact!(id)
       contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
@@ -1246,7 +1185,7 @@ module ProTacts
     def groups_by_id(ids)
       return {} if ids.empty?
 
-      load_groups(groups.select(*GROUP_COLUMNS, group_label.as(:label)).where(id: ids.uniq).all).to_h {
+      load_groups(labeled_groups.where(id: ids.uniq).all).to_h {
         [it.id, it] #: [String, Group]
       }
     end
@@ -1258,6 +1197,14 @@ module ProTacts
     #: () -> untyped
     def group_label
       Sequel.function(:coalesce, Sequel[:groups][:name], Sequel[:groups][:id])
+    end
+
+    # A groups row's own columns and its label, the start of every read
+    # that hands out a group, qualified for #group_label's reason: the
+    # label is written against the table by name.
+    #: () -> Sequel::Dataset
+    def labeled_groups
+      groups.select(Sequel[:groups][:id], Sequel[:groups][:name], group_label.as(:label))
     end
 
     # The join both inherited reads walk: a membership to the property

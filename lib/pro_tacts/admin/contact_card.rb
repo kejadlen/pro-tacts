@@ -27,11 +27,11 @@ module ProTacts
     # (ImportSaved), whose trunk RecordCard owns.
     class ContactCard < Phlex::HTML
       # @rbs @contact: Contact
-      # @rbs @groups: Array[Store::Group]
+      # @rbs @groups: Array[Group]
       # @rbs @dialog: bool
       # @rbs @card: bool
 
-      #: (contact: Contact, groups: Array[Store::Group], ?dialog: bool, ?card: bool) -> void
+      #: (contact: Contact, groups: Array[Group], ?dialog: bool, ?card: bool) -> void
       def initialize(contact:, groups:, dialog: false, card: true)
         @contact = contact
         @groups = groups
@@ -125,7 +125,7 @@ module ProTacts
         end
       end
 
-      #: (Store::Group group) -> void
+      #: (Group group) -> void
       def group_tag(group)
         a(href: "/groups/#{group.id}", class: "tag") { render GroupLabel.new(group:) }
       end

@@ -31,7 +31,7 @@ module ProTacts
     # make what the filter names is not rendered, a filter word not
     # being able to mint a contact.
     class GroupsMembers < Phlex::HTML
-      # @rbs @group: Store::Group
+      # @rbs @group: Group
       # @rbs @login: String
       # @rbs @contacts: Array[Contact]
       # @rbs @capped: Array[String]
@@ -40,7 +40,7 @@ module ProTacts
       FORM = "members-form" #: String
       private_constant :FORM
 
-      #: (group: Store::Group, contacts: Array[Contact], login: String) -> void
+      #: (group: Group, contacts: Array[Contact], login: String) -> void
       def initialize(group:, contacts:, login:)
         @group = group
         @login = login

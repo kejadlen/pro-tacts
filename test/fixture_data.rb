@@ -136,7 +136,7 @@ module FixtureData
   def self.seed_groups(store)
     seed_group(store, name: "Booles", lines: HOUSEHOLD, members: MEMBERS)
     seed_group(store, members: birthday_cards)
-    seed_group(store, name: ProTacts::Store::EVERYONE, members: cards.keys - unsynced_cards)
+    seed_group(store, name: ProTacts::Group::EVERYONE, members: cards.keys - unsynced_cards)
     seed_group(store, name: "Curies", members: CURIES)
     seed_clubs(store)
   end

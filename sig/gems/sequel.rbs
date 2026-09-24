@@ -91,6 +91,7 @@ module Sequel
     # merged by whichever table's column won. Signed here so it reads
     # as the query builder's rather than Enumerable's own #select.
     def select: (*untyped columns) -> Dataset
+    def select_append: (*untyped columns) -> Dataset
     def limit: (Integer count) -> Dataset
     # A dataset as a subquery under a name, for a column computed in
     # another dataset's select (Store#group_choices' member count).

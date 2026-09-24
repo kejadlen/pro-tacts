@@ -1,0 +1,15 @@
+# Group is a Data class, whose members the inline parser cannot read
+# (see sig/pro_tacts/contact.rbs). It is marked `@rbs skip` in group.rb
+# and signed here instead; the methods reopened onto it carry their
+# own inline types.
+module ProTacts
+  class Group
+    attr_reader id: String
+    attr_reader name: String?
+    attr_reader label: String
+    attr_reader lines: Array[String]
+    attr_reader members: Array[String]
+
+    def self.new: (id: String, name: String?, label: String, lines: Array[String], members: Array[String]) -> instance
+  end
+end

@@ -46,11 +46,11 @@ module ProTacts
         response["Content-Type"] = "text/plain"
         begin
           store.name_book(@login, r.params["name"]&.to_s)
-          "#{@login} syncs #{Store::SYNC_PREFIX}#{store.book_name(@login)}\n"
+          "#{@login} syncs #{Group::SYNC_PREFIX}#{store.book_name(@login)}\n"
         rescue Sequel::UniqueConstraintViolation, Store::EveryonesBookName
           # Another login's name, a group's already, or everyone's.
           response.status = 409
-          "#{Store::SYNC_PREFIX}#{r.params['name'].to_s.strip} is taken; #{@login}'s book is unchanged.\n"
+          "#{Group::SYNC_PREFIX}#{r.params['name'].to_s.strip} is taken; #{@login}'s book is unchanged.\n"
         end
       end
     end

@@ -614,7 +614,7 @@ class AdminImportPagesTest < Minitest::Test
 
       save(id, 0, first: "Jane", last: "Booles", "named" => [])
 
-      assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
+      assert_equal [ProTacts::Group::EVERYONE], store.all_groups.map(&:name)
     end
   end
 
@@ -642,7 +642,7 @@ class AdminImportPagesTest < Minitest::Test
     with_contacts({}) do |store|
       id = upload(JANE + PLAIN)
       save(id, 0, first: "Jane", last: "Booles")
-      everyone = store.all_groups.find { it.name == ProTacts::Store::EVERYONE }
+      everyone = store.all_groups.find { it.name == ProTacts::Group::EVERYONE }
 
       get "/import/#{id}/1"
 
@@ -661,7 +661,7 @@ class AdminImportPagesTest < Minitest::Test
     with_contacts({}) do |store|
       id = upload(JANE + PLAIN)
       save(id, 0, first: "Jane", last: "Booles")
-      everyone = store.all_groups.find { it.name == ProTacts::Store::EVERYONE }
+      everyone = store.all_groups.find { it.name == ProTacts::Group::EVERYONE }
 
       save(id, 1, first: "Sam", last: "Booles", "groups" => [], "named" => [])
 
@@ -812,9 +812,9 @@ class AdminImportPagesTest < Minitest::Test
       sam = store.contacts.find { it.name == "Sam Booles" }
 
       assert_equal [jane.id], store.group(school).members
-      assert_equal [lot, "school", ProTacts::Store::EVERYONE],
+      assert_equal [lot, "school", ProTacts::Group::EVERYONE],
                    store.all_groups.select { it.members.include?(jane.id) }.map(&:name).sort
-      assert_equal [lot, ProTacts::Store::EVERYONE],
+      assert_equal [lot, ProTacts::Group::EVERYONE],
                    store.all_groups.select { it.members.include?(sam.id) }.map(&:name).sort
     end
   end
@@ -836,7 +836,7 @@ class AdminImportPagesTest < Minitest::Test
       # The last row there was, so the walk ends: nothing was filed
       # under a group of its own, and the book is where it went.
       assert_equal "/contacts", last_response.headers["location"]
-      assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
+      assert_equal [ProTacts::Group::EVERYONE], store.all_groups.map(&:name)
     end
   end
 

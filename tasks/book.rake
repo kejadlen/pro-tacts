@@ -10,7 +10,7 @@ namespace :book do
     login = ENV.fetch("LOGIN")
     ProTacts::Store.connect(ProTacts.config.database_path) do |store|
       store.name_book(login, ENV.fetch("NAME", nil))
-      puts "#{login} syncs #{ProTacts::Store::SYNC_PREFIX}#{store.book_name(login)}"
+      puts "#{login} syncs #{ProTacts::Group::SYNC_PREFIX}#{store.book_name(login)}"
     end
   end
 end

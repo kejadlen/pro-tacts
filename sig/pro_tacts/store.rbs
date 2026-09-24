@@ -38,16 +38,6 @@ module ProTacts
       def self.new: (contact: Contact, occurs_on: Date) -> instance
     end
 
-    class Group
-      attr_reader id: String
-      attr_reader name: String?
-      attr_reader label: String
-      attr_reader lines: Array[String]
-      attr_reader members: Array[String]
-
-      def self.new: (id: String, name: String?, label: String, lines: Array[String], members: Array[String]) -> instance
-    end
-
     class GroupChoice
       attr_reader id: String
       attr_reader name: String?

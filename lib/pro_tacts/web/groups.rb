@@ -126,13 +126,13 @@ module ProTacts
       r.redirect "/groups/#{id}", 303
     end
 
-    #: (Store::Group group, ?notice: String) -> String
+    #: (Group group, ?notice: String) -> String
     def group_edit_screen(group, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
       Admin::GroupsEdit.call(group:, login: @login, notice:)
     end
 
-    #: (Store::Group group) -> String
+    #: (Group group) -> String
     def members_screen(group)
       response["Content-Type"] = "text/html; charset=utf-8"
       Admin::GroupsMembers.call(group:, contacts: store.contacts, login: @login)

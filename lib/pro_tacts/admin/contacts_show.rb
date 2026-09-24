@@ -26,7 +26,7 @@ module ProTacts
       # one: a card with no entries is a card whose history was lost,
       # and an empty default would render that as an ordinary quiet
       # record. Every group is the groups dialog's (GroupDialog).
-      #: (Contact contact, String login, Array[Store::Group] groups, Array[Store::GroupChoice] all_groups, Array[Store::Change] changes, ?notice: String?) -> void
+      #: (Contact contact, String login, Array[Group] groups, Array[Store::GroupChoice] all_groups, Array[Store::Change] changes, ?notice: String?) -> void
       def initialize(contact:, login:, groups:, all_groups:, changes:, notice: nil)
         @contact = contact
         @login = login

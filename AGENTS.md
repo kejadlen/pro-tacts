@@ -80,6 +80,8 @@ lib/pro_tacts/
 │                   # group change log, and the derived index
 ├── contact.rb      # the one model of a contact: id, vCard, etag,
 │                   # and the structured accessors over the card
+├── group.rb        # A group as a screen reads one, and the `sync:`
+│                   # names that put cards in a book
 ├── edited_contact.rb # A submitted card read against the contact it
 │                   # replaces: the card, birthday, and group edits
 │                   # Store#put writes

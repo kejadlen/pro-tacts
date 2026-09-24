@@ -67,7 +67,7 @@ class ImportWriteTest < Minitest::Test
       assert_equal 2, ids.uniq.length
       groups = store.all_groups.select { it.members.sort == ids.sort }
 
-      assert_equal ["import-20260921T031655Z", ProTacts::Store::EVERYONE],
+      assert_equal ["import-20260921T031655Z", ProTacts::Group::EVERYONE],
                    groups.map(&:name).sort
     end
   end
@@ -96,7 +96,7 @@ class ImportWriteTest < Minitest::Test
       id = Write.call(store, card, named: ["import-20260921T031655Z"], joins: [school]).id
 
       assert_equal [id], store.group(school).members
-      assert_equal ["import-20260921T031655Z", "school", ProTacts::Store::EVERYONE],
+      assert_equal ["import-20260921T031655Z", "school", ProTacts::Group::EVERYONE],
                    store.all_groups.select { it.members.include?(id) }.map(&:name).sort
     end
   end
@@ -114,7 +114,7 @@ class ImportWriteTest < Minitest::Test
 
       assert_equal [first, third].sort, store.group(school).members.sort
       assert_equal [third], store.group(work).members
-      assert_equal [ProTacts::Store::EVERYONE],
+      assert_equal [ProTacts::Group::EVERYONE],
                    store.all_groups.select { it.members.include?(second) }.map(&:name)
     end
   end
@@ -156,7 +156,7 @@ class ImportWriteTest < Minitest::Test
       id = Write.call(store, card, joins: [school]).id
 
       assert_equal [id], store.group(school).members
-      assert_equal %w[school], store.all_groups.map(&:name).reject { it == ProTacts::Store::EVERYONE }
+      assert_equal %w[school], store.all_groups.map(&:name).reject { it == ProTacts::Group::EVERYONE }
     end
   end
 
@@ -165,7 +165,7 @@ class ImportWriteTest < Minitest::Test
   # is an answer of its own and the one a card arrives with.
   def test_no_group_at_all_puts_the_card_in_everyones_book_alone
     write_card do |imported, store|
-      assert_equal [ProTacts::Store::EVERYONE], store.all_groups.map(&:name)
+      assert_equal [ProTacts::Group::EVERYONE], store.all_groups.map(&:name)
       assert_equal [imported.id], store.all_groups.fetch(0).members
     end
   end

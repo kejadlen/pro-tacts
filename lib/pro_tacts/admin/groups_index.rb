@@ -14,11 +14,11 @@ module ProTacts
     # and a create lands on the new group's editor, where everything
     # it will hold is added.
     class GroupsIndex < Phlex::HTML
-      # @rbs @groups: Array[Store::Group]
+      # @rbs @groups: Array[Group]
       # @rbs @login: String
       # @rbs @notice: String?
 
-      #: (groups: Array[Store::Group], login: String, ?notice: String?) -> void
+      #: (groups: Array[Group], login: String, ?notice: String?) -> void
       def initialize(groups:, login:, notice: nil)
         @login = login
         # The `sync:` groups first — the books a client syncs, which
@@ -60,7 +60,7 @@ module ProTacts
 
       private
 
-      #: (Store::Group group) -> String
+      #: (Group group) -> String
       def members_label(group)
         count = group.members.length
         count == 1 ? "1 member" : "#{count} members"

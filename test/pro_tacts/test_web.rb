@@ -786,7 +786,7 @@ class WebTest < Minitest::Test
   # entry, so the sequences the sync tests read are the puts' alone.
   def with_contacts(names, &block)
     super(names.to_h { |id, name| [id, card(id, name)] }) do |store|
-      FixtureData.seed_group(store, name: ProTacts::Store::EVERYONE, members: names.keys)
+      FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: names.keys)
       block.call(store)
     end
   end
@@ -1035,7 +1035,7 @@ class WebTest < Minitest::Test
     with_contacts({"aiden" => "Aiden", "znorth" => "Zed"}) do |store|
       request "/dav/addressbook/", method: "REPORT", input: sync_collection("")
       token = last_response.body[%r{<d:sync-token>([^<]+)</d:sync-token>}, 1]
-      everyone = store.all_groups.find { it.name == ProTacts::Store::EVERYONE }.id
+      everyone = store.all_groups.find { it.name == ProTacts::Group::EVERYONE }.id
 
       store.remove_member(everyone, "znorth")
       request "/dav/addressbook/", method: "REPORT", input: sync_collection(token)

@@ -58,10 +58,10 @@ module ProTacts
 
       # The group editor's save: the note replaced and the contact
       # editor's own address splice over the group's lines read as a
-      # card (Store::Group#reading), then back into the lines a group
+      # card (Group#reading), then back into the lines a group
       # holds — each unfolded and shorn of its terminator, the unit
       # CardDiff records a write in and group_properties stores.
-      #: (Store::Group group, Hash[String, untyped] params) -> Array[String]
+      #: (Group group, Hash[String, untyped] params) -> Array[String]
       def self.group_lines(group, params)
         reading = group.reading
         card = reading.stored.replace("NOTE", text_lines("NOTE", params["note"].to_s.strip))

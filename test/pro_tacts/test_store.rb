@@ -1246,8 +1246,8 @@ class StoreTest < Minitest::Test
       id = FixtureData.seed_group(store, name: "Household", members: %w[znorth aiden])
       nameless = store.create_group
 
-      assert_equal %(#<ProTacts::Store::Group id="#{id}" label="Household" members=2>), store.group(id).inspect
-      assert_equal %(#<ProTacts::Store::Group id="#{nameless}" label="#{nameless}" members=0>), store.group(nameless).inspect
+      assert_equal %(#<ProTacts::Group id="#{id}" label="Household" members=2>), store.group(id).inspect
+      assert_equal %(#<ProTacts::Group id="#{nameless}" label="#{nameless}" members=0>), store.group(nameless).inspect
     end
   end
 
@@ -1441,7 +1441,7 @@ class StoreTest < Minitest::Test
 
   def test_everyones_book_is_not_a_group_to_delete
     with_store({"aiden" => AIDEN}) do |store|
-      id = FixtureData.seed_group(store, name: ProTacts::Store::EVERYONE, members: ["aiden"])
+      id = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: ["aiden"])
 
       assert_raises(ProTacts::Store::EveryonesBookName) { store.delete_group(id) }
 

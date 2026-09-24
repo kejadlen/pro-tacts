@@ -21,14 +21,14 @@ module ProTacts
     # log names the cards a join or a leave moved, and a name is what
     # a person reads; the members list is the narrowing of it.
     class GroupsShow < Phlex::HTML
-      # @rbs @group: Store::Group
+      # @rbs @group: Group
       # @rbs @login: String
       # @rbs @reading: Contact
       # @rbs @contacts: Array[Contact]
       # @rbs @members: Array[Contact]
       # @rbs @changes: Array[Store::GroupChange]
 
-      #: (group: Store::Group, contacts: Array[Contact], changes: Array[Store::GroupChange], login: String) -> void
+      #: (group: Group, contacts: Array[Contact], changes: Array[Store::GroupChange], login: String) -> void
       def initialize(group:, contacts:, changes:, login:)
         @group = group
         @login = login

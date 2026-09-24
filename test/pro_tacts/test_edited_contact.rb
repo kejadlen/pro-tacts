@@ -21,7 +21,7 @@ class EditedContactTest < Minitest::Test
   EDITED_ADDRESS = HOUSEHOLD_ADDRESS.sub("7 Calculus", "8 Calculus") #: String
   RESERIALIZED_ADDRESS = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "ADR;type=HOME;type=pref:") #: String
   OWN_ADDRESS = "ADR:;;1 Long Road;;;;" #: String
-  HOUSEHOLD = ProTacts::Store::Group.new(
+  HOUSEHOLD = ProTacts::Group.new(
     id: "kkkk", name: "Household", label: "Household", lines: [HOUSEHOLD_ADDRESS], members: ["aiden"],
   )
   LENT = [ProTacts::Contact::Inherited.new(group: HOUSEHOLD, position: 3, line: HOUSEHOLD_ADDRESS)].freeze

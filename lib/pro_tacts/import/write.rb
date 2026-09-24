@@ -90,7 +90,7 @@ module ProTacts
         # ticked and asked for — and a membership written twice is a
         # constraint violation rather than a second membership.
         join = [*chosen, *named.map { group_id(it) }]
-        join << group_id(Store::EVERYONE) if everyone
+        join << group_id(Group::EVERYONE) if everyone
         @store.regroup(id, join: join.uniq, leave: []) unless join.empty?
 
         # Read back rather than kept from the put, because the group

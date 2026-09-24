@@ -27,7 +27,7 @@ class ContactTest < Minitest::Test
   # Inherited lines are given as bare strings and lent by GROUP, the
   # group a composed row is marked with; a test that needs a second
   # lender passes its own.
-  GROUP = ProTacts::Store::Group.new(id: "nous", name: "Booles", label: "Booles", lines: [], members: ["aiden"]) #: ProTacts::Store::Group
+  GROUP = ProTacts::Group.new(id: "nous", name: "Booles", label: "Booles", lines: [], members: ["aiden"]) #: ProTacts::Group
 
   def contact(bytes = CARD, id: "aiden", birthday: nil, inherited: [], group: GROUP)
     lent = inherited.each_with_index.map { |line, position| ProTacts::Contact::Inherited.new(group:, position:, line:) }

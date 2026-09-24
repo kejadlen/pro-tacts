@@ -46,7 +46,7 @@ module ProTacts
     # @rbs @inherited: Array[Inherited]
     # @rbs @vcard: VCard
     # @rbs @etag: String
-    # @rbs @groups_by_line: Hash[String, Store::Group]
+    # @rbs @groups_by_line: Hash[String, Group]
 
     # Ids end up in paths and arrive from client-supplied hrefs, so an id
     # outside this charset cannot be served.
@@ -354,7 +354,7 @@ module ProTacts
     # card spells the line exactly as its group does still has one, and
     # naming the group over both copies says something true about the
     # value even where it is wrong about the byte.
-    #: (VCard::Parser::Line line) -> Store::Group?
+    #: (VCard::Parser::Line line) -> Group?
     def group_of(line)
       groups_by_line[line.verbatim.chomp]
     end
@@ -364,12 +364,12 @@ module ProTacts
     # Every inherited line's group, keyed by the line's own bytes with
     # the terminator off — a group's line is stored without one and
     # composes with the card's, so neither side is compared as it lies.
-    #: () -> Hash[String, Store::Group]
+    #: () -> Hash[String, Group]
     def groups_by_line
       return @groups_by_line if defined?(@groups_by_line)
 
       @groups_by_line = @inherited.to_h {
-        [it.line.chomp, it.group] #: [String, Store::Group]
+        [it.line.chomp, it.group] #: [String, Group]
       }
     end
 

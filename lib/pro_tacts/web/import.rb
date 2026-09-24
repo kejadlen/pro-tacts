@@ -316,7 +316,7 @@ module ProTacts
     def import_picker(group, joined, named, member: nil)
       choices = store.group_choices
       lot = group.empty? ? nil : choices.find { it.name == group }
-      everyone = choices.find { it.name == Store::EVERYONE }
+      everyone = choices.find { it.name == Group::EVERYONE }
       none = [] #: Array[String]
       was = member ? store.groups_of(member.id).map(&:id) : none
       ticked = member ? was : [everyone&.id].compact
@@ -402,7 +402,7 @@ module ProTacts
       # does not exist yet, so there is no row and no answer, and the
       # card joins it the way every other create does
       # (Import::Write#call).
-      everyone = choices.find { it.name == Store::EVERYONE }
+      everyone = choices.find { it.name == Group::EVERYONE }
       syncing = everyone.nil? || ticked.include?(everyone.id)
 
       # N and FN are mandatory (RFC 2426 section 4), so a save blank

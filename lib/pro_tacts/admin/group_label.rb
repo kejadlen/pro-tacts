@@ -7,11 +7,11 @@ module ProTacts
     # its id, marked `data-nameless` so admin.css can set it as an
     # identifier rather than let it pass for a name.
     class GroupLabel < Phlex::HTML
-      # @rbs @group: Store::Group | Store::GroupChoice
+      # @rbs @group: Group | Store::GroupChoice
 
       # A Group or the lighter GroupChoice a picker carries: this reads
       # only the name and the id, which both hold.
-      #: (group: Store::Group | Store::GroupChoice) -> void
+      #: (group: Group | Store::GroupChoice) -> void
       def initialize(group:)
         @group = group
       end
