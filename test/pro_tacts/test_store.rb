@@ -948,7 +948,7 @@ class StoreTest < Minitest::Test
   # component out of range (month 13, day 32), a spelling its grammar
   # does not take (undashed, unpadded — see Birthday's patterns), and a
   # BDAY the card hangs off a property group. Why it reports rather
-  # than stores quietly is Store#report_unrecognized_bday_line.
+  # than stores quietly is Arrival#report_unrecognized_bday_line.
   def test_an_unrecognized_bday_arriving_is_reported
     ["BDAY:1985-13", "BDAY:--0432", "BDAY:19850412", "BDAY:1985-4", "item1.BDAY:1985-04-12"].each do |line|
       with_store({}) do |store|

@@ -2,7 +2,7 @@ require "pro_tacts/birthday"
 require "pro_tacts/vcard/parser"
 
 module ProTacts
-  # What one BDAY line in a submitted card is, for Store#put to act on
+  # What one BDAY line in a submitted card is, for Arrival to act on
   # (docs/plans/2026-09-11-every-birthday-in-the-model.md). Match with
   # case/when, not case/in: Steep does not check the bodies of case/in
   # branches, and these branches are the ones worth checking.

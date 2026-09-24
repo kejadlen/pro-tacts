@@ -38,14 +38,6 @@ module ProTacts
       def self.new: (contact: Contact, occurs_on: Date) -> instance
     end
 
-    class Lent
-      attr_reader group_id: String
-      attr_reader position: Integer
-      attr_reader line: String
-
-      def self.new: (group_id: String, position: Integer, line: String) -> instance
-    end
-
     class Group
       attr_reader id: String
       attr_reader name: String?
@@ -72,14 +64,6 @@ module ProTacts
       attr_reader books: Hash[String, String]
 
       def self.new: (cards: Hash[String, String], birthdays: Hash[String, Birthday], groups: Array[Group], books: Hash[String, String]) -> instance
-    end
-
-    class GroupEdit
-      attr_reader group_id: String
-      attr_reader position: Integer
-      attr_reader line: String?
-
-      def self.new: (group_id: String, position: Integer, line: String?) -> instance
     end
   end
 end
