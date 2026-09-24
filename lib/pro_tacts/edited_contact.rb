@@ -27,9 +27,7 @@ module ProTacts
   class EditedContact
     # @rbs @before: Contact?
     # @rbs @submitted: VCard
-    # @rbs @stored: VCard
-    # @rbs @birthday: Birthday?
-    # @rbs @group_edits: Array[GroupEdit]
+    # @rbs @decomposed: [VCard, Birthday?, Array[GroupEdit]]
 
     # What one classified line asks of the group it came from: the row
     # to write, and the line that replaces it — or nil to remove the
@@ -62,24 +60,26 @@ module ProTacts
     def initialize(submitted, before:)
       @before = before
       @submitted = submitted
-      @birthday, rest = split_birthday
-      @stored, @group_edits = subtract_inherited(rest)
     end
 
     attr_reader :before
 
     attr_reader :submitted
 
-    # The card to store: the submission minus its birthday and minus
-    # what its groups lend it.
-    attr_reader :stored
+    # The submission taken back apart: the card to store, minus its
+    # birthday and minus what its groups lend it; the model's new
+    # birthday, or nil to empty the model; and the group rows the
+    # member's edits rewrite or remove, empty where every lent line
+    # came back untouched. Worked out on first ask and kept, so the
+    # arrival reports go to Sentry once however often it is read.
+    #: () -> [VCard, Birthday?, Array[GroupEdit]]
+    def decomposed
+      return @decomposed if defined?(@decomposed)
 
-    # The model's new birthday, or nil to empty the model.
-    attr_reader :birthday
-
-    # The group rows the member's edits rewrite or remove, empty where
-    # every lent line came back untouched.
-    attr_reader :group_edits
+      birthday, rest = split_birthday
+      stored, group_edits = subtract_inherited(rest)
+      @decomposed = [stored, birthday, group_edits]
+    end
 
     private
 

@@ -439,7 +439,7 @@ module ProTacts
     #
     # What is stored is the card minus its birthday and minus what its
     # groups lend it, both composed back in on read; EditedContact
-    # reads the submission apart and this writes what it answers.
+    # takes the submission apart and this writes the parts.
     #
     # A card rather than its bytes, so the reading a caller already
     # made is the one EditedContact decides from: a PUT has asked
@@ -461,8 +461,7 @@ module ProTacts
       # it: the edit, which reads the submission against it, and the
       # change log's diff.
       before = contact(id)
-      edited = EditedContact.new(vcard, before:)
-      stored, birthday, edits = edited.stored, edited.birthday, edited.group_edits
+      stored, birthday, edits = EditedContact.new(vcard, before:).decomposed
 
       # The Contact this returns is the composed one — the lent lines
       # put back, read off membership as it stands at this write — and
