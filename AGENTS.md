@@ -11,7 +11,8 @@ response — the shape of those responses is empirical, not arbitrary.
 ## Commands
 
 ```bash
-rake                  # Tests (the default task)
+rake                  # Type check, then the tests (the default task)
+rake test             # The tests alone
 rake steep            # Type check lib against the RBS comments in it
 rake fixtures         # Re-record response fixtures from current behavior
 rake fixtures:extract # A logged exchange's request as a fixture step
@@ -32,25 +33,21 @@ rake console          # irb with the store open on the configured database
                       # safety net for what the session might do there
 rake profile:install  # Download carddav.mobileconfig from the app and
                       # stage it for approval
+rake profile:remove   # Remove the installed profiles pointing at it
+rake alpine:vendor    # Refresh the vendored Alpine from npm
+                      # (ALPINE=version)
+rake gloss:vendor     # Refresh the vendored Gloss CSS from a local
+                      # checkout (GLOSS=path)
 ```
 
 `rake profile:*` needs `PRO_TACTS_HOSTNAME` and touches installed system
 profiles, so leave those to the user.
 
 Importing is not a task at all: a .vcf is uploaded at `/import` in the
-app, and worked down there contact by contact, the file's contacts
-standing in a sidebar beside whatever is open. A row opens the card as
-the file wrote it beside the card that is coming in, with the lines no
-screen here shows struck, and this book's groups as a filtered list of
-boxes to tick — the group made for the import and everyone's book among
-them, ticked. That contact's own Save is what writes it through the
-store, so every row still to do wears a rail and stopping halfway keeps
-everything already in (docs/plans/2026-09-21-import-a-vcf.md). A row
-whose card looks like someone the book already has offers, above its
-editor, to update them instead, the card folded into theirs
-(docs/plans/2026-09-23-merging-on-import.md).
-The `import:*` tasks, the Swift reader they drove Contacts.app with,
-and the plan directories they wrote are gone.
+app and saved there contact by contact, each row's own Save writing it
+through the store (docs/plans/2026-09-21-import-a-vcf.md,
+docs/plans/2026-09-23-merging-on-import.md). The `import:*` tasks and
+the Swift reader they drove Contacts.app with are gone.
 
 ## Task management
 
@@ -81,7 +78,8 @@ lib/pro_tacts/
 ├── contact.rb      # the one model of a contact: id, vCard, etag,
 │                   # and the structured accessors over the card
 ├── group.rb        # A group as a screen reads one, and the `sync:`
-│                   # names that put cards in a book
+│                   # rules: which names put cards in a book, and
+│                   # everyone's
 ├── edited_contact.rb # A submitted card read against the contact it
 │                   # replaces: the card, birthday, and group edits
 │                   # Store#put writes
@@ -93,7 +91,8 @@ lib/pro_tacts/
 ├── vcard.rb        # vCard 3.0 escaping, and what a card is
 ├── vcard/parser.rb # One card's bytes into lines
 ├── proxy_auth.rb   # The login, off the header the proxy writes
-├── dev_login.rb    # That header, filled in for `rake dev` (dev.ru only)
+├── stub_login.rb   # That header, filled in where no proxy stands
+│                   # (demo.ru only)
 ├── change_id.rb    # Ids in the letters jj spells a change id with
 ├── config.rb       # Every environment read in the app
 ├── profile.rb      # carddav.mobileconfig generation
@@ -101,10 +100,16 @@ lib/pro_tacts/
 │                   # carries
 ├── refusal_alerts.rb # DAV refusals as Sentry warnings, one per route
 └── warnings.rb     # $VERBOSE off for a block, for the phlex requires
+config.ru           # The deployment: the composition root
+demo.ru             # The fixture book behind a stub login, served by
+                    # the Fly preview and main apps (fly.toml)
+dev.ru              # demo.ru, marked as a dev run, for `rake dev`
 lib/roda/plugins/dav_verbs.rb     # PROPFIND and REPORT routing verbs
 lib/sequel/extensions/sole.rb     # `first`, minus the ambiguity
 db/migrations/      # Sequel migrations, run on every store open
 sig/                # RBS for what an inline comment cannot say
+docs/DESIGN.md      # Who the admin screens are for, and how they look
+docs/apple-contacts.md # What the Apple clients do off-spec
 docs/rfcs/          # Vendored spec texts the code cites
 docs/plans/         # Dated design records
 test/fixtures/cards/            # Seed cards for the test database
@@ -138,11 +143,13 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   `DavXml`, whose methods are the only elements the server can send. Inside
   an element's block, `it` is the builder, not an enclosing block's value,
   so name the outer block's parameter.
-- Every request needs a `Remote-User` header or it gets a 401. `rake dev`
-  fills it with `alpha@example.com` when a request has none (`dev.ru`),
-  so pass it only to ask as someone else. The security of
-  that rests on the app being reachable only through a proxy that writes
-  the header itself — never bind it to anything but localhost.
+- Every request needs a `Remote-User` header or it gets a 401.
+  `StubLogin` fills it with `alpha@example.com` when a request has none,
+  so under `rake dev` pass it only to ask as someone else. The security
+  of that rests on the app being reachable only through a proxy that
+  writes the header itself. `StubLogin` belongs only in `demo.ru`, in
+  front of the fixture book: never put it in `config.ru`, and never
+  serve real data without the proxy in front.
 - DAV exchanges that went wrong (a status of 400 or more but 401, a
   crash, or a report to Sentry) are written whole to `log/exchange.log`,
   each line prefixed by the id Sentry carries as the `exchange` tag.
@@ -237,6 +244,12 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   more. A caller for whom no row is ordinary rescues the first, which is
   what `Store#contact` does for the 404 path. The store loads the
   extension on every open.
+- Rescue `Sequel::NoMatchingRow` at the method, around its one
+  expression; do not fold it into a read that returns nil, which only
+  moves the check into a `row &&` at every caller. The exception is a
+  method whose rescue would also wrap a transaction and swallow what
+  that raises: read with `first` and return early there
+  (`Store#delete_group`).
 - An etag is derived from the card, never stored beside it: `Contact`
   hashes what it serves, and its constructor is the only way to make
   one — no second path takes an etag on trust. The etag in `changes` is
@@ -281,6 +294,20 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   that needs saying which one keeps its own word (`stored`, `own`,
   `rest`). The `cards` column and the `text/vcard` media type spell
   it the same way and are neither of them variables.
+- A wrong name is fixed where it starts, in the change at hand: the
+  migration that renames the column, and every identifier that reads
+  it, rather than a follow-up. Check what the new word already means in
+  that class before taking it.
+- A class that is built once and only read back is a function wearing
+  a constructor, and it needs a noun the domain does not have. Put the
+  logic as a `def self.` on the module or class whose vocabulary it
+  already uses, helpers under `private_class_method` (`CardDiff`,
+  `Birthday`, `Admin::Format`). A new class holds a real domain thing
+  (`EditedContact` holds the contact before and the submission). If no
+  name fits, ask whether the thing should exist at all.
+- A screen, step, or button that only restates what another page holds
+  is deleted, not redesigned: land the flow on the real thing (the
+  group, the list, the record) instead. See docs/DESIGN.md.
 - `docs/plans/` entries are dated records of what was decided then. Write
   a new one rather than editing an old one to match current behavior.
 - Comments carry the reasoning; the code carries the rest. One that
@@ -300,6 +327,20 @@ not a fixture; edit a `.vcf` to change what the replay serves.
   docs/plans/2026-08-20-type-checking.md.
 - An instance variable declaration has to be the first thing in the
   class body. Further down it is reported as an unused annotation.
+- Steep refuses three shapes that Ruby accepts. A bare `[]` or `{}`
+  needs a type unless it lands in a typed parameter: put it on its own
+  line with `#: Hash[String, Array[String]]` at the end. A literal of
+  several elements is an `Array`, not a tuple, so one meant as
+  `[String, String]` says so the same way. And a local that is nil on
+  one branch stays nilable after a later `is_a?` check, so return on
+  the nil before the value is made.
+- Tests seed their store through `Store#put` without `client:`, so a
+  test store has no `sync:*` group. A test that needs everyone's book
+  makes it.
+- Actions in `.github/workflows/` are pinned by commit, and the
+  comment beside a pin names a tag that is that commit, never a
+  branch: zizmor flags a mismatch as a code scanning comment while its
+  job stays green. `git ls-remote --tags` confirms the pair.
 - `rake steep` needs a UTF-8 locale, which comes from the environment
   rather than anything in this repo. RBS reads source in the default
   external encoding, so under a C locale the em dashes in these comments
