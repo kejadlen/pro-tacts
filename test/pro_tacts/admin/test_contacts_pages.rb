@@ -376,7 +376,7 @@ class AdminContactsPagesTest < Minitest::Test
       contacts_column = last_response.body.split("upcoming birthdays").first
       assert_includes contacts_column, "Grace Hopper"
       refute_includes contacts_column, "Ada Lovelace"
-      assert_includes last_response.body, "results"
+      assert_includes last_response.body, %(<h2 class="type-label">contacts</h2>)
     end
   end
 

@@ -52,7 +52,7 @@ module ProTacts
           div(class: "dashboard") do
             section do
               div(class: "section-head") do
-                h2(class: "type-label") { @query.empty? ? "recently updated" : "results" }
+                h2(class: "type-label") { @query.empty? ? "recently updated" : "contacts" }
                 # A button, not a link: it changes the page's state
                 # rather than navigating, and the Popover API is what
                 # it invokes (see ContactDialog).
@@ -99,7 +99,7 @@ module ProTacts
       # (docs/DESIGN.md, "When adding something new").
       #: () -> void
       def group_results
-        div(class: "section-head") do
+        div(class: "section-head group-results") do
           h2(class: "type-label") { "groups" }
         end
         ul(class: "card") do

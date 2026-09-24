@@ -723,6 +723,18 @@ section > h2 {
   align-items: baseline;
 }
 
+/* The groups block under a search's contacts results. A
+   section-head's own step is s, heading to the list it names — this
+   one names the next block under the contacts card instead, so it
+   takes the page's block step (m, .admin-main's gap): the break
+   between the two lists reads as a block boundary, not another row
+   of the same list. Scoped to a second class because every other
+   section-head opens its section and has nothing above it to step
+   from. */
+.group-results {
+  margin-top: var(--gl-space-m);
+}
+
 /* /contacts' rows, one card per first letter (ContactsIndex's
    letter_groups), the letter in a narrow column at the card's left
    rather than a heading over it: a heading row between every pair of
