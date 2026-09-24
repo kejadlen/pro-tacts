@@ -8,11 +8,11 @@ module ProTacts
   # (docs/plans/2026-09-15-identity-from-one-header.md, "Which
   # header").
   #
-  # A request that names nobody is refused at the top of Web's route
-  # (Web#unauthorized). That covers the two cases Tailscale documents as
-  # having no identity: Funnel traffic, which is public, and traffic from
-  # tagged devices. A family device that gets tagged will start seeing
-  # 401s.
+  # A request that names nobody raises rather than passing a nil
+  # down (Web's error handler maps the raise to the 401). That
+  # covers the two cases Tailscale documents as having no identity:
+  # Funnel traffic, which is public, and traffic from tagged devices.
+  # A family device that gets tagged will start seeing 401s.
   #
   # Any login the proxy vouches for is accepted. Getting onto the tailnet
   # is the access control; the login only picks which address book a
@@ -32,19 +32,28 @@ module ProTacts
     HEADER = "Remote-User" #: String
     ENV_KEY = "HTTP_#{HEADER.upcase.tr("-", "_")}" #: String
 
-    # The login on a request, or nil for one that names nobody. Read as
-    # UTF-8, which is the encoding a login reaches the store in
-    # (AGENTS.md's note on STRICT columns); bytes that are not text at
-    # all name nobody rather than raising at the bind, several layers
-    # down, on a group named after them.
-    #: (Rack::env env) -> String?
+    # What #login raises for a request that names nobody. Its own
+    # class, so Web's error handler can answer exactly it with the
+    # 401 and nothing wider is ever caught — an unexpected failure
+    # still propagates to Sentry (see web.rb).
+    class MissingLogin < StandardError
+    end
+
+    # The login on a request. Read as UTF-8, which is the encoding a
+    # login reaches the store in (AGENTS.md's note on STRICT
+    # columns); bytes that are not text at all name nobody rather
+    # than raising at the bind, several layers down, on a group
+    # named after them.
+    #: (Rack::env env) -> String
     def self.login(env)
       login = env[ENV_KEY].to_s.dup.force_encoding(Encoding::UTF_8)
       # Checked before strip, which raises on invalid bytes.
-      return unless login.valid_encoding?
+      raise MissingLogin, "the #{HEADER} header is not valid UTF-8" unless login.valid_encoding?
 
       login = login.strip
-      login unless login.empty?
+      raise MissingLogin, "no login on the #{HEADER} header" if login.empty?
+
+      login
     end
   end
 end

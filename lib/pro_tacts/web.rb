@@ -73,14 +73,40 @@ module ProTacts
       "Not Found"
     end
 
+    # The identity gate's refusal, as an exception mapped to a
+    # response: ProxyAuth.login raises MissingLogin for a request that
+    # names nobody, and this answers it with the 401. `classes:` keeps
+    # the plugin from touching any other raise — an unexpected failure
+    # still propagates to Sentry::Rack::CaptureExceptions outside the
+    # app, where it is reported, so this handler must not widen.
+    #
+    # A 401 must carry a challenge (RFC 9110 section 15.5.2), and
+    # `Proxy-Identity` is no registered scheme: it tells the client
+    # that the credential is the login its proxy vouches for, which
+    # nothing the client could send supplies.
+    #
+    # The body names the header that was read, because the failure it
+    # reports is almost always a proxy writing some other one. Naming
+    # it hands an attacker nothing: the proxy overwrites the header on
+    # every request, so knowing which one it is buys no way to forge
+    # it.
+    plugin :error_handler, classes: [ProxyAuth::MissingLogin] do |_e|
+      response.status = 401
+      response["WWW-Authenticate"] = "Proxy-Identity"
+      response["Content-Type"] = "text/plain"
+      "Unauthorized: no login on the #{ProxyAuth::HEADER} header.\n" \
+      "The proxy in front of this app writes that header.\n"
+    end
+
     # The router's trunk: the identity gate, the static files, and the
     # root the admin and DAV halves share. Every other first segment is
     # a hash_branch in lib/pro_tacts/web/, run on this same instance, so
     # what the trunk sets they see.
     route do |r|
-      # Every request names a tailnet user or is refused, the static
-      # files included (ProTacts::ProxyAuth).
-      @login = ProxyAuth.login(r.env) || unauthorized(r)
+      # Every request names a tailnet user or is refused — the static
+      # files included — because #login raises for one that names
+      # nobody and the error handler above answers it.
+      @login = ProxyAuth.login(r.env)
 
       r.public
       r.hash_branches
@@ -102,28 +128,6 @@ module ProTacts
     end
 
     private
-
-    # The refusal of a request that names nobody. A 401 must carry a
-    # challenge (RFC 9110 section 15.5.2), and `Proxy-Identity` is no
-    # registered scheme: it tells the client that the credential is the
-    # login its proxy vouches for, which nothing the client could send
-    # supplies.
-    #
-    # The body names the header that was read, because the failure it
-    # reports is almost always a proxy writing some other one. Naming it
-    # hands an attacker nothing: the proxy overwrites the header on every
-    # request, so knowing which one it is buys no way to forge it.
-    #: (Roda::RodaRequest r) -> bot
-    def unauthorized(r)
-      response.status = 401
-      response["WWW-Authenticate"] = "Proxy-Identity"
-      response["Content-Type"] = "text/plain"
-      response.write(
-        "Unauthorized: no login on the #{ProxyAuth::HEADER} header.\n" \
-        "The proxy in front of this app writes that header.\n"
-      )
-      r.halt
-    end
 
     #: () -> Store
     def store

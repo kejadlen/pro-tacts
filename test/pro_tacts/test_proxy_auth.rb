@@ -16,19 +16,19 @@ class ProxyAuthTest < Minitest::Test
   end
 
   def test_no_header_is_nobody
-    assert_nil login(nil)
+    assert_raises(ProTacts::ProxyAuth::MissingLogin) { login(nil) }
   end
 
   def test_an_empty_login_is_nobody
-    assert_nil login("")
+    assert_raises(ProTacts::ProxyAuth::MissingLogin) { login("") }
   end
 
   def test_a_blank_login_is_nobody
-    assert_nil login("   ")
+    assert_raises(ProTacts::ProxyAuth::MissingLogin) { login("   ") }
   end
 
   def test_a_login_on_another_header_is_nobody
-    assert_nil login(sent_as: "HTTP_TAILSCALE_USER_LOGIN")
+    assert_raises(ProTacts::ProxyAuth::MissingLogin) { login(sent_as: "HTTP_TAILSCALE_USER_LOGIN") }
   end
 
   # The proxy copies the value through, so a non-ASCII one arrives as the
@@ -38,6 +38,6 @@ class ProxyAuthTest < Minitest::Test
   end
 
   def test_a_login_that_is_not_utf8_is_nobody
-    assert_nil login((+"zo\xEB").force_encoding(Encoding::BINARY))
+    assert_raises(ProTacts::ProxyAuth::MissingLogin) { login((+"zo\xEB").force_encoding(Encoding::BINARY)) }
   end
 end

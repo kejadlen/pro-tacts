@@ -6,7 +6,10 @@
 # classes, regexps, symbols, hashes, and arrays of those — is open, and
 # the block arguments a match yields depend on which matcher matched.
 class Roda
-  def self.plugin: (Symbol | Module plugin, *untyped args) ?{ () [self: instance] -> untyped } -> void
+  # The configure blocks vary by plugin — error_handler passes the
+  # exception, not_found and the routes pass nothing — so the block
+  # takes anything, like the matchers below.
+  def self.plugin: (Symbol | Module plugin, *untyped args, **untyped options) ?{ (*untyped) [self: instance] -> untyped } -> void
 
   def self.use: (untyped middleware, **untyped options) -> void
 
