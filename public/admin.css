@@ -487,8 +487,13 @@ textarea:focus {
   background: var(--gl-color-accent);
   border-color: var(--gl-color-accent);
 }
+/* The accent-fg pairs with the bar's fill and must stop at the
+   chrome: the menu's list is the header's DOM child but floats over
+   the page on a card, so left to reach it by descent it paints the
+   rows white on surface-card — unreadable. They keep the text color
+   their own rule gives them (the menu section below). */
 :root[data-accent] :is(.admin-header a, .admin-header .user-menu button,
-.admin-footer .type-label) {
+.admin-footer .type-label):not(.user-menu ul a) {
   color: var(--gl-color-accent-fg);
 }
 /* The one focus ring is drawn in the accent, which vanishes against a
