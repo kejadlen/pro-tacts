@@ -9,100 +9,62 @@ A CardDAV server for my family.
 - Apple devices only (it might happen to work on other CardDAV clients, but
   only accidentally)
 
-The three features the design was shaped around — groups with shared
-attributes, selective sync, and a readable dump for version control —
-are all serving now; Status covers each.
+## What it does
 
-## Status
+Contacts live in a SQLite database at `data/contacts.db` (override the
+root with `PRO_TACTS_DATA_DIR`, or the database path alone with
+`PRO_TACTS_DATABASE`), one row per contact holding the vCard itself.
+Storing the card rather than a parse of it keeps the properties the
+server does not model, which RFC 6352 section 6.3.2.2 requires of
+anything accepting writes (`docs/plans/2026-08-24-vcard-storage-and-groups.md`).
+What else the database holds that cannot be rebuilt is listed in
+`Store`'s class comment; the rest is an index `rake index:rebuild` makes
+again. `rake db:dump` writes the cards, birthdays, groups, and books out
+as plain files under `data/dump` and commits them to that directory's
+own repository, so a snapshot is something to revert to
+(`docs/plans/2026-09-20-the-dump-commits.md`).
 
-Serving real data, reads and writes both. Contacts live in a SQLite
-database at `data/contacts.db` (override the root with `PRO_TACTS_DATA_DIR`, or the
-database path alone with `PRO_TACTS_DATABASE`), one row per contact,
-holding the vCard itself:
+A group holds an address or a note written once and composed into every
+member's card on the way out, with membership never exposed to the
+client. A member editing a shared line in Contacts writes it back for
+everyone (`docs/plans/2026-09-09-group-edits-propagate.md`).
 
-```
-BEGIN:VCARD
-VERSION:3.0
-N:Smith;John;;;
-FN:John Smith
-TEL;TYPE=mobile:+1-555-1234
-UID:john-smith
-END:VCARD
-```
+Each user syncs a book of their own: the members of `sync:*`, which
+everyone gets, and of `sync:<login>`. A book can be named in place of
+the login, from `/setup` or with `rake book:name`, which renames its
+group to `sync:<name>`. A card a client creates joins `sync:*`
+(`docs/plans/2026-09-12-per-user-books.md`,
+`docs/plans/2026-09-15-client-creates-join-everyone.md`).
 
-Storing the card rather than a parse of it is what lets the server keep
-properties it does not model, which RFC 6352 section 6.3.2.2 requires of
-anything accepting writes; `docs/plans/2026-08-24-vcard-storage-and-groups.md`
-makes the case at length. The same database holds the change log, the
-birthdays, the groups, and the books — the four things in it besides
-the cards that cannot be rebuilt, the birthdays because a partial
-date has no vCard 3.0 spelling — and an index of parsed properties,
-which can: `rake index:rebuild` derives that again from the stored
-cards alone. `rake db:dump` writes the
-cards, birthdays, groups, and books out as plain files, into
-`data/dump` unless `DUMP` names another directory, and commits them to
-that directory's own repository, so a snapshot is something to revert
-to (`docs/plans/2026-09-12-database-dump.md`,
-`docs/plans/2026-09-20-the-dump-commits.md`).
+The same app serves the admin screens: the contacts and groups and
+their editors, `/setup` for a device's configuration profile, and
+`/import` for saving a .vcf into the book contact by contact
+(`docs/DESIGN.md`). Every pull request gets a Fly preview, and main
+deploys one too, both serving the fixture book through `demo.ru`.
 
-A group holds attributes its members' cards carry: an address or a note
-written once and composed into every member's card on the way out, with
-membership never exposed to the client. A member editing a shared line
-in Contacts writes it back for everyone, and a member deleting one takes
-the row away — which is why the lines a group may hold are only the two
-a household actually shares (`docs/plans/2026-08-24-vcard-storage-and-groups.md`,
-`docs/plans/2026-09-09-group-edits-propagate.md`).
-
-macOS Contacts displays them over Tailscale serve as of 2026-08-14, so
-later work has a known-good baseline to change. See
-`docs/plans/2026-08-12-one-card-on-macos.md` for what that milestone
-established. A contact's etag hashes the card it serves and the
-collection tags carry the change log's sequence, so a change to a card
-reaches synced clients on their next poll. Writes arrive the same way:
-PUT stores the submitted card verbatim (RFC 6352 section 6.3.2), and the
-change log the sync tokens count on is written with it, in one
-transaction.
-
-Requests are authenticated by one request header carrying the
-requester's login: `Remote-User`. The proxy in front of the app writes
-that header. A Caddy site's `header_up` overwrites whatever arrived, so
-a client cannot forge it. A request without a login
+Requests are authenticated by the `Remote-User` header, which the proxy
+in front of the app writes; a Caddy site's `header_up` overwrites
+whatever arrived, so a client cannot forge it. A request without it
 gets a 401. That holds only while the app is reachable through such a
-proxy alone — bind it to localhost.
-Tailscale documents two cases that carry no identity and so cannot get in:
-Funnel traffic, which is public, and traffic from tagged devices.
+proxy alone, so bind it to localhost. Tailscale traffic that carries no
+identity, Funnel and tagged devices, cannot get in
+(`docs/plans/2026-09-15-identity-from-one-header.md`).
 
-Each user syncs a book of their own rather than every card: the members
-of the group `sync:*`, which everyone gets, and of `sync:<login>`,
-matched exactly. `rake book:name LOGIN=... NAME=...` gives a login's
-book a name to use in place of the login, renaming its group to
-`sync:<name>`; a user can name their own with `POST /setup/book` and a
-`name` field. A card a client creates joins `sync:*`, so everyone
-gets it until someone takes it out. See
-`docs/plans/2026-09-12-per-user-books.md`,
-`docs/plans/2026-09-15-client-creates-join-everyone.md`,
-`docs/plans/2026-09-15-identity-from-one-header.md`, and
-`docs/plans/2026-09-16-book-names.md`.
-
-DAV exchanges that go wrong — a status of 400 or more other than the 401
-above, a crash, or a request that reported to Sentry — are written whole
-to `log/exchange.log`, rotated by size. Each exchange has an id that
-Sentry carries as the `exchange` tag, so an alert names the exchange to
-read. A client asking for something unimplemented therefore leaves behind
-enough to implement it. `PRO_TACTS_DEBUG=1` logs every DAV exchange
-instead, for reading back a write that succeeded.
-Sentry gets no request body at all, because `send_default_pii` is off, so
-the cards themselves never leave the machine.
+DAV exchanges that go wrong (a status of 400 or more other than a 401, a
+crash, or a report to Sentry) are written whole to `log/exchange.log`
+under an id Sentry carries as the `exchange` tag, so an alert names the
+exchange to read. `PRO_TACTS_DEBUG=1` logs every exchange instead. No
+request body reaches Sentry, so the cards never leave the machine.
 
 ## The minimal set macOS Contacts needs
 
 The responses are the verified minimum for macOS 26.5.1 Contacts, found
 by removing properties and re-provisioning until the card stopped
-appearing (August 2026; per-round evidence in the task comments). This is
-a per-client property, not a universal spec: iOS and other macOS versions
-are untested and may need more — the fixture replay in `test/fixtures/`
-is the harness to run when one of them misbehaves. What each response must
-carry:
+appearing (August 2026). iOS 26.6.1 works with the same set; where it
+sends something macOS does not is recorded in
+`test/fixtures/ios-exchange/`. Other clients are untested, and the
+fixture replay is the harness to run when one misbehaves. What each
+response must carry:
 
 - `PROPFIND /` and `/.well-known/carddav`: `current-user-principal` only.
 - `OPTIONS` under `/dav/`: `DAV: addressbook` — the class 1, 3, and
@@ -126,10 +88,9 @@ carry:
   submitted, octet for octet (RFC 6352 section 6.3.2.3) — a card whose
   birthday is subtracted out before storage and composed back in on
   read goes without the tag and the client refetches. A refused write
-  is a 412 naming the precondition in a `DAV:error` body. The statuses
-  follow the RFC rather than client evidence: no live write had been
-  answered when they were written, so the first synced device to edit
-  is its test.
+  is a 412 naming the precondition in a `DAV:error` body.
+- `DELETE` a card: 204, and the removal reaches other clients as a 404
+  in their next `sync-collection`.
 
 Three properties are load-bearing in non-obvious ways, documented in
 `docs/apple-contacts.md`: the collection's `resourcetype` (without
@@ -189,9 +150,9 @@ CalendarServer, which is archived but still the only written source:
 
 ## Reference implementations
 
-`servers/` holds compose files for CardDAV servers to compare against, each
-sitting behind mitmproxy because those servers cannot be made to log what we
-need. Point macOS Contacts at one, watch what it sends and what a working
+A local `servers/` directory, ignored by git, holds compose files for
+CardDAV servers to compare against, each behind mitmproxy because those
+servers cannot be made to log what we need. Point macOS Contacts at one, watch what it sends and what a working
 server sends back, then make pro-tacts match. pro-tacts itself is debugged
 through its own logs instead.
 
