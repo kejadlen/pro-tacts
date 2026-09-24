@@ -162,8 +162,9 @@ module ProTacts
             # The warm-sync ask is etag-only; a changed etag sends the
             # client back through multiget, so no address-data here.
             #
-            # The token carries the change log's sequence and whose book
-            # it was issued for (SyncToken), and the delta is the
+            # The token carries the change log's sequence, whose book
+            # it was issued for, and which database issued it
+            # (SyncToken), and the delta is the
             # log after the sequence, answered from the requester's book
             # as it is now: a card that left it answers as removed
             # (section 3.5.2), and so does one that never was in it,
@@ -190,7 +191,7 @@ module ProTacts
                   etag_response(d, it)
                 end
               end
-            elsif (sequence = SyncToken.read(token, book_digest)) && sequence <= store.latest_sequence
+            elsif (sequence = SyncToken.read(token, book_digest, store.database_id)) && sequence <= store.latest_sequence
               net = store.changes(after: sequence).map { it.card_id }.uniq
               multistatus("card", sync_token:) do |d|
                 net.each do |id|
@@ -199,8 +200,9 @@ module ProTacts
                 end
               end
             else
-              # A token this server never issued, one issued for another
-              # book, or one naming a state past the present: the
+              # A token this server never issued, one another
+              # database or book minted, or one naming a state past
+              # the present: the
               # section's DAV:valid-sync-token
               # precondition, marshalled per RFC 4918 section 16. 410
               # rather than 403 because its fallback is a full resync —
@@ -346,10 +348,12 @@ module ProTacts
     end
 
     # This request's token, minted at the ctag read above so that the
-    # one served here and the one a delta is measured from agree.
+    # one served here and the one a delta is measured from agree, and
+    # for the database this store serves, so no other's client can
+    # spend it (Store#database_id).
     #: () -> String
     def sync_token
-      SyncToken.mint(ctag, book_digest)
+      SyncToken.mint(ctag, book_digest, store.database_id)
     end
 
     #: () -> String

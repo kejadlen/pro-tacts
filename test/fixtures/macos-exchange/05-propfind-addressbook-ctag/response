@@ -19,7 +19,7 @@ Content-Type: text/xml
           </d:supported-report>
         </d:supported-report-set>
         <cs:getctag>22</cs:getctag>
-        <d:sync-token>http://pro-tacts/sync/22/336e00f5e1ec2674</d:sync-token>
+        <d:sync-token>http://pro-tacts/sync/22/336e00f5e1ec2674/6ce9dc47db17f26e</d:sync-token>
         <d:current-user-privilege-set>
           <d:privilege>
             <d:read/>

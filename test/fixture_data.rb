@@ -182,8 +182,14 @@ module FixtureData
   end
 
   # Builds the database and returns a store still open on it, for the
-  # caller to hand to the app the way config.ru does.
-  def self.install(directory)
+  # caller to hand to the app the way config.ru does. `genesis` pins the
+  # first change's stamp, and with it the database id its sync tokens
+  # embed (Store#database_id): a recorded session's responses are byte
+  # for byte the replay's only if both books answer as the same
+  # database, and a real seed moment never is twice. Unpinned by
+  # default — `rake dev` reseeding is what a fresh id per start is for
+  # (ExchangeFixtures::GENESIS for the pinned spelling).
+  def self.install(directory, genesis: nil)
     directory = Pathname.new(directory)
     FileUtils.rm_rf(directory)
     FileUtils.mkdir_p(directory)
@@ -193,6 +199,7 @@ module FixtureData
     seed.each do |id, card|
       store.put(id, ProTacts::VCard.new(card))
     end
+    database(store)[:changes].where(sequence: 1).update(created_at: genesis) if genesis
     backdate(store, seed.keys)
     seed_groups(store)
     store

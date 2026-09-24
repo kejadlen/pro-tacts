@@ -59,7 +59,7 @@ task :fixtures do
     # deleting a card, and the recording after it must not start from
     # what that one left behind.
     ExchangeFixtures.all.each do |recording|
-      store = FixtureData.install(data_dir / recording.directory.basename)
+      store = FixtureData.install(data_dir / recording.directory.basename, genesis: ExchangeFixtures::GENESIS)
       ProTacts::Web.store = store
       recording.record_responses(ProTacts::Web)
       store.close

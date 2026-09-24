@@ -42,7 +42,7 @@ class ExchangesTest < Minitest::Test
     # one the rest of the suite reads, built fresh so a replay never depends
     # on what a previous run left behind.
     directory = Pathname.new(__dir__).parent.parent / "tmp" / recording.directory.basename
-    store = FixtureData.install(directory)
+    store = FixtureData.install(directory, genesis: ExchangeFixtures::GENESIS)
     original = ProTacts::Web.store
     ProTacts::Web.store = store
 

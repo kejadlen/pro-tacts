@@ -1,6 +1,7 @@
 require_relative "../test_helper"
 require_relative "../photo_card"
 
+require "digest"
 require "pathname"
 require "tmpdir"
 
@@ -239,6 +240,57 @@ class StoreTest < Minitest::Test
 
       store.delete("znorth")
       refute_equal alone, store.ctag
+    end
+  end
+
+  ## The database a sync token names
+
+  def test_the_databases_id_is_the_digest_of_its_first_change
+    with_store({"aiden" => AIDEN}) do |store|
+      stamp = database(store)[:changes].where(sequence: 1).sole.fetch(:created_at)
+
+      assert_equal Digest::SHA256.hexdigest(stamp)[0, 16], store.database_id
+    end
+  end
+
+  def test_the_databases_id_survives_reopening
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      ids = Array.new(2) {
+        ProTacts::Store.connect(path) { |store| store.database_id }
+      }
+
+      assert_equal ids.first, ids.last
+    end
+  end
+
+  # The digest's entropy is the first write's moment, so two databases
+  # seeded alike differ by their stamps — a reseed and a restore, both
+  # moments apart. Two stores in one test can land inside the same
+  # millisecond, so this seeds a different first card: the digest then
+  # answers the difference whatever the clock did.
+  def test_two_databases_answer_different_ids
+    ids = [AIDEN, ZED].map { |card|
+      Dir.mktmpdir do |dir|
+        ProTacts::Store.connect(Pathname.new(dir) / "contacts.db") do |store|
+          store.put("first", vcard(card))
+          store.database_id
+        end
+      end
+    }
+
+    refute_equal ids.first, ids.last
+  end
+
+  # The empty book's edge: an empty log digests nothing, so its token
+  # 410s once after the first card lands — a resync of nothing.
+  def test_an_empty_book_answers_an_id_until_its_first_card_lands
+    with_store do |store|
+      empty = store.database_id
+      assert_match(/\A\h{16}\z/, empty)
+
+      store.put("aiden", vcard(AIDEN))
+      refute_equal empty, store.database_id
     end
   end
 

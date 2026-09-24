@@ -1,4 +1,5 @@
 require "date"
+require "digest"
 require "json"
 require "pathname"
 require "sequel"
@@ -259,6 +260,25 @@ module ProTacts
     #: () -> Integer
     def latest_sequence
       change_log.order(Sequel.desc(:sequence)).first&.fetch(:sequence).to_i
+    end
+
+    # The id a sync token names this database by: a digest of the
+    # change log's first entry — the write every token's sequences
+    # count from, and the one row nothing ever rewrites. #reid can move
+    # its card_id, so the stamp is the digest's whole input; no write
+    # touches a log row's created_at. Derived rather than stored
+    # (docs/plans/2026-09-24-sync-tokens-name-their-database.md), so a
+    # reseed or a dump restored — a new first entry at a new moment —
+    # makes every token the old database issued stop reading, and the
+    # route answers the 410 rather than a delta against a history the
+    # client never saw. An empty log digests nothing, so a token taken
+    # from a book that was empty 410s once after its first card lands:
+    # a resync of nothing.
+    #: () -> String
+    def database_id
+      first = change_log.order(:sequence).first
+      stamp = first.nil? ? "" : first.fetch(:created_at).to_s
+      Digest::SHA256.hexdigest(stamp)[0, 16].to_s
     end
 
     # Birthdays that land on a coming calendar day, in arrival order:

@@ -792,8 +792,9 @@ class WebTest < Minitest::Test
   end
 
   # A sync token as the route issues one to a user (Web#sync_token).
-  def issued_token(sequence, login: "test@example.com")
-    "http://pro-tacts/sync/#{sequence}/#{Digest::SHA256.hexdigest(login)[0, 16]}"
+  # `database` spells a token another database minted, the wyn case.
+  def issued_token(store, sequence, login: "test@example.com", database: nil)
+    "http://pro-tacts/sync/#{sequence}/#{Digest::SHA256.hexdigest(login)[0, 16]}/#{database || store.database_id}"
   end
 
   def etag_only_propfind
@@ -891,7 +892,7 @@ class WebTest < Minitest::Test
   # only, address-data never.
   def test_sync_collection_reports_the_delta_since_the_token
     with_contacts({"aiden" => "Aiden"}) do |store|
-      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(0))
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(store, 0))
 
       assert_equal 207, last_response.status
       assert_includes last_response.body, "/dav/addressbook/aiden.vcf"
@@ -915,20 +916,20 @@ class WebTest < Minitest::Test
 
   # The initial sync, RFC 6578 section 3.4.
   def test_sync_collection_with_no_token_lists_every_member
-    with_contacts({"aiden" => "Aiden", "znorth" => "Znorth"}) do
+    with_contacts({"aiden" => "Aiden", "znorth" => "Znorth"}) do |store|
       request "/dav/addressbook/", method: "REPORT", input: sync_collection("")
 
       assert_equal 207, last_response.status
       assert_includes last_response.body, "/dav/addressbook/aiden.vcf"
       assert_includes last_response.body, "/dav/addressbook/znorth.vcf"
-      assert_includes last_response.body, "<d:sync-token>#{issued_token(2)}</d:sync-token>"
+      assert_includes last_response.body, "<d:sync-token>#{issued_token(store, 2)}</d:sync-token>"
     end
   end
 
   # RFC 6578 section 3.2 spells a removal href and 404, no propstat.
   def test_sync_collection_reports_a_removal_as_404
     with_contacts({"aiden" => "Aiden", "znorth" => "Znorth"}) do |store|
-      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(2))
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(store, 2))
       token = last_response.body[%r{<d:sync-token>(.+)</d:sync-token>}, 1]
       store.delete("znorth")
 
@@ -946,8 +947,8 @@ class WebTest < Minitest::Test
   # present: the DAV:valid-sync-token precondition of RFC 6578
   # section 3.2, marshalled per RFC 4918 section 16.
   def test_sync_collection_refuses_a_token_it_never_issued
-    with_contacts({"aiden" => "Aiden"}) do
-      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(9))
+    with_contacts({"aiden" => "Aiden"}) do |store|
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(store, 9))
 
       assert_equal 410, last_response.status
       assert_includes last_response.body, "<d:valid-sync-token/>"
@@ -962,14 +963,33 @@ class WebTest < Minitest::Test
   # changed resyncs rather than taking a delta against another book —
   # and a token from before tokens named one is refused the same way.
   def test_sync_collection_refuses_a_token_from_another_book
-    with_contacts({"aiden" => "Aiden"}) do
-      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(1, login: "zoë@example.com"))
+    with_contacts({"aiden" => "Aiden"}) do |store|
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(store, 1, login: "zoë@example.com"))
       assert_equal 410, last_response.status
 
       request "/dav/addressbook/", method: "REPORT", input: sync_collection("http://pro-tacts/sync/1")
       assert_equal 410, last_response.status
 
-      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(1))
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(store, 1))
+      assert_equal 207, last_response.status
+    end
+  end
+
+  # A token names the database that minted it, so a device holding one
+  # from before a reseed or a restore — the same sequences over a
+  # different history — resyncs rather than taking a delta against a
+  # history it never saw
+  # (docs/plans/2026-09-24-sync-tokens-name-their-database.md).
+  def test_sync_collection_refuses_a_token_from_another_database
+    with_contacts({"aiden" => "Aiden"}) do |store|
+      request "/dav/addressbook/", method: "REPORT",
+        input: sync_collection(issued_token(store, 0, database: "1111111111111111"))
+
+      assert_equal 410, last_response.status
+      assert_includes last_response.body, "<d:valid-sync-token/>"
+
+      request "/dav/addressbook/", method: "REPORT", input: sync_collection(issued_token(store, 0))
+
       assert_equal 207, last_response.status
     end
   end

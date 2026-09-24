@@ -38,8 +38,11 @@ session received.
 
 Step 12 is a 410 the client really received, captured 2026-09-16 under
 `rake dev` with the dev login switched so the token's digest named
-another login's book. Its replay refuses it for the same reason: the
-digest is not the replay login's. After the 410, macOS sent a ctag
+another login's book. Its replay refuses it one step earlier: the
+recorded token predates tokens naming their database
+(docs/plans/2026-09-24-sync-tokens-name-their-database.md), so no part
+of it names the replay book's database — the same 410 either way. After
+the 410, macOS sent a ctag
 PROPFIND, the Depth 1 listing, a GET for the one card it lacked, the
 bootstrap PROPFIND, and a sync-collection report with the fresh token.
 The listing and bootstrap match steps 06 and 09 byte for byte, and the

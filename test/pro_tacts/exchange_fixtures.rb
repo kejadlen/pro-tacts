@@ -34,6 +34,13 @@ class ExchangeFixtures < Data.define(:directory)
   # a login back.
   REPLAY_LOGIN = "replay@example.com"
 
+  # The stamp a replayed book's first change carries (FixtureData.install
+  # pins it), so the database id its sync tokens embed — the digest of
+  # that first entry, Store#database_id — answers the same recorded as
+  # replayed. A real seed moment differs every run, and the recorded
+  # responses would drift with it.
+  GENESIS = "2000-01-01T00:00:00.000Z" #: String
+
   # Every recording, for the callers that run all of them.
   def self.all
     [MACOS, IOS]
