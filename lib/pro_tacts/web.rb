@@ -8,6 +8,7 @@ require "rack/rewindable_input"
 require "roda"
 
 require "pro_tacts/contact"
+require "pro_tacts/cross_site"
 require "pro_tacts/exchange_log"
 require "pro_tacts/refusal_alerts"
 require "pro_tacts/store"
@@ -107,6 +108,15 @@ module ProTacts
       # files included — because #login raises for one that names
       # nobody and the error handler above answers it.
       @login = ProxyAuth.login(r.env)
+
+      # A write another site's page sent, refused before any route
+      # can apply it (CrossSite).
+      if CrossSite.write?(r.env)
+        response.status = 403
+        response["Content-Type"] = "text/plain"
+        response.write("Forbidden: a write from another site's page.\n")
+        r.halt
+      end
 
       r.public
       r.hash_branches
