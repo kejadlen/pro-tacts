@@ -789,11 +789,11 @@ module ProTacts
     # #delete's shape.
     #: (String id) -> bool
     def delete_group(id)
-      # A plain `first` read, #birthday_of's reason: id is the primary
-      # key, so there is no ambiguity for `sole` to catch. Read here
-      # rather than rescued around the whole method, which would have
-      # swallowed a NoMatchingRow raised from inside the transaction
-      # below and answered it as an ordinary miss.
+      # A plain `first` read rather than #group's rescued `sole`: a
+      # rescue around the whole method would swallow a NoMatchingRow
+      # raised from inside the transaction below and answer it as an
+      # ordinary miss. id is the primary key, so there is no ambiguity
+      # for `sole` to catch.
       row = groups.where(id:).first
       return false if row.nil?
 
@@ -1204,13 +1204,13 @@ module ProTacts
       }
     end
 
-    # One card's birthday, or nil for none. A plain `first` read rather
-    # than `sole`: card_id is the primary key, so there is no ambiguity
-    # for `sole` to catch and no row is the ordinary answer.
+    # One card's birthday, or nil for none — the ordinary answer, a
+    # birthday being optional, so it is rescued here, #contact's shape.
     #: (String id) -> Birthday?
     def birthday_of(id)
-      row = birthdays.where(card_id: id).first
-      row && birthday_from(row)
+      birthday_from(birthdays.where(card_id: id).sole)
+    rescue Sequel::NoMatchingRow
+      nil
     end
 
     # The content lines a contact inherits, each beside the group
