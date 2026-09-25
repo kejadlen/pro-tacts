@@ -42,13 +42,12 @@ module ProTacts
     # `autofocus` fires when the popover is shown (it is scoped to the
     # popover, so the header search's own page-load autofocus stands).
     #
-    # An organization is made by its own popover beside this one
-    # (docs/plans/2026-09-24-company-cards.md), opened from the
-    # footer's link — not by a toggle swapping the name fields, which
-    # made the popover lurch around its own content-sized box. Created
-    # here rather than converted from a person later: the editor
-    # renders a company card's one name field, and nothing flips the
-    # flag.
+    # No company variant of this dialog: organizations are created by
+    # the clients (Contacts.app's own Company flow PUTs a finished
+    # card) and by import, and each web-side affordance tried for one
+    # cost the common path chrome it could not pay for
+    # (docs/plans/2026-09-24-company-cards.md, "Creating"). The editor
+    # knows a company card when it edits one (Contact#company?).
     class ContactDialog < Phlex::HTML
       # @rbs @query: String
 
@@ -80,43 +79,9 @@ module ProTacts
             input(type: "hidden", name: "q", value: @query)
           end
           footer do
-            # The company create's way in, on the footer's left (Gloss
-            # right-justifies a dialog's actions; this is the one
-            # thing on the other side). Opening the second popover
-            # closes this one, `popover: "auto"` being the many-open-
-            # at-once refusal, so the swap is whole dialogs rather
-            # than fields inside one — a popover sizes to its content,
-            # and fields swapping inside it made the box lurch.
-            button(type: "button", style: "margin-right: auto",
-                   popovertarget: "new-company") { "New company" }
             button(type: "button", popovertarget: "new-contact",
                    popovertargetaction: "hide") { "Cancel" }
             button(type: "submit", form: "new-contact-form",
-                   data: {variant: "primary"}) { "Create" }
-          end
-        end
-
-        # The company create's own popover, the person dialog's footer
-        # link the way in. One field — an organization is known by one
-        # name, the mononym's own rule — and the hidden `company` the
-        # route branches on (CardForm.new_org_card). The same popover
-        # machinery as the person's: Popover API open and close, no
-        # script, values surviving a light dismiss, autofocus scoped
-        # to the popover once shown.
-        dialog(id: "new-company", popover: "auto") do
-          header { "New company" }
-          form(id: "new-company-form", action: "/contacts", method: "post") do
-            input(type: "hidden", name: "company", value: "1")
-            label(class: "field") do
-              plain "Organization"
-              input(type: "text", name: "organization", required: true, autofocus: true)
-            end
-            input(type: "hidden", name: "q", value: @query)
-          end
-          footer do
-            button(type: "button", popovertarget: "new-company",
-                   popovertargetaction: "hide") { "Cancel" }
-            button(type: "submit", form: "new-company-form",
                    data: {variant: "primary"}) { "Create" }
           end
         end

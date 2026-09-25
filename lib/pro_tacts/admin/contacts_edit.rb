@@ -128,7 +128,7 @@ module ProTacts
         family, given, additional = contact.name_components || []
         @first = given
         @middle = additional
-        @last = family
+        @last = family || organization_name
       end
 
       def view_template
@@ -247,6 +247,20 @@ module ProTacts
       end
 
       private
+
+      # A company card's name, from wherever the card holds it. macOS
+      # writes N empty and the name in FN and ORG both (the PUT a real
+      # client sent, log/dev.log 2026-09-24), so the organization
+      # field cannot prefill from the family slot alone; the older
+      # family-slot shape is already read by then, and ORG's own name
+      # is its first component — the semicolons after it are units.
+      # nil for a person, whose family slot is the field.
+      #: () -> String?
+      def organization_name
+        return nil unless @contact.company?
+
+        @contact.name || @contact.organization&.split(";", 2)&.first
+      end
 
       # The rows added this pass, rendered by Alpine from `added` —
       # one per type named in the dialog, in the order they were

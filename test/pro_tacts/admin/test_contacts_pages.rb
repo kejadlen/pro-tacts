@@ -1105,25 +1105,10 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes body, '<label class="field">Last<input type="text" name="last" required ' \
                             ':required="firstBlank" @input="lastBlank = !$el.value.trim()"></label>'
       assert_includes body, 'popovertargetaction="hide"'
+      # No company create rides along: organizations arrive by client
+      # and by import, and the dialog is exactly the person's.
+      refute_includes body, "new-company"
     end
-  end
-
-  # The company create is its own popover, opened from the person
-  # dialog's footer link — not a toggle swapping the name fields,
-  # which made the popover lurch around its own content-sized box.
-  def test_the_dashboard_carries_the_new_company_dialog
-    get "/"
-
-    body = last_response.body
-    assert_includes body, '<button type="button" style="margin-right: auto" ' \
-                          'popovertarget="new-company">New company</button>'
-    assert_includes body, '<dialog id="new-company" popover="auto">'
-    assert_includes body, "<header>New company</header>"
-    assert_includes body, '<form id="new-company-form" action="/contacts" method="post">'
-    assert_includes body, '<input type="hidden" name="company" value="1">'
-    assert_includes body, '<label class="field">Organization' \
-                          '<input type="text" name="organization" required autofocus></label>'
-    assert_includes body, '<button type="submit" form="new-company-form" data-variant="primary">Create</button>'
   end
 
   # A create lands through Store#put — change log, index, and all —
@@ -1148,35 +1133,6 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes card, "FN:Grace Hopper"
       assert_includes card, "UID:#{id}"
       assert(store.changes.any? { it.action == "put" && it.card_id == id })
-    end
-  end
-
-  # The Company toggle's create: the card in Contacts.app's own shape
-  # for an organization, so a synced client shows it as one — the
-  # name in N's family slot, FN and ORG of the same, and
-  # X-ABShowAs:COMPANY.
-  def test_creating_an_organization_from_the_dialog
-    with_contacts({}) do |store|
-      post "/contacts", company: "1", organization: "Acme Corp"
-
-      assert_equal 303, last_response.status
-      id = last_response["Location"].delete_prefix("/contacts/")
-
-      card = store.contact(id).vcard.to_s
-      assert_includes card, "N:Acme Corp;;;;\r\n"
-      assert_includes card, "FN:Acme Corp\r\n"
-      assert_includes card, "ORG:Acme Corp\r\n"
-      assert_includes card, "X-ABShowAs:COMPANY\r\n"
-      assert_includes card, "UID:#{id}"
-    end
-  end
-
-  def test_a_nameless_organization_create_is_refused
-    with_contacts({}) do
-      post "/contacts", company: "1", organization: " "
-
-      assert_equal 200, last_response.status
-      assert_includes last_response.body, '<div role="status" data-fixed><span>A contact needs a name.</span></div>'
     end
   end
 
@@ -1346,6 +1302,36 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes card, "FN:Acme Corporation\r\n"
       assert_includes card, "ORG:Acme Corp\r\n"
       assert_includes card, "X-ABShowAs:COMPANY\r\n"
+    end
+  end
+
+  # The card a real client sends: macOS writes a company's N empty
+  # and its name in FN and ORG both (the PUT of 2026-09-24 in
+  # log/dev.log), so the organization field prefills from FN — not
+  # the family slot the older shape carried it in — and an untouched
+  # save writes the name into N while ORG keeps its own bytes.
+  def test_a_company_card_whose_name_sits_in_fn_prefills_and_saves
+    client =
+      "BEGIN:VCARD\r\nVERSION:3.0\r\nN:;;;;\r\nFN:Arbitrary Definitions\r\n" \
+        "ORG:Arbitrary Definitions;\r\nX-ABShowAs:COMPANY\r\n" \
+        "UID:client-org\r\nEND:VCARD\r\n"
+
+    with_contacts({"client-org" => client}) do |store|
+      get "/contacts/client-org/edit"
+
+      body = last_response.body
+      assert_equal 200, last_response.status
+      assert_includes body, '<span>Organization</span>' \
+                            '<input type="text" name="last" value="Arbitrary Definitions" required autofocus>'
+
+      post "/contacts/client-org", last: "Arbitrary Definitions",
+                                    etag: store.contact("client-org").etag
+
+      assert_equal 303, last_response.status
+      card = store.contact("client-org").vcard.to_s
+      assert_includes card, "N:Arbitrary Definitions;;;;\r\n"
+      assert_includes card, "FN:Arbitrary Definitions\r\n"
+      assert_includes card, "ORG:Arbitrary Definitions;\r\n"
     end
   end
 

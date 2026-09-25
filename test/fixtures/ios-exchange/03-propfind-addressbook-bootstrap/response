@@ -18,8 +18,8 @@ Content-Type: text/xml
             </d:report>
           </d:supported-report>
         </d:supported-report-set>
-        <cs:getctag>22</cs:getctag>
-        <d:sync-token>http://pro-tacts/sync/22/336e00f5e1ec2674/6ce9dc47db17f26e</d:sync-token>
+        <cs:getctag>23</cs:getctag>
+        <d:sync-token>http://pro-tacts/sync/23/336e00f5e1ec2674/6ce9dc47db17f26e</d:sync-token>
         <d:current-user-privilege-set>
           <d:privilege>
             <d:read/>
@@ -133,6 +133,15 @@ Content-Type: text/xml
     <d:propstat>
       <d:prop>
         <d:getetag>"f8d1a272129107f5575cc0f3b186a4c830ae5d49294df31f46a80c42f5840772"</d:getetag>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/dav/addressbook/company.vcf</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"9619ae633bcbe86ad4a6e177be72a8bf364dde6d5022abb26fcd0e68954c9388"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>

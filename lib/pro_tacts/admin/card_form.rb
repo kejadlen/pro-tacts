@@ -33,25 +33,6 @@ module ProTacts
         )
       end
 
-      # A created organization's card, the shape Contacts.app emits
-      # for one: the name in N's family slot, FN of the same, ORG
-      # carrying it again, and Apple's X-ABShowAs:COMPANY flag — the
-      # spelling a synced client needs to show it as a company
-      # (Contact#company?). One name rather than a pair: an
-      # organization is known by one name, the mononym's own rule.
-      #: (String id, String name) -> VCard
-      def self.new_org_card(id, name)
-        VCard.new(
-          "BEGIN:VCARD\r\nVERSION:3.0\r\n" \
-            "N:#{VCard.escape(name)};;;;\r\n" \
-            "FN:#{VCard.escape(name)}\r\n" \
-            "ORG:#{VCard.escape(name)}\r\n" \
-            "X-ABShowAs:COMPANY\r\n" \
-            "UID:#{id}\r\n" \
-            "END:VCARD\r\n",
-        )
-      end
-
       # The contact editor's save, spliced into the stored card.
       #: (Contact contact, String first, String middle, String last, Hash[String, untyped] params) -> VCard
       def self.contact_card(contact, first, middle, last, params)

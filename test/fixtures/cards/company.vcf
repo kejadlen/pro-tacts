@@ -1,0 +1,8 @@
+BEGIN:VCARD
+VERSION:3.0
+N:;;;;
+FN:Arbitrary Definitions
+ORG:Arbitrary Definitions;
+X-ABShowAs:COMPANY
+UID:company
+END:VCARD

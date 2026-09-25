@@ -103,6 +103,15 @@ Content-Type: text/xml
     </d:propstat>
   </d:response>
   <d:response>
+    <d:href>/dav/addressbook/company.vcf</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"9619ae633bcbe86ad4a6e177be72a8bf364dde6d5022abb26fcd0e68954c9388"</d:getetag>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
     <d:href>/dav/addressbook/emoji.vcf</d:href>
     <d:propstat>
       <d:prop>
