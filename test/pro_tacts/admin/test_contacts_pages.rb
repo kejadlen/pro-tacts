@@ -1101,8 +1101,7 @@ class AdminContactsPagesTest < Minitest::Test
       # assertion keeps a regression from rendering a silent label).
       # The Company toggle swaps the pair for the one organization
       # box, and every field is required only while shown.
-      assert_includes body, '<label class="field">Company' \
-                            '<input type="checkbox" name="company" value="1" x-model="company"></label>'
+      assert_includes body, '<label><input type="checkbox" name="company" value="1" x-model="company">Company</label>'
       assert_includes body, '<label class="field" x-show="!company">First<input type="text" name="first" required ' \
                             ':required="!company && lastBlank" @input="firstBlank = !$el.value.trim()" autofocus></label>'
       assert_includes body, '<label class="field" x-show="!company">Middle<input type="text" name="middle"></label>'

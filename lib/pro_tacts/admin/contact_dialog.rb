@@ -62,16 +62,19 @@ module ProTacts
           header { "New contact" }
           form(id: "new-contact-form", action: "/contacts", method: "post",
                x_data: "{ company: false, #{NamePair.state(nil, nil)} }") do
-            # The company toggle: an organization is made here, not by
-            # converting a person later — checking it hides the pair
-            # and asks for the one name an organization is known by
+            # The company toggle: a Gloss checkbox row, not a field —
+            # a checkbox is no Field control (Gloss's Checkbox contract
+            # styles the bare label wrapping one as an inline row), and
+            # the quiet option reads as what the name fields stand
+            # behind. Checking it hides the pair and asks for the one
+            # name an organization is known by
             # (CardForm.new_org_card). x-model both ways, so the state
             # the fields bind to is the checkbox's own, and the
             # submitted `company` param is the browser's serialization
             # of a checked box.
-            label(class: "field") do
-              plain "Company"
+            label do
               input(type: "checkbox", name: "company", value: "1", x_model: "company")
+              plain "Company"
             end
             label(class: "field", x_show: "!company") do
               plain "First"
