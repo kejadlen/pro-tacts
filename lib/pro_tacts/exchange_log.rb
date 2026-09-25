@@ -131,7 +131,7 @@ module ProTacts
     end
 
     # A 401 is the identity gate refusing a request that names nobody
-    # (Web#unauthorized): nothing went wrong, and unless everything is
+    # (Web's error handler): nothing went wrong, and unless everything is
     # asked for, a body from outside the tailnet stays off disk.
     #: (Integer status) -> bool
     def failed?(status)

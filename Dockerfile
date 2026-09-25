@@ -34,6 +34,8 @@ COPY --from=build /app /app
 
 EXPOSE 9292
 
-# 0.0.0.0 reaches only the container's own network namespace — exposure
-# to clients is tailscale serve's job, in front of the published port.
+# 0.0.0.0 reaches only the container's own network namespace. Exposure to
+# clients is the proxy's job (ProxyAuth): publish the port on localhost
+# alone (-p 127.0.0.1:9292:9292), because reached directly the app trusts
+# whatever Remote-User it is handed.
 CMD ["rackup", "-o", "0.0.0.0"]

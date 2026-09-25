@@ -27,7 +27,7 @@ module ProTacts
     # The header the proxy writes the login to, and Rack's spelling of
     # the same field in the environment. One pair, because three places
     # name it: the read below, the 401 that says which header was read
-    # (Web#unauthorized), and the Sentry scrubber that keeps it out of
+    # (Web's error handler), and the Sentry scrubber that keeps it out of
     # an event (config.ru).
     HEADER = "Remote-User" #: String
     ENV_KEY = "HTTP_#{HEADER.upcase.tr("-", "_")}" #: String

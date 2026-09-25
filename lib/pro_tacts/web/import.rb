@@ -150,8 +150,6 @@ module ProTacts
     end
 
     # A row opened: the card it arrived as beside the card that is
-    # coming in — or the contact itself, for a card this walk has
-    # One contact, the card it arrived as beside the card that is
     # coming in. The right-hand half is the contact editor itself, not a
     # copy of it: a field the two disagreed about would be a field an
     # import writes and an edit cannot undo.

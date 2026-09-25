@@ -87,8 +87,8 @@ module ProTacts
         # them off this same store. Deduplicated because two of these
         # can mean one group — a name typed for a group that the box
         # above it already offers, or everyone's book arriving both
-        # ticked and asked for — and a membership written twice is a
-        # constraint violation rather than a second membership.
+        # ticked and asked for — and a second join of one group would
+        # only be asked of Store#add_member to come to nothing.
         join = [*chosen, *named.map { group_id(it) }]
         join << group_id(Group::EVERYONE) if everyone
         @store.regroup(id, join: join.uniq, leave: []) unless join.empty?
@@ -151,9 +151,9 @@ module ProTacts
       # into an empty store creates `sync:*` (Store#everyone_group_id),
       # and a list read before that would send this to create it again.
       # Memoized so that a card given the same name twice reads the
-      # list once rather than making the group twice. The choices read, not the whole groups read:
-      # the match is on name, and a group's members are no part of it
-      # (Store#group_choices).
+      # list once rather than making the group twice. The choices read,
+      # not the whole groups read: the match is on name, and a group's
+      # members are no part of it (Store#group_choices).
       #: (String name) -> String
       def group_id(name)
         @group_ids[name] ||= @store.group_choices.find { it.name == name }&.id || @store.create_group(name:)

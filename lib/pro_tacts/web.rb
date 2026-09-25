@@ -25,8 +25,8 @@ module ProTacts
     # The vendored Gloss CSS and the admin app's own stylesheet (see
     # docs/DESIGN.md); relative to this file rather than $0 for the same
     # reason Store::MIGRATIONS is, and served by Roda's own `public`
-    # plugin rather than a reverse proxy — there is no reverse proxy
-    # here, `tailscale serve` hands requests straight to this app.
+    # plugin rather than by the proxy in front, which passes every
+    # request through and writes the login on it (ProxyAuth).
     PUBLIC_ROOT = Pathname.new(
       __dir__ #: String
     ).parent.parent / "public" #: Pathname
@@ -55,7 +55,7 @@ module ProTacts
 
     # Inside CaptureExceptions, so the exchange tag lands on the scope it
     # opens for the request. Outside the route's identity gate
-    # (#unauthorized), and safe there because a 401 is not a failure it
+    # (the error handler below), and safe there because a 401 is not a failure it
     # keeps (ExchangeLog#failed?). The log opens when Roda builds the
     # stack, not here, so requiring the app writes nothing.
     use ProTacts::ExchangeLog, path: ProTacts.config.exchange_log_path, everything: ProTacts.config.debug?
