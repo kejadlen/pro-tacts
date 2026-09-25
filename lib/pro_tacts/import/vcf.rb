@@ -40,7 +40,10 @@ module ProTacts
       # NICKNAME, TEL, EMAIL, ADR, NOTE, PHOTO, and the X-ABLabel that
       # names a row), and BDAY, which the store takes into the model on
       # the way in
-      # (docs/plans/2026-09-11-every-birthday-in-the-model.md).
+      # (docs/plans/2026-09-11-every-birthday-in-the-model.md). ORG and
+      # Apple's X-ABShowAs are a company card
+      # (docs/plans/2026-09-24-company-cards.md), whose editor reads
+      # its name out of either and which the contacts page searches.
       #
       # Everything else is unknown, which here means "no screen will
       # show it". The list is the reader's, not the writer's: adding a
@@ -48,13 +51,15 @@ module ProTacts
       # importing one would only pad the cards with what nobody can
       # read.
       KNOWN = [
-        *%w[BEGIN END VERSION UID N FN NICKNAME BDAY TEL EMAIL ADR NOTE PHOTO],
+        *%w[BEGIN END VERSION UID N FN NICKNAME BDAY TEL EMAIL ADR NOTE PHOTO ORG X-ABSHOWAS],
         LABEL,
       ].freeze #: Array[String]
 
       # Unknown, and not worth saying so. PRODID names the program
       # that wrote the file rather than anything about the person, and
-      # every export carries one: counted as a loss it would put a
+      # every export carries one; SOURCE and REV, which Monica writes
+      # on every card, are where the card came from and when it last
+      # changed there — the export's facts again. Counted as a loss it would put a
       # line in every file's summary and a mark on every contact's
       # row, for a fact nobody is going to copy into a card. What goes
       # quiet is the asking, not the dropping — the line still does
@@ -62,7 +67,14 @@ module ProTacts
       # (Admin::ImportOriginal), because that card is the file's own
       # bytes and a line shown plain there would be a line claiming to
       # arrive.
-      NOISE = %w[PRODID].freeze #: Array[String]
+      NOISE = %w[PRODID SOURCE REV].freeze #: Array[String]
+
+      # Tags (RFC 2426 section 3.6.1), which come in as groups rather
+      # than as a line: the walk ticks a group of each name beside the
+      # card (Web#import_picker), so what the line said arrives, and
+      # the line itself, struck on the card as exported, is not a loss
+      # to count.
+      CATEGORIES = "CATEGORIES" #: String
 
       # What an import makes of one card: the card as it will come in,
       # and the lines it leaves behind. Both, because the review
@@ -140,7 +152,7 @@ module ProTacts
             next if property.nil?
 
             name = property.name.upcase
-            next if known?(name) || noise?(name)
+            next if known?(name) || noise?(name) || name == CATEGORIES
 
             (seen[name] ||= []) << summary(line)
           end
@@ -173,8 +185,18 @@ module ProTacts
       def self.losses(dropped)
         dropped.reject { |line|
           property = line.property
-          !property.nil? && noise?(property.name)
+          !property.nil? && (noise?(property.name) || property.name.casecmp?(CATEGORIES))
         }
+      end
+
+      # The tags a card carries, as the names of the groups they come
+      # in as: every CATEGORIES line's comma-separated values, unescaped
+      # (RFC 2426 section 2.4.2), blank ones and repeats left out.
+      #: (VCard card) -> Array[String]
+      def self.categories(card)
+        card.properties.select { it.name.casecmp?(CATEGORIES) }.flat_map { |property|
+          property.value.split(/(?<!\\),/).map { VCard.unescape(it).strip }
+        }.reject(&:empty?).uniq
       end
 
       # One card as this book will hold it, beside what that costs.

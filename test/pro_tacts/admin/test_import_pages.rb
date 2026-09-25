@@ -1,5 +1,6 @@
 require_relative "../../test_helper"
 
+require "json"
 require "pathname"
 require "rack/test"
 require "tmpdir"
@@ -113,7 +114,7 @@ class AdminImportPagesTest < Minitest::Test
 
     assert_equal 200, last_response.status
     assert_includes last_response.body, %(<form action="/import" method="post" enctype="multipart/form-data")
-    assert_includes last_response.body, %(<input type="file" name="vcf" accept=".vcf,text/vcard">)
+    assert_includes last_response.body, %(<input type="file" name="vcf" accept=".vcf,text/vcard,.json,application/json">)
   end
 
   # Straight into the walk: a list built from a file nobody has looked
@@ -1046,7 +1047,7 @@ class AdminImportPagesTest < Minitest::Test
     with_contacts({}) do |store|
       post "/import"
 
-      assert_includes last_response.body, "Choose a .vcf file to import."
+      assert_includes last_response.body, "Choose a .vcf or Monica export to import."
       assert_empty store.changes
     end
   end
@@ -1072,4 +1073,60 @@ class AdminImportPagesTest < Minitest::Test
       assert_empty store.changes
     end
   end
+
+  # A Monica export is read as the cards it composes, and is a walk like
+  # any other from there (Import::Monica).
+  def test_a_monica_export_opens_the_walk_on_its_contacts
+    export = JSON.generate({
+      "account" => {"data" => [{"count" => 1, "type" => "contact", "values" => [
+        {"uuid" => "u", "properties" => {"first_name" => "Jane", "last_name" => "Booles", "job" => "Welder"},
+         "data" => [{"count" => 1, "type" => "note", "values" => [{"properties" => {"body" => "Likes jigsaws."}}]}]},
+      ]}]},
+    })
+    with_contacts({}) do |store|
+      id = upload(export, name: "monica.json")
+      follow_redirect!
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "Jane Booles"
+      assert_includes last_response.body, "Likes jigsaws."
+      assert_includes last_response.body, "TITLE:Welder"
+
+      save(id, 0, first: "Jane", last: "Booles", "note" => "Likes jigsaws.")
+
+      assert_equal ["Likes jigsaws."], store.contacts.fetch(0).notes.map(&:value)
+    end
+  end
+
+  # A card's tags are ticked beside it as groups: the book's own where
+  # it has one of that name, and a name to make where it does not.
+  def test_a_cards_tags_are_ticked_as_its_groups
+    tagged = PLAIN.sub("UID:", "CATEGORIES:school,book club\r\nUID:")
+    with_contacts({}) do |store|
+      school = store.create_group(name: "school")
+      id = upload(tagged)
+      follow_redirect!
+
+      assert_includes last_response.body, %(<input type="checkbox" name="groups[]" value="#{school}" checked>)
+      assert_includes last_response.body, %(<input type="checkbox" name="named[]" value="book club" checked>)
+
+      save(id, 0, first: "Sam", last: "Booles")
+      sam = store.contacts.fetch(0).id
+
+      assert_equal [sam], store.group(school).members
+      assert_equal [sam], store.all_groups.find { it.name == "book club" }.members
+    end
+  end
+
+  # Which phones a card goes out to is not a tag's to decide.
+  def test_a_tag_spelling_a_sync_group_ticks_nothing
+    tagged = PLAIN.sub("UID:", "CATEGORIES:sync:*\r\nUID:")
+    with_contacts({}) do |_store|
+      upload(tagged)
+      follow_redirect!
+
+      refute_includes last_response.body, %(name="named[]" value="sync:*")
+    end
+  end
+
 end

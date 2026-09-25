@@ -10,6 +10,7 @@ require "pro_tacts/admin/import_upload"
 require "pro_tacts/birthday"
 require "pro_tacts/import/match"
 require "pro_tacts/import/merge"
+require "pro_tacts/import/monica"
 require "pro_tacts/import/write"
 require "pro_tacts/import/staged"
 require "pro_tacts/import/vcf"
@@ -88,15 +89,16 @@ module ProTacts
 
     private
 
-    # The upload's own POST: the file read and judged whole before
-    # anything is staged, the old `execute`'s rule that a source which
-    # will not read brings in nothing. What it stages is both readings —
+    # The upload's own POST: the file — a .vcf, or a Monica export
+    # read as one — read and judged whole before anything is staged,
+    # the old `execute`'s rule that a source which will not read
+    # brings in nothing. What it stages is both readings —
     # the file as it arrived, and the cards pared to what this book
     # shows — and then it is the walk's first card.
     #: (untyped r) -> untyped
     def stage_upload(r)
       upload = file_in(r.params["vcf"])
-      return import_screen(notice: "Choose a .vcf file to import.") if upload.nil?
+      return import_screen(notice: "Choose a .vcf or Monica export to import.") if upload.nil?
 
       name = File.basename(upload[:filename].to_s)
       # Relabelled and judged in the same breath, Web#write_card's rule
@@ -107,6 +109,11 @@ module ProTacts
       return import_screen(notice: "#{name} is not UTF-8 text.") unless bytes.valid_encoding?
 
       begin
+        # A Monica export is read as the cards it composes, and from
+        # here on is a .vcf like any other: the composed file is what
+        # the walk stages as the import's original and strikes lines
+        # out of (Import::Monica).
+        bytes = Import::Monica.vcf(bytes) if Import::Monica.export?(bytes)
         cards = Import::Vcf.cards(bytes)
       rescue Import::Vcf::Invalid => error
         return import_screen(notice: error.message)
@@ -251,7 +258,7 @@ module ProTacts
         # (Admin::ImportSidebar).
         save: merge ? "Update" : "Import",
         aside: Admin::ImportOriginal.new(card: original, dropped: merge ? dropped + merge.left : dropped),
-        fields: import_picker(group, joined, named, member: target),
+        fields: import_picker(group, joined, named, member: target, tags: Import::Vcf.categories(original)),
         lead: import_target(upload, index, matches, target),
         sidebar:,
       )
@@ -328,18 +335,28 @@ module ProTacts
     # save moves only what was toggled. The group for the import is
     # ticked beside them all the same, so the group the walk ends on
     # lists every contact it touched.
-    #: (String group, Array[String]? joined, Array[String]? named, ?member: Contact?) -> Admin::ImportGroups
-    def import_picker(group, joined, named, member: nil)
+    #
+    # The card's own tags (CATEGORIES, which Monica writes a contact's
+    # tags as) are ticked too: a group of that name where the book has
+    # one, and a name for the Save to make where it does not
+    # (Import::Write#group_id), so an import from a book that sorted
+    # its people by tag arrives sorted the same way. A tag spelling a
+    # sync group is left alone — which phones a card goes out to is
+    # the one box here a tag should not be able to tick.
+    #: (String group, Array[String]? joined, Array[String]? named, ?member: Contact?, ?tags: Array[String]) -> Admin::ImportGroups
+    def import_picker(group, joined, named, member: nil, tags: [])
       choices = store.group_choices
       lot = group.empty? ? nil : choices.find { it.name == group }
       everyone = choices.find { it.name == Group::EVERYONE }
       none = [] #: Array[String]
       was = member ? store.groups_of(member.id).map(&:id) : none
       ticked = member ? was : [everyone&.id].compact
+      tags = tags.reject { Group.sync_name?(it) }
+      tagged = choices.select { tags.include?(it.name) }
       Admin::ImportGroups.new(
         groups: choices,
-        joined: joined || [*ticked, lot&.id].compact.uniq,
-        named: named || [(group unless lot || group.empty?)].compact,
+        joined: joined || [*ticked, lot&.id, *tagged.map(&:id)].compact.uniq,
+        named: named || [(group unless lot || group.empty?), *(tags - tagged.map(&:name))].compact.uniq,
         was:,
       )
     end
