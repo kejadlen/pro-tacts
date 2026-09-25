@@ -721,7 +721,7 @@ class AdminImportPagesTest < Minitest::Test
       # neither the filter nor the cap: a decision the form still
       # submits is never hidden.
       assert_includes last_response.body, %(<template x-for="name in named"><label>)
-      assert_includes last_response.body, %(row.querySelector('input[type=checkbox]').checked)
+      assert_includes last_response.body, %(row.querySelector('input[type=checkbox]')?.checked)
     end
   end
 

@@ -205,11 +205,29 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # The filter is the members screen's (Admin::GroupFilter): each row
+  # carries the label it matches on, lowercased, and each letter hides
+  # once the filter hides every row under it.
+  def test_contacts_filters_the_rows_by_name
+    red = ADA.sub("FN:Ada Lovelace", "FN:Sarah\r\nNICKNAME:Red").sub("UID:ada", "UID:red")
+
+    with_contacts({"red" => red}) do
+      get "/contacts"
+
+      body = last_response.body
+      assert_includes body, %(placeholder="Filter contacts")
+      assert_includes body, %(data-label="sarah (red)")
+      assert_includes body, %(<section :hidden="![...$el.querySelectorAll('[data-label]')].some(row => visible(row))">)
+      assert_includes body, "No contacts match."
+    end
+  end
+
   def test_contacts_with_no_contacts_says_so
     with_contacts({}) { get "/contacts" }
 
     assert_includes last_response.body, "contacts (0)"
     assert_includes last_response.body, "No contacts yet."
+    refute_includes last_response.body, "Filter contacts"
   end
 
   # The link's answer: every stored card's bytes in id order — the
