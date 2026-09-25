@@ -1141,16 +1141,19 @@ class StoreTest < Minitest::Test
 
   # A member's served card is the stored one with the group's lines
   # composed in, and the birthday composed after them — every read,
-  # single or listed, hands out the same composed card.
+  # single or listed, hands out the same composed card. A lent note
+  # composes as a section of the one NOTE, headed by the group's
+  # label — its id, this group being nameless
+  # (docs/plans/2026-09-25-one-note-per-contact.md).
   def test_a_member_serves_the_group_lines_composed_in
     born = AIDEN.sub("FN:Aiden\r\n", "FN:Aiden\r\nBDAY:1985-12-10\r\n")
-    composed = AIDEN.sub(
-      "END:VCARD\r\n",
-      "#{HOUSEHOLD_ADDRESS}\r\n#{HOUSEHOLD_NOTE}\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n",
-    )
 
     with_store({"aiden" => born, "znorth" => ZED}) do |store|
-      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      composed = AIDEN.sub(
+        "END:VCARD\r\n",
+        "#{HOUSEHOLD_ADDRESS}\r\nNOTE:Shared · #{id}:\\nGate code 1854.\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n",
+      )
 
       assert_equal composed, store.contact("aiden").vcard.to_s
       assert_equal composed, store.contacts.find { it.id == "aiden" }.vcard.to_s
@@ -1186,21 +1189,26 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # Two groups' lines compose in group-id order, then position — the
-  # order is a fact of the schema, not of whichever join SQLite
+  # Two groups' sections compose in group-id order, then position —
+  # the order is a fact of the schema, not of whichever join SQLite
   # returns first, so the composed bytes never move between reads. The
   # ids are minted rather than chosen, so the expectation is sorted by
   # them: which group leads is the ids' business, that the id decides
-  # it rather than the creation order is this test's.
+  # it rather than the creation order is this test's. Both groups are
+  # nameless, so each section is headed by the id that ordered it.
   def test_two_groups_compose_in_a_fixed_order
     with_store({"aiden" => AIDEN}) do |store|
-      lent = {
-        FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_NOTE]) => HOUSEHOLD_NOTE,
-        FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS]) => HOUSEHOLD_ADDRESS,
+      lent = [HOUSEHOLD_NOTE, "NOTE:Second note."].to_h { |line|
+        [FixtureData.seed_group(store, members: ["aiden"], lines: [line]), line]
       }
 
-      first, second = lent.sort.map { it.last }
-      composed = AIDEN.sub("END:VCARD\r\n", "#{first}\r\n#{second}\r\nEND:VCARD\r\n")
+      first, second = lent.keys.sort
+      text = -> gid { lent.fetch(gid).split(":", 2).fetch(1) }
+      value = "Shared · #{first}:\n#{text.(first)}\n\nShared · #{second}:\n#{text.(second)}"
+      composed = AIDEN.sub(
+        "END:VCARD\r\n",
+        "NOTE:#{ProTacts::VCard.escape(value)}\r\nEND:VCARD\r\n",
+      )
       assert_equal composed, store.contact("aiden").vcard.to_s
     end
   end
@@ -1239,6 +1247,31 @@ class StoreTest < Minitest::Test
 
       assert_equal [put.etag, edit.etag], logged.last(2).map { it[:etag] }
       assert_includes put.vcard.to_s, HOUSEHOLD_ADDRESS
+    end
+  end
+
+  # The note-bearing member's round trip, the one the one-note shape
+  # exists for: a client PUTs back the served card and the member's
+  # own note is what is stored — the group's section gone, nothing
+  # propagated, the composed etag standing — so a client that changed
+  # nothing hears of nothing (docs/plans/2026-09-25-one-note-per-
+  # contact.md).
+  def test_a_note_bearing_members_served_card_round_trips
+    stored = AIDEN.sub("END:VCARD\r\n", "NOTE:Own note.\r\nEND:VCARD\r\n")
+
+    with_store({"aiden" => stored}) do |store|
+      id = FixtureData.seed_group(store, name: "Booles", members: ["aiden"], lines: [HOUSEHOLD_NOTE])
+
+      served = store.contact("aiden")
+      put = store.put("aiden", vcard(served.vcard.to_s))
+      change = store.changes_of("aiden").first
+
+      assert_includes put.vcard.to_s, "NOTE:Own note.\\n\\nShared · Booles:\\nGate code 1854.\r\n"
+      assert_equal stored, put.stored.to_s
+      assert_equal [HOUSEHOLD_NOTE], store.group(id).lines
+      assert_equal served.etag, change.etag
+      assert_empty change.diff.added
+      assert_empty change.diff.removed
     end
   end
 
@@ -1411,8 +1444,34 @@ class StoreTest < Minitest::Test
         change = store.changes_of(member).first
         assert_equal "group", change.action
         assert_equal store.contact(member).etag, change.etag
-        assert_equal [EDITED_ADDRESS, HOUSEHOLD_NOTE], change.diff.added
+        assert_equal [EDITED_ADDRESS, "NOTE:Shared · #{id}:\\nGate code 1854."], change.diff.added
       end
+    end
+  end
+
+  # The one-note invariant's raise: lines this server built carrying
+  # two NOTEs are a bug, and the raise reaches Sentry with the request
+  # (docs/plans/2026-09-25-one-note-per-contact.md, "The invariant").
+  def test_a_group_may_not_hold_two_notes
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, members: ["aiden"])
+
+      error = assert_raises(RuntimeError) {
+        store.set_group_lines(id, [HOUSEHOLD_NOTE, "NOTE:Second."])
+      }
+      assert_equal "a group was given 2 NOTE lines", error.message
+    end
+  end
+
+  # The same raise over an editor's save — foreign input joins on its
+  # way in (EditedContact, Import::Merge), so two NOTEs here can only
+  # be a path this server built.
+  def test_an_editors_save_may_not_store_two_notes
+    with_store({"aiden" => AIDEN}) do |store|
+      two = AIDEN.sub("END:VCARD\r\n", "NOTE:First.\r\nNOTE:Second.\r\nEND:VCARD\r\n")
+
+      error = assert_raises(RuntimeError) { store.save_edit("aiden", vcard(two), birthday: nil) }
+      assert_equal "a stored card was built with 2 NOTE lines", error.message
     end
   end
 
@@ -1740,7 +1799,7 @@ class StoreTest < Minitest::Test
 
       contact = store.put("aiden", vcard(AIDEN), client: true)
 
-      assert_includes contact.vcard.to_s, HOUSEHOLD_NOTE
+      assert_includes contact.vcard.to_s, "NOTE:Shared · sync:*:\\nGate code 1854."
       assert_equal store.contact("aiden").etag, store.changes_of("aiden").first.etag
     end
   end
@@ -2316,6 +2375,46 @@ class StoreTest < Minitest::Test
         # moved the birthday and dropped the NOTE unwitnessed.
         assert_equal shared, store.contact("xavi").vcard.to_s
         assert_nil birthday_row(store, "xavi")
+      end
+    end
+  end
+
+  # A database from before the one-note invariant is joined onto it:
+  # a card's several NOTEs become one value, a group's several NOTE
+  # rows become the one row a member's edit writes back to, and a
+  # card holding one note all along keeps its bytes. The member
+  # serves the group's joined note as one section, the shape every
+  # write composes from here
+  # (docs/plans/2026-09-25-one-note-per-contact.md).
+  def test_the_migration_joins_several_notes_into_one
+    two_notes = AIDEN.sub("END:VCARD\r\n", "NOTE:First.\r\nNOTE:Second.\r\nEND:VCARD\r\n")
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 11)
+        db[:cards].insert(id: "aiden", vcard: two_notes)
+        db[:cards].insert(id: "znorth", vcard: ZED.sub("END:VCARD\r\n", "NOTE:One only.\r\nEND:VCARD\r\n"))
+        db[:groups].insert(id: "nous", name: "Booles")
+        db[:group_properties].insert(group_id: "nous", position: 0, line: HOUSEHOLD_ADDRESS)
+        db[:group_properties].insert(group_id: "nous", position: 1, line: "NOTE:Gate code 1854.")
+        db[:group_properties].insert(group_id: "nous", position: 2, line: "NOTE:Bins on Tuesday.")
+        db[:group_members].insert(group_id: "nous", card_id: "znorth")
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        joined = AIDEN.sub("END:VCARD\r\n", "NOTE:First.\\n\\nSecond.\r\nEND:VCARD\r\n")
+        assert_equal joined, store.contact("aiden").vcard.to_s
+
+        assert_equal(
+          [HOUSEHOLD_ADDRESS, "NOTE:Gate code 1854.\\n\\nBins on Tuesday."],
+          store.group("nous").lines,
+        )
+        served = ZED.sub(
+          "END:VCARD\r\n",
+          "NOTE:One only.\\n\\nShared · Booles:\\nGate code 1854.\\n\\nBins on Tuesday.\r\n" \
+          "#{HOUSEHOLD_ADDRESS}\r\nEND:VCARD\r\n",
+        )
+        assert_equal served, store.contact("znorth").vcard.to_s
       end
     end
   end

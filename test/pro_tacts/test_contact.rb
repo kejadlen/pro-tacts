@@ -394,17 +394,86 @@ class ContactTest < Minitest::Test
     assert_equal GROUP, contact.group_of(addresses.fetch(1).line)
   end
 
-  # A member with a note of its own and a group that lends it another
-  # carries both: NOTE's cardinality is `*` (RFC 6350 section 6.7.2),
-  # so the accessor reads every one — the member's first, the group's
-  # after it, the order #vcard composes.
-  def test_notes_read_the_members_own_and_the_groups
-    contact = contact(STRUCTURED, inherited: ["NOTE:Gate code 1854."])
-    notes = contact.notes
+  # A lent NOTE composes into the member's own as one value — the
+  # served card carries one NOTE, not two, because macOS keeps only
+  # the last of two and a PUT would store the truncation
+  # (docs/plans/2026-09-25-one-note-per-contact.md). The member's own
+  # text first, the group's as a section after it, at the member's own
+  # NOTE position.
+  def test_a_lent_note_composes_into_the_members_own
+    composed = contact(STRUCTURED, inherited: ["NOTE:Gate code 1854."]).vcard.to_s
 
-    assert_equal ["Countess, mathematician.", "Gate code 1854."], notes.map { it.value }
+    assert_equal(
+      STRUCTURED.sub(
+        "NOTE:Countess\\, mathematician.\r\n",
+        "NOTE:Countess\\, mathematician.\\n\\nShared · Booles:\\nGate code 1854.\r\n",
+      ),
+      composed,
+    )
+  end
+
+  # A member with no note of its own serves the section alone, the
+  # one NOTE inserted before END:VCARD the way a lent line is.
+  def test_a_member_with_no_note_of_its_own_serves_the_section_alone
+    composed = contact(CARD, inherited: ["NOTE:Gate code 1854."]).vcard.to_s
+
+    assert_equal(
+      CARD.sub("END:VCARD\r\n", "NOTE:Shared · Booles:\\nGate code 1854.\r\nEND:VCARD\r\n"),
+      composed,
+    )
+  end
+
+  # Nothing lent that is a note, and the member's own NOTE serves as
+  # its bytes lie — the editor's whole safety, and the reason #composed_note
+  # answers nil over an empty one. What else the group lends composes
+  # as lines around it.
+  def test_a_contact_whose_groups_lend_no_note_serves_its_own_note_bytes
+    composed = contact(STRUCTURED, inherited: ["TEL;TYPE=home:+44 20 5555 0100"]).vcard.to_s
+
+    assert_equal(
+      STRUCTURED.sub("END:VCARD\r\n", "TEL;TYPE=home:+44 20 5555 0100\r\nEND:VCARD\r\n"),
+      composed,
+    )
+    assert_includes composed, "NOTE:Countess\\, mathematician.\r\n"
+  end
+
+  # The composed NOTE stands at the member's own NOTE position — a
+  # lent line's position is insert's, before END:VCARD, and the
+  # birthday lands after everything else.
+  def test_the_composed_note_lands_at_the_members_own_note_position
+    birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
+    composed = STRUCTURED.sub(
+      "NOTE:Countess\\, mathematician.\r\n",
+      "NOTE:Countess\\, mathematician.\\n\\nShared · Booles:\\nGate code 1854.\r\n",
+    ).sub(
+      "END:VCARD\r\n",
+      "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom\r\n" \
+      "BDAY:1985-12-10\r\nEND:VCARD\r\n",
+    )
+
+    assert_equal(
+      composed,
+      contact(
+        STRUCTURED,
+        birthday:,
+        inherited: [
+          "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
+          "NOTE:Gate code 1854.",
+        ],
+      ).vcard.to_s,
+    )
+  end
+
+  # The joined line matches nothing by bytes — neither the member's
+  # own nor what a group lends — so a screen asking after provenance
+  # reads the stored card and the inheritance, not the composed value
+  # (Admin::ContactCard's note rows).
+  def test_the_composed_note_names_no_group
+    notes = contact(STRUCTURED, inherited: ["NOTE:Gate code 1854."]).notes
+
+    assert_equal 1, notes.size
     assert_nil contact.group_of(notes.fetch(0).line)
-    assert_equal GROUP, contact.group_of(notes.fetch(1).line)
+    assert_equal ["Countess, mathematician."], contact(STRUCTURED, inherited: ["NOTE:Gate code 1854."]).own.notes.map { it.value }
   end
 
   def test_unescapes_notes

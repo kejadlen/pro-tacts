@@ -3,6 +3,7 @@ require "sentry-ruby"
 require "pro_tacts/birthday"
 require "pro_tacts/birthday_line"
 require "pro_tacts/contact"
+require "pro_tacts/note_sections"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
@@ -166,10 +167,13 @@ module ProTacts
     # is stored plus inherited, so stored is submitted minus inherited
     # and a client that PUTs back what it downloaded stores what it
     # started with (docs/plans/2026-08-24-vcard-storage-and-groups.md,
-    # "Groups compose into cards"). Which of four shapes a lent line
-    # came back as, and what each asks of its group, is #classify —
-    # argued in that plan's "Classifying what came back" and in
-    # docs/plans/2026-09-09-group-edits-propagate.md.
+    # "Groups compose into cards"). A lent line that is not a NOTE is
+    # read by the line matching below and #classify — argued in that
+    # plan's "Classifying what came back" and in
+    # docs/plans/2026-09-09-group-edits-propagate.md — and a lent NOTE
+    # by #subtract_notes, because it came back inside the member's own
+    # value rather than as a line of its own
+    # (docs/plans/2026-09-25-one-note-per-contact.md).
     #
     # Two passes, because one lent line must not be attributed a line
     # another lent line would have matched exactly. A member of two
@@ -188,42 +192,174 @@ module ProTacts
     #: (VCard vcard) -> [VCard, Array[GroupEdit]]
     def subtract_inherited(vcard)
       lent = @before&.inherited || [] #: Array[Contact::Inherited]
-      return [vcard, []] if lent.empty?
-
-      unaccounted = unaccounted_lines(vcard)
-      taken = [] #: Array[VCard::Parser::Line]
-
-      moved = lent.reject { |row|
-        candidates = unaccounted.select { it.names?(property_name(row.line)) }
-        # Blind to lines saying the same thing the way the editor's
-        # digests are blind to identical bytes
-        # (VCard::Parser::Line#digest): where a member's own card
-        # carries what its group lends, which copy this takes is
-        # undecidable and their saying the same thing makes it not
-        # matter.
-        match = candidates.find { unedited?(it, parsed_line(row.line), unaccounted) }
-        if match
-          label = label_of(match, unaccounted)
-          taken << strike(unaccounted, match)
-          taken << strike(unaccounted, label) if label
-        end
-        match
-      }
+      note_rows, line_rows = lent.partition { |row| property_name(row.line).casecmp?("NOTE") == true }
 
       edits = [] #: Array[GroupEdit]
-      ambiguous = 0
-      unshareable = 0
-      moved.each do |row|
-        case classify(row, unaccounted, taken)
-        in GroupEdit => edit then edits << edit
-        in :ambiguous then ambiguous += 1
-        in :unshareable then unshareable += 1
+      struck = vcard
+      if line_rows.any?
+        unaccounted = unaccounted_lines(vcard)
+        taken = [] #: Array[VCard::Parser::Line]
+
+        moved = line_rows.reject { |row|
+          candidates = unaccounted.select { it.names?(property_name(row.line)) }
+          # Blind to lines saying the same thing the way the editor's
+          # digests are blind to identical bytes
+          # (VCard::Parser::Line#digest): where a member's own card
+          # carries what its group lends, which copy this takes is
+          # undecidable and their saying the same thing makes it not
+          # matter.
+          match = candidates.find { unedited?(it, parsed_line(row.line), unaccounted) }
+          if match
+            label = label_of(match, unaccounted)
+            taken << strike(unaccounted, match)
+            taken << strike(unaccounted, label) if label
+          end
+          match
+        }
+
+        ambiguous = 0
+        unshareable = 0
+        moved.each do |row|
+          case classify(row, unaccounted, taken)
+          in GroupEdit => edit then edits << edit
+          in :ambiguous then ambiguous += 1
+          in :unshareable then unshareable += 1
+          end
         end
+
+        report_ambiguous_inherited_lines(ambiguous)
+        report_unshareable_lines(unshareable)
+        struck = taken.reduce(vcard) { |rest, line| rest.substitute(line.digest, []) }
       end
 
-      report_ambiguous_inherited_lines(ambiguous)
-      report_unshareable_lines(unshareable)
-      [taken.reduce(vcard) { |rest, line| rest.substitute(line.digest, []) }, edits]
+      card, note_edits = subtract_notes(struck, note_rows)
+      [card, edits + note_edits]
+    end
+
+    # The one NOTE the submission carries, read back into what the
+    # member keeps and what each lending group is asked of — the
+    # inverse of what Contact#vcard composes, over sections rather
+    # than lines. Where no group lends a note the NOTE lines are the
+    # member's own and keep their bytes, joined into one and reported
+    # only where a client sent several — the one-note invariant's
+    # answer to foreign input (docs/plans/2026-09-25-one-note-per-
+    # contact.md, "The split" and "The invariant").
+    #
+    # The one reading that is not the section grammar's: a value with
+    # no headers that is exactly a lent note's text is a client of the
+    # two-line shape sending back what macOS truncated it to — the
+    # last NOTE, which composition put last (docs/apple-contacts.md,
+    # "Only the last of two notes survives"). It reads as that note
+    # present and every other one gone, the reading the line matching
+    # made of the same card before sections existed.
+    #: (VCard vcard, Array[Contact::Inherited] rows) -> [VCard, Array[GroupEdit]]
+    def subtract_notes(vcard, rows)
+      notes = vcard.lines.select { it.names?("NOTE") }
+      return [members_own(vcard, notes), []] if rows.empty?
+
+      labels = rows.map { it.group.label }
+      if labels.uniq.length != labels.length
+        report_indistinguishable_labels
+        return [members_own(vcard, notes), []]
+      end
+
+      # No NOTE at all is every section deleted — the cleared field,
+      # which takes the member's own text with it the way taking the
+      # lent line always did.
+      deletions = rows.map { |row|
+        GroupEdit.new(group_id: row.group.id, position: row.position, line: nil)
+      }
+      return [vcard, deletions] if notes.empty?
+
+      values = notes.map { it.property&.text }
+      if values.any?(&:nil?)
+        report_unreadable_sections
+        return [members_own(vcard, notes), []]
+      end
+      value = values.join("\n\n")
+      split = NoteSections.split(value, labels)
+      if split.sections.empty?
+        # A value with no headers that is exactly a lent note's text is
+        # a client of the two-line shape sending back what macOS
+        # truncated it to — the last NOTE, which composition put last
+        # (docs/apple-contacts.md, "Only the last of two notes
+        # survives"). It reads as that note present and every other
+        # one gone, the reading the line matching made of the same
+        # card before sections existed.
+        kept = rows.find { |row| lent_text(row) == value }
+        unless kept.nil?
+          return [
+            vcard.replace("NOTE", []),
+            rows.reject { it.equal?(kept) }.map { |row|
+              GroupEdit.new(group_id: row.group.id, position: row.position, line: nil)
+            },
+          ]
+        end
+
+        report_unreadable_sections
+        return [members_own(vcard, notes), []]
+      end
+
+      if split.sections.length != split.sections.map(&:label).uniq.length
+        report_unreadable_sections
+        return [members_own(vcard, notes), []]
+      end
+
+      texts = split.sections.to_h {
+        [it.label, it.text] #: [String, String]
+      }
+      edits = rows.filter_map { |row|
+        text = texts[row.group.label]
+        case text
+        when nil
+          GroupEdit.new(group_id: row.group.id, position: row.position, line: nil)
+        when lent_text(row)
+          nil
+        else
+          GroupEdit.new(
+            group_id: row.group.id,
+            position: row.position,
+            line: "NOTE:#{VCard.escape(text)}",
+          )
+        end
+      }
+      if split.member.empty?
+        member = [] #: Array[String]
+      else
+        member = ["NOTE:#{VCard.escape(split.member)}\r\n"]
+      end
+      [vcard.replace("NOTE", member), edits]
+    end
+
+    # The submission's NOTE lines kept as the member's own: their
+    # bytes where there is one, joined where foreign input sent
+    # several — the one-note invariant's answer to a client
+    # (docs/plans/2026-09-25-one-note-per-contact.md, "The invariant").
+    #: (VCard vcard, Array[VCard::Parser::Line] notes) -> VCard
+    def members_own(vcard, notes)
+      return vcard if notes.length <= 1
+
+      report_many_note_lines(notes.length)
+      joined_notes(vcard, notes)
+    end
+
+    # What a lent NOTE row says, as text: the unescaped value of its
+    # line, or nil for one that will not read and so cannot be compared
+    # with anything a client sent.
+    #: (Contact::Inherited row) -> String?
+    def lent_text(row)
+      parsed_line(row.line).property&.text
+    end
+
+    # The submission's NOTE lines joined into the one the invariant
+    # keeps, at the first one's position: a client's two-NOTE card is
+    # foreign input, joined rather than refused. A line that will not
+    # read has no text to join, so its bytes join as they lie — the
+    # one shape that loses nothing a person could have written.
+    #: (VCard vcard, Array[VCard::Parser::Line] notes) -> VCard
+    def joined_notes(vcard, notes)
+      texts = notes.map { it.property&.text || it.verbatim.chomp }
+      vcard.replace("NOTE", ["NOTE:#{VCard.escape(texts.join("\n\n"))}\r\n"])
     end
 
     # What a lent line that came back changed asks of its group: the
@@ -418,6 +554,44 @@ module ProTacts
 
       Sentry.capture_message(
         "a submitted card edited #{count} inherited line(s) into a shape no group may hold",
+        level: :warning,
+      )
+    end
+
+    # A contact has one note (docs/plans/2026-09-25-one-note-per-
+    # contact.md), so a submission with several is a client this server
+    # did not compose for; they join, and the news is worth having
+    # because whatever each carried is now one value on one member.
+    #: (Integer count) -> void
+    def report_many_note_lines(count)
+      Sentry.capture_message("a submitted card carried #{count} NOTE lines", level: :warning)
+    end
+
+    # The mangle report: a NOTE this server cannot read back into
+    # sections — a header a person's editing took apart, two sections
+    # claiming one label, or a line that will not read. The whole
+    # value stays on the member and the groups keep what they lend, so
+    # the member serves its own copy and each group's section beside
+    # it until someone reconciles them, which is why the news is worth
+    # having (docs/plans/2026-09-25-one-note-per-contact.md, "The
+    # split").
+    #: () -> void
+    def report_unreadable_sections
+      Sentry.capture_message(
+        "a submitted NOTE could not be read back into its sections; it stays on the member",
+        level: :warning,
+      )
+    end
+
+    # Two of a contact's groups lend under one label — a nameless
+    # group's id and a group named the same — so a section read under
+    # that label cannot say which lent it. Nothing is attributed and
+    # nothing propagates, the same bargain #report_unreadable_sections
+    # makes.
+    #: () -> void
+    def report_indistinguishable_labels
+      Sentry.capture_message(
+        "two of a contact's groups share a label, so its submitted NOTE cannot be attributed",
         level: :warning,
       )
     end

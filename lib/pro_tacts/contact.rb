@@ -3,6 +3,7 @@ require "digest"
 require "sentry-ruby"
 
 require "pro_tacts/birthday"
+require "pro_tacts/note_sections"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
@@ -150,11 +151,16 @@ module ProTacts
     # The card to serve: the stored one with the inherited lines and
     # the birthday composed back in, in that order, each immediately
     # before END:VCARD — stored + inherited + birthday, the card a
-    # client downloads. A birthday with no wire form, or none at all,
-    # and an empty inheritance leave their halves as they lie, and an
-    # empty inheritance is #insert's own no-op — the same card object —
-    # so a contact in no group serves exactly the bytes it did before
-    # groups existed, etag included. Composed on first ask and
+    # client downloads. A lent NOTE is the one exception: it composes
+    # as a labeled section inside the member's single NOTE, not as a
+    # second line, because macOS keeps only the last of two and a PUT
+    # stores the truncation (docs/plans/2026-09-25-one-note-per-
+    # contact.md, "The served shape"). A birthday with no wire form,
+    # or none at all, and an empty inheritance leave their halves as
+    # they lie, and an empty inheritance is #insert's own no-op — the
+    # same card object — so a contact in no group serves exactly the
+    # bytes it did before groups existed, etag included. Composed on
+    # first ask and
     # memoized, and the etag's derivation deferred with it: a caller
     # that reads neither — and the listing paths read neither — pays
     # for no composition of its own.
@@ -162,9 +168,12 @@ module ProTacts
     def vcard
       return @vcard if defined?(@vcard)
 
-      with_inherited = @stored.insert(@inherited.map { it.line })
+      lent_notes, lent_lines = @inherited.partition { |row| note_row?(row.line) }
+      with_inherited = @stored.insert(lent_lines.map { it.line })
+      composed = composed_note(lent_notes)
+      with_note = composed ? with_inherited.replace("NOTE", [composed]) : with_inherited
       line = @birthday && @birthday.to_line
-      @vcard = line ? with_inherited.insert([line]) : with_inherited
+      @vcard = line ? with_note.insert([line]) : with_note
     end
 
     # The same contact with nothing its groups lend it: the editor's
@@ -347,13 +356,15 @@ module ProTacts
       rows("ADR") { |property, line| address_of(property, line:) }
     end
 
-    # The card's NOTEs (RFC 2426 section 3.6.2), in text form. Every
-    # one, not the first: a member with a note of its own and a group
-    # that lends it another carries two, and RFC 6350 section 6.7.2
-    # settles that this is a card and not a broken one — NOTE's
-    # cardinality is `*`, and 2426 restricts it nowhere. Showing one
-    # would hide whichever the composition happened to put second,
-    # which is always the group's (see #vcard).
+    # The card's NOTEs (RFC 2426 section 3.6.2), in text form. On the
+    # stored card this is at most one — the one-note invariant
+    # (docs/plans/2026-09-25-one-note-per-contact.md) — and on the
+    # composed card it is exactly one wherever a group lends a note,
+    # the member's own and every lent one joined into a single value
+    # that #vcard builds. The reader stays a plural because the
+    # composed card is bytes like any other: a card a client sent
+    # before the invariant, or one this server did not compose, says
+    # whatever its lines say.
     #: () -> Array[Note]
     def notes
       rows("NOTE") { |property, line|
@@ -391,6 +402,40 @@ module ProTacts
       @groups_by_line = @inherited.to_h {
         [it.line.chomp, it.group] #: [String, Group]
       }
+    end
+
+    # Whether a lent line is a NOTE, read off its bytes the way
+    # EditedContact reads a property name off them: the group schema
+    # admits no `item1.` prefix to strip (db/migrations/004_groups.rb).
+    #: (String line) -> bool
+    def note_row?(line)
+      line[/\A[^;:]*/].to_s.casecmp?("NOTE") == true
+    end
+
+    # The one NOTE the served card carries, as a content line: the
+    # member's own text and the lent notes as sections, written
+    # through NoteSections and escaped the way the editors write a
+    # text value. Nil where nothing is lent — a member whose groups
+    # hold no note serves its own NOTE's bytes as they lie, whatever
+    # they say, the editor's whole safety.
+    #
+    # A member's own two NOTE lines — a card older than the one-note
+    # migration, or a bug — join as the member's text, which serves
+    # the card this shape means to serve and converges on it at the
+    # next write. A lent line that will not read has no text to
+    # become and is skipped, unreachable through every write the
+    # schema and #shareable? gate.
+    #: (Array[Inherited] rows) -> String?
+    def composed_note(rows)
+      return if rows.empty?
+
+      sections = rows.filter_map { |row|
+        text = VCard.new(row.line).lines.fetch(0).property&.text
+        NoteSections::Section.new(label: row.group.label, text:) if text
+      }
+      member = @stored.lines.select { it.names?("NOTE") }
+        .filter_map { it.property&.text }.join("\n\n")
+      "NOTE:#{VCard.escape(NoteSections.join(member, sections))}\r\n"
     end
 
     # A property group to the `X-ABLabel` text anchoring it — the

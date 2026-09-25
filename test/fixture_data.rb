@@ -51,11 +51,15 @@ module FixtureData
 
   # The groups the fixture book carries. The first is a household, the
   # three household-* cards in it. Those cards are a family — one
-  # surname, a mobile and an email each, and no address or note of
-  # their own — so everything the admin UI shows on them in those two
-  # rows is the group's, and removing a member visibly takes it away.
-  # They sit outside the recorded macOS exchange's hrefs, so the replay
-  # keeps serving that session the bytes it saw.
+  # surname, a mobile and an email each, and no address of their own —
+  # so the address row the admin UI shows on them is the group's, and
+  # removing a member visibly takes it away. Alicia carries a note of
+  # her own beside the group's, the one shape the one-note composition
+  # exists for (docs/plans/2026-09-25-one-note-per-contact.md): her
+  # served card joins both into a single NOTE, and her page shows them
+  # as two provenance-marked rows. They sit outside the recorded macOS
+  # exchange's hrefs, so the replay keeps serving that session the
+  # bytes it saw.
   #
   # The second is the nameless case: every bday-* card in one group
   # with no name and nothing to lend

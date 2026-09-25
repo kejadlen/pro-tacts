@@ -81,6 +81,27 @@ class ImportMergeTest < Minitest::Test
     assert_equal "JB", folded.nickname
   end
 
+  # A contact holds one note, so several arriving fill the gap as one
+  # value — a blank line between, the shape the write path joins
+  # foreign input into and the sections read beside
+  # (docs/plans/2026-09-25-one-note-per-contact.md).
+  def test_several_arriving_notes_join_into_the_one_gap
+    bare = <<~CARD.gsub("\n", "\r\n")
+      BEGIN:VCARD
+      VERSION:3.0
+      N:Booles;Janet;;;
+      FN:Janet Booles
+      NOTE:From the school list
+      NOTE:Chair of the residents' association
+      UID:ABC-123
+      END:VCARD
+    CARD
+    folded = merge(jane(STORED.sub("NOTE:Met at work\r\n", "")), bare).contact
+
+    assert_equal ["From the school list\n\nChair of the residents' association"], folded.notes.map(&:value)
+    assert_includes folded.stored.to_s, "NOTE:From the school list\\n\\nChair of the residents' association\r\n"
+  end
+
   # A birthday the contact has none of goes into the model, the split
   # a stored contact is held in.
   def test_a_birthday_the_contact_lacks_comes_into_the_model

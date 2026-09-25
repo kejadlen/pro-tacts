@@ -4,6 +4,7 @@ require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/group_dialog"
 require "pro_tacts/admin/group_label"
+require "pro_tacts/vcard"
 
 module ProTacts
   module Admin
@@ -97,8 +98,31 @@ module ProTacts
           row(Format.type_label(nil, address.types, "address"), Format.address_lines(address), address.line)
         end
         row("birthday", @birthday) if @birthday
-        @contact.notes.each do |note|
-          row("notes", note.value, note.line)
+        note_rows
+      end
+
+      # The notes read as the editors do — the member's own card and
+      # the inheritance — and not out of the one value the client is
+      # served: a group's note keeps its own row and its group beside
+      # it, the same standing every other lent row has
+      # (docs/plans/2026-09-25-one-note-per-contact.md, "What the
+      # admin screens read").
+      #: () -> void
+      def note_rows
+        @contact.own.notes.each do |note|
+          row("notes", note.value)
+        end
+        @contact.inherited.each do |lent|
+          next unless lent.line[/\A[^;:]*/].to_s.casecmp?("NOTE") == true
+
+          text = VCard.new(lent.line).lines.fetch(0).property&.text
+          next if text.nil?
+
+          dt(class: "type-label") { "notes" }
+          dd(class: "type-body-sm") do
+            div(style: "white-space: pre-wrap;") { text }
+            group_tag(lent.group)
+          end
         end
       end
 

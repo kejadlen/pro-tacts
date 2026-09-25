@@ -30,6 +30,7 @@ module ProTacts
       # @rbs @labels: Hash[String, Array[VCard::Parser::Line]]
       # @rbs @groups: Hash[String, String]
       # @rbs @named_groups: Array[String]
+      # @rbs @arriving_notes: Array[String]
       # @rbs @contact: Contact
       # @rbs @left: Array[VCard::Parser::Line]
 
@@ -55,6 +56,7 @@ module ProTacts
         @groups = {} #: Hash[String, String]
         @named_groups = into.stored.properties.filter_map { it.group&.downcase }
         taken = [] #: Array[String]
+        arriving_notes = [] #: Array[String]
         left = [] #: Array[VCard::Parser::Line]
         birthday = into.birthday
         card.lines.each do |line|
@@ -72,7 +74,14 @@ module ProTacts
           elsif ONE.include?(name)
             own = into.stored.property(name)
             if own.nil?
-              taken.concat(moved(line, property))
+              # A contact holds one note, so several arriving join into
+              # the one they fill (docs/plans/2026-09-25-one-note-per-
+              # contact.md); the joined line is written below the walk.
+              if name == "NOTE"
+                arriving_notes << property.text
+              else
+                taken.concat(moved(line, property))
+              end
             elsif own.value != property.value
               left << line
             end
@@ -95,6 +104,12 @@ module ProTacts
           end
         end
         @left = left
+        # The arriving notes' one line, at the walk's end: whatever
+        # order they arrived in, the join is the value the book keeps
+        # and the one-note invariant asks for.
+        unless arriving_notes.empty?
+          taken << "NOTE:#{VCard.escape(arriving_notes.join("\n\n"))}\r\n"
+        end
         @contact = into.with(stored: into.stored.insert(taken), birthday:)
       end
 

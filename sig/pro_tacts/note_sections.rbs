@@ -1,0 +1,20 @@
+# NoteSections::Section and ::Split are Data classes, whose members
+# the inline parser cannot read (see sig/pro_tacts/contact.rbs). The
+# module's own methods carry their types inline in note_sections.rb.
+module ProTacts
+  module NoteSections
+    class Section
+      attr_reader label: String
+      attr_reader text: String
+
+      def self.new: (label: String, text: String) -> instance
+    end
+
+    class Split
+      attr_reader member: String
+      attr_reader sections: Array[Section]
+
+      def self.new: (member: String, sections: Array[Section]) -> instance
+    end
+  end
+end

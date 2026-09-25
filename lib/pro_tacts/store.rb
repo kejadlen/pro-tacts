@@ -442,6 +442,7 @@ module ProTacts
       # change log's diff.
       before = contact(id)
       stored, birthday, edits = EditedContact.new(vcard, before:).decomposed
+      assert_one_note(stored)
 
       # The Contact this returns is the composed one — the lent lines
       # put back, read off membership as it stands at this write — and
@@ -498,6 +499,7 @@ module ProTacts
     #: (String id, VCard vcard, birthday: Birthday?) -> Contact
     def save_edit(id, vcard, birthday:)
       before = contact(id)
+      assert_one_note(vcard)
       contact = Contact.new(id:, stored: vcard, birthday:, inherited: inherited_of(id))
       @database.transaction do
         upsert_card(contact.id, vcard)
@@ -694,6 +696,9 @@ module ProTacts
     # and NOTE lines — and raises.
     #: (String id, Array[String] lines) -> void
     def set_group_lines(id, lines)
+      notes = lines.count { it[/\A[^;:]*/].to_s.casecmp?("NOTE") == true }
+      raise "a group was given #{notes} NOTE lines" if notes > 1
+
       @database.transaction do
         was = group_properties.where(group_id: id).order(:position).select_map(:line)
         diff = CardDiff.between_lines(was, lines)
@@ -924,6 +929,18 @@ module ProTacts
     #: () -> Sequel::Dataset
     def group_properties
       @database[:group_properties]
+    end
+
+    # The one-note invariant's raise: a card this server built with
+    # more than one NOTE is a bug, and a raise reaches Sentry with the
+    # request (docs/plans/2026-09-25-one-note-per-contact.md, "The
+    # invariant"). Foreign input never gets here — EditedContact and
+    # Import::Merge join what arrives — so the message carries no card
+    # content because there is none it could usefully carry.
+    #: (VCard vcard) -> void
+    def assert_one_note(vcard)
+      count = vcard.lines.count { it.names?("NOTE") }
+      raise "a stored card was built with #{count} NOTE lines" if count > 1
     end
 
     #: () -> Sequel::Dataset
