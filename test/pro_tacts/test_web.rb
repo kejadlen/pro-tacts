@@ -229,32 +229,23 @@ class WebTest < Minitest::Test
     end
   end
 
-  # A browser too old to send Sec-Fetch-Site still sends Origin.
-  def test_a_write_from_another_origin_is_refused
-    header "Origin", "https://evil.example"
+  # A page on a sibling subdomain is another site's too.
+  def test_a_same_site_write_is_refused
+    header "Sec-Fetch-Site", "same-site"
 
     post "/contacts", first: "Mallory"
 
     assert_equal 403, last_response.status
   end
 
-  def test_a_write_from_this_origin_is_applied
-    with_contacts({}) do
-      header "Origin", "http://example.org"
-
+  # No Sec-Fetch-Site is every DAV client, whose write goes through.
+  def test_a_write_without_sec_fetch_site_is_applied
+    with_contacts({}) do |store|
       post "/contacts", first: "Grace"
 
       assert_equal 303, last_response.status
+      assert_equal ["Grace"], store.contacts.map(&:name)
     end
-  end
-
-  # A sandboxed frame's opaque origin names no host at all.
-  def test_a_write_from_an_opaque_origin_is_refused
-    header "Origin", "null"
-
-    post "/contacts", first: "Mallory"
-
-    assert_equal 403, last_response.status
   end
 
   # A cross-site read changes nothing, and a link followed from

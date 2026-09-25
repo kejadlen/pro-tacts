@@ -95,9 +95,10 @@ no `sync:*` group; a test that needs everyone's book makes it.
   for the fixture book in `demo.ru` and nowhere else: never in
   `config.ru`, and never in front of real data.
 - That identity is ambient, so a page on another site could submit a
-  form as whoever's device opened it. `CrossSite` refuses a write the
-  browser marks as cross-site before any route runs; a form's POST
-  from this app's own pages is same-origin and passes.
+  form as whoever's device opened it. Roda's `sec_fetch_site_csrf`
+  refuses a write the browser marks as cross-site before any route
+  runs; a form's POST from this app's own pages is same-origin and
+  passes, and so does a DAV client, which sends no Sec-Fetch-Site.
 - Failed DAV exchanges are written whole to `log/exchange.log` under the
   id Sentry carries as the `exchange` tag. Look there first when a
   client asks for something, and promote one with
