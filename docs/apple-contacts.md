@@ -215,6 +215,13 @@ card: nothing for a bare card, up to a photo's size for one with a picture
 (see "Profile pictures"). Verified 2026-09-10, macOS 26.5.1
 (AddressBookCore/2732.600.11).
 
+A weak ETag — the one answer section 6.3.2.3 leaves open where it forbids
+a strong one — is treated the same as none. A PUT answered `204` with
+`ETag: W/"…"` got the same `REPORT` and the same `GET`, 87 ms after the
+PUT. The refetch is what Contacts costs for a card it re-serializes;
+nothing the spec permits saves it. Verified 2026-09-24, macOS 27.0 (26A428)
+(AddressBookCore/2765.100.1.1.1).
+
 ## The client rewrites every card it touches
 
 A card served by pro-tacts and edited in Contacts does not come back in the
