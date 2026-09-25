@@ -451,41 +451,97 @@ textarea:focus {
   color: var(--gl-color-text-secondary);
 }
 
-/* A phone has no room for all four in one row: left there, the
-   search shrank to an empty square, the name broke at its hyphen, and
-   the account ran past the right edge. So the header becomes two rows
-   that keep the wide one's reading order: who this is at the top (the
-   name on the left, the account on the right), and under it the
-   search where reading starts, the destinations at its end. The break
-   between them is an empty full-width item rather than a wrap left to
-   find its own place, because a wrap moves whichever item no longer
-   fits, and which one that is depends on the login's length. The
-   login is whatever the proxy vouches for, usually an email, so it is
-   what gives up width, ending in an ellipsis. The breakpoint is where
-   the one row still leaves the search room for its placeholder. The
-   empty break is a line of its own, so the rows are spaced by the
-   second row's margin rather than a row gap it would double. */
+/* The search's label only folds it on a phone, below; wider, it is
+   the field's box and the glyph is not drawn. The menu repeats the
+   destinations for the phone too, and wider they are in the nav. */
+.search-form label {
+  display: block;
+}
+.search-form label > svg,
+.user-menu .menu-nav {
+  display: none;
+}
+
+/* A phone has no room for the name, the search, two destinations
+   and the account in one row: left there, the search shrank to an
+   empty square, the name broke at its hyphen, and the account ran
+   past the right edge. So the destinations move into the account
+   menu (Layout repeats them there), and the search folds into its
+   glyph beside the account. A tap on the glyph focuses the field its
+   label holds, and while the field has focus, or a query to show,
+   it opens across the whole header over the name and the account,
+   which are hidden rather than removed so the header keeps its
+   height. The account's login is whatever the proxy vouches for,
+   usually an email, so it is what gives up width, ending in an
+   ellipsis. The breakpoint is where the one row still leaves the
+   search room for its placeholder. */
 @media (max-width: 48rem) {
   .admin-header {
-    flex-wrap: wrap;
-    row-gap: 0;
+    position: relative;
   }
-  .admin-header::after {
-    content: "";
-    flex-basis: 100%;
-    order: 1;
-  }
-  .admin-header .search-form,
   .admin-header nav {
-    order: 2;
-    margin-top: var(--gl-space-2xs);
+    display: none;
+  }
+  .user-menu .menu-nav {
+    display: block;
   }
   .admin-header .search-form {
+    flex: none;
+    margin-left: auto;
     max-width: none;
   }
+  .search-form label {
+    display: flex;
+    padding: var(--gl-space-3xs);
+    cursor: pointer;
+  }
+  .search-form label > svg {
+    display: block;
+  }
+  .admin-header .search-form input[type="search"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    clip-path: inset(50%);
+  }
+  .admin-header .search-form:is(:focus-within,
+  :has(input:not(:placeholder-shown))) {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin: 0;
+    padding: 0 var(--gl-space-m);
+  }
+  .admin-header .search-form:is(:focus-within,
+  :has(input:not(:placeholder-shown))) label {
+    flex: 1;
+    padding: 0;
+    cursor: auto;
+  }
+  .admin-header .search-form:is(:focus-within,
+  :has(input:not(:placeholder-shown))) label > svg {
+    display: none;
+  }
+  .admin-header .search-form:is(:focus-within,
+  :has(input:not(:placeholder-shown))) input[type="search"] {
+    position: static;
+    width: 100%;
+    height: auto;
+    opacity: 1;
+    clip-path: none;
+  }
+  .admin-header .search-form:is(:focus-within,
+  :has(input:not(:placeholder-shown))) .search-clear {
+    inset-inline-end: calc(var(--gl-space-m) + var(--gl-space-2xs));
+  }
+  .admin-header:has(.search-form:focus-within,
+  .search-form input:not(:placeholder-shown)) > :not(.search-form) {
+    visibility: hidden;
+  }
   .user-menu {
-    flex: 1 1 0;
-    justify-content: flex-end;
     min-width: 0;
   }
   .user-menu button {
@@ -539,9 +595,10 @@ textarea:focus {
    chrome: the menu's list is the header's DOM child but floats over
    the page on a card, so left to reach it by descent it paints the
    rows white on surface-card — unreadable. They keep the text color
-   their own rule gives them (the menu section below). */
+   their own rule gives them (the menu section below). The search's
+   clear is the same case: it sits in the field, not on the bar. */
 :root[data-accent] :is(.admin-header a, .admin-header .user-menu button,
-.admin-footer .type-label):not(.user-menu ul a) {
+.admin-header .search-form label, .admin-footer .type-label):not(.user-menu ul a, .search-clear) {
   color: var(--gl-color-accent-fg);
 }
 /* The one focus ring is drawn in the accent, which vanishes against a

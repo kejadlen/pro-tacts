@@ -57,6 +57,15 @@ class AdminLayoutTest < Minitest::Test
     assert_includes header_html, %(<a href="/" class="icon-button search-clear" data-size="sm" aria-label="Clear search">)
   end
 
+  # On a phone the nav is hidden and the menu carries the
+  # destinations instead (admin.css), so both have to be there.
+  def test_the_account_menu_repeats_the_destinations
+    with_env({})
+
+    assert_includes header_html, %(<li class="menu-nav"><a href="/contacts">contacts</a></li>)
+    assert_includes header_html, %(<li class="menu-nav"><a href="/groups">groups</a></li>)
+  end
+
   def test_the_account_menu_links_to_the_import_screen
     with_env({})
 
