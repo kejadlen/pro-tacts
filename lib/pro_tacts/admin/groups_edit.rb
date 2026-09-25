@@ -57,11 +57,14 @@ module ProTacts
               form(action: "/groups/#{@group.id}", method: "post", class: "field-stack", id: FORM) do
                 input(type: "hidden", name: "version", value: @group.version)
                 # The id as the blank's placeholder, because a group
-                # with no name is shown as its id everywhere else.
+                # with no name is shown as its id everywhere else. A
+                # book's group keeps its name (Store#rename_group), so
+                # its field is read-only — still submitted, so the
+                # save carries the name it found.
                 label(class: "field") do
                   span { "Name" }
                   input(type: "text", name: "name", value: @group.name,
-                        placeholder: @group.id, autofocus: true)
+                        placeholder: @group.id, autofocus: !@group.sync?, readonly: @group.sync?)
                 end
                 @reading.addresses.each { |address| address_row(address) }
                 added_address_row

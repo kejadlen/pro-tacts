@@ -1761,18 +1761,51 @@ class StoreTest < Minitest::Test
     end
   end
 
-  def test_a_rename_into_between_or_out_of_sync_logs_every_member
+  # Into a book by a rename, and between books by #name_book, the one
+  # way a book's group is renamed.
+  def test_a_rename_into_or_between_books_logs_every_member
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       id = FixtureData.seed_group(store, name: "Household", members: %w[aiden znorth])
 
-      store.rename_group(id, name: "sync:Alpha Chen")
-      store.rename_group(id, name: "sync:Alpha Chen")
-      store.rename_group(id, name: "sync:Zoë Chen")
-      store.rename_group(id, name: "Household")
+      store.rename_group(id, name: "sync:alpha@example.com")
+      store.rename_group(id, name: "sync:alpha@example.com")
+      store.name_book("alpha@example.com", "Alpha Chen")
 
       %w[aiden znorth].each do
-        assert_equal %w[group group group put], store.changes_of(it).map(&:action)
+        assert_equal %w[group group put], store.changes_of(it).map(&:action)
       end
+    end
+  end
+
+  # A book's group keeps its name: out of `sync:` or between two such
+  # names, and everyone's book above all, which would tell every
+  # client to drop every card.
+  def test_a_books_group_refuses_a_rename
+    with_store({"aiden" => AIDEN}) do |store|
+      everyone = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[aiden])
+      alpha = store.create_group(name: "sync:Alpha Chen")
+
+      assert_raises(ProTacts::Store::SyncGroupRename) { store.rename_group(everyone, name: "Everyone") }
+      assert_raises(ProTacts::Store::SyncGroupRename) { store.rename_group(everyone, name: " ") }
+      assert_raises(ProTacts::Store::SyncGroupRename) { store.rename_group(alpha, name: "sync:Zoë Chen") }
+      assert_raises(ProTacts::Store::SyncGroupRename) do
+        store.edit_group(everyone, name: "Everyone", lines: [], members: %w[aiden])
+      end
+
+      assert_equal ProTacts::Group::EVERYONE, store.group(everyone).name
+      assert_equal "sync:Alpha Chen", store.group(alpha).name
+      assert_equal %w[put], store.changes_of("aiden").map(&:action)
+    end
+  end
+
+  # Keeping the name it has is no rename, which every group edit does.
+  def test_a_books_group_keeps_its_name_through_an_edit
+    with_store({"aiden" => AIDEN}) do |store|
+      everyone = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[aiden])
+
+      store.edit_group(everyone, name: ProTacts::Group::EVERYONE, lines: [], members: [])
+
+      assert_empty store.group(everyone).members
     end
   end
 

@@ -104,6 +104,10 @@ module ProTacts
         # A taken name (db/migrations/008_group_names.rb). The save is
         # one transaction, so nothing of it landed.
         return group_edit_screen(group, notice: "Another group is already named #{r.params['name']}; nothing was saved.")
+      rescue Store::SyncGroupRename
+        # A book's group keeps its name (Store#rename_group); the
+        # editor renders it read-only, so this is a doctored save.
+        return group_edit_screen(group, notice: "The #{group.name} group names a book and keeps its name; nothing was saved.")
       end
       r.redirect "/groups/#{id}", 303
     end
