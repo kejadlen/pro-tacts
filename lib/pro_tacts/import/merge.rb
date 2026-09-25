@@ -14,9 +14,9 @@ module ProTacts
     # the arriving card adds only what the contact does not hold yet. A
     # phone, an email or an address comes in beside the ones the
     # contact has, unless it is one of them. A name, a nickname, a
-    # note, a photo or a birthday — what a contact holds one of — comes
-    # in only where the contact has none, and where the two differ the
-    # book's own stands. What that leaves behind is #left, struck on
+    # note, a photo, an organization or a birthday — what a contact
+    # holds one of — comes in only where the contact has none, and
+    # where the two differ the book's own stands. What that leaves behind is #left, struck on
     # the card as exported the way every other line not coming in is
     # (Admin::ImportOriginal), so nothing is lost without having been
     # shown first.
@@ -40,7 +40,7 @@ module ProTacts
 
       # What a contact holds one of: an arriving one fills a gap, and
       # is left behind where the contact has its own.
-      ONE = %w[N FN NICKNAME NOTE PHOTO].freeze #: Array[String]
+      ONE = %w[N FN NICKNAME NOTE PHOTO ORG X-ABSHOWAS].freeze #: Array[String]
 
       # The envelope, which the contact has its own of — its UID above
       # all, the arriving one naming a record in some other book
