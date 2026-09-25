@@ -302,13 +302,27 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
-  def test_a_books_group_renders_its_name_read_only
+  def test_a_books_group_renders_no_name_field
     with_contacts(BOOLES) do |store|
       id = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[george])
 
       get "/groups/#{id}/edit"
 
-      assert_includes last_response.body, "readonly"
+      refute_includes last_response.body, %(name="name")
+    end
+  end
+
+  # The form a book's group renders carries no name, and its save
+  # keeps the name the group has.
+  def test_a_save_without_a_name_keeps_it
+    with_contacts(BOOLES) do |store|
+      id = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[george])
+
+      post "/groups/#{id}", version: store.group(id).version, note: "Gate code 1854.", members: ["", "george"]
+
+      assert_equal 303, last_response.status
+      assert_equal ProTacts::Group::EVERYONE, store.group(id).name
+      assert_equal ["NOTE:Gate code 1854."], store.group(id).lines
     end
   end
 

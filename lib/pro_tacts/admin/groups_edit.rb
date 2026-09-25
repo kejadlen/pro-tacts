@@ -59,12 +59,14 @@ module ProTacts
                 # The id as the blank's placeholder, because a group
                 # with no name is shown as its id everywhere else. A
                 # book's group keeps its name (Store#rename_group), so
-                # its field is read-only — still submitted, so the
-                # save carries the name it found.
-                label(class: "field") do
-                  span { "Name" }
-                  input(type: "text", name: "name", value: @group.name,
-                        placeholder: @group.id, autofocus: !@group.sync?, readonly: @group.sync?)
+                # it gets no field at all: the way back above already
+                # names it, and a save without one keeps the name
+                # (Web#apply_group_edit).
+                unless @group.sync?
+                  label(class: "field") do
+                    span { "Name" }
+                    input(type: "text", name: "name", value: @group.name, placeholder: @group.id, autofocus: true)
+                  end
                 end
                 @reading.addresses.each { |address| address_row(address) }
                 added_address_row
