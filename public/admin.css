@@ -445,9 +445,57 @@ textarea:focus {
 }
 .admin-header > a {
   font-size: var(--gl-step-0);
+  white-space: nowrap;
 }
 .admin-header nav a {
   color: var(--gl-color-text-secondary);
+}
+
+/* A phone has no room for all four in one row: left there, the
+   search shrank to an empty square, the name broke at its hyphen, and
+   the account ran past the right edge. So the header becomes two rows
+   that keep the wide one's reading order: who this is at the top (the
+   name on the left, the account on the right), and under it the
+   search where reading starts, the destinations at its end. The break
+   between them is an empty full-width item rather than a wrap left to
+   find its own place, because a wrap moves whichever item no longer
+   fits, and which one that is depends on the login's length. The
+   login is whatever the proxy vouches for, usually an email, so it is
+   what gives up width, ending in an ellipsis. The breakpoint is where
+   the one row still leaves the search room for its placeholder. The
+   empty break is a line of its own, so the rows are spaced by the
+   second row's margin rather than a row gap it would double. */
+@media (max-width: 48rem) {
+  .admin-header {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+  .admin-header::after {
+    content: "";
+    flex-basis: 100%;
+    order: 1;
+  }
+  .admin-header .search-form,
+  .admin-header nav {
+    order: 2;
+    margin-top: var(--gl-space-2xs);
+  }
+  .admin-header .search-form {
+    max-width: none;
+  }
+  .user-menu {
+    flex: 1 1 0;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+  .user-menu button {
+    min-width: 0;
+  }
+  .user-menu button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 /* The page's other chrome bar, built off the header's rule: the same
