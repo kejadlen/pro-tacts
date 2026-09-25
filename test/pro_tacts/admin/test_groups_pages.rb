@@ -143,14 +143,17 @@ class AdminGroupsPagesTest < Minitest::Test
   # The members list the way /contacts does (Format.sort_key), not in
   # the store's id order. Seeded so the two disagree. The scan takes
   # the list's own rows — an li's link, not the change log's, which
-  # names the same cards for other reasons.
+  # names the same cards for other reasons — and only from the
+  # members heading down: the header's account menu carries an li
+  # link into /contacts too (the export), above every list.
   def test_the_members_list_in_name_order
     with_contacts(BOOLES.merge("zz" => "Alice Aardvark")) do |store|
       id = household(store, members: %w[mary zz george])
 
       get "/groups/#{id}"
 
-      assert_equal %w[zz george mary], last_response.body.scan(%r{<li><a href="/contacts/([^"]+)">}).flatten
+      members = last_response.body.split("members (").last
+      assert_equal %w[zz george mary], members.scan(%r{<li><a href="/contacts/([^"]+)">}).flatten
     end
   end
 

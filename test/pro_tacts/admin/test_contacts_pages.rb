@@ -212,6 +212,25 @@ class AdminContactsPagesTest < Minitest::Test
     assert_includes last_response.body, "No contacts yet."
   end
 
+  # The link's answer: every stored card's bytes in id order — the
+  # same read rake db:dump makes (Store#snapshot) — joined whole, each
+  # card ending in its own final newline so the cards never run
+  # together. The stored bytes are the assertion's truth, not the
+  # input: a write composes the modeled BDAY back in.
+  def test_the_export_serves_every_stored_card_as_one_vcard_file
+    grace = ADA.sub("Ada Lovelace", "Grace Hopper").sub("UID:ada", "UID:grace")
+
+    with_contacts({"grace" => grace, "ada" => ADA}) do |store|
+      get "/contacts/export.vcf"
+
+      assert_equal 200, last_response.status
+      assert_equal "text/vcard; charset=utf-8", last_response["Content-Type"]
+      assert_equal 'attachment; filename="contacts.vcf"', last_response["Content-Disposition"]
+      assert_equal store.snapshot.cards.values.join, last_response.body
+      assert_equal 2, last_response.body.scan("BEGIN:VCARD").length
+    end
+  end
+
   # A contact born on `date`'s month and day in 2000, so the
   # birthdays column's ordering and labels are deterministic against
   # the real clock.

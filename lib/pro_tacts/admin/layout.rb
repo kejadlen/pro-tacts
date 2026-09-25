@@ -126,10 +126,11 @@ module ProTacts
               # account has no page: a login decides which cards sync
               # to whose devices (docs/plans/2026-09-12-per-user-
               # books.md) and nothing else, so what hangs off it is
-              # the two destinations that are not records and so
+              # the destinations that are not records and so
               # cannot be searched for — import, a handful of times in
               # a book's life (docs/plans/2026-09-21-import-a-vcf.md),
-              # and device setup. A popover by the Popover API, like
+              # export, its counterpart, and device setup. A popover
+              # by the Popover API, like
               # every floated layer here; the list sits beside its
               # button in the header because a promoted popover is
               # positioned against the viewport, not the DOM beside
@@ -143,6 +144,7 @@ module ProTacts
                 end
                 ul(id: MENU, popover: "auto", class: "user-menu-list") do
                   li { a(href: "/import") { "import" } }
+                  li { a(href: "/contacts/export.vcf") { "export" } }
                   li { a(href: "/setup") { "device setup" } }
                 end
               end

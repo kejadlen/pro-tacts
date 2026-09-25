@@ -56,6 +56,21 @@ module ProTacts
         end
       end
 
+      # The whole book as one multi-vCard file: every stored card's
+      # bytes in id order, the same read rake db:dump makes
+      # (Store#snapshot), joined with nothing between — each card is
+      # stored ending in its final newline, so one card's END:VCARD
+      # never rides against the next one's BEGIN. Above `r.on String`,
+      # which would otherwise take the segment for a contact id. An
+      # attachment disposition, because a download is the point here
+      # where the profile's own route leaves it off for its install
+      # flow (web/setup.rb).
+      r.get "export.vcf" do
+        response["Content-Type"] = "text/vcard; charset=utf-8"
+        response["Content-Disposition"] = 'attachment; filename="contacts.vcf"'
+        store.snapshot.cards.values.join
+      end
+
       r.on String do |id|
         # The browser's edit of one contact
         # (docs/plans/2026-09-05-web-card-editor.md): an explicit

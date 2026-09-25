@@ -63,6 +63,14 @@ class AdminLayoutTest < Minitest::Test
     assert_includes header_html, %(<a href="/import">import</a>)
   end
 
+  # The menu's one link that is not a screen: the whole book out as
+  # a file, import's counterpart.
+  def test_the_account_menu_links_to_the_export
+    with_env({})
+
+    assert_includes header_html, %(<a href="/contacts/export.vcf">export</a>)
+  end
+
   def test_the_account_menu_links_to_device_setup
     with_env({})
 
