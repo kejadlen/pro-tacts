@@ -964,9 +964,8 @@ module ProTacts
     #: (String id, String? name) -> void
     def refuse_sync_rename(id, name)
       was = groups.where(id:).sole.fetch(:name)&.to_s
-      return if was == group_name(name) || !Group.sync_name?(was)
-
-      raise SyncGroupRename, "#{was} is a book's group, named by the book"
+      renamed = was != group_name(name)
+      raise SyncGroupRename, "#{was} is a book's group, named by the book" if renamed && Group.sync_name?(was)
     end
 
     # The rename itself, with no refusal: #name_book's way of renaming
