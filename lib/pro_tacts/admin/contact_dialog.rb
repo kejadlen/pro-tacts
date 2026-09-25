@@ -42,13 +42,13 @@ module ProTacts
     # `autofocus` fires when the popover is shown (it is scoped to the
     # popover, so the header search's own page-load autofocus stands).
     #
-    # The Company toggle makes an organization instead of a person
-    # (docs/plans/2026-09-24-company-cards.md): one organization box
-    # replaces the pair, each side required only while shown, and the
-    # route branches on the submitted `company` param. An organization
-    # is created here rather than converted from a person later — the
-    # editor renders a company card's one name field, and nothing
-    # flips the flag.
+    # An organization is made by its own popover beside this one
+    # (docs/plans/2026-09-24-company-cards.md), opened from the
+    # footer's link — not by a toggle swapping the name fields, which
+    # made the popover lurch around its own content-sized box. Created
+    # here rather than converted from a person later: the editor
+    # renders a company card's one name field, and nothing flips the
+    # flag.
     class ContactDialog < Phlex::HTML
       # @rbs @query: String
 
@@ -61,39 +61,18 @@ module ProTacts
         dialog(id: "new-contact", popover: "auto") do
           header { "New contact" }
           form(id: "new-contact-form", action: "/contacts", method: "post",
-               x_data: "{ company: false, #{NamePair.state(nil, nil)} }") do
-            # The company toggle: a Gloss checkbox row, not a field —
-            # a checkbox is no Field control (Gloss's Checkbox contract
-            # styles the bare label wrapping one as an inline row), and
-            # the quiet option reads as what the name fields stand
-            # behind. Checking it hides the pair and asks for the one
-            # name an organization is known by
-            # (CardForm.new_org_card). x-model both ways, so the state
-            # the fields bind to is the checkbox's own, and the
-            # submitted `company` param is the browser's serialization
-            # of a checked box.
-            label do
-              input(type: "checkbox", name: "company", value: "1", x_model: "company")
-              plain "Company"
-            end
-            label(class: "field", x_show: "!company") do
+               x_data: "{ #{NamePair.state(nil, nil)} }") do
+            label(class: "field") do
               plain "First"
-              input(**NamePair.first(nil, nil, guard: "!company"), autofocus: true)
+              input(**NamePair.first(nil, nil), autofocus: true)
             end
-            label(class: "field", x_show: "!company") do
+            label(class: "field") do
               plain "Middle"
               input(type: "text", name: "middle")
             end
-            label(class: "field", x_show: "!company") do
+            label(class: "field") do
               plain "Last"
-              input(**NamePair.last(nil, nil, guard: "!company"))
-            end
-            # Required only while shown, the pair's own rule turned
-            # around: a hidden box demanding a name would block every
-            # person's create.
-            label(class: "field", x_show: "company") do
-              plain "Organization"
-              input(type: "text", name: "organization", ":required": "company")
+              input(**NamePair.last(nil, nil))
             end
             # The search the dialog opened over — opening a popover
             # loads no page, so this survives only the failed-create
@@ -101,9 +80,43 @@ module ProTacts
             input(type: "hidden", name: "q", value: @query)
           end
           footer do
+            # The company create's way in, on the footer's left (Gloss
+            # right-justifies a dialog's actions; this is the one
+            # thing on the other side). Opening the second popover
+            # closes this one, `popover: "auto"` being the many-open-
+            # at-once refusal, so the swap is whole dialogs rather
+            # than fields inside one — a popover sizes to its content,
+            # and fields swapping inside it made the box lurch.
+            button(type: "button", style: "margin-right: auto",
+                   popovertarget: "new-company") { "New company" }
             button(type: "button", popovertarget: "new-contact",
                    popovertargetaction: "hide") { "Cancel" }
             button(type: "submit", form: "new-contact-form",
+                   data: {variant: "primary"}) { "Create" }
+          end
+        end
+
+        # The company create's own popover, the person dialog's footer
+        # link the way in. One field — an organization is known by one
+        # name, the mononym's own rule — and the hidden `company` the
+        # route branches on (CardForm.new_org_card). The same popover
+        # machinery as the person's: Popover API open and close, no
+        # script, values surviving a light dismiss, autofocus scoped
+        # to the popover once shown.
+        dialog(id: "new-company", popover: "auto") do
+          header { "New company" }
+          form(id: "new-company-form", action: "/contacts", method: "post") do
+            input(type: "hidden", name: "company", value: "1")
+            label(class: "field") do
+              plain "Organization"
+              input(type: "text", name: "organization", required: true, autofocus: true)
+            end
+            input(type: "hidden", name: "q", value: @query)
+          end
+          footer do
+            button(type: "button", popovertarget: "new-company",
+                   popovertargetaction: "hide") { "Cancel" }
+            button(type: "submit", form: "new-company-form",
                    data: {variant: "primary"}) { "Create" }
           end
         end

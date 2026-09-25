@@ -34,13 +34,13 @@ module ProTacts
         # the change log a sync token counts on lands with the card.
         # A nameless create is a dashboard re-render with a toast: the
         # browser cannot produce one — the dialog requires one name box
-        # or the other, Admin::NamePair, or the one organization box
-        # the Company toggle swaps in — so this is the backstop, and
+        # or the other, Admin::NamePair, or the company dialog's one
+        # organization box — so this is the backstop, and
         # a popover cannot be declared open in markup — the toast is
         # the refusal the
         # re-rendered page can actually show.
         r.post do
-          # The Company toggle's create: one name, the card
+          # The company dialog's create: one name, the card
           # CardForm.new_org_card writes. The same nameless backstop,
           # for the same reason.
           if r.params["company"]

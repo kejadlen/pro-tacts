@@ -18,11 +18,16 @@ components apart yet.
 
 ## Creating
 
-The dashboard's new-contact dialog gained a Company checkbox. Checked,
-it hides the name pair and asks for one Organization box — Alpine
-showing whichever side the toggle chose, each required only while
-shown, so a hidden box can never block the submit. The route branches
-on the submitted `company` param, and `CardForm.new_org_card` writes
+The dashboard's new-contact dialog carries a quiet "New company"
+link at the foot of its actions, opening a second popover of its own:
+one Organization field, the same Create. The first cut was a Company
+checkbox swapping the name fields inside the one dialog, and it was
+wrong twice — a mode switch inside a three-field form, and a popover
+resizing around its own content every time it flipped. The second
+dialog is the honest shape: the person's dialog is exactly what it
+was, and the swap is whole popovers (`popover: "auto"` closes the
+first when the second opens), not fields inside one. The org form
+posts `company` with the one name, and `CardForm.new_org_card` writes
 the shape Contacts.app emits: the name in N's family slot, `FN` and
 `ORG` of the same, the flag. An organization is made here, not by
 converting a person later — the editor never flips the flag.

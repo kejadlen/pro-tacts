@@ -1095,22 +1095,35 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes body, '<button data-size="sm" popovertarget="new-contact">add contact</button>'
       assert_includes body, '<dialog id="new-contact" popover="auto">'
       assert_includes body, '<form id="new-contact-form" action="/contacts" method="post" ' \
-                            'x-data="{ company: false, firstBlank: true, lastBlank: true }">'
+                            'x-data="{ firstBlank: true, lastBlank: true }">'
       # The captions render — a bare string mid-block is void in
       # Phlex, so the labels carry their text through plain (the
       # assertion keeps a regression from rendering a silent label).
-      # The Company toggle swaps the pair for the one organization
-      # box, and every field is required only while shown.
-      assert_includes body, '<label><input type="checkbox" name="company" value="1" x-model="company">Company</label>'
-      assert_includes body, '<label class="field" x-show="!company">First<input type="text" name="first" required ' \
-                            ':required="!company && lastBlank" @input="firstBlank = !$el.value.trim()" autofocus></label>'
-      assert_includes body, '<label class="field" x-show="!company">Middle<input type="text" name="middle"></label>'
-      assert_includes body, '<label class="field" x-show="!company">Last<input type="text" name="last" required ' \
-                            ':required="!company && firstBlank" @input="lastBlank = !$el.value.trim()"></label>'
-      assert_includes body, '<label class="field" x-show="company">Organization' \
-                            '<input type="text" name="organization" :required="company"></label>'
+      assert_includes body, '<label class="field">First<input type="text" name="first" required ' \
+                            ':required="lastBlank" @input="firstBlank = !$el.value.trim()" autofocus></label>'
+      assert_includes body, '<label class="field">Middle<input type="text" name="middle"></label>'
+      assert_includes body, '<label class="field">Last<input type="text" name="last" required ' \
+                            ':required="firstBlank" @input="lastBlank = !$el.value.trim()"></label>'
       assert_includes body, 'popovertargetaction="hide"'
     end
+  end
+
+  # The company create is its own popover, opened from the person
+  # dialog's footer link — not a toggle swapping the name fields,
+  # which made the popover lurch around its own content-sized box.
+  def test_the_dashboard_carries_the_new_company_dialog
+    get "/"
+
+    body = last_response.body
+    assert_includes body, '<button type="button" style="margin-right: auto" ' \
+                          'popovertarget="new-company">New company</button>'
+    assert_includes body, '<dialog id="new-company" popover="auto">'
+    assert_includes body, "<header>New company</header>"
+    assert_includes body, '<form id="new-company-form" action="/contacts" method="post">'
+    assert_includes body, '<input type="hidden" name="company" value="1">'
+    assert_includes body, '<label class="field">Organization' \
+                          '<input type="text" name="organization" required autofocus></label>'
+    assert_includes body, '<button type="submit" form="new-company-form" data-variant="primary">Create</button>'
   end
 
   # A create lands through Store#put — change log, index, and all —
