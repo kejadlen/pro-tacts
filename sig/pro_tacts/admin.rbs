@@ -64,11 +64,17 @@ module ProTacts
     end
 
     class ImportSidebar
-      def self.new: (upload: String, rows: Array[[Contact, Integer]], saved: Hash[String, String], current: Integer) -> instance
+      def self.new: (upload: String, rows: Array[[Contact, Integer, Integer]], saved: Hash[String, String], current: Integer) -> instance
     end
 
     class ImportSaved
       def self.call: (contact: Contact, login: String, groups: Array[Group], all_groups: Array[Store::GroupChoice], aside: untyped, sidebar: untyped, edit: String, land: String, ?notice: String?) -> String
+    end
+
+    # Its sort_key orders the import's list the way the listings of
+    # contacts are ordered (Web#walk_order).
+    module Format
+      def self.sort_key: (Contact contact) -> String
     end
 
     # Rendered by Dashboard, not called from checked code; only

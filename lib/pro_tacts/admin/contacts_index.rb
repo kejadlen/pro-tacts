@@ -2,6 +2,7 @@ require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/format"
+require "pro_tacts/admin/group_filter"
 require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/layout"
 
@@ -12,6 +13,12 @@ module ProTacts
     # "The core idea"), in Format.sort_key's order. Rows carry the
     # label the dashboard's rows do (Format.name_label) and the
     # contact's groups as chips under it.
+    #
+    # A filter over the rows narrows the list by that label as it is
+    # typed, GroupFilter's the way the members screen's is, so the
+    # book's two lists of contacts match a name the same way. A letter
+    # whose rows it all hides goes with them, heading and card, rather
+    # than standing as an empty section.
     class ContactsIndex < Phlex::HTML
       # @rbs @rows: Array[Contact]
       # @rbs @login: String
@@ -32,16 +39,17 @@ module ProTacts
 
       def view_template
         render Layout.new(title: "Contacts", login: @login) do
-          section do
+          section(class: "contacts-list", x_data: GroupFilter::STATE) do
             div(class: "section-head") do
               h2(class: "type-label") { "contacts (#{@rows.length})" }
             end
             if @rows.empty?
               p(class: "type-body-sm") { "No contacts yet." }
             else
-              div(class: "letter-groups") do
+              render GroupFilter.new(placeholder: "Filter contacts")
+              div(class: "letter-groups", x_ref: "options") do
                 letter_groups.each do |letter, rows|
-                  section do
+                  section(":hidden": "![...$el.querySelectorAll('[data-label]')].some(row => visible(row))") do
                     h3(class: "type-label") { letter }
                     ul(class: "card") do
                       rows.each { render_row(it) }
@@ -49,6 +57,7 @@ module ProTacts
                   end
                 end
               end
+              render GroupFilter::Empty.new(any: true, offer: false, noun: "contacts")
             end
           end
         end
@@ -63,7 +72,7 @@ module ProTacts
         # name is the row's link and stretches over the row
         # (.linked-row in admin.css); the chips, each a link to its
         # group's page as on the record page, sit above that stretch.
-        li(class: "linked-row") do
+        li(class: "linked-row", **GroupFilter.row(Format.name_label(contact))) do
           render Avatar.new(contact:, size: "lg")
           div(style: "flex: 1; min-width: 0;") do
             a(href: "/contacts/#{contact.id}", class: "row-link") { Format.name_label(contact) }

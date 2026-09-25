@@ -817,6 +817,14 @@ section > h2 {
   line-height: calc(var(--gl-step--1) * 1.55);
 }
 
+/* The contacts page's filter (Admin::ContactsIndex), between the
+   heading and the letters it narrows: the section-head's own step to
+   the list, so the field reads as the list's first line rather than
+   as the heading's. */
+.contacts-list > .filter {
+  margin-bottom: var(--gl-space-s);
+}
+
 /* A row with links inside it (ContactsIndex's rows, whose group
    chips open their groups): Gloss's whole-row control is an anchor
    that is the row's only child, and an anchor cannot hold the chips'

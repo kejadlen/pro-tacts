@@ -1,5 +1,6 @@
 require "pro_tacts/admin/card_form"
 require "pro_tacts/admin/contacts_edit"
+require "pro_tacts/admin/format"
 require "pro_tacts/admin/import_groups"
 require "pro_tacts/admin/import_original"
 require "pro_tacts/admin/import_saved"
@@ -111,9 +112,10 @@ module ProTacts
         return import_screen(notice: error.message)
       end
 
+      revised = cards.map { Import::Vcf.read(it).card }
       id = Import::Staged.open(
         original: bytes,
-        revised: joined(cards.map { Import::Vcf.read(it).card }),
+        revised: joined(revised),
         # Named here and not at the end, there being no end to name
         # it at: every Save files its contact under it. Not the
         # importer's to rename either — a name typed before anything
@@ -127,11 +129,12 @@ module ProTacts
       # the file: the walk is the point, and a list that has just been
       # built from a file nobody has looked at yet is a stop on the
       # way to the same place — the list stands beside every card
-      # anyway (Admin::ImportSidebar).
+      # anyway (Admin::ImportSidebar). The first contact is the list's
+      # first row (#walk_order), not the file's first card.
       #
       # A 303, the other writes' answer, because what follows is a
       # walk: every screen of it is a GET a back button can revisit.
-      r.redirect "/import/#{id}/0", 303
+      r.redirect "/import/#{id}/#{walk_order(revised).fetch(0)}", 303
     end
 
     # The walk's list of contacts, as every screen of it shows them:
@@ -140,13 +143,28 @@ module ProTacts
     # the book already. `current` is the row whose screen is open.
     #: (String upload, Array[VCard] originals, Array[VCard] revised, Hash[String, String] saved, current: Integer) -> Admin::ImportSidebar
     def walk_sidebar(upload, originals, revised, saved, current:)
-      rows = revised.each_with_index.map { |card, index|
+      rows = walk_order(revised).map { |index|
         # A literal of several elements is an Array until something
         # says otherwise, and an inline annotation needs its own line.
         dropped = Import::Vcf.read(originals.fetch(index)).dropped
-        [import_contact(card, index), Import::Vcf.losses(dropped).length] #: [Contact, Integer]
+        [import_contact(revised.fetch(index), index), Import::Vcf.losses(dropped).length, index] #: [Contact, Integer, Integer]
       }
       Admin::ImportSidebar.new(upload:, rows:, saved:, current:)
+    end
+
+    # The rows' places in the file, in the order the list shows them:
+    # the contacts page's (Format.sort_key), so a file reads the way
+    # the book it is joining does. The place in the file breaks a tie
+    # where the book's id would, as a number: a row's id is that place
+    # spelled as a string, and "10" sorts before "2". A row is still
+    # named by its place (the Integer route), which a save cannot
+    # move; its position in the list is read off the revised cards
+    # afresh on every screen, so a family name changed on the way in
+    # moves its row the way it would move the contact's.
+    #: (Array[VCard] revised) -> Array[Integer]
+    def walk_order(revised)
+      contacts = revised.each_with_index.map { |card, index| import_contact(card, index) }
+      contacts.each_index.sort_by { |index| [Admin::Format.sort_key(contacts.fetch(index)), index] }
     end
 
     # A row opened: the card it arrived as beside the card that is
@@ -456,7 +474,7 @@ module ProTacts
         # to.
         revised[index] = edited
         Import::Staged.update(upload, joined(revised))
-        return walk_on(r, upload, index, written, saved, revised.length)
+        return walk_on(r, upload, index, written, saved, revised)
       end
 
       # The birthday goes back into the card, an import having no
@@ -488,29 +506,31 @@ module ProTacts
       revised[index] = edited
       Import::Staged.update(upload, joined(revised))
       written = Import::Write.call(store, edited, joins: ticked, named: wanted, everyone: syncing)
-      walk_on(r, upload, index, written, saved, revised.length)
+      walk_on(r, upload, index, written, saved, revised)
     end
 
     # A row's Save landed, as a new contact or an updated one: the row
     # noted as saved, and the walk on from it. `saved` is the rows
-    # saved before this one, and `count` how many the file holds.
-    #: (untyped r, String upload, Integer index, Contact written, Hash[String, String] saved, Integer count) -> untyped
-    def walk_on(r, upload, index, written, saved, count)
+    # saved before this one, and `revised` the file's cards with this
+    # row's save staged among them.
+    #: (untyped r, String upload, Integer index, Contact written, Hash[String, String] saved, Array[VCard] revised) -> untyped
+    def walk_on(r, upload, index, written, saved, revised)
       Import::Staged.record(upload, index.to_s, written.id)
 
       # The last one: there is nothing left to come back to, so the
       # walk is over rather than a list of rows that all say the same
       # thing.
-      return close_walk(r, upload) if saved.length + 1 == count
+      return close_walk(r, upload) if saved.length + 1 == revised.length
 
-      # Onto the next row nobody has read, in the file's own order —
+      # Onto the next row nobody has read, in the list's order
+      # (#walk_order) —
       # the walk steps from card to card, a screen between saves
       # having only ever repeated what the list beside every card
       # says. `saved` was read before this write, so the row just
       # written is named here too; a `fetch` rather than a `first`
       # because empty is the case the line above took, and reaching
       # it is a broken assumption rather than a screen to render.
-      remaining = (0...count).reject { |i| saved.key?(i.to_s) || i == index }
+      remaining = walk_order(revised).reject { |i| saved.key?(i.to_s) || i == index }
       r.redirect "/import/#{upload}/#{remaining.fetch(0)}", 303
     end
 
