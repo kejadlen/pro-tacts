@@ -165,22 +165,39 @@ module ProTacts
                   # would still land in the type column as an
                   # anonymous grid item, but nothing could then reach
                   # it, and the note's caption needs reaching.
-                  label(class: "field") do
-                    span { "First" }
-                    input(**NamePair.first(@first, @last), autofocus: true)
-                  end
-                  # Outside the required pair, and outside its removal
-                  # state with it: a blanked middle name rewrites N's
-                  # additional component like any other name box, and
-                  # the row it would strike through is the name row,
-                  # which no save can remove.
-                  label(class: "field") do
-                    span { "Middle" }
-                    input(type: "text", name: "middle", value: @middle)
-                  end
-                  label(class: "field") do
-                    span { "Last" }
-                    input(**NamePair.last(@first, @last))
+                  # The name, as an organization spells it or a person:
+                  # one field for a company card (X-ABShowAs:COMPANY,
+                  # Contact#company?), the pair and the middle box for
+                  # everyone else. The organization field's wire name
+                  # is `last` because that is where the name lives —
+                  # N's family slot, the component the save splices
+                  # (CardForm.n_line) — and the label says what the
+                  # visitor knows it by. An unchecked company card
+                  # submits no first or middle, and the save reads
+                  # their absence as the empties they are.
+                  if @contact.company?
+                    label(class: "field") do
+                      span { "Organization" }
+                      input(type: "text", name: "last", value: @last, required: true, autofocus: true)
+                    end
+                  else
+                    label(class: "field") do
+                      span { "First" }
+                      input(**NamePair.first(@first, @last), autofocus: true)
+                    end
+                    # Outside the required pair, and outside its removal
+                    # state with it: a blanked middle name rewrites N's
+                    # additional component like any other name box, and
+                    # the row it would strike through is the name row,
+                    # which no save can remove.
+                    label(class: "field") do
+                      span { "Middle" }
+                      input(type: "text", name: "middle", value: @middle)
+                    end
+                    label(class: "field") do
+                      span { "Last" }
+                      input(**NamePair.last(@first, @last))
+                    end
                   end
                   # The whole-property rows wear the removal state only
                   # over a property the card carries: both render empty

@@ -116,6 +116,25 @@ class ContactTest < Minitest::Test
     assert_nil contact(CARD).nickname
   end
 
+  def test_reads_the_organization
+    employed = CARD.sub("FN:Aiden\r\n", "FN:Aiden\r\nORG:Calculus Close Co\r\n")
+
+    assert_equal "Calculus Close Co", contact(employed).organization
+    assert_nil contact(CARD).organization
+  end
+
+  # X-ABShowAs:COMPANY is Apple's flag for a card shown as a company
+  # rather than a person, and it is display's fact alone: a person
+  # carries ORG without it.
+  def test_reads_whether_the_card_shows_as_a_company
+    company = CARD.sub("FN:Aiden\r\n", "FN:Aiden\r\nX-ABShowAs:COMPANY\r\n")
+    employed = CARD.sub("FN:Aiden\r\n", "FN:Aiden\r\nORG:Calculus Close Co\r\n")
+
+    assert contact(company).company?
+    refute contact(employed).company?
+    refute contact(CARD).company?
+  end
+
   def test_values_come_back_unescaped
     escaped = STRUCTURED.sub("FN:Ada Lovelace", "FN:Ada\\, Countess of Lovelace")
 

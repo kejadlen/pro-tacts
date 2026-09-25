@@ -87,6 +87,7 @@ module ProTacts
         q = query.downcase
         return true if row.contact.name&.downcase&.include?(q)
         return true if row.contact.nickname&.downcase&.include?(q)
+        return true if row.contact.organization&.downcase&.include?(q)
         return true if row.contact.phones.any? { it.value.downcase.include?(q) }
         return true if row.contact.emails.any? { it.value.downcase.include?(q) }
         return true if @labels.fetch(row.contact.id, []).any? { it.downcase.include?(q) }

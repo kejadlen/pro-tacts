@@ -41,6 +41,14 @@ module ProTacts
     # instead (see Web's POST handler).
     # `autofocus` fires when the popover is shown (it is scoped to the
     # popover, so the header search's own page-load autofocus stands).
+    #
+    # The Company toggle makes an organization instead of a person
+    # (docs/plans/2026-09-24-company-cards.md): one organization box
+    # replaces the pair, each side required only while shown, and the
+    # route branches on the submitted `company` param. An organization
+    # is created here rather than converted from a person later — the
+    # editor renders a company card's one name field, and nothing
+    # flips the flag.
     class ContactDialog < Phlex::HTML
       # @rbs @query: String
 
@@ -53,18 +61,36 @@ module ProTacts
         dialog(id: "new-contact", popover: "auto") do
           header { "New contact" }
           form(id: "new-contact-form", action: "/contacts", method: "post",
-               x_data: "{ #{NamePair.state(nil, nil)} }") do
+               x_data: "{ company: false, #{NamePair.state(nil, nil)} }") do
+            # The company toggle: an organization is made here, not by
+            # converting a person later — checking it hides the pair
+            # and asks for the one name an organization is known by
+            # (CardForm.new_org_card). x-model both ways, so the state
+            # the fields bind to is the checkbox's own, and the
+            # submitted `company` param is the browser's serialization
+            # of a checked box.
             label(class: "field") do
-              plain "First"
-              input(**NamePair.first(nil, nil), autofocus: true)
+              plain "Company"
+              input(type: "checkbox", name: "company", value: "1", x_model: "company")
             end
-            label(class: "field") do
+            label(class: "field", x_show: "!company") do
+              plain "First"
+              input(**NamePair.first(nil, nil, guard: "!company"), autofocus: true)
+            end
+            label(class: "field", x_show: "!company") do
               plain "Middle"
               input(type: "text", name: "middle")
             end
-            label(class: "field") do
+            label(class: "field", x_show: "!company") do
               plain "Last"
-              input(**NamePair.last(nil, nil))
+              input(**NamePair.last(nil, nil, guard: "!company"))
+            end
+            # Required only while shown, the pair's own rule turned
+            # around: a hidden box demanding a name would block every
+            # person's create.
+            label(class: "field", x_show: "company") do
+              plain "Organization"
+              input(type: "text", name: "organization", ":required": "company")
             end
             # The search the dialog opened over — opening a popover
             # loads no page, so this survives only the failed-create

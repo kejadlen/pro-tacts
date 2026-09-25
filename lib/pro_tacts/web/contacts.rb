@@ -33,25 +33,40 @@ module ProTacts
         # names. Stored through Store#put like any client write, so
         # the change log a sync token counts on lands with the card.
         # A nameless create is a dashboard re-render with a toast: the
-        # browser cannot produce one (the dialog requires one name box
-        # or the other, Admin::NamePair), so this is the backstop, and
+        # browser cannot produce one — the dialog requires one name box
+        # or the other, Admin::NamePair, or the one organization box
+        # the Company toggle swaps in — so this is the backstop, and
         # a popover cannot be declared open in markup — the toast is
         # the refusal the
         # re-rendered page can actually show.
         r.post do
-          first = r.params["first"].to_s.strip
-          middle = r.params["middle"].to_s.strip
-          last = r.params["last"].to_s.strip
-          # A middle name is not one of the halves that make a name: the
-          # form asks for it beside a pair it stands outside of
-          # (Admin::NamePair), and nobody is known by their middle name
-          # alone.
-          if first.empty? && last.empty?
-            dashboard(query: r.params["q"], notice: "A contact needs a name.")
+          # The Company toggle's create: one name, the card
+          # CardForm.new_org_card writes. The same nameless backstop,
+          # for the same reason.
+          if r.params["company"]
+            organization = r.params["organization"].to_s.strip
+            if organization.empty?
+              dashboard(query: r.params["q"], notice: "A contact needs a name.")
+            else
+              id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
+              store.put(id, Admin::CardForm.new_org_card(id, organization))
+              r.redirect "/contacts/#{id}", 303
+            end
           else
-            id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
-            store.put(id, Admin::CardForm.new_card(id, first, middle, last))
-            r.redirect "/contacts/#{id}", 303
+            first = r.params["first"].to_s.strip
+            middle = r.params["middle"].to_s.strip
+            last = r.params["last"].to_s.strip
+            # A middle name is not one of the halves that make a name: the
+            # form asks for it beside a pair it stands outside of
+            # (Admin::NamePair), and nobody is known by their middle name
+            # alone.
+            if first.empty? && last.empty?
+              dashboard(query: r.params["q"], notice: "A contact needs a name.")
+            else
+              id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
+              store.put(id, Admin::CardForm.new_card(id, first, middle, last))
+              r.redirect "/contacts/#{id}", 303
+            end
           end
         end
       end

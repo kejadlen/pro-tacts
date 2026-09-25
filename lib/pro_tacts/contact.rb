@@ -295,6 +295,26 @@ module ProTacts
       text_of(vcard.property("NICKNAME"))
     end
 
+    # ORG's value (RFC 2426 section 3.5.5), in text form — the whole
+    # value as the card spells it, org name and units together, which
+    # is what a search reads; no screen has asked for the components
+    # apart yet.
+    #: () -> String?
+    def organization
+      text_of(vcard.property("ORG"))
+    end
+
+    # Whether the card shows as a company rather than a person:
+    # Apple's X-ABShowAs:COMPANY, the spelling Contacts.app writes and
+    # reads — the phone labels' own precedent for trusting an X-
+    # property (docs/plans/2026-09-18-phone-labels.md). Display's fact
+    # alone, and a different property from #organization's: a person
+    # carries ORG without the flag, and neither is bound to the other.
+    #: () -> bool
+    def company?
+      vcard.property("X-ABShowAs")&.text == "COMPANY"
+    end
+
     #: () -> Array[Phone]
     def phones
       labels = labels_by_group

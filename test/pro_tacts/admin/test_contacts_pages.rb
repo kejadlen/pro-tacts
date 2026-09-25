@@ -404,6 +404,19 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # ORG is a name a person works under: it finds them the way a
+  # nickname does. An organization card's own name is its FN, which
+  # the name match already reads.
+  def test_search_matches_the_organization
+    employed = ADA.sub("UID:ada", "UID:employed").sub("END:VCARD", "ORG:Acme Corp\r\nEND:VCARD")
+
+    with_contacts({"employed" => employed}) do
+      get "/", q: "acme"
+
+      assert_includes last_response.body, "Ada Lovelace"
+    end
+  end
+
   def test_search_with_no_matches_says_so
     with_contacts({"ada" => ADA}) do
       get "/", q: "nobody"
@@ -1082,15 +1095,21 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes body, '<button data-size="sm" popovertarget="new-contact">add contact</button>'
       assert_includes body, '<dialog id="new-contact" popover="auto">'
       assert_includes body, '<form id="new-contact-form" action="/contacts" method="post" ' \
-                            'x-data="{ firstBlank: true, lastBlank: true }">'
+                            'x-data="{ company: false, firstBlank: true, lastBlank: true }">'
       # The captions render — a bare string mid-block is void in
       # Phlex, so the labels carry their text through plain (the
       # assertion keeps a regression from rendering a silent label).
-      assert_includes body, '<label class="field">First<input type="text" name="first" required ' \
-                            ':required="lastBlank" @input="firstBlank = !$el.value.trim()" autofocus></label>'
-      assert_includes body, '<label class="field">Middle<input type="text" name="middle"></label>'
-      assert_includes body, '<label class="field">Last<input type="text" name="last" required ' \
-                            ':required="firstBlank" @input="lastBlank = !$el.value.trim()"></label>'
+      # The Company toggle swaps the pair for the one organization
+      # box, and every field is required only while shown.
+      assert_includes body, '<label class="field">Company' \
+                            '<input type="checkbox" name="company" value="1" x-model="company"></label>'
+      assert_includes body, '<label class="field" x-show="!company">First<input type="text" name="first" required ' \
+                            ':required="!company && lastBlank" @input="firstBlank = !$el.value.trim()" autofocus></label>'
+      assert_includes body, '<label class="field" x-show="!company">Middle<input type="text" name="middle"></label>'
+      assert_includes body, '<label class="field" x-show="!company">Last<input type="text" name="last" required ' \
+                            ':required="!company && firstBlank" @input="lastBlank = !$el.value.trim()"></label>'
+      assert_includes body, '<label class="field" x-show="company">Organization' \
+                            '<input type="text" name="organization" :required="company"></label>'
       assert_includes body, 'popovertargetaction="hide"'
     end
   end
@@ -1117,6 +1136,35 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes card, "FN:Grace Hopper"
       assert_includes card, "UID:#{id}"
       assert(store.changes.any? { it.action == "put" && it.card_id == id })
+    end
+  end
+
+  # The Company toggle's create: the card in Contacts.app's own shape
+  # for an organization, so a synced client shows it as one — the
+  # name in N's family slot, FN and ORG of the same, and
+  # X-ABShowAs:COMPANY.
+  def test_creating_an_organization_from_the_dialog
+    with_contacts({}) do |store|
+      post "/contacts", company: "1", organization: "Acme Corp"
+
+      assert_equal 303, last_response.status
+      id = last_response["Location"].delete_prefix("/contacts/")
+
+      card = store.contact(id).vcard.to_s
+      assert_includes card, "N:Acme Corp;;;;\r\n"
+      assert_includes card, "FN:Acme Corp\r\n"
+      assert_includes card, "ORG:Acme Corp\r\n"
+      assert_includes card, "X-ABShowAs:COMPANY\r\n"
+      assert_includes card, "UID:#{id}"
+    end
+  end
+
+  def test_a_nameless_organization_create_is_refused
+    with_contacts({}) do
+      post "/contacts", company: "1", organization: " "
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, '<div role="status" data-fixed><span>A contact needs a name.</span></div>'
     end
   end
 
@@ -1251,6 +1299,41 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
       assert_includes store.contact("prince").vcard.to_s, "N:Prince;;;;\r\n"
+    end
+  end
+
+  ACME = "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Acme Corp;;;;\r\nFN:Acme Corp\r\nORG:Acme Corp\r\n" \
+         "X-ABShowAs:COMPANY\r\nUID:acme\r\nEND:VCARD\r\n"
+
+  # A company card's name is one field — the organization's own — in
+  # place of the pair, keyed off X-ABShowAs:COMPANY; the wire name is
+  # `last`, the family slot the save splices.
+  def test_the_edit_screen_shows_one_organization_field_for_a_company_card
+    with_contacts({"acme" => ACME}) do
+      get "/contacts/acme/edit"
+
+      body = last_response.body
+      assert_equal 200, last_response.status
+      assert_includes body, '<span>Organization</span>' \
+                            '<input type="text" name="last" value="Acme Corp" required autofocus>'
+      refute_includes body, '<span>First</span>'
+      refute_includes body, '<span>Last</span>'
+    end
+  end
+
+  # The save splices the organization's name into N's family slot and
+  # rewrites FN, and touches nothing else: ORG is a property no field
+  # on this form owns, so it keeps the bytes it arrived with.
+  def test_saving_a_company_cards_edit_moves_the_name_and_leaves_its_org_alone
+    with_contacts({"acme" => ACME}) do |store|
+      post "/contacts/acme", last: "Acme Corporation", etag: store.contact("acme").etag
+
+      assert_equal 303, last_response.status
+      card = store.contact("acme").vcard.to_s
+      assert_includes card, "N:Acme Corporation;;;;\r\n"
+      assert_includes card, "FN:Acme Corporation\r\n"
+      assert_includes card, "ORG:Acme Corp\r\n"
+      assert_includes card, "X-ABShowAs:COMPANY\r\n"
     end
   end
 
