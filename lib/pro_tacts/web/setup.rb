@@ -16,8 +16,8 @@ module ProTacts
     # the address a device reached this app at is reachable from that
     # device by construction, where an environment variable is a claim
     # about some other machine's idea of where we live. It is the
-    # client's Host header, which behind `tailscale serve` is serve's
-    # own — and past the identity gate in web.rb's trunk, the only
+    # client's Host header, which the proxy in front passes along
+    # (ProxyAuth) — and past the identity gate in web.rb's trunk, the only
     # devices asking are on the tailnet.
     hash_branch("setup") do |r|
       r.is do

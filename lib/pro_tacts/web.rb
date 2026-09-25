@@ -24,8 +24,8 @@ module ProTacts
     # The vendored Gloss CSS and the admin app's own stylesheet (see
     # docs/DESIGN.md); relative to this file rather than $0 for the same
     # reason Store::MIGRATIONS is, and served by Roda's own `public`
-    # plugin rather than a reverse proxy — there is no reverse proxy
-    # here, `tailscale serve` hands requests straight to this app.
+    # plugin rather than by the proxy in front, which passes every
+    # request through and writes the login on it (ProxyAuth).
     PUBLIC_ROOT = Pathname.new(
       __dir__ #: String
     ).parent.parent / "public" #: Pathname
@@ -54,7 +54,7 @@ module ProTacts
 
     # Inside CaptureExceptions, so the exchange tag lands on the scope it
     # opens for the request. Outside the route's identity gate
-    # (#unauthorized), and safe there because a 401 is not a failure it
+    # (the error handler below), and safe there because a 401 is not a failure it
     # keeps (ExchangeLog#failed?). The log opens when Roda builds the
     # stack, not here, so requiring the app writes nothing.
     use ProTacts::ExchangeLog, path: ProTacts.config.exchange_log_path, everything: ProTacts.config.debug?
@@ -90,6 +90,15 @@ module ProTacts
     # it hands an attacker nothing: the proxy overwrites the header on
     # every request, so knowing which one it is buys no way to forge
     # it.
+    # The login is ambient — the proxy writes it for whichever tailnet
+    # device is asking — so no cookie is involved and SameSite holds
+    # nothing back: a page on another site could submit a form here and
+    # the app would apply it as whoever's device opened it. A write the
+    # browser marks as anything but same-origin gets an empty 403. One
+    # carrying no Sec-Fetch-Site at all passes, because that is every
+    # DAV client and curl, and no page a current browser sends.
+    plugin :sec_fetch_site_csrf, allow_missing: true, csrf_failure: :empty_403
+
     plugin :error_handler, classes: [ProxyAuth::MissingLogin] do |_e|
       response.status = 401
       response["WWW-Authenticate"] = "Proxy-Identity"
@@ -107,6 +116,10 @@ module ProTacts
       # files included — because #login raises for one that names
       # nobody and the error handler above answers it.
       @login = ProxyAuth.login(r.env)
+
+      # A write another site's page sent, refused before any route can
+      # apply it (the plugin's comment above).
+      check_sec_fetch_site!
 
       r.public
       r.hash_branches

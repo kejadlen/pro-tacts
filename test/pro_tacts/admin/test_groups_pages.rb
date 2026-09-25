@@ -290,6 +290,46 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
+  # Everyone's book keeps its name: renaming it would empty every
+  # device's book (Store#rename_group).
+  def test_a_rename_of_a_books_group_is_refused_and_changes_nothing
+    with_contacts(BOOLES) do |store|
+      id = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[george])
+
+      post "/groups/#{id}", version: store.group(id).version, name: "Everyone", members: ["", "george", "mary"]
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "The sync:* group names a book and keeps its name; nothing was saved."
+      assert_equal ProTacts::Group::EVERYONE, store.group(id).name
+      assert_equal %w[george], store.group(id).members
+    end
+  end
+
+  def test_a_books_group_shows_its_name_as_text
+    with_contacts(BOOLES) do |store|
+      id = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[george])
+
+      get "/groups/#{id}/edit"
+
+      refute_includes last_response.body, %(name="name")
+      assert_includes last_response.body, "<span>Name</span><span>sync:*</span>"
+    end
+  end
+
+  # The form a book's group renders carries no name, and its save
+  # keeps the name the group has.
+  def test_a_save_without_a_name_keeps_it
+    with_contacts(BOOLES) do |store|
+      id = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[george])
+
+      post "/groups/#{id}", version: store.group(id).version, note: "Gate code 1854.", members: ["", "george"]
+
+      assert_equal 303, last_response.status
+      assert_equal ProTacts::Group::EVERYONE, store.group(id).name
+      assert_equal ["NOTE:Gate code 1854."], store.group(id).lines
+    end
+  end
+
   # No list at all is a POST that says nothing about membership; a
   # doctored id names no card and is dropped rather than a 500.
   def test_membership_moves_only_for_a_list_of_real_cards

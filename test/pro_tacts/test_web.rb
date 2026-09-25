@@ -203,6 +203,61 @@ class WebTest < Minitest::Test
     end
   end
 
+  ## Refusing a write another site's page sent
+
+  # The forged create: a page elsewhere submitting the dashboard's
+  # form, which the browser marks as cross-site.
+  def test_a_cross_site_write_is_refused
+    with_contacts({}) do |store|
+      header "Sec-Fetch-Site", "cross-site"
+
+      post "/contacts", first: "Mallory"
+
+      assert_equal 403, last_response.status
+      assert_empty store.contacts
+    end
+  end
+
+  def test_a_same_origin_write_is_applied
+    with_contacts({}) do |store|
+      header "Sec-Fetch-Site", "same-origin"
+
+      post "/contacts", first: "Grace"
+
+      assert_equal 303, last_response.status
+      assert_equal ["Grace"], store.contacts.map(&:name)
+    end
+  end
+
+  # A page on a sibling subdomain is another site's too.
+  def test_a_same_site_write_is_refused
+    header "Sec-Fetch-Site", "same-site"
+
+    post "/contacts", first: "Mallory"
+
+    assert_equal 403, last_response.status
+  end
+
+  # No Sec-Fetch-Site is every DAV client, whose write goes through.
+  def test_a_write_without_sec_fetch_site_is_applied
+    with_contacts({}) do |store|
+      post "/contacts", first: "Grace"
+
+      assert_equal 303, last_response.status
+      assert_equal ["Grace"], store.contacts.map(&:name)
+    end
+  end
+
+  # A cross-site read changes nothing, and a link followed from
+  # elsewhere is how a person reaches the dashboard.
+  def test_a_cross_site_read_is_answered
+    header "Sec-Fetch-Site", "cross-site"
+
+    get "/"
+
+    assert_equal 200, last_response.status
+  end
+
   def test_get_unknown_contact_is_404
     get "/dav/addressbook/nope.vcf"
 

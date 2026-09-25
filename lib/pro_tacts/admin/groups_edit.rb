@@ -57,11 +57,21 @@ module ProTacts
               form(action: "/groups/#{@group.id}", method: "post", class: "field-stack", id: FORM) do
                 input(type: "hidden", name: "version", value: @group.version)
                 # The id as the blank's placeholder, because a group
-                # with no name is shown as its id everywhere else.
-                label(class: "field") do
-                  span { "Name" }
-                  input(type: "text", name: "name", value: @group.name,
-                        placeholder: @group.id, autofocus: true)
+                # with no name is shown as its id everywhere else. A
+                # book's group keeps its name (Store#rename_group), so
+                # the name is shown rather than offered: text where the
+                # field would be, and a save that carries none keeps it
+                # (Web#apply_group_edit).
+                if @group.sync?
+                  div(class: "field") do
+                    span { "Name" }
+                    span { @group.name }
+                  end
+                else
+                  label(class: "field") do
+                    span { "Name" }
+                    input(type: "text", name: "name", value: @group.name, placeholder: @group.id, autofocus: true)
+                  end
                 end
                 @reading.addresses.each { |address| address_row(address) }
                 added_address_row

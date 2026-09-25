@@ -26,6 +26,10 @@ class Roda
   def self.hash_branch: (String segment) { (RodaRequest) [self: instance] -> untyped } -> void
                       | (String | Symbol namespace, String segment) { (RodaRequest) [self: instance] -> untyped } -> void
 
+  # The sec_fetch_site_csrf plugin's: halts a write whose
+  # Sec-Fetch-Site the plugin was not configured to allow.
+  def check_sec_fetch_site!: () -> void
+
   def request: () -> RodaRequest
   def response: () -> RodaResponse
 

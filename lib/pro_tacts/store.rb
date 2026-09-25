@@ -157,6 +157,9 @@ module ProTacts
     # A book named `*`, which would be everyone's (#name_book).
     class EveryonesBookName < ArgumentError; end
 
+    # A rename of a group whose name is a book's (#rename_group).
+    class SyncGroupRename < ArgumentError; end
+
     # Sequel's migrations, run on open. They ship with the code rather
     # than with a deployment, so the path is relative to this file.
     # `__dir__` is nil only for code with no file behind it, which a
@@ -377,7 +380,7 @@ module ProTacts
     # Sets the name a login's book goes by, or with nil or a blank goes
     # back to the login. The login's `sync:` group, if it has one, is
     # renamed in the same transaction, so the book keeps its cards and
-    # #rename_group logs every member for the clients syncing it. A name
+    # #rename logs every member for the clients syncing it. A name
     # another login's book goes by raises on the unique index, and `*`
     # is refused before the transaction, #put's reason for building a
     # Contact outside one.
@@ -391,7 +394,7 @@ module ProTacts
         group = groups.where(name: own_sync_name(login)).select_map(:id).first
         books.where(login:).delete
         books.insert(login:, name:) unless name.nil?
-        rename_group(group.to_s, name: own_sync_name(login)) unless group.nil?
+        rename(group.to_s, own_sync_name(login)) unless group.nil?
       end
     end
 
@@ -664,27 +667,17 @@ module ProTacts
 
     # A group's name, or none — NULL being the one spelling of
     # nameless (db/migrations/005_group_identity.rb), so a blank is
-    # stored as that rather than refused by the schema. A name is on no
-    # card, so no member's bytes move, but a `sync:` name is what puts a
-    # card in a book: a rename into, out of, or between them moves every
-    # member between books and logs each one (#fan_out's `moved`).
-    # Logged in the group's own log only where the name moved, the log
-    # recording what happened rather than that a save was asked
-    # (docs/plans/2026-09-23-group-change-log.md, "One entry per
-    # primitive").
+    # stored as that rather than refused by the schema. A group whose
+    # name is a book's keeps it: renaming `sync:*` would tell every
+    # client to drop every card, and a login's `sync:` group is named by
+    # #name_book, which a rename here would leave naming a group that is
+    # not there (docs/plans/2026-09-16-book-names.md). Refused before
+    # the transaction, #name_book's reason. A rename into a `sync:` name
+    # is how a book is made, and stays.
     #: (String id, name: String?) -> void
     def rename_group(id, name:)
-      name = nil if name.to_s.strip.empty?
-      @database.transaction do
-        was = groups.where(id:).sole.fetch(:name)&.to_s
-        if was != name && (Group.sync_name?(was) || Group.sync_name?(name))
-          members = member_ids([id])
-          fan_out(members, moved: members) { groups.where(id:).update(name:) }
-        else
-          groups.where(id:).update(name:)
-        end
-        record_group_change(id, action: GroupAction::RENAME, detail: {"was" => was, "name" => name}) if was != name
-      end
+      refuse_sync_rename(id, name)
+      rename(id, name)
     end
 
     # Replaces what a group lends, wholesale, at positions from zero.
@@ -726,10 +719,11 @@ module ProTacts
     # about to stop or had yet to start serving.
     #: (String id, name: String?, lines: Array[String], members: Array[String]) -> void
     def edit_group(id, name:, lines:, members:)
+      refuse_sync_rename(id, name)
       @database.transaction do
         current = member_ids([id])
         (current - members).each { remove_member(id, it) }
-        rename_group(id, name:)
+        rename(id, name)
         set_group_lines(id, lines)
         (members - current).each { add_member(id, it) }
       end
@@ -795,11 +789,11 @@ module ProTacts
     # #delete's shape.
     #: (String id) -> bool
     def delete_group(id)
-      # A plain `first` read, #birthday_of's reason: id is the primary
-      # key, so there is no ambiguity for `sole` to catch. Read here
-      # rather than rescued around the whole method, which would have
-      # swallowed a NoMatchingRow raised from inside the transaction
-      # below and answered it as an ordinary miss.
+      # A plain `first` read rather than #group's rescued `sole`: a
+      # rescue around the whole method would swallow a NoMatchingRow
+      # raised from inside the transaction below and answer it as an
+      # ordinary miss. id is the primary key, so there is no ambiguity
+      # for `sole` to catch.
       row = groups.where(id:).first
       return false if row.nil?
 
@@ -962,6 +956,47 @@ module ProTacts
     #: (String group_id, action: String, detail: Hash[String, untyped]) -> void
     def record_group_change(group_id, action:, detail:)
       group_changes.insert(group_id:, action:, detail: detail.to_json)
+    end
+
+    # #rename_group's refusal, for it and for #edit_group, which renames
+    # inside a transaction of its own and so has to ask before opening
+    # it.
+    #: (String id, String? name) -> void
+    def refuse_sync_rename(id, name)
+      was = groups.where(id:).sole.fetch(:name)&.to_s
+      renamed = was != group_name(name)
+      raise SyncGroupRename, "#{was} is a book's group, named by the book" if renamed && Group.sync_name?(was)
+    end
+
+    # The rename itself, with no refusal: #name_book's way of renaming
+    # the one group #rename_group will not. A name is on no card, so no
+    # member's bytes move, but a `sync:` name is what puts a card in a
+    # book: a rename into, out of, or between them moves every member
+    # between books and logs each one (#fan_out's `moved`). Logged in
+    # the group's own log only where the name moved, the log recording
+    # what happened rather than that a save was asked
+    # (docs/plans/2026-09-23-group-change-log.md, "One entry per
+    # primitive").
+    #: (String id, String? name) -> void
+    def rename(id, name)
+      name = group_name(name)
+      @database.transaction do
+        was = groups.where(id:).sole.fetch(:name)&.to_s
+        if was != name && (Group.sync_name?(was) || Group.sync_name?(name))
+          members = member_ids([id])
+          fan_out(members, moved: members) { groups.where(id:).update(name:) }
+        else
+          groups.where(id:).update(name:)
+        end
+        record_group_change(id, action: GroupAction::RENAME, detail: {"was" => was, "name" => name}) if was != name
+      end
+    end
+
+    # A name as a group stores it: a blank is NULL, nameless's one
+    # spelling (db/migrations/005_group_identity.rb).
+    #: (String? name) -> String?
+    def group_name(name)
+      name unless name.to_s.strip.empty?
     end
 
     # The block's group writes, bracketed by a read of every member
@@ -1168,13 +1203,13 @@ module ProTacts
       }
     end
 
-    # One card's birthday, or nil for none. A plain `first` read rather
-    # than `sole`: card_id is the primary key, so there is no ambiguity
-    # for `sole` to catch and no row is the ordinary answer.
+    # One card's birthday, or nil for none — the ordinary answer, a
+    # birthday being optional, so it is rescued here, #contact's shape.
     #: (String id) -> Birthday?
     def birthday_of(id)
-      row = birthdays.where(card_id: id).first
-      row && birthday_from(row)
+      birthday_from(birthdays.where(card_id: id).sole)
+    rescue Sequel::NoMatchingRow
+      nil
     end
 
     # The content lines a contact inherits, each beside the group

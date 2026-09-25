@@ -98,12 +98,21 @@ module ProTacts
           group.members
         end #: Array[String]
 
+      # No name at all keeps the one it has, the members' posture
+      # above: a book's group shows its name as text (Admin::GroupsEdit),
+      # where a blank one is a request to go nameless.
+      name = r.params.key?("name") ? r.params["name"].to_s : group.name
+
       begin
-        store.edit_group(id, name: r.params["name"].to_s, lines: Admin::CardForm.group_lines(group, r.params), members:)
+        store.edit_group(id, name:, lines: Admin::CardForm.group_lines(group, r.params), members:)
       rescue Sequel::UniqueConstraintViolation
         # A taken name (db/migrations/008_group_names.rb). The save is
         # one transaction, so nothing of it landed.
         return group_edit_screen(group, notice: "Another group is already named #{r.params['name']}; nothing was saved.")
+      rescue Store::SyncGroupRename
+        # A book's group keeps its name (Store#rename_group); the
+        # editor offers no field for it, so this is a doctored save.
+        return group_edit_screen(group, notice: "The #{group.name} group names a book and keeps its name; nothing was saved.")
       end
       r.redirect "/groups/#{id}", 303
     end

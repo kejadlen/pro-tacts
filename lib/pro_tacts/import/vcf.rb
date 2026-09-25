@@ -27,6 +27,13 @@ module ProTacts
       # A file that is not a set of vCards.
       class Invalid < StandardError; end
 
+      # Apple's own name for a row, carried on a line of its own beside
+      # the one it names (`item1.X-ABLabel:_$!<Spouse>!$_`). Known, and
+      # named apart from the rest because what happens to the line it
+      # annotates happens to it too: a label whose line is gone names
+      # nothing (#read).
+      LABEL = "X-ABLABEL" #: String
+
       # The properties this address book reads, and so the properties
       # an import brings in. The envelope (BEGIN, END, VERSION, UID),
       # the fields a screen shows (Contact's own readers: N, FN,
@@ -40,13 +47,6 @@ module ProTacts
       # screen for a property is what brings it in, and until then
       # importing one would only pad the cards with what nobody can
       # read.
-      # Apple's own name for a row, carried on a line of its own beside
-      # the one it names (`item1.X-ABLabel:_$!<Spouse>!$_`). Known, and
-      # named apart from the rest because what happens to the line it
-      # annotates happens to it too: a label whose line is gone names
-      # nothing (#read).
-      LABEL = "X-ABLABEL" #: String
-
       KNOWN = [
         *%w[BEGIN END VERSION UID N FN NICKNAME BDAY TEL EMAIL ADR NOTE PHOTO],
         LABEL,
