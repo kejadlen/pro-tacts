@@ -302,13 +302,14 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
-  def test_a_books_group_renders_no_name_field
+  def test_a_books_group_shows_its_name_as_text
     with_contacts(BOOLES) do |store|
       id = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[george])
 
       get "/groups/#{id}/edit"
 
       refute_includes last_response.body, %(name="name")
+      assert_includes last_response.body, "<span>Name</span><span>sync:*</span>"
     end
   end
 
