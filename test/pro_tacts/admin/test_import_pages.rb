@@ -187,6 +187,27 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # The list reads the way the contacts page does (Format.sort_key),
+  # not in the file's order, and the walk goes down it as it reads:
+  # the upload opens on the first row, and a Save steps to the next.
+  # The row keeps its place in the file as its name.
+  def test_the_walk_lists_the_file_the_way_the_contacts_page_does
+    with_contacts({}) do |_store|
+      zed = PLAIN.sub("N:Booles;Sam;;;", "N:Zed;Zoe;;;").sub("FN:Sam Booles", "FN:Zoe Zed")
+      adams = PLAIN.sub("N:Booles;Sam;;;", "N:adams;Al;;;").sub("FN:Sam Booles", "FN:Al adams")
+      id = upload(zed + JANE + adams)
+
+      assert_equal "/import/#{id}/2", last_response.headers["location"]
+      follow_redirect!
+
+      links = last_response.body.scan(%r{<a href="/import/#{id}/(\d+)"}).flatten
+      assert_equal %w[2 1 0], links
+
+      save(id, 2, first: "Al", last: "adams")
+      assert_equal "/import/#{id}/1", last_response.headers["location"]
+    end
+  end
+
   # Everything is unsaved until its own screen says otherwise, and a
   # walk broken off overnight has to say which rows those are. The
   # rail says it on screen; the word is there for a reader that

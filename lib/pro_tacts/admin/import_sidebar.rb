@@ -40,16 +40,18 @@ module ProTacts
     # prose.
     class ImportSidebar < Phlex::HTML
       # @rbs @upload: String
-      # @rbs @rows: Array[[::ProTacts::Contact, Integer]]
+      # @rbs @rows: Array[[::ProTacts::Contact, Integer, Integer]]
       # @rbs @saved: Hash[String, String]
       # @rbs @current: Integer?
 
-      # `rows` is the contact each card will be written as and how
-      # many of its original's lines are not coming with it; `saved`
+      # `rows` is the contact each card will be written as, how many
+      # of its original's lines are not coming with it, and the card's
+      # place in the file, in the order the list reads
+      # (Web#walk_order); `saved`
       # the contact each row that has come in was written as, by the
       # row's place in the file; `current` the row whose screen is
       # open.
-      #: (upload: String, rows: Array[[::ProTacts::Contact, Integer]], saved: Hash[String, String], current: Integer) -> void
+      #: (upload: String, rows: Array[[::ProTacts::Contact, Integer, Integer]], saved: Hash[String, String], current: Integer) -> void
       def initialize(upload:, rows:, saved:, current:)
         @upload = upload
         @rows = rows
@@ -66,7 +68,7 @@ module ProTacts
       def view_template
         nav(class: "record walk-list") do
           ul(class: "card") do
-            @rows.each_with_index do |(contact, dropped), index|
+            @rows.each do |(contact, dropped, index)|
               row(contact, dropped, index)
             end
           end
