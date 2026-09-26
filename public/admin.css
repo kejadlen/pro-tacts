@@ -473,11 +473,15 @@ textarea:focus {
    which are hidden rather than removed so the header keeps its
    height. The account's login is whatever the proxy vouches for,
    usually an email, so it is what gives up width, ending in an
-   ellipsis. The breakpoint is where the one row still leaves the
-   search room for its placeholder. */
+   ellipsis. The name and the login line up on their baselines, the
+   two being different sizes of type, which centering left a pixel
+   or three apart; the glyph has no baseline and centers. The
+   breakpoint is where the one row still leaves the search room for
+   its placeholder. */
 @media (max-width: 48rem) {
   .admin-header {
     position: relative;
+    align-items: baseline;
   }
   .admin-header nav {
     display: none;
@@ -487,6 +491,7 @@ textarea:focus {
   }
   .admin-header .search-form {
     flex: none;
+    align-self: center;
     margin-left: auto;
     max-width: none;
   }
@@ -544,8 +549,11 @@ textarea:focus {
   .user-menu {
     min-width: 0;
   }
+  /* The same pull at the start, so the glyph sits as far from the
+     login as from the name rather than a padding's width further. */
   .user-menu button {
     min-width: 0;
+    margin-inline-start: calc(-1 * var(--gl-space-2xs));
   }
   .user-menu button span {
     overflow: hidden;
@@ -794,6 +802,12 @@ input[type="search"]::-webkit-search-cancel-button {
 .user-menu {
   anchor-name: --user-menu;
   display: flex;
+}
+/* The button's own inline padding is pulled into the header's gutter
+   at the end, so the chevron ends on the edge the name starts from
+   at the other side, and the hover fill runs into the padding. */
+.user-menu button {
+  margin-inline-end: calc(-1 * var(--gl-space-2xs));
 }
 /* The UA popover styles center (`position: fixed; inset: 0; margin:
    auto`), overridden to open off the anchor: below the button's
