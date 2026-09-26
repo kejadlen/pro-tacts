@@ -104,9 +104,18 @@ module ProTacts
               # header needs no script for it; the native cancel WebKit
               # and Blink draw is suppressed there too, one affordance
               # rather than two.
+              #
+              # On a phone the search folds into its glyph and opens
+              # across the whole header while it has focus or a query
+              # (admin.css). The label is what makes the glyph open
+              # it: a tap anywhere in a label focuses its field, so
+              # the fold needs no script either.
               form(action: "/", method: "get", class: "search-form") do
-                input(type: "search", name: "q", value: @query,
-                      placeholder: "Search contacts", autofocus: @autofocus)
+                label do
+                  render Icon.new(:search)
+                  input(type: "search", name: "q", value: @query,
+                        placeholder: "Search contacts", autofocus: @autofocus)
+                end
                 a(href: "/", class: "icon-button search-clear", data_size: "sm",
                   aria_label: "Clear search") { render Icon.new(:x) }
               end
@@ -115,7 +124,10 @@ module ProTacts
               # list is where a group is created — both reachable from
               # anywhere (docs/DESIGN.md, "The core idea"), search
               # still finding a group by name — with who is asking
-              # named beside them.
+              # named beside them. On a phone the two move into the
+              # account menu with home, the name's own link (the list
+              # below repeats all three for that), leaving the header
+              # the search and the account.
               nav do
                 a(href: "/contacts") { "contacts" }
                 a(href: "/groups") { "groups" }
@@ -143,6 +155,9 @@ module ProTacts
                   render Icon.new(:chevron_down)
                 end
                 ul(id: MENU, popover: "auto", class: "user-menu-list") do
+                  li(class: "menu-nav") { a(href: "/") { "home" } }
+                  li(class: "menu-nav") { a(href: "/contacts") { "contacts" } }
+                  li(class: "menu-nav") { a(href: "/groups") { "groups" } }
                   li { a(href: "/import") { "import" } }
                   li { a(href: "/contacts/export.vcf") { "export" } }
                   li { a(href: "/setup") { "device setup" } }

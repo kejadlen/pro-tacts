@@ -445,9 +445,120 @@ textarea:focus {
 }
 .admin-header > a {
   font-size: var(--gl-step-0);
+  white-space: nowrap;
 }
 .admin-header nav a {
   color: var(--gl-color-text-secondary);
+}
+
+/* The search's label only folds it on a phone, below; wider, it is
+   the field's box and the glyph is not drawn. The menu repeats home
+   and the destinations for the phone too, and wider the name and the
+   nav carry them. */
+.search-form label {
+  display: block;
+}
+.search-form label > svg,
+.user-menu .menu-nav {
+  display: none;
+}
+
+/* A phone has no room for the name, the search, two destinations
+   and the account in one row: left there, the search shrank to an
+   empty square, the name broke at its hyphen, and the account ran
+   past the right edge. So the header keeps the two things only it
+   can do, the search and the account. The name goes, being the way
+   home and nothing more once the tab says which instance this is,
+   and home joins the destinations in the account menu (Layout
+   repeats them there). The search folds into its glyph at the
+   start of the row, pulled out by its padding so it stands on the
+   edge the page's column does; a tap on it focuses the field its
+   label holds, and while the field has focus, or a query to show,
+   it opens across the whole header over the account, which is
+   hidden rather than removed so the header keeps its height. The
+   login is whatever the proxy vouches for, usually an email, so it
+   ends in an ellipsis when it runs out of room. The breakpoint is
+   where the one row still leaves the search room for its
+   placeholder. */
+@media (max-width: 48rem) {
+  .admin-header {
+    position: relative;
+  }
+  .admin-header > a,
+  .admin-header nav {
+    display: none;
+  }
+  .user-menu .menu-nav {
+    display: block;
+  }
+  .admin-header .search-form {
+    flex: none;
+    margin-inline-start: calc(-1 * var(--gl-space-3xs));
+    max-width: none;
+  }
+  .search-form label {
+    display: flex;
+    padding: var(--gl-space-3xs);
+    cursor: pointer;
+  }
+  .search-form label > svg {
+    display: block;
+  }
+  .admin-header .search-form input[type="search"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    clip-path: inset(50%);
+  }
+  .admin-header .search-form:is(:focus-within,
+  :has(input:not(:placeholder-shown))) {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin: 0;
+    padding: 0 var(--gl-space-m);
+  }
+  .admin-header .search-form:is(:focus-within,
+  :has(input:not(:placeholder-shown))) label {
+    flex: 1;
+    padding: 0;
+    cursor: auto;
+  }
+  .admin-header .search-form:is(:focus-within,
+  :has(input:not(:placeholder-shown))) label > svg {
+    display: none;
+  }
+  .admin-header .search-form:is(:focus-within,
+  :has(input:not(:placeholder-shown))) input[type="search"] {
+    position: static;
+    width: 100%;
+    height: auto;
+    opacity: 1;
+    clip-path: none;
+  }
+  .admin-header .search-form:is(:focus-within,
+  :has(input:not(:placeholder-shown))) .search-clear {
+    inset-inline-end: calc(var(--gl-space-m) + var(--gl-space-2xs));
+  }
+  .admin-header:has(.search-form:focus-within,
+  .search-form input:not(:placeholder-shown)) > :not(.search-form) {
+    visibility: hidden;
+  }
+  .user-menu {
+    min-width: 0;
+    margin-inline-start: auto;
+  }
+  .user-menu button {
+    min-width: 0;
+  }
+  .user-menu button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 /* The page's other chrome bar, built off the header's rule: the same
@@ -491,9 +602,10 @@ textarea:focus {
    chrome: the menu's list is the header's DOM child but floats over
    the page on a card, so left to reach it by descent it paints the
    rows white on surface-card — unreadable. They keep the text color
-   their own rule gives them (the menu section below). */
+   their own rule gives them (the menu section below). The search's
+   clear is the same case: it sits in the field, not on the bar. */
 :root[data-accent] :is(.admin-header a, .admin-header .user-menu button,
-.admin-footer .type-label):not(.user-menu ul a) {
+.admin-header .search-form label, .admin-footer .type-label):not(.user-menu ul a, .search-clear) {
   color: var(--gl-color-accent-fg);
 }
 /* The one focus ring is drawn in the accent, which vanishes against a
@@ -689,6 +801,12 @@ input[type="search"]::-webkit-search-cancel-button {
 .user-menu {
   anchor-name: --user-menu;
   display: flex;
+}
+/* The button's own inline padding is pulled into the header's gutter
+   at the end, so the chevron ends on the edge the name starts from
+   at the other side, and the hover fill runs into the padding. */
+.user-menu button {
+  margin-inline-end: calc(-1 * var(--gl-space-2xs));
 }
 /* The UA popover styles center (`position: fixed; inset: 0; margin:
    auto`), overridden to open off the anchor: below the button's

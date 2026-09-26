@@ -20,8 +20,9 @@ module ProTacts
       # verbatim from the lucide-static SVG's own children: x, the
       # remove control's two strokes; calendar, the birthday row's
       # picker; the import row's verdict, a circle either way and
-      # a check in it when the row is in the book; and
-      # chevron-down, the account menu's opening direction. A tag
+      # a check in it when the row is in the book;
+      # chevron-down, the account menu's opening direction; and
+      # search, what the header's search folds into on a phone. A tag
       # per shape rather than a bare list of path data, because
       # calendar's frame is a rect and redrawing it as a path would
       # be this file copying something other than what Lucide ships.
@@ -45,6 +46,10 @@ module ProTacts
         ],
         chevron_down: [
           [:path, {d: "m6 9 6 6 6-6"}],
+        ],
+        search: [
+          [:path, {d: "m21 21-4.34-4.34"}],
+          [:circle, {cx: 11, cy: 11, r: 8}],
         ],
       } #: Hash[Symbol, Array[[Symbol, Hash[Symbol, untyped]]]]
 
