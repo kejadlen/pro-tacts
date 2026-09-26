@@ -125,9 +125,9 @@ module ProTacts
               # anywhere (docs/DESIGN.md, "The core idea"), search
               # still finding a group by name — with who is asking
               # named beside them. On a phone the two move into the
-              # account menu (the list below repeats them for that),
-              # leaving the header the name, the search, and the
-              # account.
+              # account menu with home, the name's own link (the list
+              # below repeats all three for that), leaving the header
+              # the search and the account.
               nav do
                 a(href: "/contacts") { "contacts" }
                 a(href: "/groups") { "groups" }
@@ -155,6 +155,7 @@ module ProTacts
                   render Icon.new(:chevron_down)
                 end
                 ul(id: MENU, popover: "auto", class: "user-menu-list") do
+                  li(class: "menu-nav") { a(href: "/") { "home" } }
                   li(class: "menu-nav") { a(href: "/contacts") { "contacts" } }
                   li(class: "menu-nav") { a(href: "/groups") { "groups" } }
                   li { a(href: "/import") { "import" } }
