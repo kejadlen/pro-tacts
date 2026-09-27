@@ -361,11 +361,15 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes header, "search-form"
       assert_includes header, "name=\"q\""
       assert_includes header, "autofocus"
+      # Folded on a phone despite the focus (Layout says why).
+      refute_includes header, " data-open"
 
       get "/", q: "ada"
       header = last_response.body.split("<main").first
       assert_includes header, "value=\"ada\""
       refute_includes header, "autofocus"
+      # Open from the start, showing the query its results answer.
+      assert_includes header, " data-open"
     end
   end
 

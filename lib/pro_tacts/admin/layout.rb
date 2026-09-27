@@ -106,12 +106,28 @@ module ProTacts
               # rather than two.
               #
               # On a phone the search folds into its glyph and opens
-              # across the whole header while it has focus or a query
-              # (admin.css). The label is what makes the glyph open
-              # it: a tap anywhere in a label focuses its field, so
-              # the fold needs no script either.
-              form(action: "/", method: "get", class: "search-form") do
-                label do
+              # across the whole header (admin.css, keyed on
+              # data-open). A tap on the glyph opens it, and the label
+              # is what focuses the field from there. It folds again
+              # when focus leaves with nothing typed; a page carrying
+              # a query renders open, the query being what its results
+              # answer. Focus alone does not open it, because the
+              # dashboard's autofocus would then land every phone on
+              # an open search with the account hidden behind it. A
+              # touch anywhere else folds it at once rather than
+              # waiting on the blur, which a phone was seen to send
+              # late or not at all.
+              open = !@query.to_s.empty?
+              fold = "if ($el.querySelector('input').value === '') " \
+                     "{ open = false; $el.querySelector('input').blur() }"
+              form(action: "/", method: "get", class: "search-form",
+                   x_data: "{ open: #{open} }", "x-bind:data-open": "open",
+                   "@input": "open = true",
+                   "@focusout": "open = $el.contains($event.relatedTarget) || " \
+                                "$el.querySelector('input').value !== ''",
+                   "@pointerdown.outside": fold,
+                   **(open ? {data: {open: true}} : {})) do
+                label("@click": "open = true") do
                   render Icon.new(:search)
                   input(type: "search", name: "q", value: @query,
                         placeholder: "Search contacts", autofocus: @autofocus)

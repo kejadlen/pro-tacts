@@ -472,9 +472,9 @@ textarea:focus {
    and home joins the destinations in the account menu (Layout
    repeats them there). The search folds into its glyph at the
    start of the row, pulled out by its padding so it stands on the
-   edge the page's column does; a tap on it focuses the field its
-   label holds, and while the field has focus, or a query to show,
-   it opens across the whole header over the account, which is
+   edge the page's column does; a tap on it opens it (Layout says
+   when it folds again, and why focus alone does not open it), across
+   the whole header over the account, which is
    hidden rather than removed so the header keeps its height. The
    login is whatever the proxy vouches for, usually an email, so it
    ends in an ellipsis when it runs out of room. The breakpoint is
@@ -511,8 +511,7 @@ textarea:focus {
     opacity: 0;
     clip-path: inset(50%);
   }
-  .admin-header .search-form:is(:focus-within,
-  :has(input:not(:placeholder-shown))) {
+  .admin-header .search-form[data-open] {
     position: absolute;
     inset: 0;
     display: flex;
@@ -521,30 +520,25 @@ textarea:focus {
     margin: 0;
     padding: 0 var(--gl-space-m);
   }
-  .admin-header .search-form:is(:focus-within,
-  :has(input:not(:placeholder-shown))) label {
+  .admin-header .search-form[data-open] label {
     flex: 1;
     padding: 0;
     cursor: auto;
   }
-  .admin-header .search-form:is(:focus-within,
-  :has(input:not(:placeholder-shown))) label > svg {
+  .admin-header .search-form[data-open] label > svg {
     display: none;
   }
-  .admin-header .search-form:is(:focus-within,
-  :has(input:not(:placeholder-shown))) input[type="search"] {
+  .admin-header .search-form[data-open] input[type="search"] {
     position: static;
     width: 100%;
     height: auto;
     opacity: 1;
     clip-path: none;
   }
-  .admin-header .search-form:is(:focus-within,
-  :has(input:not(:placeholder-shown))) .search-clear {
+  .admin-header .search-form[data-open] .search-clear {
     inset-inline-end: calc(var(--gl-space-m) + var(--gl-space-2xs));
   }
-  .admin-header:has(.search-form:focus-within,
-  .search-form input:not(:placeholder-shown)) > :not(.search-form) {
+  .admin-header:has(.search-form[data-open]) > :not(.search-form) {
     visibility: hidden;
   }
   .user-menu {
