@@ -41,8 +41,8 @@ module ProTacts
         @notice = notice
         @labels = {}
         groups.each { |group| group.members.each { (@labels[it] ||= []) << group.label } }
-        q = @query.downcase
-        @groups = @query.empty? ? [] : groups.select { it.label.downcase.include?(q) }.sort
+        q = Format.search_key(@query)
+        @groups = @query.empty? ? [] : groups.select { Format.search_key(it.label).include?(q) }.sort
         @rows = @query.empty? ? recent.first(RECENT_LIMIT) : recent.select { matches?(it, @query) }
       end
 
@@ -81,16 +81,17 @@ module ProTacts
 
       # Match generously (docs/DESIGN.md): a contact is findable by
       # name or nickname, any of its values, or the groups it
-      # belongs to.
+      # belongs to — every comparison against the fold
+      # Format.search_key makes of both sides, accents with the case.
       #: (Store::RecentContact row, String query) -> bool
       def matches?(row, query)
-        q = query.downcase
-        return true if row.contact.name&.downcase&.include?(q)
-        return true if row.contact.nickname&.downcase&.include?(q)
-        return true if row.contact.organization&.downcase&.include?(q)
-        return true if row.contact.phones.any? { it.value.downcase.include?(q) }
-        return true if row.contact.emails.any? { it.value.downcase.include?(q) }
-        return true if @labels.fetch(row.contact.id, []).any? { it.downcase.include?(q) }
+        q = Format.search_key(query)
+        return true if Format.search_key(row.contact.name.to_s).include?(q)
+        return true if Format.search_key(row.contact.nickname.to_s).include?(q)
+        return true if Format.search_key(row.contact.organization.to_s).include?(q)
+        return true if row.contact.phones.any? { Format.search_key(it.value).include?(q) }
+        return true if row.contact.emails.any? { Format.search_key(it.value).include?(q) }
+        return true if @labels.fetch(row.contact.id, []).any? { Format.search_key(it).include?(q) }
 
         false
       end

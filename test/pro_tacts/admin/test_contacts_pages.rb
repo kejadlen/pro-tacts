@@ -458,6 +458,28 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # Both sides of the match fold (Format.search_key): a query without
+  # the accents finds a name with them, and a query with them a name
+  # without.
+  def test_search_folds_accents
+    emile = ADA.sub("FN:Ada Lovelace", "FN:Émile Muñoz")
+      .sub("N:Lovelace;Ada;;;", "N:Muñoz;Émile;;;").sub("UID:ada", "UID:emile")
+    jose = ADA.sub("FN:Ada Lovelace", "FN:Jose Alvarez")
+      .sub("N:Lovelace;Ada;;;", "N:Alvarez;Jose;;;").sub("UID:ada", "UID:jose")
+
+    with_contacts({"emile" => emile, "jose" => jose}) do
+      get "/", q: "munoz"
+
+      contacts_column = last_response.body.split("upcoming birthdays").first
+      assert_includes contacts_column, "Émile Muñoz"
+      refute_includes contacts_column, "Jose Alvarez"
+
+      get "/", q: "josé"
+
+      assert_includes last_response.body.split("upcoming birthdays").first, "Jose Alvarez"
+    end
+  end
+
   def test_search_with_no_matches_says_so
     with_contacts({"ada" => ADA}) do
       get "/", q: "nobody"

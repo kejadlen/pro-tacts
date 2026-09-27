@@ -51,6 +51,15 @@ class FormatTest < Minitest::Test
     assert_equal "L", ProTacts::Admin::Format.initials(contact(family_only))
   end
 
+  # Search compares on the fold, not the spelling: an accent never
+  # hides the letter it sits on, and a letter another script spells
+  # stays — ASCII-only matching would make that name unfindable.
+  def test_search_key_folds_accents_and_keeps_whole_letters
+    assert_equal "emile munoz", ProTacts::Admin::Format.search_key("Émile Muñoz")
+    assert_equal "νικος", ProTacts::Admin::Format.search_key("Νίκος")
+    assert_equal "straße", ProTacts::Admin::Format.search_key("Straße")
+  end
+
   def test_formats_the_birthday
     birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
 

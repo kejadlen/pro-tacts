@@ -382,6 +382,20 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
+  # The client-side filter folds the same way the dashboard's does
+  # (Format.search_key on the label, the same fold in JS on the
+  # needle), so an accent hides a row from neither.
+  def test_the_members_filter_folds_accents
+    with_contacts({"emile" => "Émile Muñoz"}) do |store|
+      id = store.create_group
+
+      get "/groups/#{id}/members"
+
+      assert_includes last_response.body, %(data-label="emile munoz")
+      assert_includes last_response.body, "normalize('NFD')"
+    end
+  end
+
   def test_the_members_list_in_name_order_on_the_screen_too
     with_contacts(BOOLES.merge("zz" => "Alice Aardvark")) do |store|
       id = household(store, members: %w[mary zz george])
@@ -541,6 +555,20 @@ class AdminGroupsPagesTest < Minitest::Test
 
       assert_includes last_response.body, %(<a href="/contacts/george">)
       refute_includes last_response.body, %(<a href="/contacts/ada">)
+    end
+  end
+
+  # The fold reaches a group's own name and, through it, the group's
+  # members: the label matches folded on both sides.
+  def test_search_folds_accents_in_a_groups_name
+    with_contacts(BOOLES) do |store|
+      id = store.create_group(name: "Família")
+      store.add_member(id, "george")
+
+      get "/", q: "familia"
+
+      assert_includes last_response.body, %(<a href="/groups/#{id}">)
+      assert_includes last_response.body, %(<a href="/contacts/george">)
     end
   end
 end

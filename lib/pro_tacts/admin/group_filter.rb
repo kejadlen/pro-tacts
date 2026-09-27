@@ -1,5 +1,6 @@
 require "pro_tacts/admin/phlex"
 
+require "pro_tacts/admin/format"
 require "pro_tacts/admin/icons"
 
 module ProTacts
@@ -28,8 +29,10 @@ module ProTacts
     # contacts page renders the filter alone: its rows have no boxes,
     # and nothing caps a list whose whole point is the whole book.
     #
-    # Alpine does the filtering, matching each row's lowercased label
-    # in `data-label` so no group's name is ever spliced into script.
+    # Alpine does the filtering, matching each row's label as
+    # Format.search_key folds it — lowercased, accents folded —
+    # against a needle folded the same way in JS, so no group's name
+    # is ever spliced into script.
     # A row it hides still submits its box: hiding is not unticking,
     # and a contact's other groups are not being answered for by a
     # word typed to find one of them. Every row stays in the page for
@@ -65,7 +68,7 @@ module ProTacts
       # two only re-read when the filter changes — a name committed
       # since would be invisible to both until the next keystroke.
       STATE = "{ filter: '', all: false, named: [], " \
-              "get needle() { return this.filter.trim().toLowerCase() }, " \
+              "get needle() { return this.filter.trim().toLowerCase().normalize('NFD').replace(/\\p{Mn}/gu, '') }, " \
               "get labels() { return [...this.$refs.options.querySelectorAll('[data-label]')]" \
               ".map(row => row.dataset.label) }, " \
               "get rows() { return [...this.$refs.options.querySelectorAll('[data-label]')] }, " \
@@ -87,7 +90,7 @@ module ProTacts
       # cannot see is a row it would offer to create twice.
       #: (String label, ?capped: bool) -> Hash[untyped, untyped]
       def self.row(label, capped: false)
-        {data: {label: label.downcase, capped:}, ":hidden": "!visible($el)"}
+        {data: {label: Format.search_key(label), capped:}, ":hidden": "!visible($el)"}
       end
 
       # Which of `ids` the cap holds back, in the order they render.

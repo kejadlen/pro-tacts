@@ -35,6 +35,20 @@ module ProTacts
         (family || contact.name || contact.id).to_s.downcase
       end
 
+      # The string a search compares on: the query and the value it
+      # is matched against both lowercased and accents folded to the
+      # letters they sit on, so "munoz" finds "Muñoz". NFD plus
+      # \p{Mn} carries an accent off as a combining mark and leaves
+      # every other script findable as itself — deliberately not
+      # ASCII-only, which would strip a name no ASCII letter survives
+      # down to nothing a query could reach. A letter that is whole
+      # rather than base-plus-accent (ß, æ) stays: folding it is
+      # transliteration, not this.
+      #: (String value) -> String
+      def self.search_key(value)
+        value.downcase.unicode_normalize(:nfd).gsub(/\p{Mn}+/, "")
+      end
+
       # A contact's initials. N's given and family names (RFC 2426
       # section 3.1.2) are structured data and the real answer to "what
       # are this contact's initials" — falling back, when the card
