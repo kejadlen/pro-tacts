@@ -1284,7 +1284,7 @@ class StoreTest < Minitest::Test
 
       listed = store.contacts.find { it.id == "aiden" }
       [store.contact("aiden"), listed].each do |contact|
-        assert_equal store.group(id), contact.group_of(contact.addresses.fetch(0).line)
+        assert_equal store.group(id), contact.addresses.fetch(0).lent_by
       end
     end
   end
@@ -2336,7 +2336,7 @@ class StoreTest < Minitest::Test
       ProTacts::Store.connect(path) do |store|
         contact = store.contact("aiden")
         assert_includes contact.vcard.to_s, HOUSEHOLD_ADDRESS
-        assert_equal "nous", contact.group_of(contact.addresses.fetch(0).line)&.id
+        assert_equal "nous", contact.addresses.fetch(0).lent_by&.id
 
         database(store)[:cards].where(id: "aiden").delete
         assert_empty database(store)[:group_members].all

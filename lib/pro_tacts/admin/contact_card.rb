@@ -81,21 +81,22 @@ module ProTacts
 
       # A missing TYPE parameter still gets a key: the fallback names
       # the kind of value, so no row renders unlabeled in the grid.
-      # Every row that reads from a line hands it over, because which
-      # group lends a row is a question about the line it came from.
-      # The birthday hands over none: it is the model beside the card,
-      # and a group holds only addresses and notes anyway (see
-      # db/migrations/004_groups.rb).
+      # Every row hands over the group that lends it, nil where the
+      # card's own — provenance carried on the row
+      # (Contact::Phone#lent_by and kin), not re-derived from the
+      # composed bytes. The birthday hands over none: it is the model
+      # beside the card, and a group holds only addresses and notes
+      # anyway (see db/migrations/004_groups.rb).
       def rows
         groups_row if @dialog || @groups.any?
         @contact.phones.each do |phone|
-          row(Format.type_label(phone.label, phone.types, "phone"), phone.value, phone.line)
+          row(Format.type_label(phone.label, phone.types, "phone"), phone.value, phone.lent_by)
         end
         @contact.emails.each do |email|
-          row(Format.type_label(nil, email.types, "email"), email.value, email.line)
+          row(Format.type_label(nil, email.types, "email"), email.value, email.lent_by)
         end
         @contact.addresses.each do |address|
-          row(Format.type_label(nil, address.types, "address"), Format.address_lines(address), address.line)
+          row(Format.type_label(nil, address.types, "address"), Format.address_lines(address), address.lent_by)
         end
         row("birthday", @birthday) if @birthday
         note_rows
@@ -155,22 +156,21 @@ module ProTacts
       end
 
       # The type in one column and the value in the other, with the
-      # group that lends the line named under the value when one does.
+      # group that lends the row named under the value when one does.
       # In the value cell rather than beside the type label: the type
       # column holds one thing for every row in the card
       # (docs/DESIGN.md, "Alignment is the layout"), and a mark on
       # the value is what says this address is the household's rather
       # than this contact's.
-      #: (String type, String | Array[String] value, ?VCard::Parser::Line? line) -> void
-      def row(type, value, line = nil)
-        group = line && @contact.group_of(line)
+      #: (String type, String | Array[String] value, ?Group? lent_by) -> void
+      def row(type, value, lent_by = nil)
         dt(class: "type-label") { type }
         dd(class: "type-body-sm") do
           render_value(value)
           # The groups row's own tag, pinned to this row's first line
           # at the right edge of the value column (admin.css) — under
           # the value it could be read as marking the row below.
-          group_tag(group) if group
+          group_tag(lent_by) if lent_by
         end
       end
 

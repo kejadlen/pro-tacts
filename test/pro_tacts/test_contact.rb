@@ -390,8 +390,24 @@ class ContactTest < Minitest::Test
     addresses = contact.addresses
 
     assert_equal 2, addresses.size
-    assert_nil contact.group_of(addresses.fetch(0).line)
-    assert_equal GROUP, contact.group_of(addresses.fetch(1).line)
+    assert_nil addresses.fetch(0).lent_by
+    assert_equal GROUP, addresses.fetch(1).lent_by
+  end
+
+  # The member's own spelling of a line its group also lends — an
+  # address already on the card when its holder joined: the stored
+  # copy reads as the member's own and only the composed one names
+  # the group, where a match on bytes named the group over both and
+  # the member's own address read as the group's.
+  def test_a_line_the_stored_card_spells_as_its_group_does_reads_as_its_own_first
+    lent = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
+    same = STRUCTURED.sub("ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom", lent)
+    contact = contact(same, inherited: [lent])
+    addresses = contact.addresses
+
+    assert_equal 2, addresses.size
+    assert_nil addresses.fetch(0).lent_by
+    assert_equal GROUP, addresses.fetch(1).lent_by
   end
 
   # A lent NOTE composes into the member's own as one value — the
@@ -465,15 +481,16 @@ class ContactTest < Minitest::Test
   end
 
   # The joined line matches nothing by bytes — neither the member's
-  # own nor what a group lends — so a screen asking after provenance
-  # reads the stored card and the inheritance, not the composed value
-  # (Admin::ContactCard's note rows).
+  # own nor what a group lends — so a screen marking a note's
+  # provenance reads the stored card and the inheritance, not the
+  # composed value (Admin::ContactCard's note rows; a Note carries no
+  # lent_by for the asking).
   def test_the_composed_note_names_no_group
-    notes = contact(STRUCTURED, inherited: ["NOTE:Gate code 1854."]).notes
+    contact = contact(STRUCTURED, inherited: ["NOTE:Gate code 1854."])
+    notes = contact.notes
 
     assert_equal 1, notes.size
-    assert_nil contact.group_of(notes.fetch(0).line)
-    assert_equal ["Countess, mathematician."], contact(STRUCTURED, inherited: ["NOTE:Gate code 1854."]).own.notes.map { it.value }
+    assert_equal ["Countess, mathematician."], contact.own.notes.map { it.value }
   end
 
   def test_unescapes_notes

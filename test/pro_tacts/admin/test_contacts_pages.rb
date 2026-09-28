@@ -503,6 +503,26 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # A member whose own card already carries the address its group
+  # lends — the address was on the card before the join — shows both
+  # rows, and only the composed copy is marked as the group's: the
+  # member's own reads as the member's own (the row's lent_by).
+  def test_show_marks_only_the_lent_copy_of_an_address_the_member_also_holds
+    with_contacts({"ada" => ADA}) do |store|
+      own = ADA.sub("ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom", HOUSEHOLD.fetch(0))
+      store.put("ada", ProTacts::VCard.new(own))
+      id = FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: [HOUSEHOLD.fetch(0)])
+
+      get "/contacts/ada"
+      rows = last_response.body.scan(%r{<dt class="type-label">home</dt><dd class="type-body-sm">.*?</dd>}m)
+                 .select { it.include?("7 Calculus Close") }
+
+      assert_equal 2, rows.size
+      refute_includes rows.fetch(0), %(class="tag")
+      assert_includes rows.fetch(1), %(<a href="/groups/#{id}" class="tag">Booles</a>)
+    end
+  end
+
   # A row a group lends is marked with a tag opening the group, and the
   # contact's own rows are not: Ada carries an address and a note of
   # her own beside the household's two, and only the household's are
@@ -1437,7 +1457,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => ADA}) do |store|
       FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
       contact = store.contact("ada")
-      lent = contact.addresses.find { contact.group_of(it.line) }
+      lent = contact.addresses.find { it.lent_by }
 
       post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
                                etag: contact.etag,

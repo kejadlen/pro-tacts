@@ -47,7 +47,7 @@ module ProTacts
     # @rbs @inherited: Array[Inherited]
     # @rbs @vcard: VCard
     # @rbs @etag: String
-    # @rbs @groups_by_line: Hash[String, Group]
+    # @rbs @lent_at: Hash[Integer, Group]
 
     # Ids end up in paths and arrive from client-supplied hrefs, so an id
     # outside this charset cannot be served.
@@ -60,16 +60,17 @@ module ProTacts
     # where the card left the position blank or stopped short of it).
     # A phone's `label` is the `X-ABLabel` sharing its property group,
     # a different fact from its types
-    # (docs/plans/2026-09-18-phone-labels.md, "Reading"), and every
+    # (docs/plans/2026-09-18-phone-labels.md, "Reading"), every
     # shape's `line` is the parsed line it was read from, the address
     # a save names that row by
-    # (docs/plans/2026-09-05-web-card-editor.md).
+    # (docs/plans/2026-09-05-web-card-editor.md), and `lent_by` the
+    # group lending the row, nil where the card's own (#lent_at).
     # Data classes, whose members the inline syntax cannot read; the
     # signatures live in sig/pro_tacts/contact.rbs.
     # @rbs skip
-    Phone = Data.define(:value, :label, :types, :line)
+    Phone = Data.define(:value, :label, :types, :line, :lent_by)
     # @rbs skip
-    Email = Data.define(:value, :types, :line)
+    Email = Data.define(:value, :types, :line, :lent_by)
     # @rbs skip
     Note = Data.define(:value, :line)
     # @rbs skip
@@ -94,6 +95,7 @@ module ProTacts
       :country,
       :types,
       :line,
+      :lent_by,
     )
 
     # An ADR's editable components, in the order the value spells them
@@ -327,7 +329,7 @@ module ProTacts
     #: () -> Array[Phone]
     def phones
       labels = labels_by_group
-      rows("TEL") { |property, line|
+      rows("TEL") { |property, line, lent_by|
         value = text_of(property)
         group = property.group
         # RFC 2426 section 3.3.1: `voice` is the type every number has
@@ -337,23 +339,24 @@ module ProTacts
           label: group && labels[group],
           types: property.types - %w[voice],
           line:,
+          lent_by:,
         ) if value
       }
     end
 
     #: () -> Array[Email]
     def emails
-      rows("EMAIL") { |property, line|
+      rows("EMAIL") { |property, line, lent_by|
         value = text_of(property)
         # RFC 2426 section 3.3.2: `internet` is the format every address
         # has by default, so it names none.
-        Email.new(value:, types: property.types - %w[internet], line:) if value
+        Email.new(value:, types: property.types - %w[internet], line:, lent_by:) if value
       }
     end
 
     #: () -> Array[Address]
     def addresses
-      rows("ADR") { |property, line| address_of(property, line:) }
+      rows("ADR") { |property, line, lent_by| address_of(property, line:, lent_by:) }
     end
 
     # The card's NOTEs (RFC 2426 section 3.6.2), in text form. On the
@@ -373,35 +376,42 @@ module ProTacts
       }
     end
 
-    # The group a composed line came from, or nil for a
-    # line the contact's own card carries — the provenance a screen
-    # marks an inherited row with.
-    #
-    # Matched by the line's bytes, which is the same blindness the
-    # editor's digests have (VCard::Parser::Line#digest): a stored
-    # line whose bytes are a group's line reads as the group's here.
-    # No write makes that state — EditedContact takes the
-    # group's copy back out of a submission — but a member whose own
-    # card spells the line exactly as its group does still has one, and
-    # naming the group over both copies says something true about the
-    # value even where it is wrong about the byte.
-    #: (VCard::Parser::Line line) -> Group?
-    def group_of(line)
-      groups_by_line[line.verbatim.chomp]
-    end
-
     private
 
-    # Every inherited line's group, keyed by the line's own bytes with
-    # the terminator off — a group's line is stored without one and
-    # composes with the card's, so neither side is compared as it lies.
-    #: () -> Hash[String, Group]
-    def groups_by_line
-      return @groups_by_line if defined?(@groups_by_line)
+    # Which of the composed card's lines the groups lend, keyed by
+    # where each sits in #vcard's parse: #vcard appends what the
+    # groups lend after the stored card's own lines, so a walk that
+    # spends the stored card's copies first leaves every lent line to
+    # pair with the inherited row composition placed there. A member
+    # whose own card spells a line exactly as its group lends — an
+    # address already on the card when its holder joined — reads as
+    # the member's own first and the group's second, where a match on
+    # bytes named the group over both copies and the member's own
+    # address read as the group's. Keyed by position rather than by
+    # the Line itself because a Line is a value: the two copies a card
+    # holds of one line hash alike, and only where each sits tells
+    # them apart. A NOTE is never matched: a lent one composes as a
+    # section of the member's single NOTE, so a screen marking one
+    # reads the inheritance directly.
+    #: () -> Hash[Integer, Group]
+    def lent_at
+      return @lent_at if defined?(@lent_at)
 
-      @groups_by_line = @inherited.to_h {
-        [it.line.chomp, it.group] #: [String, Group]
-      }
+      remaining = @stored.lines.map { it.verbatim.chomp }.tally
+      rows = @inherited.reject { note_row?(it.line) } #: Array[Contact::Inherited]
+      @lent_at = {} #: Hash[Integer, Group]
+      vcard.lines.each_with_index do |served, index|
+        next if served.names?("NOTE")
+
+        bytes = served.verbatim.chomp
+        count = remaining[bytes] || 0
+        if count.positive?
+          remaining[bytes] = count - 1
+        elsif (row = rows.shift)
+          @lent_at[index] = row.group
+        end
+      end
+      @lent_at
     end
 
     # Whether a lent line is a NOTE, read off its bytes the way
@@ -461,23 +471,17 @@ module ProTacts
 
     # The rows a repeatable property reads as: each line naming it
     # folded by the block, which answers nil for a row with nothing
-    # to show.
-    #: [T] (String name) { (VCard::Parser::Property, VCard::Parser::Line) -> T? } -> Array[T]
+    # to show — and told which group lends the line, the provenance a
+    # screen marks a row with, carried by position rather than read
+    # back off the bytes (#lent_at's reason).
+    #: [T] (String name) { (VCard::Parser::Property, VCard::Parser::Line, Group?) -> T? } -> Array[T]
     def rows(name)
-      of_line(name).filter_map { |line|
-        property = line.property
-        yield(property, line) unless property.nil?
-      }
-    end
+      vcard.lines.each.with_index.filter_map { |line, index|
+        next unless line.names?(name)
 
-    # The lines naming `name`, parsed beside their bytes — the walk the
-    # provenance-carrying accessors read from, so a row can carry the
-    # line it was read from as its address. A line that would not
-    # read is a row no form can address and no accessor reads; it
-    # stays enumerable in VCard#lines, served from its bytes.
-    #: (String name) -> Array[VCard::Parser::Line]
-    def of_line(name)
-      vcard.lines.select { it.names?(name) }
+        property = line.property
+        yield(property, line, lent_at[index]) unless property.nil?
+      }
     end
 
     # A text property's value, with the empty one reading as absent:
@@ -502,13 +506,13 @@ module ProTacts
     # ADR's components, with a value that is blank throughout reading
     # as no address at all. Carries the line it was read from, the
     # other provenance-carrying shapes' own address for a save.
-    #: (VCard::Parser::Property property, line: VCard::Parser::Line) -> Address?
-    def address_of(property, line:)
+    #: (VCard::Parser::Property property, line: VCard::Parser::Line, lent_by: Group?) -> Address?
+    def address_of(property, line:, lent_by:)
       components = components_of(property)
       return if components.none?
 
       po_box, extended, street, locality, region, postal_code, country = components
-      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: property.types, line:)
+      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: property.types, line:, lent_by:)
     end
 
   end
