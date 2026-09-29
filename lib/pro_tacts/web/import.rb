@@ -246,10 +246,14 @@ module ProTacts
         # The submit says what it does — the import of this one
         # contact, or the update of the one it is folded into —
         # because this is the one editor in the app whose Save can
-        # create the record rather than amend it. The row beside it
-        # wears its check only once this has been pressed
-        # (Admin::ImportSidebar).
-        save: merge ? "Update" : "Import",
+        # create the record rather than amend it. An update names the
+        # contact it writes, the two modes differing nowhere else the
+        # eye lands: the fields over a fold are the same shape as over
+        # an arriving card, and the toggle above them
+        # (Admin::ImportTarget) a pill whose taken side lifts one step.
+        # The row beside it wears its check only once this has been
+        # pressed (Admin::ImportSidebar).
+        save: target ? "Update #{target.name || target.id}" : "Import",
         aside: Admin::ImportOriginal.new(card: original, dropped: merge ? dropped + merge.left : dropped),
         fields: import_picker(group, joined, named, member: target),
         lead: import_target(upload, index, matches, target),

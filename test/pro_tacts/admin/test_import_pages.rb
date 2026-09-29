@@ -899,7 +899,7 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body,
                       %(<a href="/import/#{id}/0?into=jane" role="tab" aria-selected="true">update Jane Booles</a>)
       assert_includes last_response.body, %(<input type="hidden" name="into" value="jane">)
-      assert_includes last_response.body, %(>Update</button>)
+      assert_includes last_response.body, %(>Update Jane Booles</button>)
     end
   end
 
@@ -949,7 +949,7 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body, %(value="jane@example.com")
       assert_includes last_response.body, %(value="+1 555 0100")
       assert_includes last_response.body, %(<li data-dropped><span>FN:Jane B. Booles</span>)
-      assert_includes last_response.body, %(>Update</button>)
+      assert_includes last_response.body, %(>Update Jane Booles</button>)
     end
   end
 
