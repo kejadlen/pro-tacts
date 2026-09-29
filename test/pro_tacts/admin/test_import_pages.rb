@@ -278,6 +278,39 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # The shape macOS writes a company in (test/fixtures/cards/
+  # company.vcf): N empty, the name in FN and ORG, and the flag. It
+  # opens in the company editor and comes in as a company.
+  def test_a_company_card_comes_in_as_a_company
+    company = <<~CARD.gsub("\n", "\r\n")
+      BEGIN:VCARD
+      VERSION:3.0
+      N:;;;;
+      FN:Bletchley Park
+      ORG:Bletchley Park Trust;
+      X-ABShowAs:COMPANY
+      UID:GHI-789
+      END:VCARD
+    CARD
+    with_contacts({}) do |store|
+      id = upload(company)
+
+      get "/import/#{id}/0"
+
+      refute_includes last_response.body, "not imported"
+      assert_includes last_response.body, "<span>Organization</span>"
+      assert_includes last_response.body, %(name="last" value="Bletchley Park")
+
+      save(id, 0, first: "", last: "Bletchley Park")
+
+      assert_equal 303, last_response.status
+      park = store.contacts.fetch(0)
+
+      assert_predicate park, :company?
+      assert_equal "Bletchley Park Trust;", park.organization
+    end
+  end
+
   def test_an_index_past_the_end_of_the_file_is_not_found
     with_contacts({}) do |_store|
       id = upload(JANE)

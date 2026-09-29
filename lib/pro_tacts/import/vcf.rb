@@ -38,8 +38,11 @@ module ProTacts
       # an import brings in. The envelope (BEGIN, END, VERSION, UID),
       # the fields a screen shows (Contact's own readers: N, FN,
       # NICKNAME, TEL, EMAIL, ADR, NOTE, PHOTO, and the X-ABLabel that
-      # names a row), and BDAY, which the store takes into the model on
-      # the way in
+      # names a row), the two a company card is read by (ORG, whose
+      # name the editor's Organization field falls back to and which
+      # the dashboard's search reads, and X-ABShowAs, which puts that
+      # field there — docs/plans/2026-09-24-company-cards.md), and
+      # BDAY, which the store takes into the model on the way in
       # (docs/plans/2026-09-11-every-birthday-in-the-model.md).
       #
       # Everything else is unknown, which here means "no screen will
@@ -48,7 +51,7 @@ module ProTacts
       # importing one would only pad the cards with what nobody can
       # read.
       KNOWN = [
-        *%w[BEGIN END VERSION UID N FN NICKNAME BDAY TEL EMAIL ADR NOTE PHOTO],
+        *%w[BEGIN END VERSION UID N FN NICKNAME BDAY TEL EMAIL ADR NOTE PHOTO ORG X-ABSHOWAS],
         LABEL,
       ].freeze #: Array[String]
 

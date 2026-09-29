@@ -162,6 +162,29 @@ class ImportVcfTest < Minitest::Test
     assert Vcf.cards(revised).fetch(0).card?
   end
 
+  # A company card is read by its flag and its ORG
+  # (docs/plans/2026-09-24-company-cards.md), so both come in and
+  # neither is a decision; without them it would arrive as a person.
+  def test_reading_a_company_card_keeps_what_makes_it_one
+    company = <<~CARD.gsub("\n", "\r\n")
+      BEGIN:VCARD
+      VERSION:3.0
+      N:;;;;
+      FN:Bletchley Park
+      ORG:Bletchley Park Trust;
+      X-ABShowAs:COMPANY
+      UID:GHI-789
+      END:VCARD
+    CARD
+    cards = Vcf.cards(company)
+
+    reading = Vcf.read(cards.fetch(0))
+
+    assert_equal company, reading.card.to_s
+    assert_empty reading.dropped
+    assert_empty Vcf.unknown(cards)
+  end
+
   def test_reading_a_card_leaves_behind_what_no_screen_shows
     reading = Vcf.read(Vcf.cards(JANE).fetch(0))
 
