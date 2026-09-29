@@ -1,0 +1,90 @@
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//macOS 16.0//EN
+N:Hamilton;Margaret;Heafield;;
+FN:Margaret Hamilton
+NICKNAME:Maggie
+EMAIL;type=INTERNET;type=HOME;type=pref:margaret@example.com
+TEL;type=CELL;type=VOICE;type=pref:+1 555 0177
+ADR;type=HOME;type=pref:;;12 Apollo Way;Cambridge;MA;02139;United States
+BDAY:1936-08-17
+NOTE:Wrote the flight software. Ask about the 1202 alarm\, she tells it best.
+UID:import-margaret
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//macOS 16.0//EN
+N:Lovelase;Ada;;;
+FN:Ada Lovelase
+EMAIL;type=INTERNET:countess@example.com
+TEL;type=HOME;type=VOICE:+1-555-0199
+UID:import-ada-typo
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//macOS 16.0//EN
+N:;;;;
+FN:Amazing Grace
+NICKNAME:Grandma COBOL
+EMAIL;type=INTERNET;type=WORK:grace@example.com
+ORG:US Navy;
+TITLE:Rear Admiral
+UID:import-grace-nickname
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//macOS 16.0//EN
+N:Curie;Marie;Skłodowska;;
+FN:Marie Skłodowska Curie
+TEL;type=CELL:06 12 34 56 01
+item1.EMAIL;type=INTERNET:m.curie@example.fr
+item1.X-ABLabel:lab
+item2.URL:https://example.fr/radium
+item2.X-ABLabel:_$!<HomePage>!$_
+BDAY;X-APPLE-OMIT-YEAR=1604:1604-11-07
+UID:import-marie-phone
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//macOS 16.0//EN
+N:Hopper;Grace;Murray;;
+FN:Grace Murray Hopper
+EMAIL;type=INTERNET:grace.hopper@example.com
+UID:import-grace-second
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//macOS 16.0//EN
+N:Gödel;Kurt;;;
+FN:Kurt Gödel
+EMAIL;type=INTERNET:kurt@example.at
+item1.ADR;type=HOME:;;Linden Lane 112;Princeton;NJ;08540;United States
+item1.X-ABADR:us
+item2.X-ABRELATEDNAMES;type=pref:Adele Gödel
+item2.X-ABLabel:_$!<Spouse>!$_
+X-SOCIALPROFILE;type=twitter:x-apple:incompleteness
+NOTE:Met at the IAS. Brings his own food to dinner. This note runs long enou
+ gh that the export folded it across two lines.
+UID:import-kurt-accents
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//macOS 16.0//EN
+N:Turing;Alan;Mathison;;
+FN:Alan Turing 🧩
+TEL;type=CELL:+44 7700 900912
+BDAY:--0623
+X-ABShowAs:PERSON
+UID:import-alan-emoji
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//macOS 16.0//EN
+N:;;;;
+FN:Bletchley Park
+ORG:Bletchley Park Trust;
+TEL;type=WORK;type=VOICE:+44 1908 640404
+ADR;type=WORK:;;The Mansion;Milton Keynes;;MK3 6EB;United Kingdom
+X-ABShowAs:COMPANY
+UID:import-bletchley-company
+END:VCARD
