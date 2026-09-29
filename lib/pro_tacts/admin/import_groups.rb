@@ -44,8 +44,9 @@ module ProTacts
       # @rbs @capped: Array[String]
       # @rbs @was: Array[String]
 
-      # The `sync:` groups lead (GroupChoice#<=>), then largest first
-      # and alphabetical among groups the same size: the groups an
+      # The `sync:` groups lead and the nameless ones trail
+      # (GroupChoice#<=>), then largest first and alphabetical among
+      # groups the same size: the groups an
       # arrival is likeliest to belong in are the ones most of the
       # book already does, so they are the rows the cap leaves
       # standing, and the filter reaches the rest. The groups dialog
@@ -73,7 +74,7 @@ module ProTacts
       # what was toggled (Web#apply_groups). A new contact is in none.
       #: (groups: Array[Store::GroupChoice], joined: Array[String], named: Array[String], ?was: Array[String]) -> void
       def initialize(groups:, joined:, named:, was: [])
-        @groups = groups.sort_by { [it.sync? ? 0 : 1, -it.member_count, it.label.downcase] }
+        @groups = groups.sort_by { [it.sync? ? 0 : 1, it.name.nil? ? 1 : 0, -it.member_count, it.label.downcase] }
         @joined = joined
         @named = named
         @was = was

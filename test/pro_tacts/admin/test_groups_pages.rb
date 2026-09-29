@@ -65,6 +65,21 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
+  # A nameless group is labelled by its id, which reads as noise among
+  # names, so those sink below the named ones.
+  def test_the_list_ends_with_the_nameless_groups
+    with_contacts({}) do |store|
+      nameless = store.create_group
+      zoetrope = store.create_group(name: "zoetrope")
+      abacus = store.create_group(name: "Abacus")
+
+      get "/groups"
+
+      assert_equal [abacus, zoetrope, nameless],
+                   last_response.body.scan(%r{<a href="/groups/([^"]+)">}).flatten
+    end
+  end
+
   def test_an_empty_list_says_so
     with_contacts({}) do
       get "/groups"

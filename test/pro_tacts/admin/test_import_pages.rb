@@ -820,6 +820,23 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # However many it holds: a nameless group sinks here as it does in
+  # the listings.
+  def test_the_groups_beside_a_card_end_with_the_nameless_groups
+    with_contacts({"jane" => JANE, "sam" => PLAIN}) do |store|
+      nameless = store.create_group
+      store.add_member(nameless, "jane")
+      store.add_member(nameless, "sam")
+      small = store.create_group(name: "small")
+      id = upload(JANE)
+
+      get "/import/#{id}/0"
+
+      assert_equal [small, nameless],
+                   last_response.body.scan(/name="groups\[\]" value="([^"]+)"/).flatten
+    end
+  end
+
   def test_the_groups_beside_a_card_offer_no_such_thing_uncapped
     with_contacts({}) do |store|
       # Seven, the import's own name being the eighth row.

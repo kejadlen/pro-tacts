@@ -126,7 +126,8 @@ module ProTacts
       # choices; keep the two alike.
       #: (GroupChoice other) -> Integer?
       def <=>(other)
-        [sync? ? 0 : 1, label.downcase, id] <=> [other.sync? ? 0 : 1, other.label.downcase, other.id]
+        [sync? ? 0 : 1, name.nil? ? 1 : 0, label.downcase, id] <=>
+          [other.sync? ? 0 : 1, other.name.nil? ? 1 : 0, other.label.downcase, other.id]
       end
     end
 

@@ -51,13 +51,15 @@ module ProTacts
 
     # The order every listing of groups reads in: the `sync:` groups
     # — the books a client syncs, the store's own rather than
-    # anything a person made — first, then the rest alphabetically.
+    # anything a person made — first, then the rest alphabetically,
+    # and the nameless ones last, their ids being no names to read.
     # GroupChoice spells this again for the pickers; keep the two
     # alike. Comparable deliberately left out: its `==` would sit in
     # front of Data's whole-value one, and `sort` asks only for `<=>`.
     #: (Group other) -> Integer?
     def <=>(other)
-      [sync? ? 0 : 1, label.downcase, id] <=> [other.sync? ? 0 : 1, other.label.downcase, other.id]
+      [sync? ? 0 : 1, name.nil? ? 1 : 0, label.downcase, id] <=>
+        [other.sync? ? 0 : 1, other.name.nil? ? 1 : 0, other.label.downcase, other.id]
     end
 
     # The group's etag, for the editor's snapshot guard: a hash of
