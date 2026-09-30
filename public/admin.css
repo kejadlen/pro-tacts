@@ -727,18 +727,19 @@ body {
   background: var(--gl-color-surface-fill-2);
 }
 
-/* The dialog opens near the top rather than centered, so the input
-   stays put as the results under it grow and shrink; wider than
-   Gloss's 26rem, a result row being a whole name and its age. The
-   input sheds its block padding as the groups dialog's filter does,
-   the selector out-specifying field.css's double-:not input rule
-   rather than relying on stylesheet order. The results scroll in
+/* The dialog opens near the top, the space scale's largest step
+   down, rather than centered, so the input stays put as the results
+   under it grow and shrink; wider than Gloss's 26rem, a result row
+   being a whole name and its age. The input sheds its block padding
+   as the groups dialog's filter does, the selector out-specifying
+   field.css's double-:not input rule rather than relying on
+   stylesheet order. The results scroll in
    place under the input rather than the dialog growing past the
    viewport — Gloss gives a dialog overflow: hidden (the groups
    dialog's note below). */
 .search-dialog {
   width: 36rem;
-  margin-block: 12vh auto;
+  margin-block: var(--gl-space-3xl) auto;
 }
 .search-dialog .filter > input[type="search"] {
   padding-block: var(--gl-space-3xs);
