@@ -39,8 +39,8 @@ module ProTacts
     # browser submit gets past — and the server's backstop for a
     # hand-crafted empty POST answers with a toast on the dashboard
     # instead (see Web's POST handler).
-    # `autofocus` fires when the popover is shown (it is scoped to the
-    # popover, so the header search's own page-load autofocus stands).
+    # `autofocus` fires when the popover is shown, being scoped to the
+    # popover.
     #
     # No company variant of this dialog: organizations are created by
     # the clients (Contacts.app's own Company flow PUTs a finished
@@ -49,13 +49,6 @@ module ProTacts
     # (docs/plans/2026-09-24-company-cards.md, "Creating"). The editor
     # knows a company card when it edits one (Contact#company?).
     class ContactDialog < Phlex::HTML
-      # @rbs @query: String
-
-      #: (query: String) -> void
-      def initialize(query:)
-        @query = query
-      end
-
       def view_template
         dialog(id: "new-contact", popover: "auto") do
           header { "New contact" }
@@ -73,10 +66,6 @@ module ProTacts
               plain "Last"
               input(**NamePair.last(nil, nil))
             end
-            # The search the dialog opened over — opening a popover
-            # loads no page, so this survives only the failed-create
-            # re-render, keeping the results the user was looking at.
-            input(type: "hidden", name: "q", value: @query)
           end
           footer do
             button(type: "button", popovertarget: "new-contact",

@@ -556,7 +556,7 @@ class AdminGroupsPagesTest < Minitest::Test
     with_contacts(BOOLES) do |store|
       id = household(store)
 
-      get "/", q: "boole"
+      get "/search/results", q: "boole"
 
       assert_includes last_response.body, %(<a href="/groups/#{id}">)
     end
@@ -566,7 +566,7 @@ class AdminGroupsPagesTest < Minitest::Test
     with_contacts({"george" => "George", "ada" => "Ada Lovelace"}) do |store|
       household(store, members: ["george"])
 
-      get "/", q: "boole"
+      get "/search/results", q: "boole"
 
       assert_includes last_response.body, %(<a href="/contacts/george">)
       refute_includes last_response.body, %(<a href="/contacts/ada">)
@@ -580,7 +580,7 @@ class AdminGroupsPagesTest < Minitest::Test
       id = store.create_group(name: "Família")
       store.add_member(id, "george")
 
-      get "/", q: "familia"
+      get "/search/results", q: "familia"
 
       assert_includes last_response.body, %(<a href="/groups/#{id}">)
       assert_includes last_response.body, %(<a href="/contacts/george">)

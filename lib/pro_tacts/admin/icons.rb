@@ -21,8 +21,9 @@ module ProTacts
       # remove control's two strokes; calendar, the birthday row's
       # picker; the import row's verdict, a circle either way and
       # a check in it when the row is in the book;
-      # chevron-down, the account menu's opening direction; and
-      # search, what the header's search folds into on a phone. A tag
+      # chevron-down, the account menu's opening direction;
+      # search, the glyph on the header's search button; and house,
+      # the phone header's way home from the search page. A tag
       # per shape rather than a bare list of path data, because
       # calendar's frame is a rect and redrawing it as a path would
       # be this file copying something other than what Lucide ships.
@@ -50,6 +51,10 @@ module ProTacts
         search: [
           [:path, {d: "m21 21-4.34-4.34"}],
           [:circle, {cx: 11, cy: 11, r: 8}],
+        ],
+        house: [
+          [:path, {d: "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"}],
+          [:path, {d: "M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"}],
         ],
       } #: Hash[Symbol, Array[[Symbol, Hash[Symbol, untyped]]]]
 

@@ -102,12 +102,12 @@
 
 /* A form in a card keeps a tighter rhythm than Gloss's form-body
    defaults: the boxes shed their block padding down to the scale's
-   smallest step — the same shedding the header's search does — and
+   smallest step — the same shedding a dialog's filter does — and
    the stack closes to the detail grid's row gap, because a row is
    now one line tall there too. Scoped to the card-body form rather
    than overriding field.css globally; the label in the input
    selector out-specifies field.css's input rule rather than relying
-   on stylesheet order (see the header search's note). Everything
+   on stylesheet order (see .search-dialog's rules). Everything
    here reaches the record's own rows by the child combinator rather
    than by descent: these rules are the record's, and both dialogs'
    fields keep Gloss's own — a 26rem popover is not a record, and the
@@ -431,17 +431,36 @@ textarea:focus {
   color: var(--gl-color-text-primary);
   text-decoration: none;
 }
-/* Two groups in one flex row: the name and the search it carries on
-   the left, the destinations and the account at the right edge — the
-   nav's auto margin is what pushes the second group there, no
-   wrappers to hold. The name sits a tier above the links — one type
-   step, the identity rendered in type (docs/DESIGN.md) — while they
-   step down a shade: destinations, not the name. */
+/* Three columns: the name at the start, the search in the middle,
+   and the destinations with the account at the end, held in one box
+   (Layout). The outer two share the width left over equally, so the
+   middle is the header's own middle whatever the name and the login
+   measure, and a column that needs more than its share takes it,
+   pushing the search aside rather than squeezing its own contents —
+   left to the flex row, the squeeze came out of the account's
+   chevron first. Only wider than a
+   phone, whose header is two things at its two edges (below). The
+   name sits a tier above the links — one type step, the identity
+   rendered in type (docs/DESIGN.md) — while they step down a shade:
+   destinations, not the name. */
+@media (width > 48rem) {
+  .admin-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+  }
+}
+.header-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gl-space-s);
+  min-width: max-content;
+  margin-inline-start: auto;
+}
 .admin-header nav {
   display: flex;
   align-items: baseline;
   gap: var(--gl-space-s);
-  margin-left: auto;
 }
 .admin-header > a {
   font-size: var(--gl-step-0);
@@ -451,39 +470,35 @@ textarea:focus {
   color: var(--gl-color-text-secondary);
 }
 
-/* The search's label only folds it on a phone, below; wider, it is
-   the field's box and the glyph is not drawn. The menu repeats home
-   and the destinations for the phone too, and wider the name and the
-   nav carry them. */
-.search-form label {
-  display: block;
-}
-.search-form label > svg,
+/* The menu repeats home and the destinations for the phone, below;
+   wider, the name and the nav carry them. */
 .user-menu .menu-nav {
   display: none;
 }
 
 /* A phone has no room for the name, the search, two destinations
-   and the account in one row: left there, the search shrank to an
-   empty square, the name broke at its hyphen, and the account ran
-   past the right edge. So the header keeps the two things only it
-   can do, the search and the account. The name goes, being the way
-   home and nothing more once the tab says which instance this is,
-   and home joins the destinations in the account menu (Layout
-   repeats them there). The search folds into its glyph at the
-   start of the row, pulled out by its padding so it stands on the
-   edge the page's column does; a tap on it opens it (Layout says
-   when it folds again, and why focus alone does not open it), across
-   the whole header over the account, which is
-   hidden rather than removed so the header keeps its height. The
-   login is whatever the proxy vouches for, usually an email, so it
-   ends in an ellipsis when it runs out of room. The breakpoint is
-   where the one row still leaves the search room for its
-   placeholder. */
+   and the account in one row: left there, the name broke at its
+   hyphen and the account ran past the right edge. So the header
+   keeps the two things only it can do, the search and the account.
+   The name goes, being the way home and nothing more once the tab
+   says which instance this is, and home joins the destinations in
+   the account menu (Layout repeats them there). The search is its
+   link to the search page, the glyph alone, in place of the
+   dialog's button: a phone's screen is the page's whole width, and
+   the dialog would only be a smaller one over it. On the search
+   page the same glyph's place goes to home (Layout). The login is
+   whatever the proxy vouches for, usually an email, so it ends in
+   an ellipsis when it runs out of room.
+
+   The bars' sides close a step inside the page column's gutter, so
+   the glyph and the account's chevron sit nearer the screen's edges
+   than the column's content does: at the gutter they read as inset,
+   and at the bars' block step as crowding the edge. The glyph's
+   link trades Gloss's fixed icon-button box, which centers the glyph
+   in room no token names, for a 2xs step of padding pulled back out
+   by the same step: the glyph stands on the bar's edge the way the
+   chevron does (.user-menu button, below). */
 @media (max-width: 48rem) {
-  .admin-header {
-    position: relative;
-  }
   .admin-header > a,
   .admin-header nav {
     display: none;
@@ -491,59 +506,23 @@ textarea:focus {
   .user-menu .menu-nav {
     display: block;
   }
-  .admin-header .search-form {
-    flex: none;
-    margin-inline-start: calc(-1 * var(--gl-space-3xs));
-    max-width: none;
-  }
-  .search-form label {
-    display: flex;
-    padding: var(--gl-space-3xs);
-    cursor: pointer;
-  }
-  .search-form label > svg {
-    display: block;
-  }
-  .admin-header .search-form input[type="search"] {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    clip-path: inset(50%);
-  }
-  .admin-header .search-form[data-open] {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    margin: 0;
-    padding: 0 var(--gl-space-m);
-  }
-  .admin-header .search-form[data-open] label {
-    flex: 1;
-    padding: 0;
-    cursor: auto;
-  }
-  .admin-header .search-form[data-open] label > svg {
+  .admin-header .search-button {
     display: none;
   }
-  .admin-header .search-form[data-open] input[type="search"] {
-    position: static;
-    width: 100%;
+  .admin-header,
+  .admin-footer {
+    padding-inline: var(--gl-space-s);
+  }
+  .admin-header .phone-glyph {
+    display: inline-flex;
+    width: auto;
     height: auto;
-    opacity: 1;
-    clip-path: none;
+    padding: var(--gl-space-2xs);
+    margin-inline-start: calc(-1 * var(--gl-space-2xs));
   }
-  .admin-header .search-form[data-open] .search-clear {
-    inset-inline-end: calc(var(--gl-space-m) + var(--gl-space-2xs));
-  }
-  .admin-header:has(.search-form[data-open]) > :not(.search-form) {
-    visibility: hidden;
-  }
+  .header-end,
   .user-menu {
     min-width: 0;
-    margin-inline-start: auto;
   }
   .user-menu button {
     min-width: 0;
@@ -596,10 +575,9 @@ textarea:focus {
    chrome: the menu's list is the header's DOM child but floats over
    the page on a card, so left to reach it by descent it paints the
    rows white on surface-card — unreadable. They keep the text color
-   their own rule gives them (the menu section below). The search's
-   clear is the same case: it sits in the field, not on the bar. */
+   their own rule gives them (the menu section below). */
 :root[data-accent] :is(.admin-header a, .admin-header .user-menu button,
-.admin-header .search-form label, .admin-footer .type-label):not(.user-menu ul a, .search-clear) {
+.admin-header .search-button, .admin-footer .type-label):not(.user-menu ul a) {
   color: var(--gl-color-accent-fg);
 }
 /* The one focus ring is drawn in the accent, which vanishes against a
@@ -728,36 +706,72 @@ body {
   white-space: nowrap;
 }
 
-/* field.css's `form { max-width: 28rem; }` is sized for the
-   settings-form pattern; the header's search is a single input, and
-   flex: 1 + a narrower cap lets the box grow beside the name toward
-   a deliberate 18rem and shrink on a narrow viewport. */
-.search-form {
-  flex: 1;
-  max-width: 18rem;
+/* The search field (SearchField): the input over its results, which
+   take no room before there are any. The row Enter would follow
+   wears the hover's fill. */
+.search-field,
+.search-results {
+  display: flex;
+  flex-direction: column;
 }
-/* field.css sizes the input's padding for form bodies (xs block);
-   against the header's one-line chrome the box stands too tall, so it
-   sheds the vertical half of that padding down to the scale's
-   smallest step and keeps the horizontal. The selector
-   out-specifies field.css's double-:not input rule rather than
-   relying on stylesheet order. */
-.admin-header .search-form input[type="search"] {
+.search-field {
+  gap: var(--gl-space-s);
+}
+.search-results {
+  gap: var(--gl-space-2xs);
+}
+.search-results:empty {
+  display: none;
+}
+.search-results .card > li > a[data-active] {
+  background: var(--gl-color-surface-fill-2);
+}
+
+/* The dialog opens near the top rather than centered, so the input
+   stays put as the results under it grow and shrink; wider than
+   Gloss's 26rem, a result row being a whole name and its age. The
+   input sheds its block padding as the groups dialog's filter does,
+   the selector out-specifying field.css's double-:not input rule
+   rather than relying on stylesheet order. The results scroll in
+   place under the input rather than the dialog growing past the
+   viewport — Gloss gives a dialog overflow: hidden (the groups
+   dialog's note below). */
+.search-dialog {
+  width: 36rem;
+  margin-block: 12vh auto;
+}
+.search-dialog .filter > input[type="search"] {
   padding-block: var(--gl-space-3xs);
+}
+.search-dialog .search-results {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* The page's field (SearchPage) spans the column: field.css caps a
+   form for the settings pattern, and this form is the page. The
+   header's phone glyph — the link to this page, or home from it —
+   shows only on a phone (above); wider, the dialog's button and the
+   name stand in for it. */
+.search-page {
+  max-width: none;
+}
+.phone-glyph {
+  display: none;
 }
 
 /* Clearing a search field: one affordance for both kinds the app
-   has — the header's search and the lists' filter — Gloss's sm
+   has — the search dialog's input and the lists' filter, both a
+   .filter box — Gloss's sm
    icon-button carrying Lucide's x, overlaid at the field's end.
    Revealed by :has(:not(:placeholder-shown)) on the box the input
    and the control share, so it appears the moment there is text to
    clear, typed-but-unsubmitted included, with no script — the
    filter's button needs Alpine only for its click, which empties
-   the state the rows read (GroupFilter). The input's end padding
+   the state the rows or the results read. The input's end padding
    reserves the control's width by the sm icon-button's own
    geometry (2× its 3xs padding + its 1.15×0.8125rem line), so text
    never runs under it. */
-.search-form,
 .filter {
   position: relative;
 }
@@ -768,7 +782,6 @@ body {
   translate: 0 -50%;
   display: none;
 }
-.search-form:has(input:not(:placeholder-shown)) .search-clear,
 .filter:has(input:not(:placeholder-shown)) .search-clear {
   display: inline-flex;
 }

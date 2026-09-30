@@ -47,7 +47,7 @@ module ProTacts
           # (Admin::NamePair), and nobody is known by their middle name
           # alone.
           if first.empty? && last.empty?
-            dashboard(query: r.params["q"], notice: "A contact needs a name.")
+            dashboard(notice: "A contact needs a name.")
           else
             id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
             store.put(id, Admin::CardForm.new_card(id, first, middle, last))
@@ -129,18 +129,14 @@ module ProTacts
 
     private
 
-    # The dashboard GET and a refused create render the same page,
-    # which is why the query travels both paths — a create refused
-    # under a search re-renders the results it was refused over.
-    #: (query: String?, ?notice: String?) -> String
-    def dashboard(query:, notice: nil)
+    # The dashboard GET and a refused create render the same page.
+    #: (?notice: String?) -> String
+    def dashboard(notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
       Admin::Dashboard.call(
         recent: store.contacts_by_recency,
         upcoming: store.upcoming_birthdays(Admin::UpcomingBirthdays::LIMIT),
-        query:,
         login: @login,
-        groups: store.all_groups,
         notice:,
       )
     end

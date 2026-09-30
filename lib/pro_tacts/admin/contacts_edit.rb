@@ -34,7 +34,7 @@ module ProTacts
     # nickname or note row over a card that carries neither, which has
     # nothing to lose. The etag rides along hidden, the snapshot
     # guard's half. `autofocus` on the first field: this screen's
-    # entry point is the name, not the header search.
+    # entry point is the name.
     class ContactsEdit < Phlex::HTML
       # The property types the add dialog offers, in the order it
       # lists them — exactly the rows the save can insert

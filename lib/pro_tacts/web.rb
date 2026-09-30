@@ -131,7 +131,7 @@ module ProTacts
         # DAV client's bootstrap. The create dialog rides along hidden
         # in the render (see Admin::ContactDialog).
         r.get do
-          dashboard(query: r.params["q"])
+          dashboard
         end
 
         r.propfind do
@@ -155,4 +155,5 @@ require "pro_tacts/web/contacts"
 require "pro_tacts/web/dav"
 require "pro_tacts/web/groups"
 require "pro_tacts/web/import"
+require "pro_tacts/web/search"
 require "pro_tacts/web/setup"

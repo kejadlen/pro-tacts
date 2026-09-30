@@ -24,11 +24,14 @@ module ProTacts
       # a hit on the name first — every word the start of a word of the
       # name or nickname, "ada" or "love" for Ada Lovelace — then the
       # hits anywhere else, recency keeping its order within each. The
-      # rows arrive in recency order, and partition keeps it. `labels`
-      # is the names of the groups each contact is in, by id.
-      #: (Array[Store::RecentContact] rows, query: String, labels: Hash[String, Array[String]]) -> Array[Store::RecentContact]
-      def self.contacts(rows, query:, labels:)
+      # rows arrive in recency order, and partition keeps it. The groups
+      # arrive whole because a contact is found by the names of the
+      # groups it is in.
+      #: (Array[Store::RecentContact] rows, query: String, groups: Array[Group]) -> Array[Store::RecentContact]
+      def self.contacts(rows, query:, groups:)
         words = words(query)
+        labels = {} #: Hash[String, Array[String]]
+        groups.each { |group| group.members.each { (labels[it] ||= []) << group.label } }
         matched = rows.select { |row| matches?(row.contact, words, labels.fetch(row.contact.id, [])) }
         names, rest = matched.partition { name_hit?(it.contact, words) }
         names + rest

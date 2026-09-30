@@ -348,58 +348,106 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The search lives in the page header (docs/DESIGN.md), rendered by
-  # the layout on every screen now — not just the dashboard's — so
-  # the header's height never changes between pages and finding a
-  # contact never requires going home first. This pins the wiring,
-  # not just the behavior: a screen that forgets `autofocus` loses
-  # the focused-and-ready entry point with no route failing.
-  def test_the_search_lives_in_the_header
+  # The search rides every screen's header (docs/DESIGN.md), the
+  # dashboard's and a record's alike — finding a contact never
+  # requires going home first. The dashboard no longer focuses
+  # anything on load: the search is a button and `/` away
+  # (Admin::SearchDialog), and the only autofocus left is inside the
+  # popovers, which fires as each one opens.
+  def test_the_search_renders_on_every_screen
     with_contacts({"ada" => ADA}) do
-      get "/"
-      header = last_response.body.split("<main").first
-      assert_includes header, "search-form"
-      assert_includes header, "name=\"q\""
-      assert_includes header, "autofocus"
-      # Folded on a phone despite the focus (Layout says why).
-      refute_includes header, " data-open"
+      ["/", "/contacts/ada"].each do |path|
+        get path
+        header = last_response.body.split("<main").first
 
-      get "/", q: "ada"
-      header = last_response.body.split("<main").first
-      assert_includes header, "value=\"ada\""
-      refute_includes header, "autofocus"
-      # Open from the start, showing the query its results answer.
-      assert_includes header, " data-open"
+        assert_includes header, %(popovertarget="search"), path
+        assert_includes header, %(<dialog id="search" popover="auto"), path
+      end
     end
   end
 
-  # The same chrome on a record's own page: the search rides the
-  # header there too, empty and unfocused — the record is that
-  # page's content, not a query.
-  def test_the_search_renders_on_detail_pages_too
-    with_contacts({"ada" => ADA}) do
-      get "/contacts/ada"
+  # The dashboard answers no query: the results page it used to be is
+  # gone, and a stale ?q= link lands on recency like any other visit.
+  def test_the_dashboard_ignores_a_query
+    grace = ADA.sub("Ada Lovelace", "Grace Hopper").sub("UID:ada", "UID:grace")
 
-      header = last_response.body.split("<main").first
-      assert_includes header, "search-form"
-      # No value attribute at all — the record's page carries no
-      # query, and Phlex omits the attribute for nil rather than
-      # rendering it empty.
-      assert_includes header, '<input type="search" name="q" placeholder="Search contacts">'
-      refute_includes header, "autofocus"
-    end
-  end
-
-  # Searching narrows the contacts column; the ambient column stays
-  # where it is, still answering its own question.
-  def test_search_leaves_the_birthdays_column_standing
-    birthday = born(Date.today + 3, name: "Birthday Person", id: "birthday")
-
-    with_contacts({"ada" => ADA, "birthday" => birthday}) do
+    with_contacts({"ada" => ADA, "grace" => grace}) do
       get "/", q: "hopper"
 
-      assert_includes last_response.body, "No contacts match."
-      assert_includes last_response.body, "Birthday Person"
+      assert_includes last_response.body, %(<h2 class="type-label">recently updated</h2>)
+      assert_includes last_response.body, "Ada Lovelace"
+    end
+  end
+
+  # GET /search/results is the field's list, not a page: no layout
+  # around it.
+  def test_search_answers_a_fragment
+    with_contacts({"ada" => ADA}) do
+      get "/search/results", q: "ada"
+
+      assert_equal 200, last_response.status
+      assert_equal "text/html; charset=utf-8", last_response["Content-Type"]
+      assert last_response.body.start_with?(%(<h2 class="type-label">contacts</h2>))
+      refute_includes last_response.body, "<html"
+      assert_includes last_response.body, %(<a href="/contacts/ada">)
+    end
+  end
+
+  # A blank query answers the recently updated list, the search page
+  # showing it before a word is typed and again once the input is
+  # cleared.
+  def test_search_with_a_blank_query_answers_the_recent_contacts
+    with_contacts({"ada" => ADA}) do
+      get "/search/results", q: "  "
+
+      assert_equal 200, last_response.status
+      assert last_response.body.start_with?(%(<h2 class="type-label">recently updated</h2>))
+      assert_includes last_response.body, %(<a href="/contacts/ada">)
+    end
+  end
+
+  # The page a phone's header links to (Admin::SearchPage): the field
+  # in a form back to itself, focused, over the recently updated list
+  # until a word is typed.
+  def test_the_search_page_renders_the_field
+    with_contacts({"ada" => ADA}) do
+      get "/search"
+
+      assert_equal 200, last_response.status
+      main = last_response.body.split("<main").last
+      assert_includes main, %(<form action="/search" method="get" class="search-page">)
+      assert_includes main, %(<input type="search" name="q" value="" placeholder="Search contacts")
+      assert_includes main, "autofocus"
+      assert_includes main, %(<h2 class="type-label">recently updated</h2>)
+      assert_includes main, %(<a href="/contacts/ada">)
+    end
+  end
+
+  # On the search page a phone's header glyph goes home rather than
+  # back to the page it is on.
+  def test_the_search_page_trades_the_phone_search_link_for_home
+    with_contacts({}) do
+      get "/search"
+      header = last_response.body.split("<main").first
+      assert_includes header, %(<a href="/" class="icon-button phone-glyph" aria-label="Home">)
+      refute_includes header, %(<a href="/search" class="icon-button phone-glyph")
+
+      get "/"
+      header = last_response.body.split("<main").first
+      assert_includes header, %(<a href="/search" class="icon-button phone-glyph" aria-label="Search">)
+    end
+  end
+
+  # A query in the address renders its results with the page, so a
+  # submitted search answers without script and going back to the
+  # page lands on the results it showed.
+  def test_the_search_page_renders_the_results_of_its_query
+    with_contacts({"ada" => ADA}) do
+      get "/search", q: "ada"
+
+      main = last_response.body.split("<main").last
+      assert_includes main, %(value="ada")
+      assert_includes main, %(<a href="/contacts/ada">)
     end
   end
 
@@ -409,15 +457,10 @@ class AdminContactsPagesTest < Minitest::Test
       .sub("UID:ada", "UID:grace")
 
     with_contacts({"ada" => ADA, "grace" => grace}) do
-      get "/", q: "hopper"
+      get "/search/results", q: "hopper"
 
-      # The columns split on the birthdays column's label: matching
-      # narrows the contacts column, and Ada stays out of it — she is
-      # still beside it, in the ambient column where she belongs.
-      contacts_column = last_response.body.split("upcoming birthdays").first
-      assert_includes contacts_column, "Grace Hopper"
-      refute_includes contacts_column, "Ada Lovelace"
-      assert_includes last_response.body, %(<h2 class="type-label">contacts</h2>)
+      assert_includes last_response.body, "Grace Hopper"
+      refute_includes last_response.body, "Ada Lovelace"
     end
   end
 
@@ -425,10 +468,10 @@ class AdminContactsPagesTest < Minitest::Test
   # any of its values, or the groups it belongs to.
   def test_search_matches_a_phone_or_email_value
     with_contacts({"ada" => ADA}) do
-      get "/", q: "555-0100"
+      get "/search/results", q: "555-0100"
       assert_includes last_response.body, "Ada Lovelace"
 
-      get "/", q: "ada@example.com"
+      get "/search/results", q: "ada@example.com"
       assert_includes last_response.body, "Ada Lovelace"
     end
   end
@@ -439,7 +482,7 @@ class AdminContactsPagesTest < Minitest::Test
     red = ADA.sub("FN:Ada Lovelace", "FN:Sarah\r\nNICKNAME:Red").sub("UID:ada", "UID:red")
 
     with_contacts({"red" => red}) do
-      get "/", q: "red"
+      get "/search/results", q: "red"
 
       assert_includes last_response.body, "Sarah (Red)"
     end
@@ -452,7 +495,7 @@ class AdminContactsPagesTest < Minitest::Test
     employed = ADA.sub("UID:ada", "UID:employed").sub("END:VCARD", "ORG:Acme Corp\r\nEND:VCARD")
 
     with_contacts({"employed" => employed}) do
-      get "/", q: "acme"
+      get "/search/results", q: "acme"
 
       assert_includes last_response.body, "Ada Lovelace"
     end
@@ -468,23 +511,22 @@ class AdminContactsPagesTest < Minitest::Test
       .sub("N:Lovelace;Ada;;;", "N:Alvarez;Jose;;;").sub("UID:ada", "UID:jose")
 
     with_contacts({"emile" => emile, "jose" => jose}) do
-      get "/", q: "munoz"
+      get "/search/results", q: "munoz"
 
-      contacts_column = last_response.body.split("upcoming birthdays").first
-      assert_includes contacts_column, "Émile Muñoz"
-      refute_includes contacts_column, "Jose Alvarez"
+      assert_includes last_response.body, "Émile Muñoz"
+      refute_includes last_response.body, "Jose Alvarez"
 
-      get "/", q: "josé"
+      get "/search/results", q: "josé"
 
-      assert_includes last_response.body.split("upcoming birthdays").first, "Jose Alvarez"
+      assert_includes last_response.body, "Jose Alvarez"
     end
   end
 
   def test_search_with_no_matches_says_so
     with_contacts({"ada" => ADA}) do
-      get "/", q: "nobody"
+      get "/search/results", q: "nobody"
 
-      assert_includes last_response.body, "No contacts match."
+      assert_includes last_response.body, "Nothing matches."
     end
   end
 
@@ -1110,8 +1152,8 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_includes last_response.body, 'src="/contacts/pic/photo"'
 
-      get "/", q: "no-match-for-this"
-      refute_includes last_response.body, 'src="/contacts/pic/photo"'
+      get "/search/results", q: "ada"
+      assert_includes last_response.body, 'src="/contacts/pic/photo"'
     end
   end
 

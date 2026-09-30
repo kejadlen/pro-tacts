@@ -2,6 +2,7 @@ require "pro_tacts/admin/phlex"
 
 require "pro_tacts"
 require "pro_tacts/admin/icons"
+require "pro_tacts/admin/search_dialog"
 
 module ProTacts
   module Admin
@@ -9,16 +10,12 @@ module ProTacts
     # vendored Gloss stylesheets (see public/vendor/gloss and
     # docs/DESIGN.md), and a one-line header naming the app in type —
     # "no brand mark" is one of the rules that document inherits from
-    # Gloss — with the collection search beside the name on every
-    # screen: a header that grew and shrank with the search made the
-    # chrome jump between pages, and search-first (docs/DESIGN.md)
-    # wants finding a contact possible from anywhere. `query` carries
-    # the dashboard's current search into the input's value;
-    # `autofocus` is a screen saying its entry point is the search —
-    # the dashboard with an empty query, the one place the design
-    # doc wants "focused and ready". `wide` opts a screen out of the
-    # reading width a single column wants (see admin.css) — the
-    # dashboard root is the one screen that asks.
+    # Gloss — with the search's button beside the name on every
+    # screen: search-first (docs/DESIGN.md) wants finding a contact
+    # possible from anywhere, and the dialog it opens rides along in
+    # every render. `wide` opts a screen out of the reading width a
+    # single column wants (see admin.css) — the dashboard root is the
+    # one screen that asks.
     #
     # Alpine loads on every screen, and it is the only script here.
     # The admin UI was script-free until the edit screen needed to
@@ -39,17 +36,17 @@ module ProTacts
       # @rbs @title: String
       # @rbs @login: String
       # @rbs @wide: bool
-      # @rbs @query: String?
-      # @rbs @autofocus: bool
+      # @rbs @searching: bool
       # @rbs @notice: String?
 
-      #: (title: String, login: String, ?wide: bool, ?query: String?, ?autofocus: bool, ?notice: String?) -> void
-      def initialize(title:, login:, wide: false, query: nil, autofocus: false, notice: nil)
+      # `searching` is the search page saying it is the screen: the
+      # phone's link to the search would lead back to where it is.
+      #: (title: String, login: String, ?wide: bool, ?searching: bool, ?notice: String?) -> void
+      def initialize(title:, login:, wide: false, searching: false, notice: nil)
         @title = title
         @login = login
         @wide = wide
-        @query = query
-        @autofocus = autofocus
+        @searching = searching
         @notice = notice
       end
 
@@ -90,96 +87,79 @@ module ProTacts
             header(class: "admin-header") do
               # The name and, beside it, the one control every screen
               # shares: what this app is and how it is asked a
-              # question, on the left where reading starts. The input
-              # keeps the query it carries — a results page has
-              # somewhere to be besides the input — and focuses only
-              # where the screen asked for it.
+              # question, on the left where reading starts.
               a(href: "/") { "pro-tacts" }
-              # The search and, in the field's end, its clear: a link,
-              # because clearing the dashboard's search is navigating
-              # to the page with no query — the form's own target with
-              # nothing submitted — landing focused on an empty input
-              # again. CSS reveals it the moment there is text to clear
-              # (admin.css), typed-but-unsubmitted included, so the
-              # header needs no script for it; the native cancel WebKit
-              # and Blink draw is suppressed there too, one affordance
-              # rather than two.
-              #
-              # On a phone the search folds into its glyph and opens
-              # across the whole header (admin.css, keyed on
-              # data-open). A tap on the glyph opens it, and the label
-              # is what focuses the field from there. It folds again
-              # when focus leaves with nothing typed; a page carrying
-              # a query renders open, the query being what its results
-              # answer. Focus alone does not open it, because the
-              # dashboard's autofocus would then land every phone on
-              # an open search with the account hidden behind it. A
-              # touch anywhere else folds it at once rather than
-              # waiting on the blur, which a phone was seen to send
-              # late or not at all.
-              open = !@query.to_s.empty?
-              fold = "if ($el.querySelector('input').value === '') " \
-                     "{ open = false; $el.querySelector('input').blur() }"
-              form(action: "/", method: "get", class: "search-form",
-                   x_data: "{ open: #{open} }", "x-bind:data-open": "open",
-                   "@input": "open = true",
-                   "@focusout": "open = $el.contains($event.relatedTarget) || " \
-                                "$el.querySelector('input').value !== ''",
-                   "@pointerdown.outside": fold,
-                   **(open ? {data: {open: true}} : {})) do
-                label("@click": "open = true") do
-                  render Icon.new(:search)
-                  input(type: "search", name: "q", value: @query,
-                        placeholder: "Search contacts", autofocus: @autofocus)
-                end
-                a(href: "/", class: "icon-button search-clear", data_size: "sm",
-                  aria_label: "Clear search") { render Icon.new(:x) }
+              # The search's two ways in, one shown at each width
+              # (admin.css): on a wide screen a button opening the
+              # dialog over the page (SearchDialog), in the header's
+              # middle; on a phone a link, just the glyph, to the
+              # search page (SearchPage), which has the whole screen
+              # for its results. Neither is the input itself, so the
+              # header is one height on every screen. On the search
+              # page itself the phone's glyph is home instead, the
+              # name that is the way home elsewhere being hidden there.
+              button(type: "button", class: "search-button", data_size: "sm",
+                     popovertarget: SearchDialog::ID) do
+                render Icon.new(:search)
+                span { "Search" }
               end
-              # The destinations and the account, at the right edge:
-              # the contacts list is the browse surface and the groups
-              # list is where a group is created — both reachable from
-              # anywhere (docs/DESIGN.md, "The core idea"), search
-              # still finding a group by name — with who is asking
-              # named beside them. On a phone the two move into the
-              # account menu with home, the name's own link (the list
-              # below repeats all three for that), leaving the header
-              # the search and the account.
-              nav do
-                a(href: "/contacts") { "contacts" }
-                a(href: "/groups") { "groups" }
+              if @searching
+                a(href: "/", class: "icon-button phone-glyph", aria_label: "Home") { render Icon.new(:house) }
+              else
+                a(href: "/search", class: "icon-button phone-glyph", aria_label: "Search") { render Icon.new(:search) }
               end
-              # The account the proxy vouches for (ProxyAuth), named
-              # where the session reads as belonging to someone. The
-              # button opens a menu rather than a page because the
-              # account has no page: a login decides which cards sync
-              # to whose devices (docs/plans/2026-09-12-per-user-
-              # books.md) and nothing else, so what hangs off it is
-              # the destinations that are not records and so
-              # cannot be searched for — import, a handful of times in
-              # a book's life (docs/plans/2026-09-21-import-a-vcf.md),
-              # export, its counterpart, and device setup. A popover
-              # by the Popover API, like
-              # every floated layer here; the list sits beside its
-              # button in the header because a promoted popover is
-              # positioned against the viewport, not the DOM beside
-              # its button, so admin.css anchors it to the wrapper by
-              # name — while the Popover API still renders it above
-              # everything when open.
-              div(class: "user-menu") do
-                button(type: "button", data_size: "sm", popovertarget: MENU) do
-                  span { @login }
-                  render Icon.new(:chevron_down)
+              div(class: "header-end") do
+                # The destinations and the account, at the right edge
+                # in one box, so the search can take the middle between
+                # it and the name (admin.css):
+                # the contacts list is the browse surface and the groups
+                # list is where a group is created — both reachable from
+                # anywhere (docs/DESIGN.md, "The core idea"), search
+                # still finding a group by name — with who is asking
+                # named beside them. On a phone the two move into the
+                # account menu with home, the name's own link (the list
+                # below repeats all three for that), leaving the header
+                # the search and the account.
+                nav do
+                  a(href: "/contacts") { "contacts" }
+                  a(href: "/groups") { "groups" }
                 end
-                ul(id: MENU, popover: "auto", class: "user-menu-list") do
-                  li(class: "menu-nav") { a(href: "/") { "home" } }
-                  li(class: "menu-nav") { a(href: "/contacts") { "contacts" } }
-                  li(class: "menu-nav") { a(href: "/groups") { "groups" } }
-                  li { a(href: "/import") { "import" } }
-                  li { a(href: "/contacts/export.vcf") { "export" } }
-                  li { a(href: "/setup") { "device setup" } }
+                # The account the proxy vouches for (ProxyAuth), named
+                # where the session reads as belonging to someone. The
+                # button opens a menu rather than a page because the
+                # account has no page: a login decides which cards sync
+                # to whose devices (docs/plans/2026-09-12-per-user-
+                # books.md) and nothing else, so what hangs off it is
+                # the destinations that are not records and so
+                # cannot be searched for — import, a handful of times in
+                # a book's life (docs/plans/2026-09-21-import-a-vcf.md),
+                # export, its counterpart, and device setup. A popover
+                # by the Popover API, like
+                # every floated layer here; the list sits beside its
+                # button in the header because a promoted popover is
+                # positioned against the viewport, not the DOM beside
+                # its button, so admin.css anchors it to the wrapper by
+                # name — while the Popover API still renders it above
+                # everything when open.
+                div(class: "user-menu") do
+                  button(type: "button", data_size: "sm", popovertarget: MENU) do
+                    span { @login }
+                    render Icon.new(:chevron_down)
+                  end
+                  ul(id: MENU, popover: "auto", class: "user-menu-list") do
+                    li(class: "menu-nav") { a(href: "/") { "home" } }
+                    li(class: "menu-nav") { a(href: "/contacts") { "contacts" } }
+                    li(class: "menu-nav") { a(href: "/groups") { "groups" } }
+                    li { a(href: "/import") { "import" } }
+                    li { a(href: "/contacts/export.vcf") { "export" } }
+                    li { a(href: "/setup") { "device setup" } }
+                  end
                 end
               end
             end
+            # Out of the header's row: a popover opens in the top
+            # layer from wherever it sits.
+            render SearchDialog.new
             main(class: "admin-main", **(@wide ? {data: {wide: true}} : {})) { yield }
             # The shell's other edge: which build is answering and
             # whether it is logging what it answers, both read off

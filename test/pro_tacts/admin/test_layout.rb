@@ -49,12 +49,23 @@ class AdminLayoutTest < Minitest::Test
     assert_includes header_html, %(<ul id="user-menu" popover="auto")
   end
 
-  # A link, not a button: clearing the dashboard's search is navigating
-  # to the page with no query.
-  def test_the_search_carries_a_clear
+  # The search is a button in the header and the dialog it opens
+  # (Admin::SearchDialog), rendered on every screen, beside the link a
+  # phone shows instead (admin.css picks one per width). rack-test
+  # cannot open a popover or run the fetch, so this pins the wiring a
+  # browser acts on: the declarative pair, the link, the input focused
+  # as the dialog opens, the route its results come from, and the key
+  # that opens it.
+  def test_the_search_is_a_button_and_the_dialog_it_opens
     with_env({})
 
-    assert_includes header_html, %(<a href="/" class="icon-button search-clear" data-size="sm" aria-label="Clear search">)
+    assert_includes header_html, %(<button type="button" class="search-button" data-size="sm" popovertarget="search">)
+    assert_includes header_html, %(<a href="/search" class="icon-button phone-glyph" aria-label="Search">)
+    assert_includes header_html, %(<dialog id="search" popover="auto" class="search-dialog")
+    assert_includes header_html, %(<input type="search" name="q" value="" placeholder="Search contacts" aria-label="Search contacts" autofocus)
+    assert_includes header_html, "fetch('/search/results?q='"
+    assert_includes header_html, "@keydown.slash.window"
+    assert_includes header_html, %(aria-label="Clear search")
   end
 
   # On a phone the name and the nav are hidden and the menu carries

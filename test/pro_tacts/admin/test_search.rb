@@ -2,6 +2,7 @@ require_relative "../../test_helper"
 
 require "pro_tacts/admin/search"
 require "pro_tacts/contact"
+require "pro_tacts/group"
 require "pro_tacts/store"
 require "pro_tacts/vcard"
 
@@ -15,8 +16,8 @@ class SearchTest < Minitest::Test
     ProTacts::Store::RecentContact.new(contact:, updated_at: Time.now)
   end
 
-  def search(rows, query, labels: {})
-    ProTacts::Admin::Search.contacts(rows, query:, labels:).map { it.contact.id }
+  def search(rows, query, groups: [])
+    ProTacts::Admin::Search.contacts(rows, query:, groups:).map { it.contact.id }
   end
 
   # Each word finds its own field: neither "ada" nor "london" is
@@ -56,8 +57,9 @@ class SearchTest < Minitest::Test
 
   def test_the_groups_a_contact_is_in_find_it
     ada = row("ada", "Ada Lovelace")
+    math = ProTacts::Group.new(id: "math", name: "Mathematicians", label: "Mathematicians", lines: [], members: ["ada"])
 
-    assert_equal ["ada"], search([ada], "mathematicians", labels: {"ada" => ["Mathematicians"]})
+    assert_equal ["ada"], search([ada], "mathematicians", groups: [math])
   end
 
   # Charles is the more recent, and only his note says "ada"; Ada's

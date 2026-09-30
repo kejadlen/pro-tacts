@@ -18,7 +18,17 @@ module ProTacts
     end
 
     class Dashboard
-      def self.call: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], query: String?, login: String, groups: Array[Group], ?notice: String?) -> String
+      RECENT_LIMIT: Integer
+      def self.call: (recent: Array[Store::RecentContact], upcoming: Array[Store::UpcomingBirthday], login: String, ?notice: String?) -> String
+    end
+
+    class SearchResults
+      def self.new: (contacts: Array[Store::RecentContact], groups: Array[Group], ?recent: bool) -> instance
+      def call: () -> String
+    end
+
+    class SearchPage
+      def self.call: (login: String, query: String, results: SearchResults) -> String
     end
 
     class ContactsIndex

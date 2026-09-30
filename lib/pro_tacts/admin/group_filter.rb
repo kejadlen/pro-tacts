@@ -138,7 +138,7 @@ module ProTacts
         # positioned at the field's end (admin.css). The click empties
         # the state rather than the box alone — `filter` is what the
         # rows, the cap, and the offer all read — and the reveal is
-        # CSS on the box, the header search's own (see Layout).
+        # CSS on the box, the search dialog's own (see admin.css).
         div(class: "filter") do
           input(type: "search", placeholder: @placeholder,
                 aria_label: @placeholder, autofocus: @autofocus,

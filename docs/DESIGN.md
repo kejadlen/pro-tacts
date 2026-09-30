@@ -85,14 +85,15 @@ left.
 
 Every collection screen is the same shape:
 
-1. A search input in the page header, focused and ready. The input
-   renders on every screen — a header that changes height between
-   pages makes the chrome jump, and a search should never require
-   going home first — but focuses only on collection screens, where
-   the search is the page.
-2. Results while there's a query.
-3. **Recently updated** when there isn't — the ten or so records touched last,
-   sorted by update time.
+1. A search one key away. Its button sits in the page header on every
+   screen — a header that changes height between pages makes the
+   chrome jump, and a search should never require going home first —
+   and it, or `/` from anywhere, opens a dialog with the input
+   focused and results narrowing as it is typed. On a phone it goes
+   to a search page instead, the same input with the screen to itself.
+2. **Recently updated** on the screen itself — the ten or so records
+   touched last, sorted by update time. The screen answers no query;
+   the dialog does, over whatever screen it was opened on.
 
 Recency is the answer to "what was I doing?", which is the actual question
 someone opening this app has. Match generously: a contact should be findable
@@ -102,11 +103,9 @@ The root screen is a dashboard of two columns. The primary column is the
 shape above. The ambient column beside it is a standing answer to "what's
 coming?": the next ten or so birthdays in arrival order, each row opening
 the contact's card. It is a list that browses, like the whole-set listing,
-because its question is not "where is X?", and it stands whether or not
-there is a query. The
-columns are equal and fluid, collapsing to one — birthdays under contacts —
-when the viewport cannot hold two side by side. Every other screen keeps a
-single reading column.
+because its question is not "where is X?". The columns are equal and fluid,
+collapsing to one — birthdays under contacts — when the viewport cannot hold
+two side by side. Every other screen keeps a single reading column.
 
 Under every screen sits the footer, the header's counterpart, holding what no
 search can turn up because none of it is a record: the version answering and
