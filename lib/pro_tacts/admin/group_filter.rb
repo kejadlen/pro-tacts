@@ -10,12 +10,10 @@ module ProTacts
     # it, and the offer to make the group the filter names
     # (docs/plans/2026-09-22-a-few-groups-at-a-time.md).
     #
-    # Shared by the three places too long a list is picked from, and
-    # by the one it is only read from, the contacts page
-    # (Admin::ContactsIndex). Of the three pickers, the two where a
-    # contact's groups are picked — the dialog on a stored contact's
-    # card (Admin::GroupDialog) and the boxes beside an arriving one
-    # (Admin::ImportGroups) — and the members screen,
+    # Shared by the three places too long a list is picked from: the
+    # two where a contact's groups are picked — the dialog on a stored
+    # contact's card (Admin::GroupDialog) and the boxes beside an
+    # arriving one (Admin::ImportGroups) — and the members screen,
     # where a group's contacts are (Admin::GroupsMembers). A book with
     # three groups and a book with three hundred are the same screen,
     # and the import's is the screen the walk opens once per contact,
@@ -25,9 +23,11 @@ module ProTacts
     # and not the offer to make what the filter names: a filter word
     # cannot mint a contact — that is the dashboard's dialog, with
     # its name fields — so its placeholder says nothing about adding,
-    # and `named` idles, nothing rendering Fresh to push onto it. The
-    # contacts page renders the filter alone: its rows have no boxes,
-    # and nothing caps a list whose whole point is the whole book.
+    # and `named` idles, nothing rendering Fresh to push onto it.
+    #
+    # The contacts page does not use it: a list that is only read, not
+    # picked from, leaves finding to the header's search, which matches
+    # more than a name (Admin::ContactsIndex).
     #
     # Alpine does the filtering, matching each row's label as
     # Format.search_key folds it — lowercased, accents folded —
@@ -57,10 +57,9 @@ module ProTacts
       # make one vanish would be hiding a decision rather than
       # narrowing a list — and the tick is read off the checkbox at
       # each evaluation, so a row answers the next filter change
-      # already ticked, and a row with no box at all — the contacts
-      # page's — is ticked by nobody. `rows` is whatever carries
-      # `data-label` — a label in the dialog and the import, an li on
-      # the members screen and the contacts page, whose label sits inside its row — and is the element
+      # already ticked. `rows` is whatever carries `data-label` — a
+      # label in the dialog and the import, an li on the members
+      # screen, whose label sits inside its row — and is the element
       # list `none` reads: no row visible, which is what "No groups
       # match" claims. `named` is the names a tick on the offer
       # committed to making (Named): `creatable` and `none` read it
