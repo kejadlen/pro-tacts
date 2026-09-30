@@ -6,6 +6,7 @@ require "pro_tacts/admin/format"
 require "pro_tacts/admin/group_label"
 require "pro_tacts/admin/list_item"
 require "pro_tacts/admin/layout"
+require "pro_tacts/admin/search"
 require "pro_tacts/admin/upcoming_birthdays"
 
 module ProTacts
@@ -13,7 +14,8 @@ module ProTacts
     # GET / — the dashboard (docs/DESIGN.md): the search in the page
     # header, recency in the primary column, the birthdays the year is
     # about to bring in the ambient one beside it. A query narrows the
-    # contacts column to matches across every contact; an empty query
+    # contacts column to matches across every contact, in the order
+    # Search.contacts ranks them; an empty query
     # shows the ten most recently updated. The create dialog rides
     # along hidden on every render — a popover opens where it sits, so
     # the add button needs nothing from the server but the page it is
@@ -41,9 +43,8 @@ module ProTacts
         @notice = notice
         @labels = {}
         groups.each { |group| group.members.each { (@labels[it] ||= []) << group.label } }
-        q = Format.search_key(@query)
-        @groups = @query.empty? ? [] : groups.select { Format.search_key(it.label).include?(q) }.sort
-        @rows = @query.empty? ? recent.first(RECENT_LIMIT) : recent.select { matches?(it, @query) }
+        @groups = @query.empty? ? [] : Search.groups(groups, query: @query)
+        @rows = @query.empty? ? recent.first(RECENT_LIMIT) : Search.contacts(recent, query: @query, labels: @labels)
       end
 
       def view_template
@@ -78,23 +79,6 @@ module ProTacts
       end
 
       private
-
-      # Match generously (docs/DESIGN.md): a contact is findable by
-      # name or nickname, any of its values, or the groups it
-      # belongs to — every comparison against the fold
-      # Format.search_key makes of both sides, accents with the case.
-      #: (Store::RecentContact row, String query) -> bool
-      def matches?(row, query)
-        q = Format.search_key(query)
-        return true if Format.search_key(row.contact.name.to_s).include?(q)
-        return true if Format.search_key(row.contact.nickname.to_s).include?(q)
-        return true if Format.search_key(row.contact.organization.to_s).include?(q)
-        return true if row.contact.phones.any? { Format.search_key(it.value).include?(q) }
-        return true if row.contact.emails.any? { Format.search_key(it.value).include?(q) }
-        return true if @labels.fetch(row.contact.id, []).any? { Format.search_key(it).include?(q) }
-
-        false
-      end
 
       # The groups whose names match, under the contacts: a group is a
       # record the search reaches as surely as a contact is

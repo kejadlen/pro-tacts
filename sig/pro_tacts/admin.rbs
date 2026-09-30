@@ -72,9 +72,11 @@ module ProTacts
     end
 
     # Its sort_key orders the import's list the way the listings of
-    # contacts are ordered (Web#walk_order).
+    # contacts are ordered (Web#walk_order), and its search_key is the
+    # fold Search matches on.
     module Format
       def self.sort_key: (Contact contact) -> String
+      def self.search_key: (String value) -> String
     end
 
     # Rendered by Dashboard, not called from checked code; only
