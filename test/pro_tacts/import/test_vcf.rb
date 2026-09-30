@@ -193,4 +193,58 @@ class ImportVcfTest < Minitest::Test
     assert_includes reading.card.to_s, "not a content line\r\n"
     assert_empty reading.dropped.select { it.property.nil? }
   end
+
+  # A company card comes in whole (docs/plans/2026-09-24-company-cards.md):
+  # its editor reads the name out of ORG, and the flag says how to show it.
+  def test_a_company_comes_in_with_its_organization_and_its_flag
+    card = Vcf.cards(<<~CARD.gsub("\n", "\r\n")).fetch(0)
+      BEGIN:VCARD
+      VERSION:3.0
+      N:;;;;
+      FN:Acme
+      ORG:Acme;
+      X-ABShowAs:COMPANY
+      END:VCARD
+    CARD
+    reading = Vcf.read(card)
+
+    assert_includes reading.card.to_s, "ORG:Acme;\r\n"
+    assert_includes reading.card.to_s, "X-ABShowAs:COMPANY\r\n"
+    assert_empty reading.dropped
+  end
+
+  # Where a card came from and when it last changed there, which Monica
+  # writes on every card: the export's facts, dropped without remark.
+  def test_source_and_rev_are_noise
+    card = Vcf.cards(<<~CARD.gsub("\n", "\r\n")).fetch(0)
+      BEGIN:VCARD
+      VERSION:4.0
+      FN:Jane Booles
+      SOURCE:https://monica.example.com/people/h:abc
+      REV:2026-09-01T00:00:00Z
+      END:VCARD
+    CARD
+    reading = Vcf.read(card)
+
+    assert_equal %w[SOURCE REV], reading.dropped.map { it.property&.name }
+    assert_empty Vcf.losses(reading.dropped)
+  end
+
+  # Tags come in as groups, so the line that carried them is neither a
+  # property to survey nor a loss to count.
+  def test_categories_are_read_as_group_names_and_counted_as_no_loss
+    card = Vcf.cards(<<~CARD.gsub("\n", "\r\n")).fetch(0)
+      BEGIN:VCARD
+      VERSION:3.0
+      FN:Jane Booles
+      CATEGORIES:school,book club,school
+      CATEGORIES:Smith\\, Jones
+      END:VCARD
+    CARD
+
+    assert_equal ["school", "book club", "Smith, Jones"], Vcf.categories(card)
+    assert_empty Vcf.losses(Vcf.read(card).dropped)
+    assert_empty Vcf.unknown([card])
+  end
+
 end

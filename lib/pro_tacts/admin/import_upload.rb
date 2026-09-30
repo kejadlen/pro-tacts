@@ -11,7 +11,9 @@ module ProTacts
     # on a Mac and carrying a plan to a host over HTTP; now it is the
     # file that Mac already knows how to export.
     #
-    # The form takes one .vcf and nothing else. Looking over what is
+    # The form takes one file: a .vcf, or the JSON Monica 4 exports an
+    # account as (Import::Monica), which is read as the .vcf it composes.
+    # Looking over what is
     # in it needs the file open, so that is the next screen's
     # (ImportReview, over the walk's list of its contacts and the pair
     # of cards a row there opens).
@@ -38,8 +40,8 @@ module ProTacts
           render RecordCard.new(heading: "Import contacts", submit: "Import", form: FORM) do
             form(action: "/import", method: "post", enctype: "multipart/form-data", id: FORM) do
               label(class: "field") do
-                plain "vcard file"
-                input(type: "file", name: "vcf", accept: ".vcf,text/vcard")
+                plain "vcard file or Monica export"
+                input(type: "file", name: "vcf", accept: ".vcf,text/vcard,.json,application/json")
               end
             end
           end
