@@ -26,7 +26,7 @@ module ProTacts
       def view_template
         render Layout.new(title: "Search", login: @login, searching: true) do
           form(action: "/search", method: "get", class: "search-page") do
-            render SearchField.new(query: @query, results: @results, history: true, recent: true)
+            render SearchField.new(query: @query, results: @results, history: true)
           end
         end
       end

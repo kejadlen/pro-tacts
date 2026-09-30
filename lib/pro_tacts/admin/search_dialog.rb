@@ -14,7 +14,9 @@ module ProTacts
     # a click outside — and `autofocus` lands in the input each time
     # it opens. `/` opens it from anywhere a key is not already typing
     # into something (docs/DESIGN.md, "The core idea"). What was typed
-    # stays when it closes, so reopening lands on the same answer.
+    # stays when it closes, so reopening lands on the same answer;
+    # opened blank, it lists the recently updated contacts, the search
+    # page's own list before a word is typed.
     class SearchDialog < Phlex::HTML
       ID = "search" #: String
 

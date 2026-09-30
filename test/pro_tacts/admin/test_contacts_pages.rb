@@ -357,6 +357,19 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # The dialog fetches the recently updated list as it opens with
+  # nothing typed, the list GET /search/results answers a blank query
+  # (Admin::SearchField), so the box is never empty.
+  def test_the_search_dialog_fetches_as_it_opens
+    with_contacts({"ada" => ADA}) do
+      get "/"
+      dialog = last_response.body[/<dialog id="search".*?<\/dialog>/m]
+
+      assert_includes dialog, "addEventListener('toggle'"
+      assert_includes dialog, "opened() { if (this.q.trim() === '') this.search() }"
+    end
+  end
+
   # The dashboard answers no query: the results page it used to be is
   # gone, and a stale ?q= link lands on recency like any other visit.
   def test_the_dashboard_ignores_a_query

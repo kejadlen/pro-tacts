@@ -54,8 +54,10 @@ submitted query without script, which the dialog cannot. The header
 renders both the dialog's button and the page's link, and CSS shows
 one per width. Before a word is typed the page lists the recently
 updated contacts, the dashboard's own rows, rather than standing
-empty; the dialog opens over a screen with its own content and
-stays empty until typed into.
+empty. The dialog first stayed empty until typed into, since it
+opens over a screen with its own content; it lists them too now,
+fetched as it opens, since most screens it opens over are not the
+dashboard and a blank box offered nothing to pick.
 
 ## Why the results page went
 
