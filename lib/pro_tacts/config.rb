@@ -79,12 +79,14 @@ module ProTacts
       @env.fetch("PRO_TACTS_ACCENT", nil)
     end
 
-    # The tab's icon, PRO_TACTS_FAVICON, as an href; nil leaves the page
-    # without one, which is the deployment's "no brand mark"
-    # (docs/DESIGN.md).
-    #: () -> String?
+    # The tab's icon, PRO_TACTS_FAVICON, as an href. Unset, it is the
+    # deployment's: Lucide's book-user stroked in the default accent
+    # (tokens.css), from the icon register rather than a brand mark
+    # (docs/DESIGN.md), so a run that names its own — `rake dev`'s ink
+    # blue dot — differs from it at a glance.
+    #: () -> String
     def favicon
-      @env.fetch("PRO_TACTS_FAVICON", nil)
+      @env.fetch("PRO_TACTS_FAVICON", "/favicon.svg")
     end
 
     # The running image's version, baked in as a build arg (see

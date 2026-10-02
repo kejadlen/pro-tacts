@@ -74,8 +74,8 @@ class ConfigTest < Minitest::Test
     assert_equal "ink-blue", ProTacts::Config.new("PRO_TACTS_ACCENT" => "ink-blue").accent
   end
 
-  def test_favicon_is_nil_when_unset
-    assert_nil ProTacts::Config.new({}).favicon
+  def test_favicon_is_the_deployments_when_unset
+    assert_equal "/favicon.svg", ProTacts::Config.new({}).favicon
   end
 
   def test_favicon_is_passed_through

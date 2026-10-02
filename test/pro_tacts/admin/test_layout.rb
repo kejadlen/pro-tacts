@@ -153,10 +153,10 @@ class AdminLayoutTest < Minitest::Test
     assert_includes last_response.body, %(<link rel="icon" href="/favicon-dev.svg">)
   end
 
-  def test_no_favicon_leaves_the_tab_bare
+  def test_the_tab_carries_the_deployments_favicon_when_unset
     with_env({})
 
-    refute_includes last_response.body, %(rel="icon")
+    assert_includes last_response.body, %(<link rel="icon" href="/favicon.svg">)
   end
 
   def test_the_title_names_the_instance
