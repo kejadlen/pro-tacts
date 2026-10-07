@@ -545,16 +545,21 @@ module ProTacts
       # thing.
       return close_walk(r, upload) if saved.length + 1 == revised.length
 
-      # Onto the next row nobody has read, in the list's order
-      # (#walk_order) —
-      # the walk steps from card to card, a screen between saves
-      # having only ever repeated what the list beside every card
-      # says. `saved` was read before this write, so the row just
-      # written is named here too; a `fetch` rather than a `first`
-      # because empty is the case the line above took, and reaching
-      # it is a broken assumption rather than a screen to render.
-      remaining = walk_order(revised).reject { |i| saved.key?(i.to_s) || i == index }
-      r.redirect "/import/#{upload}/#{remaining.fetch(0)}", 303
+      # Onto the next row still to save below this one, in the list's
+      # order (#walk_order) — the walk steps from card to card, a
+      # screen between saves having only ever repeated what the list
+      # beside every card says. Below rather than first, so a row
+      # passed over stays passed over: skipping one is opening the
+      # next, and the walk comes back round to it only once the rows
+      # after it are saved. `saved` was read before this write, so the
+      # row just written is named here too; a `fetch` rather than a
+      # `first` because empty is the case the line above took, and
+      # reaching it is a broken assumption rather than a screen to
+      # render.
+      order = walk_order(revised)
+      remaining = order.reject { |i| saved.key?(i.to_s) || i == index }
+      below = order.drop(order.index(index).to_i + 1)
+      r.redirect "/import/#{upload}/#{below.find { remaining.include?(it) } || remaining.fetch(0)}", 303
     end
 
     # The end of the walk: the file and the walk's own notes gone, and

@@ -209,6 +209,24 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # A Save steps to the next unsaved row below it, so a row skipped
+  # by opening a later one stays skipped; with nothing unsaved below,
+  # the walk comes back round to the first one left.
+  def test_a_save_steps_past_a_skipped_row
+    with_contacts({}) do |_store|
+      zed = PLAIN.sub("N:Booles;Sam;;;", "N:Zed;Zoe;;;").sub("FN:Sam Booles", "FN:Zoe Zed")
+      adams = PLAIN.sub("N:Booles;Sam;;;", "N:adams;Al;;;").sub("FN:Sam Booles", "FN:Al adams")
+      id = upload(zed + JANE + adams)
+
+      # The list reads Al (2), Jane (1), Zoe (0); Al is skipped.
+      save(id, 1, first: "Jane", last: "Booles")
+      assert_equal "/import/#{id}/0", last_response.headers["location"]
+
+      save(id, 0, first: "Zoe", last: "Zed")
+      assert_equal "/import/#{id}/2", last_response.headers["location"]
+    end
+  end
+
   # Everything is unsaved until its own screen says otherwise, and a
   # walk broken off overnight has to say which rows those are. The
   # rail says it on screen; the word is there for a reader that
