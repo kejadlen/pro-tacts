@@ -129,6 +129,15 @@ class ImportMonicaTest < Minitest::Test
     assert_equal PIXEL, card.property("PHOTO").value
   end
 
+  # A company Monica kept as a vCard's raw ORG loses the trailing
+  # semicolons, which escaped as text would be part of its name; one
+  # that was nothing else is no company.
+  def test_a_companys_trailing_semicolons_are_dropped
+    assert_equal "Acme", card_for(export(jane("company" => "Acme; ")), "Jane Booles").property("ORG").value
+    assert_equal "Acme", card_for(export(jane("company" => "Acme;;")), "Jane Booles").property("ORG").text
+    assert_nil card_for(export(jane("company" => ";")), "Jane Booles").property("ORG")
+  end
+
   # One NOTE, the invariant a contact keeps
   # (docs/plans/2026-09-25-one-note-per-contact.md): the prose first,
   # then what Monica keeps as records, spelled out.

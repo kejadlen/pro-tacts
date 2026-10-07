@@ -154,7 +154,12 @@ module ProTacts
         lines << "N:#{last};#{first};#{middle};;"
         lines << "FN:#{VCard.escape(name_of(properties))}"
         lines << text("NICKNAME", properties["nickname"])
-        lines << text("ORG", properties["company"])
+        # Monica's company is free text, and one that came in by vCard
+        # kept ORG's raw value, the trailing semicolon macOS writes
+        # included — Monica's own migration nulls a company of ";"
+        # alone (2021_10_14_212144_v_card_company). Escaped as text,
+        # that semicolon would be part of the name.
+        lines << text("ORG", properties["company"].to_s.sub(/[;\s]+\z/, ""))
         lines << text("TITLE", properties["job"])
         lines << birthday(properties["birthdate"])
 
