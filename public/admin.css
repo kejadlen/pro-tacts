@@ -183,6 +183,12 @@
   column-gap: var(--gl-space-s);
   align-items: baseline;
 }
+/* The Company row's box has no text to share a baseline with, so the
+   baseline rule above floats it over its caption; centred, the two
+   read as one row like every other. */
+.card-body form.field-stack > .field:has(> input[type="checkbox"]) {
+  align-items: center;
+}
 /* A row whose control is a stack of inputs — an address's component
    fields — holds the multi-line value's own lines in the value
    column (docs/DESIGN.md), so the stack closes to the record's own

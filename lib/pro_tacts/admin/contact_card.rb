@@ -1,6 +1,7 @@
 require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/avatar"
+require "pro_tacts/admin/card_form"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/group_dialog"
 require "pro_tacts/admin/group_label"
@@ -62,6 +63,13 @@ module ProTacts
             # formal name stays the heading.
             if @contact.nickname
               div(class: "type-h3 gl-muted", style: "margin-top: var(--gl-space-2xs);") { @contact.nickname }
+            end
+            # A person's organization, where Contacts.app shows it:
+            # under the name, in body type because it is no name of
+            # theirs. A company's is the name above it already.
+            organization = CardForm.organization_of(@contact.vcard).to_s
+            if !@contact.company? && !organization.empty?
+              div(class: "type-body gl-muted", style: "margin-top: var(--gl-space-2xs);") { organization }
             end
           end
           # Only a picture earns this slot: an initials circle

@@ -1350,10 +1350,10 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes body, '<form action="/contacts/red" method="post" class="field-stack" id="contact-form">'
       assert_includes body, '<button type="submit" form="contact-form" data-variant="primary">Save</button>'
       assert_includes body, '<input type="text" name="first" value="Ada" ' \
-                            ':required="lastBlank" @input="firstBlank = !$el.value.trim()" autofocus>'
-      assert_includes body, '<span>Middle</span><input type="text" name="middle">'
+                            ':required="lastBlank" @input="firstBlank = !$el.value.trim()" :disabled="company" autofocus>'
+      assert_includes body, '<span>Middle</span><input type="text" name="middle" :disabled="company">'
       assert_includes body, '<input type="text" name="last" value="Lovelace" ' \
-                            ':required="firstBlank" @input="lastBlank = !$el.value.trim()">'
+                            ':required="firstBlank" @input="lastBlank = !$el.value.trim()" :disabled="company">'
       assert_includes body,
         '<label class="field" data-blank-removes><span>Nickname</span>' \
         '<input type="text" name="nickname" value="Red" placeholder="removed on save"></label>'
@@ -1373,7 +1373,7 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/ada/edit"
 
       assert_equal 200, last_response.status
-      assert_includes last_response.body, '<input type="text" name="middle" value="Byron, the poet">'
+      assert_includes last_response.body, '<input type="text" name="middle" value="Byron, the poet" :disabled="company">'
     end
   end
 
@@ -1388,9 +1388,9 @@ class AdminContactsPagesTest < Minitest::Test
       body = last_response.body
       assert_includes body, "firstBlank: true, lastBlank: false"
       assert_includes body, '<input type="text" name="first" ' \
-                            ':required="lastBlank" @input="firstBlank = !$el.value.trim()" autofocus>'
+                            ':required="lastBlank" @input="firstBlank = !$el.value.trim()" :disabled="company" autofocus>'
       assert_includes body, '<input type="text" name="last" value="Prince" required ' \
-                            ':required="firstBlank" @input="lastBlank = !$el.value.trim()">'
+                            ':required="firstBlank" @input="lastBlank = !$el.value.trim()" :disabled="company">'
 
       post "/contacts/prince", first: "", last: "Prince", etag: store.contact("prince").etag
 
@@ -1399,68 +1399,192 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  ACME = "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Acme Corp;;;;\r\nFN:Acme Corp\r\nORG:Acme Corp\r\n" \
+  ACME = "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Acme Corp;;;;\r\nFN:Acme Corp\r\nORG:Acme Corp;Sales\r\n" \
          "X-ABShowAs:COMPANY\r\nUID:acme\r\nEND:VCARD\r\n"
 
-  # A company card's name is one field — the organization's own — in
-  # place of the pair, keyed off X-ABShowAs:COMPANY; the wire name is
-  # `last`, the family slot the save splices.
+  # The two cards macOS PUT as a card was switched in Contacts.app
+  # (log/dev.log, 2026-10-07): a person with an employer (exchange
+  # b5ce7eaebe0e) and that card made a company again (ec5ce1d8dd03).
+  # Their X-ADDRESSING-GRAMMAR blob is left out, being Apple's opaque
+  # bytes that no read here touches.
+  SWITCHED_PERSON = "BEGIN:VCARD\r\nVERSION:3.0\r\nPRODID:-//Apple Inc.//macOS 27.0//EN\r\nN:B;A;;;\r\n" \
+                    "FN:A B\r\nORG:Arbitrary Definitions;\r\nREV:2026-10-07T13:34:15Z\r\nUID:company\r\n" \
+                    "END:VCARD\r\n"
+  SWITCHED_COMPANY = "BEGIN:VCARD\r\nVERSION:3.0\r\nPRODID:-//Apple Inc.//macOS 27.0//EN\r\nN:;;;;\r\n" \
+                     "FN:Arbitrary Definitions\r\nORG:Arbitrary Definitions;\r\nX-ABShowAs:COMPANY\r\n" \
+                     "REV:2026-10-07T13:34:40Z\r\nUID:company\r\nEND:VCARD\r\n"
+
+  # A company card's name is the organization row, required and
+  # focused; the pair is rendered hidden and disabled, so the Company
+  # box can switch to it and it neither submits nor blocks a save.
   def test_the_edit_screen_shows_one_organization_field_for_a_company_card
     with_contacts({"acme" => ACME}) do
       get "/contacts/acme/edit"
 
       body = last_response.body
       assert_equal 200, last_response.status
-      assert_includes body, '<span>Organization</span>' \
-                            '<input type="text" name="last" value="Acme Corp" required autofocus>'
-      refute_includes body, '<span>First</span>'
-      refute_includes body, '<span>Last</span>'
+      assert_includes body, '<div class="field"><label for="company">Company</label>' \
+                            '<input type="hidden" name="company" value="0">' \
+                            '<input type="checkbox" id="company" name="company" value="1" checked x-model="company">'
+      assert_includes body, %(<label class="field" :data-blank-removes="!company"><span>Organization</span>) +
+                            %(<input type="text" name="organization" value="Acme Corp" required :required="company" ) +
+                            %(autofocus :placeholder="company ? '' : 'removed on save'">)
+      assert_includes body, '<label class="field" x-show="!company" style="display: none"><span>First</span>'
+      assert_includes body, '<input type="text" name="last" value="Acme Corp" required ' \
+                            ':required="firstBlank" @input="lastBlank = !$el.value.trim()" disabled :disabled="company">'
+      # The organization, then the box, under the name fields.
+      assert_operator body.index('name="organization"'), :>, body.index('name="last"')
+      assert_operator body.index('id="company"'), :>, body.index('name="organization"')
     end
   end
 
-  # The save splices the organization's name into N's family slot and
-  # rewrites FN, and touches nothing else: ORG is a property no field
-  # on this form owns, so it keeps the bytes it arrived with.
-  def test_saving_a_company_cards_edit_moves_the_name_and_leaves_its_org_alone
+  # A person's organization is their employer: shown, optional, and a
+  # whole-property row whose blank removes it, like the nickname's.
+  def test_the_edit_screen_shows_a_persons_organization
+    with_contacts({"company" => SWITCHED_PERSON}) do
+      get "/contacts/company/edit"
+
+      body = last_response.body
+      assert_includes body, '<input type="checkbox" id="company" name="company" value="1" x-model="company">'
+      assert_includes body, %(<label class="field" data-blank-removes :data-blank-removes="!company">) +
+                            %(<span>Organization</span><input type="text" name="organization" ) +
+                            %(value="Arbitrary Definitions" :required="company" placeholder="removed on save" ) +
+                            %(:placeholder="company ? '' : 'removed on save'">)
+    end
+  end
+
+  # A person without one has an empty row and nothing to lose, and
+  # their own name is no organization's to prefill.
+  def test_a_person_without_an_organization_gets_an_empty_row
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada/edit"
+
+      assert_includes last_response.body,
+        '<label class="field"><span>Organization</span><input type="text" name="organization" :required="company">'
+    end
+  end
+
+  # The person's save writes the employer into ORG's first component,
+  # the units after it kept; blank removes the property; a POST
+  # without the field leaves it be.
+  def test_saving_a_persons_organization
+    with_contacts({"company" => SWITCHED_PERSON.sub("ORG:Arbitrary Definitions;", "ORG:Arbitrary Definitions;Ops")}) do |store|
+      post "/contacts/company", first: "A", last: "B", organization: "Gloss", etag: store.contact("company").etag
+      assert_includes store.contact("company").vcard.to_s, "ORG:Gloss;Ops\r\n"
+
+      post "/contacts/company", first: "A", last: "B", etag: store.contact("company").etag
+      assert_includes store.contact("company").vcard.to_s, "ORG:Gloss;Ops\r\n"
+
+      post "/contacts/company", first: "A", last: "B", organization: "", etag: store.contact("company").etag
+      refute_includes store.contact("company").vcard.to_s, "ORG"
+      refute store.contact("company").company?
+    end
+  end
+
+  # The details page shows a person's organization under their name,
+  # and a company's not twice.
+  def test_show_puts_a_persons_organization_under_the_name
+    with_contacts({"company" => SWITCHED_PERSON, "acme" => ACME}) do
+      get "/contacts/company"
+      header = last_response.body.split("<dl").first
+      assert_includes header, '<div class="type-body gl-muted" style="margin-top: var(--gl-space-2xs);">' \
+                              "Arbitrary Definitions</div>"
+
+      get "/contacts/acme"
+      refute_includes last_response.body.split("<dl").first, "type-body gl-muted"
+    end
+  end
+
+  # A company's name goes into ORG's first component and FN, where
+  # macOS keeps it; the units after it keep their bytes, and N is
+  # emptied, the older shape's name in it included.
+  def test_saving_a_company_writes_its_name_into_org_and_fn
     with_contacts({"acme" => ACME}) do |store|
-      post "/contacts/acme", last: "Acme Corporation", etag: store.contact("acme").etag
+      post "/contacts/acme", company: "1", organization: "Acme, Inc.", etag: store.contact("acme").etag
 
       assert_equal 303, last_response.status
       card = store.contact("acme").vcard.to_s
-      assert_includes card, "N:Acme Corporation;;;;\r\n"
-      assert_includes card, "FN:Acme Corporation\r\n"
-      assert_includes card, "ORG:Acme Corp\r\n"
+      assert_includes card, "N:;;;;\r\n"
+      assert_includes card, "FN:Acme\\, Inc.\r\n"
+      assert_includes card, "ORG:Acme\\, Inc.;Sales\r\n"
       assert_includes card, "X-ABShowAs:COMPANY\r\n"
     end
   end
 
-  # The card a real client sends: macOS writes a company's N empty
-  # and its name in FN and ORG both (the PUT of 2026-09-24 in
-  # log/dev.log), so the organization field prefills from FN — not
-  # the family slot the older shape carried it in — and an untouched
-  # save writes the name into N while ORG keeps its own bytes.
-  def test_a_company_card_whose_name_sits_in_fn_prefills_and_saves
-    client =
-      "BEGIN:VCARD\r\nVERSION:3.0\r\nN:;;;;\r\nFN:Arbitrary Definitions\r\n" \
-        "ORG:Arbitrary Definitions;\r\nX-ABShowAs:COMPANY\r\n" \
-        "UID:client-org\r\nEND:VCARD\r\n"
+  # An untouched save of the card macOS wrote keeps every byte.
+  def test_an_untouched_company_save_keeps_the_card
+    with_contacts({"company" => SWITCHED_COMPANY}) do |store|
+      get "/contacts/company/edit"
+      assert_includes last_response.body, 'name="organization" value="Arbitrary Definitions"'
 
-    with_contacts({"client-org" => client}) do |store|
-      get "/contacts/client-org/edit"
-
-      body = last_response.body
-      assert_equal 200, last_response.status
-      assert_includes body, '<span>Organization</span>' \
-                            '<input type="text" name="last" value="Arbitrary Definitions" required autofocus>'
-
-      post "/contacts/client-org", last: "Arbitrary Definitions",
-                                    etag: store.contact("client-org").etag
+      post "/contacts/company", company: "1", organization: "Arbitrary Definitions",
+                                etag: store.contact("company").etag
 
       assert_equal 303, last_response.status
-      card = store.contact("client-org").vcard.to_s
-      assert_includes card, "N:Arbitrary Definitions;;;;\r\n"
+      assert_equal SWITCHED_COMPANY, store.contact("company").vcard.to_s
+    end
+  end
+
+  # Ticking Company on a person: the flag goes on and FN takes the
+  # organization's name, and N is emptied, as in macOS's second PUT:
+  # the person's names would otherwise stay on a card that no longer
+  # shows them.
+  def test_ticking_company_makes_a_person_a_company
+    with_contacts({"company" => SWITCHED_PERSON}) do |store|
+      post "/contacts/company", company: "1", organization: "Arbitrary Definitions",
+                                etag: store.contact("company").etag
+
+      assert_equal 303, last_response.status
+      contact = store.contact("company")
+      assert contact.company?
+      card = contact.vcard.to_s
+      assert_includes card, "N:;;;;\r\n"
       assert_includes card, "FN:Arbitrary Definitions\r\n"
       assert_includes card, "ORG:Arbitrary Definitions;\r\n"
+    end
+  end
+
+  # Unticking it: the flag comes off and the pair writes N and FN, as
+  # in macOS's first PUT; ORG stays, the person's employer now.
+  def test_unticking_company_makes_a_company_a_person
+    with_contacts({"company" => SWITCHED_COMPANY}) do |store|
+      post "/contacts/company", company: "0", first: "A", last: "B", etag: store.contact("company").etag
+
+      assert_equal 303, last_response.status
+      contact = store.contact("company")
+      refute contact.company?
+      card = contact.vcard.to_s
+      assert_includes card, "N:B;A;;;\r\n"
+      assert_includes card, "FN:A B\r\n"
+      assert_includes card, "ORG:Arbitrary Definitions;\r\n"
+      refute_includes card, "X-ABShowAs"
+    end
+  end
+
+  # A company switched to a person whose N already holds names still
+  # gets its FN from them: the FN it had was the organization's.
+  def test_a_switch_back_to_a_person_rewrites_the_display_name
+    names_kept = SWITCHED_COMPANY.sub("N:;;;;", "N:B;A;;;")
+
+    with_contacts({"company" => names_kept}) do |store|
+      post "/contacts/company", company: "0", first: "A", last: "B", etag: store.contact("company").etag
+
+      assert_includes store.contact("company").vcard.to_s, "FN:A B\r\n"
+    end
+  end
+
+  # Neither kind saves without its name: macOS would not save the
+  # person it unticked until one was typed, and a company's one field
+  # is the whole of its name.
+  def test_a_switch_without_the_new_kinds_name_is_refused
+    with_contacts({"company" => SWITCHED_COMPANY, "person" => SWITCHED_PERSON.sub("UID:company", "UID:person")}) do |store|
+      post "/contacts/company", company: "0", first: "", last: "", etag: store.contact("company").etag
+      assert_includes last_response.body, "A contact needs a name."
+      assert store.contact("company").company?
+
+      post "/contacts/person", company: "1", organization: " ", etag: store.contact("person").etag
+      assert_includes last_response.body, "A contact needs a name."
+      refute store.contact("person").company?
     end
   end
 
@@ -2341,7 +2465,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => ADA}) do
       body = (get("/contacts/ada/edit") && last_response.body)
 
-      assert_includes body, %(<div x-data="{ added: [], type: 'phone', firstBlank: false, lastBlank: false }">)
+      assert_includes body, %(<div x-data="{ added: [], type: 'phone', company: false, firstBlank: false, lastBlank: false }">)
       # One template serves every kind: the single-value kinds get an
       # input whose type and name bind to the kind, the address kind
       # the same six component fields a standing row gets — named by

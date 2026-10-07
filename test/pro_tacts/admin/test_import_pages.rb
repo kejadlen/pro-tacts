@@ -280,7 +280,9 @@ class AdminImportPagesTest < Minitest::Test
 
   # The shape macOS writes a company in (test/fixtures/cards/
   # company.vcf): N empty, the name in FN and ORG, and the flag. It
-  # opens in the company editor and comes in as a company.
+  # opens in the company editor and comes in as a company, its name
+  # ORG's own and FN following it the way macOS writes FN
+  # (docs/plans/2026-10-07-switching-company-and-person.md).
   def test_a_company_card_comes_in_as_a_company
     company = <<~CARD.gsub("\n", "\r\n")
       BEGIN:VCARD
@@ -299,15 +301,16 @@ class AdminImportPagesTest < Minitest::Test
 
       refute_includes last_response.body, "not imported"
       assert_includes last_response.body, "<span>Organization</span>"
-      assert_includes last_response.body, %(name="last" value="Bletchley Park")
+      assert_includes last_response.body, %(name="organization" value="Bletchley Park Trust")
 
-      save(id, 0, first: "", last: "Bletchley Park")
+      save(id, 0, first: "", last: "", company: "1", organization: "Bletchley Park Trust")
 
       assert_equal 303, last_response.status
       park = store.contacts.fetch(0)
 
       assert_predicate park, :company?
       assert_equal "Bletchley Park Trust;", park.organization
+      assert_equal "Bletchley Park Trust", park.name
     end
   end
 

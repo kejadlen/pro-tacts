@@ -33,7 +33,35 @@ module ProTacts
         )
       end
 
-      # The contact editor's save, spliced into the stored card.
+      # Whether the save writes a company card: the editor's Company
+      # box, which submits "1" checked and the hidden "0" before it
+      # otherwise. A POST carrying neither keeps what the card is
+      # (Contact#company?), so no other form's save can switch one.
+      #: (Contact contact, Hash[String, untyped] params) -> bool
+      def self.company?(contact, params)
+        case params["company"]
+        when "1" then true
+        when "0" then false
+        else contact.company?
+        end
+      end
+
+      # Whether the save is refused for want of a name, each kind
+      # asking its own: a company its organization field, a person
+      # either half of the pair (Admin::NamePair). The server's half
+      # of the browser's `required`.
+      #: (Contact contact, Hash[String, untyped] params) -> bool
+      def self.nameless?(contact, params)
+        if company?(contact, params)
+          params["organization"].to_s.strip.empty?
+        else
+          params["first"].to_s.strip.empty? && params["last"].to_s.strip.empty?
+        end
+      end
+
+      # The contact editor's save, spliced into the stored card. Where
+      # each kind keeps its name, and the switch between the two, is
+      # docs/plans/2026-10-07-switching-company-and-person.md.
       #: (Contact contact, String first, String middle, String last, Hash[String, untyped] params) -> VCard
       def self.contact_card(contact, first, middle, last, params)
         nickname = params["nickname"].to_s.strip
@@ -47,8 +75,12 @@ module ProTacts
         own = contact.own
 
         vcard = contact.stored
-        vcard = vcard.replace("N", [n_line(vcard, first, middle, last)])
-        vcard = edited_fn(contact, vcard, first, middle, last)
+        vcard =
+          if company?(contact, params)
+            company_name(vcard, params["organization"].to_s.strip)
+          else
+            person_name(contact, vcard, first, middle, last, params["organization"]&.to_s&.strip)
+          end
         vcard = vcard.replace("NICKNAME", text_lines("NICKNAME", nickname))
         vcard = vcard.replace("NOTE", text_lines("NOTE", note))
         vcard = edited_values(own.phones, "phone", "TEL", vcard, params)
@@ -236,6 +268,65 @@ module ProTacts
         ["#{name}:#{VCard.escape(value)}\r\n"]
       end
 
+      # A company's name, written where macOS writes one (exchange
+      # ec5ce1d8dd03 in log/dev.log, 2026-10-07): ORG's first component
+      # and FN both, under X-ABShowAs:COMPANY, with N empty. A company
+      # has no person's name, and one left in N would be a name no
+      # screen here shows (the editor hides the pair for a company), so
+      # a person made a company leaves theirs behind, prefixes and
+      # suffixes too, and a switch back is typed afresh, as Contacts.app
+      # asked for it. Each line is rewritten only where it says
+      # something else, so an untouched save of the card macOS wrote
+      # keeps its bytes.
+      #: (VCard vcard, String organization) -> VCard
+      def self.company_name(vcard, organization)
+        vcard = vcard.replace("N", ["N:;;;;\r\n"]) unless vcard.property("N")&.components&.all?(&:empty?)
+        vcard = vcard.replace("FN", ["FN:#{VCard.escape(organization)}\r\n"]) unless vcard.property("FN")&.text == organization
+        vcard = edited_organization(vcard, organization)
+        return vcard if vcard.property("X-ABShowAs")&.text == "COMPANY"
+
+        vcard.replace("X-ABShowAs", ["X-ABShowAs:COMPANY\r\n"])
+      end
+
+      # A person's name, into N and FN, and the flag gone: a person is
+      # a card without X-ABShowAs, which is how macOS unticks Company
+      # (exchange b5ce7eaebe0e). ORG is the person's employer, written
+      # from the same field as a company's name; a POST without that
+      # field leaves it be, the birthday group's posture.
+      #: (Contact contact, VCard vcard, String first, String middle, String last, String? organization) -> VCard
+      def self.person_name(contact, vcard, first, middle, last, organization)
+        vcard = vcard.replace("N", [n_line(vcard, first, middle, last)])
+        vcard = edited_fn(contact, vcard, first, middle, last)
+        vcard = edited_organization(vcard, organization) if organization
+        vcard.replace("X-ABShowAs", [])
+      end
+
+      # An organization's own name: ORG's first component (RFC 2426
+      # section 3.5.5), the units after it being no part of it. Public
+      # for the editor's prefill (Admin::ContactsEdit), which reads the
+      # name this save writes.
+      #: (VCard vcard) -> String?
+      def self.organization_of(vcard)
+        vcard.property("ORG")&.components&.first
+      end
+
+      # ORG with the organization field's name in it, or the card
+      # untouched where the name already is that. The name is the first
+      # component, the units after it rejoined byte for byte — n_line's
+      # splice, for n_line's reason. Blank removes the property, the
+      # whole-property rule, units and all: they are no row of their own
+      # here, and a department of no organization is not one to keep.
+      #: (VCard vcard, String organization) -> VCard
+      def self.edited_organization(vcard, organization)
+        return vcard if organization_of(vcard).to_s == organization
+        return vcard.replace("ORG", []) if organization.empty?
+
+        property = vcard.property("ORG")
+        units = [] #: Array[String]
+        units = VCard.split_raw_components(property.value).drop(1) if property
+        vcard.replace("ORG", ["ORG:#{[VCard.escape(organization), *units].join(";")}\r\n"])
+      end
+
       # FN's replacement, or the card untouched: the display name is the
       # card's own text (RFC 2426 section 3.1.1), not a rendering of N,
       # and "Dr. Ada B. Lovelace, Jr." holds parts no field on this form
@@ -250,7 +341,9 @@ module ProTacts
       def self.edited_fn(contact, vcard, first, middle, last)
         family, given, additional = contact.name_components || []
         named = !vcard.property("FN").nil?
-        return vcard if named && first == given.to_s && middle == additional.to_s && last == family.to_s
+        # A company's FN is its organization's name (#company_name), so
+        # a card leaving that kind takes its display name from the pair.
+        return vcard if named && !contact.company? && first == given.to_s && middle == additional.to_s && last == family.to_s
 
         vcard.replace("FN", ["FN:#{VCard.escape(display_name(first, middle, last))}\r\n"])
       end
@@ -296,7 +389,7 @@ module ProTacts
 
       private_class_method :edited_values, :edited_addresses, :address_unchanged?,
                            :address_line, :birthday_component, :text_lines, :edited_fn, :display_name,
-                           :n_line
+                           :n_line, :company_name, :person_name, :edited_organization
     end
   end
 end

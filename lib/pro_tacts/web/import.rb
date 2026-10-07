@@ -428,11 +428,12 @@ module ProTacts
       # N and FN are mandatory (RFC 2426 section 4), so a save blank
       # throughout is refused — the toast is the backstop, the form's
       # name pair (Admin::NamePair) being the browser's own refusal of
-      # the same.
+      # the same, and a company's organization field the one name it
+      # has (Admin::CardForm.nameless?).
       first = r.params["first"].to_s.strip
       middle = r.params["middle"].to_s.strip
       last = r.params["last"].to_s.strip
-      if first.empty? && last.empty?
+      if Admin::CardForm.nameless?(contact, r.params)
         return card_screen(upload, index, into:, notice: "A contact needs a name.", joined: ticked, named: wanted)
       end
 

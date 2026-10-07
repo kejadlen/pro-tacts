@@ -80,6 +80,7 @@ module ProTacts
       # @rbs @first: String?
       # @rbs @middle: String?
       # @rbs @last: String?
+      # @rbs @organization: String?
       # @rbs @action: String
       # @rbs @back: ([String, String])?
       # @rbs @aside: Phlex::HTML?
@@ -128,7 +129,8 @@ module ProTacts
         family, given, additional = contact.name_components || []
         @first = given
         @middle = additional
-        @last = family || organization_name
+        @last = family
+        @organization = organization_name
       end
 
       def view_template
@@ -142,8 +144,9 @@ module ProTacts
           # row for it, so the two have to share state, and Alpine
           # scopes by ancestry. `added` is the list of types added
           # this pass, `type` is the radio's binding, and the rest is
-          # the name boxes' (NamePair).
-          div(x_data: "{ added: [], type: '#{ADDABLE_TYPES.first}', #{NamePair.state(@first, @last)} }") do
+          # the name boxes' (NamePair), `company` the Company box's.
+          div(x_data: "{ added: [], type: '#{ADDABLE_TYPES.first}', company: #{@contact.company?}, " \
+                      "#{NamePair.state(@first, @last)} }") do
             render RecordCard.new(
               back: @back,
               nav: -> {
@@ -165,39 +168,64 @@ module ProTacts
                   # would still land in the type column as an
                   # anonymous grid item, but nothing could then reach
                   # it, and the note's caption needs reaching.
-                  # The name, as an organization spells it or a person:
-                  # one field for a company card (X-ABShowAs:COMPANY,
-                  # Contact#company?), the pair and the middle box for
-                  # everyone else. The organization field's wire name
-                  # is `last` because that is where the name lives —
-                  # N's family slot, the component the save splices
-                  # (CardForm.n_line) — and the label says what the
-                  # visitor knows it by. An unchecked company card
-                  # submits no first or middle, and the save reads
-                  # their absence as the empties they are.
-                  if @contact.company?
-                    label(class: "field") do
-                      span { "Organization" }
-                      input(type: "text", name: "last", value: @last, required: true, autofocus: true)
-                    end
-                  else
-                    label(class: "field") do
-                      span { "First" }
-                      input(**NamePair.first(@first, @last), autofocus: true)
-                    end
-                    # Outside the required pair, and outside its removal
-                    # state with it: a blanked middle name rewrites N's
-                    # additional component like any other name box, and
-                    # the row it would strike through is the name row,
-                    # which no save can remove.
-                    label(class: "field") do
-                      span { "Middle" }
-                      input(type: "text", name: "middle", value: @middle)
-                    end
-                    label(class: "field") do
-                      span { "Last" }
-                      input(**NamePair.last(@first, @last))
-                    end
+                  # The name, as a person spells it: the pair and the
+                  # middle box, hidden for a company, whose name is the
+                  # organization row below. Disabled rather than only
+                  # hidden, so they neither submit nor stand in the way
+                  # of a `required`, and a switch back before the save
+                  # finds them as they were; a saved company has none
+                  # (CardForm.company_name). Shown and enabled from the
+                  # server's own render, so the page is right before
+                  # Alpine runs.
+                  company = @contact.company?
+                  label(class: "field", x_show: "!company", style: ("display: none" if company)) do
+                    span { "First" }
+                    input(**NamePair.first(@first, @last), disabled: company, ":disabled": "company",
+                                                           autofocus: !company)
+                  end
+                  # Outside the required pair, and outside its removal
+                  # state with it: a blanked middle name rewrites N's
+                  # additional component like any other name box, and
+                  # the row it would strike through is the name row,
+                  # which no save can remove.
+                  label(class: "field", x_show: "!company", style: ("display: none" if company)) do
+                    span { "Middle" }
+                    input(type: "text", name: "middle", value: @middle, disabled: company, ":disabled": "company")
+                  end
+                  label(class: "field", x_show: "!company", style: ("display: none" if company)) do
+                    span { "Last" }
+                    input(**NamePair.last(@first, @last), disabled: company, ":disabled": "company")
+                  end
+                  # ORG, one row for both kinds: a company's name, and
+                  # so required while the box is ticked, or a person's
+                  # employer, and so a whole-property row like the
+                  # nickname, whose blank removes it. The removal state
+                  # is bound to the box so a company's blank, which
+                  # cannot save, never claims a removal.
+                  org = !@contact.stored.property("ORG").nil?
+                  label(class: "field", data: {blank_removes: org && !company},
+                                        **(org ? {":data-blank-removes": "!company"} : {})) do
+                    span { "Organization" }
+                    input(type: "text", name: "organization", value: @organization,
+                          required: company, ":required": "company", autofocus: company,
+                          placeholder: org && !company ? "removed on save" : nil,
+                          **(org ? {":placeholder": "company ? '' : 'removed on save'"} : {}))
+                  end
+                  # Company or person, Contacts.app's own checkbox
+                  # (docs/plans/2026-10-07-switching-company-and-
+                  # person.md), under the name it decides the shape of.
+                  # The hidden "0" goes first so an unticked box still
+                  # says so — Rack keeps the last of a repeated name —
+                  # and CardForm.company? reads a POST with neither as
+                  # the card's kind unchanged. The caption is a label
+                  # beside the box rather than one wrapping it: Gloss
+                  # sets a wrapping label in its checkbox type, over
+                  # the caption's.
+                  div(class: "field") do
+                    label(for: "company") { "Company" }
+                    input(type: "hidden", name: "company", value: "0")
+                    input(type: "checkbox", id: "company", name: "company", value: "1",
+                          checked: company, x_model: "company")
                   end
                   # The whole-property rows wear the removal state only
                   # over a property the card carries: both render empty
@@ -248,18 +276,16 @@ module ProTacts
 
       private
 
-      # A company card's name, from wherever the card holds it. macOS
-      # writes N empty and the name in FN and ORG both (the PUT a real
-      # client sent, log/dev.log 2026-09-24), so the organization
-      # field cannot prefill from the family slot alone; the older
-      # family-slot shape is already read by then, and ORG's own name
-      # is its first component — the semicolons after it are units.
-      # nil for a person, whose family slot is the field.
+      # The organization field's value: ORG's own name, where the save
+      # writes it (CardForm.edited_organization). A company card without
+      # one is the older shape, which kept a company's name in N and
+      # FN, so it reads FN; a person without one has no employer.
       #: () -> String?
       def organization_name
-        return nil unless @contact.company?
+        own = CardForm.organization_of(@contact.stored).to_s
+        return own unless own.empty?
 
-        @contact.name || @contact.organization&.split(";", 2)&.first
+        @contact.name if @contact.company?
       end
 
       # The rows added this pass, rendered by Alpine from `added` —
