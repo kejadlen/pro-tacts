@@ -173,6 +173,16 @@ class ImportMonicaTest < Minitest::Test
     assert_includes dropped, "X-MONICA-ACTIVITY:2026-06-01 — Picnic"
   end
 
+  # A composed card says who wrote it, which is how the walk knows to
+  # tick it into the monica group; a card from anywhere else is not.
+  def test_a_composed_card_is_marked_for_the_monica_group
+    card = card_for(export(jane), "Jane Booles")
+
+    assert_equal Monica::PRODID, card.property("PRODID").text
+    assert_equal ["monica"], Monica.groups(card)
+    assert_empty Monica.groups(ProTacts::VCard.new("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Sam\r\nEND:VCARD\r\n"))
+  end
+
   def test_tags_arrive_as_the_card_s_categories
     card = card_for(export(jane), "Jane Booles")
 

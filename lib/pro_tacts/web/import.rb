@@ -262,7 +262,8 @@ module ProTacts
         # pressed (Admin::ImportSidebar).
         save: target ? "Update #{target.name || target.id}" : "Import",
         aside: Admin::ImportOriginal.new(card: original, dropped: merge ? dropped + merge.left : dropped),
-        fields: import_picker(group, joined, named, member: target, tags: Import::Vcf.categories(original)),
+        fields: import_picker(group, joined, named, member: target,
+                                                    tags: Import::Vcf.categories(original) + Import::Monica.groups(original)),
         lead: import_target(upload, index, matches, target),
         sidebar:,
       )

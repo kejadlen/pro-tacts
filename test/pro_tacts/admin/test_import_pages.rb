@@ -1144,10 +1144,25 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body, "Jane Booles"
       assert_includes last_response.body, "Likes jigsaws."
       assert_includes last_response.body, "TITLE:Welder"
+      # Everything from Monica is ticked into the one group, beside
+      # the import's own.
+      assert_includes last_response.body, %(<input type="checkbox" name="named[]" value="monica" checked>)
 
       save(id, 0, first: "Jane", last: "Booles", "note" => "Likes jigsaws.")
 
-      assert_equal ["Likes jigsaws."], store.contacts.fetch(0).notes.map(&:value)
+      jane = store.contacts.fetch(0)
+      assert_equal ["Likes jigsaws."], jane.notes.map(&:value)
+      assert_equal [jane.id], store.all_groups.find { it.name == "monica" }.members
+    end
+  end
+
+  # A .vcf is not Monica's, whatever its file is called.
+  def test_a_vcf_is_not_ticked_into_the_monica_group
+    with_contacts({}) do
+      upload(PLAIN, name: "monica.vcf")
+      follow_redirect!
+
+      refute_includes last_response.body, %(value="monica")
     end
   end
 

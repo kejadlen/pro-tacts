@@ -46,6 +46,24 @@ module ProTacts
         "protege" => "protégé",
       }.freeze #: Hash[String, String]
 
+      # The program that wrote a composed card, which is this one
+      # reading Monica's export — the PRODID's own question, and how
+      # the walk tells a Monica card from a .vcf's. Vcf.read drops it
+      # as noise, so it costs the card nothing.
+      PRODID = "-//pro-tacts//Monica 4 export//EN" #: String
+
+      # The group a card from Monica is ticked into beside the import's
+      # own, so everything that came over from Monica can be found
+      # together after any number of imports.
+      GROUP = "monica" #: String
+
+      # The groups a card is ticked into for having come from Monica:
+      # GROUP for a card this module composed, none for any other.
+      #: (VCard card) -> Array[String]
+      def self.groups(card)
+        card.property("PRODID")&.text == PRODID ? [GROUP] : []
+      end
+
       # Whether an upload is a JSON document rather than a .vcf — asked
       # of the bytes rather than the file's name, which is the
       # browser's to get wrong. A vCard begins with BEGIN.
@@ -131,7 +149,7 @@ module ProTacts
       #: (Hash[String, untyped] contact, names: Hash[String, String], photos: Hash[String, String], field_types: Hash[String, Hash[String, untyped]], activities: Hash[String, Hash[String, untyped]], relationships: Array[untyped]) -> String
       def self.card(contact, names:, photos:, field_types:, activities:, relationships:)
         properties = props(contact)
-        lines = ["BEGIN:VCARD", "VERSION:3.0"] #: Array[String?]
+        lines = ["BEGIN:VCARD", "VERSION:3.0", "PRODID:#{PRODID}"] #: Array[String?]
         first, middle, last = %w[first_name middle_name last_name].map { VCard.escape(properties[it].to_s.strip) }
         lines << "N:#{last};#{first};#{middle};;"
         lines << "FN:#{VCard.escape(name_of(properties))}"
