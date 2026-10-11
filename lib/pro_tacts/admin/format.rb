@@ -86,7 +86,7 @@ module ProTacts
       #: (Contact::Address address) -> Array[String]
       def self.address_lines(address)
         [
-          [address.extended, address.street].compact.join(" "),
+          [address.street, address.extended].compact.join(" "),
           [address.locality, address.region, address.postal_code].compact.join(", "),
           address.country,
         ].compact.reject { it.empty? }
