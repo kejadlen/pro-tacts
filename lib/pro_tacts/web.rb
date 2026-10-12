@@ -30,6 +30,11 @@ module ProTacts
       __dir__ #: String
     ).parent.parent / "public" #: Pathname
 
+    # The statuses whose transactions Sentry drops, for config.ru:
+    # sentry-ruby's default (TRACE_IGNORE_STATUS_CODES_DEFAULT) less 303,
+    # which answers every admin write, so an upload or a Save is traced.
+    UNTRACED_STATUSES = [(301..302), (305..399), (401..404)].freeze #: Array[Range[Integer]]
+
     # The store this app serves from. config.ru builds it and hands it in;
     # nothing here reaches for a global to find one, which is what lets a
     # test point the app at a throwaway database. Kept in Roda's own opts

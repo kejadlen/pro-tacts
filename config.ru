@@ -48,6 +48,7 @@ Sentry.init do |sentry|
   sentry.exclude_loggers = [ProTacts::ExchangeLog::PROGNAME]
 
   sentry.traces_sample_rate = 1.0
+  sentry.trace_ignore_status_codes = ProTacts::Web::UNTRACED_STATUSES
 end
 
 ProTacts::Web.plugin :common_logger, $stderr
