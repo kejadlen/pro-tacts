@@ -118,7 +118,7 @@ module ProTacts
         # the walk stages as the import's original and strikes lines
         # out of (Import::Monica).
         bytes = span("import.monica") { Import::Monica.vcf(bytes) } if Import::Monica.export?(bytes)
-        cards = span("import.split") { |step| Import::Vcf.cards(bytes).tap { step&.set_data("cards", it.length) } }
+        cards = span("import.split") { |step| Import::Vcf.cards(bytes).tap { step.set_attribute("cards", it.length) } }
       rescue Import::Vcf::Invalid => error
         return import_screen(notice: error.message)
       end
@@ -250,7 +250,7 @@ module ProTacts
       } if contact
 
       arriving = import_contact(card, index)
-      book = span("import.contacts") { |step| store.contacts.tap { step&.set_data("rows", it.length) } }
+      book = span("import.contacts") { |step| store.contacts.tap { step.set_attribute("rows", it.length) } }
       matches = span("import.match") { Import::Match.candidates(arriving, book) }
       target = into.nil? || into.empty? ? nil : store.contact(into)
       # The row opened with no choice made is the first choice
@@ -618,9 +618,9 @@ module ProTacts
       return nil if original.nil? || revised.nil?
 
       span("import.staged") { |step|
-        step&.set_data("bytes", original.bytesize + revised.bytesize)
+        step.set_attribute("bytes", original.bytesize + revised.bytesize)
         cards = [Import::Vcf.cards(original), Import::Vcf.cards(revised)] #: [Array[VCard], Array[VCard]]
-        step&.set_data("cards", cards[0].length)
+        step.set_attribute("cards", cards[0].length)
         cards
       }
     end

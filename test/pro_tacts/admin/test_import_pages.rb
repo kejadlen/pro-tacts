@@ -49,7 +49,7 @@ class AdminImportPagesTest < Minitest::Test
   CARD
 
   def app
-    ProTacts::Web
+    traced(ProTacts::Web)
   end
 
   def setup

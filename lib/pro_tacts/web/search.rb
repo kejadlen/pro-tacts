@@ -40,17 +40,17 @@ module ProTacts
     #: (String query) -> Admin::SearchResults
     def search_results(query)
       recent = span("search.contacts_by_recency") { |step|
-        store.contacts_by_recency.tap { step&.set_data("rows", it.length) }
+        store.contacts_by_recency.tap { step.set_attribute("rows", it.length) }
       }
       if query.empty?
         return Admin::SearchResults.new(contacts: recent.first(Admin::Dashboard::RECENT_LIMIT), groups: [], recent: true)
       end
 
-      groups = span("search.all_groups") { |step| store.all_groups.tap { step&.set_data("rows", it.length) } }
+      groups = span("search.all_groups") { |step| store.all_groups.tap { step.set_attribute("rows", it.length) } }
       span("search.match") { |step|
         contacts = Admin::Search.contacts(recent, query:, groups:)
-        step&.set_data("words", query.split.length)
-        step&.set_data("contacts", contacts.length)
+        step.set_attribute("words", query.split.length)
+        step.set_attribute("contacts", contacts.length)
         Admin::SearchResults.new(contacts:, groups: Admin::Search.groups(groups, query:))
       }
     end

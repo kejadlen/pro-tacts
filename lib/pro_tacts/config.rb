@@ -23,6 +23,14 @@ module ProTacts
       @env.fetch("SENTRY_DSN", nil)
     end
 
+    # Where traces are sent over OTLP/HTTP, as the full URL — for
+    # VictoriaTraces, http://<host>:10428/insert/opentelemetry/v1/traces.
+    # Unset, traces reach Sentry alone. See ProTacts::Tracing.
+    #: () -> String?
+    def traces_endpoint
+      @env.fetch("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", nil)
+    end
+
     # Whether the exchange log keeps every DAV exchange rather than the
     # ones that went wrong, so a write that succeeded can be read back —
     # which is how a client's handling of a property gets probed at all

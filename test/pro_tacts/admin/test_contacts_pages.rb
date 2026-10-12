@@ -18,7 +18,7 @@ class AdminContactsPagesTest < Minitest::Test
   include ThrowawayContacts
 
   def app
-    ProTacts::Web
+    traced(ProTacts::Web)
   end
 
   def setup
@@ -410,7 +410,7 @@ class AdminContactsPagesTest < Minitest::Test
       transaction = transactions.first
       spans = transaction.spans.select { it[:op].start_with?("search.") }
       assert_equal %w[search.contacts_by_recency search.all_groups search.match search.render], spans.map { it[:op] }
-      assert_equal({"words" => 1, "contacts" => 1}, spans.find { it[:op] == "search.match" }[:data])
+      assert_equal({"otel.kind" => :internal, "words" => 1, "contacts" => 1}, spans.find { it[:op] == "search.match" }[:data])
       refute_includes JSON.generate(transaction.to_h), "lovelace"
     end
   ensure

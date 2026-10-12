@@ -12,6 +12,7 @@ require "pro_tacts/exchange_log"
 require "pro_tacts/refusal_alerts"
 require "pro_tacts/store"
 require "pro_tacts/proxy_auth"
+require "pro_tacts/tracing"
 require "roda/plugins/dav_verbs"
 
 module ProTacts
@@ -29,11 +30,6 @@ module ProTacts
     PUBLIC_ROOT = Pathname.new(
       __dir__ #: String
     ).parent.parent / "public" #: Pathname
-
-    # The statuses whose transactions Sentry drops, for config.ru:
-    # sentry-ruby's default (TRACE_IGNORE_STATUS_CODES_DEFAULT) less 303,
-    # which answers every admin write, so an upload or a Save is traced.
-    UNTRACED_STATUSES = [(301..302), (305..399), (401..404)].freeze #: Array[Range[Integer]]
 
     # The store this app serves from. config.ru builds it and hands it in;
     # nothing here reaches for a global to find one, which is what lets a
@@ -152,13 +148,14 @@ module ProTacts
       self.class.store
     end
 
-    # One step of a request, timed as a span on its Sentry transaction
-    # so a slow screen names its slow step. The op is the step's whole
+    # One step of a request, timed as a span inside its request's span
+    # so a slow screen names its slow step. The name is the step's whole
     # name; a span carries counts and never a value a person typed or a
-    # card holds (config.ru's send_default_pii).
-    #: [T] (String op) { (Sentry::Span?) -> T } -> T
-    def span(op, &)
-      Sentry.with_child_span(op:, description: op, &)
+    # card holds, since its attributes reach Sentry whatever
+    # send_default_pii says.
+    #: [T] (String name) { (OpenTelemetry::Trace::Span) -> T } -> T
+    def span(name, &)
+      Tracing::TRACER.in_span(name) { |step, _context| yield step }
     end
   end
 end

@@ -46,7 +46,16 @@ require "sentry/test_helper"
 # re-opens the SDK when it finds it closed. Before minitest/autorun
 # regardless, per the rule the header states, so direct single-file
 # runs — where this file is the entry — keep the close after the tests.
-Sentry.init { |sentry| sentry.dsn = nil }
+# The instrumenter is config.ru's, so Sentry builds transactions from the
+# spans Tracing hands it, and Tracing is configured as config.ru does,
+# less the OTLP export.
+SENTRY_INIT = ->(sentry) {
+  sentry.dsn = nil
+  sentry.instrumenter = :otel
+}
+Sentry.init(&SENTRY_INIT)
+OpenTelemetry.logger = Logger.new($stderr, level: :warn)
+ProTacts::Tracing.configure(nil)
 
 require "minitest/autorun"
 
@@ -64,7 +73,7 @@ ProTacts::Web.store = FixtureData.install(data_dir)
 # store its birthday model what it cannot recompose.
 module SentryMessages
   def setup_sentry
-    Sentry.init { |sentry| sentry.dsn = nil } unless Sentry.initialized?
+    Sentry.init(&SENTRY_INIT) unless Sentry.initialized?
     setup_sentry_test
   end
 
@@ -73,7 +82,7 @@ module SentryMessages
   end
 end
 
-# Tracing on for one test, under config.ru's statuses, so a request's
+# Tracing on for one test, scrubbed as config.ru scrubs, so a request's
 # transaction and its spans land in sentry_events. Set on the test
 # layer's configuration after setup rather than in setup_sentry_test's
 # block, which configures the hub's base layer too — a layer teardown
@@ -85,7 +94,15 @@ module SentryTracing
   def setup_sentry_tracing
     setup_sentry
     Sentry.configuration.traces_sample_rate = 1.0
-    Sentry.configuration.trace_ignore_status_codes = ProTacts::Web::UNTRACED_STATUSES
+    Sentry.configuration.before_send_transaction = ->(event, _hint) { ProTacts::Tracing.scrub(event) }
+  end
+
+  # The app inside the request span's middleware, as config.ru mounts it.
+  def traced(app)
+    Rack::Builder.app do
+      use(*ProTacts::Tracing.middleware)
+      run app
+    end
   end
 end
 

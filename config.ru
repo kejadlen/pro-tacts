@@ -8,6 +8,7 @@ require "sentry-ruby"
 $LOAD_PATH.unshift(Pathname.new(__dir__) / "lib")
 require "pro_tacts/web"
 require "pro_tacts/store"
+require "pro_tacts/tracing"
 
 config = ProTacts.config
 
@@ -39,7 +40,9 @@ Sentry.init do |sentry|
     event
   end
   sentry.before_send = drop_identity
-  sentry.before_send_transaction = drop_identity
+  sentry.before_send_transaction = lambda do |event, hint|
+    ProTacts::Tracing.scrub(drop_identity.call(event, hint))
+  end
 
   # The exchange log is a local-only record of whole exchanges, bodies
   # and all. Sentry's sentry_logger hook would otherwise turn it into
@@ -48,9 +51,11 @@ Sentry.init do |sentry|
   sentry.exclude_loggers = [ProTacts::ExchangeLog::PROGNAME]
 
   sentry.traces_sample_rate = 1.0
-  sentry.trace_ignore_status_codes = ProTacts::Web::UNTRACED_STATUSES
+  sentry.instrumenter = :otel
 end
+ProTacts::Tracing.configure(config.traces_endpoint)
 
 ProTacts::Web.plugin :common_logger, $stderr
 
+use(*ProTacts::Tracing.middleware)
 run ProTacts::Web.freeze.app

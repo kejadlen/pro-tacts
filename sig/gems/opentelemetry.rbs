@@ -1,0 +1,60 @@
+# OpenTelemetry is reached from ProTacts::Tracing, which installs the SDK
+# and builds the request span's middleware, and from Web#span, which
+# times a step of a request inside that span.
+module OpenTelemetry
+  def self.tracer_provider: () -> Trace::TracerProvider
+
+  def self.propagation=: (untyped propagator) -> void
+
+  module Trace
+    class TracerProvider
+      def tracer: (String name) -> Tracer
+    end
+
+    class Tracer
+      def in_span: [T] (String name) { (Span span, untyped context) -> T } -> T
+    end
+
+    class Span
+      def set_attribute: (String key, Integer value) -> self
+    end
+  end
+
+  module SDK
+    def self.configure: () { (Configurator) -> void } -> void
+
+    class Configurator
+      def service_name=: (String name) -> void
+
+      def use: (String instrumentation_name, ?Hash[Symbol, untyped] config) -> void
+
+      def add_span_processor: (untyped processor) -> void
+    end
+
+    module Trace
+      module Export
+        class BatchSpanProcessor
+          def initialize: (Exporter::OTLP::Exporter exporter) -> void
+        end
+      end
+    end
+  end
+
+  module Exporter
+    module OTLP
+      class Exporter
+        def initialize: (endpoint: String) -> void
+      end
+    end
+  end
+
+  module Instrumentation
+    module Rack
+      class Instrumentation
+        def self.instance: () -> Instrumentation
+
+        def middleware_args: () -> Array[untyped]
+      end
+    end
+  end
+end

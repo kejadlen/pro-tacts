@@ -3,13 +3,19 @@
 # RefusalAlerts sends, the arrival messages dav.rb and store.rb send,
 # and the photo decode refusal contact.rb captures. ExchangeLog tags the
 # request's scope and reads whether anything was reported under it, and
-# the search times its steps as spans.
+# Tracing hands Sentry its spans and scrubs the transactions they become.
 module Sentry
-  # Yields nil outside a transaction, as under a nil DSN.
-  def self.with_child_span: [T] (op: String, description: String) { (Span?) -> T } -> T
+  class TransactionEvent
+    def contexts: () -> Hash[Symbol, Hash[Symbol, untyped]]
+  end
 
-  class Span
-    def set_data: (String key, Integer value) -> void
+  module OpenTelemetry
+    class SpanProcessor
+      def self.instance: () -> SpanProcessor
+    end
+
+    class Propagator
+    end
   end
 
   def self.capture_message: (String message, ?level: Symbol, ?fingerprint: Array[String], ?tags: Hash[Symbol, String]) -> untyped
