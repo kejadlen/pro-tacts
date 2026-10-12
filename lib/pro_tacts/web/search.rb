@@ -12,9 +12,7 @@ module ProTacts
     # a second copy in the page's script
     # (docs/plans/2026-09-30-live-search.md).
     #
-    # Each step is a span on the request's Sentry transaction, so a slow
-    # search names its slow step. A span carries counts and never the
-    # query, which is a name typed into a field.
+    # Each step is a span (Web#span), and none carries the query.
     hash_branch("search") do |r|
       query = r.params["q"].to_s.strip
 
@@ -22,7 +20,7 @@ module ProTacts
         r.get do
           response["Content-Type"] = "text/html; charset=utf-8"
           results = search_results(query)
-          search_span("render") { Admin::SearchPage.call(login: @login, query:, results:) }
+          span("search.render") { Admin::SearchPage.call(login: @login, query:, results:) }
         end
       end
 
@@ -30,7 +28,7 @@ module ProTacts
       r.get "results" do
         response["Content-Type"] = "text/html; charset=utf-8"
         results = search_results(query)
-        search_span("render") { results.call }
+        span("search.render") { results.call }
       end
     end
 
@@ -41,25 +39,20 @@ module ProTacts
     # word is typed.
     #: (String query) -> Admin::SearchResults
     def search_results(query)
-      recent = search_span("contacts_by_recency") { |span|
-        store.contacts_by_recency.tap { span&.set_data("rows", it.length) }
+      recent = span("search.contacts_by_recency") { |step|
+        store.contacts_by_recency.tap { step&.set_data("rows", it.length) }
       }
       if query.empty?
         return Admin::SearchResults.new(contacts: recent.first(Admin::Dashboard::RECENT_LIMIT), groups: [], recent: true)
       end
 
-      groups = search_span("all_groups") { |span| store.all_groups.tap { span&.set_data("rows", it.length) } }
-      search_span("match") { |span|
+      groups = span("search.all_groups") { |step| store.all_groups.tap { step&.set_data("rows", it.length) } }
+      span("search.match") { |step|
         contacts = Admin::Search.contacts(recent, query:, groups:)
-        span&.set_data("words", query.split.length)
-        span&.set_data("contacts", contacts.length)
+        step&.set_data("words", query.split.length)
+        step&.set_data("contacts", contacts.length)
         Admin::SearchResults.new(contacts:, groups: Admin::Search.groups(groups, query:))
       }
-    end
-
-    #: [T] (String step) { (Sentry::Span?) -> T } -> T
-    def search_span(step, &)
-      Sentry.with_child_span(op: "search.#{step}", description: step, &)
     end
   end
 end

@@ -14,7 +14,7 @@ require "pro_tacts/web"
 # date.
 class AdminContactsPagesTest < Minitest::Test
   include Rack::Test::Methods
-  include Sentry::TestHelper
+  include SentryTracing
   include ThrowawayContacts
 
   def app
@@ -401,7 +401,7 @@ class AdminContactsPagesTest < Minitest::Test
   # Each step of a search is a span on the request's transaction, and
   # none of them carries the query (Web's search branch).
   def test_search_times_its_steps_without_the_query
-    setup_sentry_test { it.traces_sample_rate = 1.0 }
+    setup_sentry_tracing
     with_contacts({"ada" => ADA}) do
       get "/search/results", q: "lovelace"
 

@@ -73,6 +73,22 @@ module SentryMessages
   end
 end
 
+# Tracing on for one test, under config.ru's statuses, so a request's
+# transaction and its spans land in sentry_events. Set on the test
+# layer's configuration after setup rather than in setup_sentry_test's
+# block, which configures the hub's base layer too — a layer teardown
+# keeps, so every later test would record transactions.
+module SentryTracing
+  include Sentry::TestHelper
+  include SentryMessages
+
+  def setup_sentry_tracing
+    setup_sentry
+    Sentry.configuration.traces_sample_rate = 1.0
+    Sentry.configuration.trace_ignore_status_codes = ProTacts::Web::UNTRACED_STATUSES
+  end
+end
+
 # Hands the app a throwaway store holding just the given cards (id to
 # bytes), so a route can be exercised without touching the fixture
 # book, and yields it so a test can change a card mid-sequence. Only

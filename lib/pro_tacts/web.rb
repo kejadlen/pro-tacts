@@ -151,6 +151,15 @@ module ProTacts
     def store
       self.class.store
     end
+
+    # One step of a request, timed as a span on its Sentry transaction
+    # so a slow screen names its slow step. The op is the step's whole
+    # name; a span carries counts and never a value a person typed or a
+    # card holds (config.ru's send_default_pii).
+    #: [T] (String op) { (Sentry::Span?) -> T } -> T
+    def span(op, &)
+      Sentry.with_child_span(op:, description: op, &)
+    end
   end
 end
 
