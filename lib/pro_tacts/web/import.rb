@@ -39,6 +39,10 @@ module ProTacts
     # the file — a stop between saves that repeated what the list
     # beside every card already said.
     #
+    # Every screen re-reads the whole staged file, so each step that
+    # grows with it is a span (Web#span) counting cards, never their
+    # content.
+    #
     # Under the same identity gate as every other route (web.rb),
     # which is also where the arrivals' books come from: a card this
     # creates joins everyone's book the way a client's create does, so
@@ -113,25 +117,27 @@ module ProTacts
         # here on is a .vcf like any other: the composed file is what
         # the walk stages as the import's original and strikes lines
         # out of (Import::Monica).
-        bytes = Import::Monica.vcf(bytes) if Import::Monica.export?(bytes)
-        cards = Import::Vcf.cards(bytes)
+        bytes = span("import.monica") { Import::Monica.vcf(bytes) } if Import::Monica.export?(bytes)
+        cards = span("import.split") { |step| Import::Vcf.cards(bytes).tap { step&.set_data("cards", it.length) } }
       rescue Import::Vcf::Invalid => error
         return import_screen(notice: error.message)
       end
 
-      revised = cards.map { Import::Vcf.read(it).card }
-      id = Import::Staged.open(
-        original: bytes,
-        revised: joined(revised),
-        # Named here and not at the end, there being no end to name
-        # it at: every Save files its contact under it. Not the
-        # importer's to rename either — a name typed before anything
-        # has been looked at is a name for nothing, and one typed
-        # after would split an import across two groups. What is
-        # editable is the membership, beside each contact's own card
-        # and a contact at a time (#import_picker).
-        group: Import::Write.default_group,
-      )
+      revised = span("import.pare") { cards.map { Import::Vcf.read(it).card } }
+      id = span("import.stage") {
+        Import::Staged.open(
+          original: bytes,
+          revised: joined(revised),
+          # Named here and not at the end, there being no end to name
+          # it at: every Save files its contact under it. Not the
+          # importer's to rename either — a name typed before anything
+          # has been looked at is a name for nothing, and one typed
+          # after would split an import across two groups. What is
+          # editable is the membership, beside each contact's own card
+          # and a contact at a time (#import_picker).
+          group: Import::Write.default_group,
+        )
+      }
       # Straight to the first contact rather than to a screen about
       # the file: the walk is the point, and a list that has just been
       # built from a file nobody has looked at yet is a stop on the
@@ -150,11 +156,13 @@ module ProTacts
     # the book already. `current` is the row whose screen is open.
     #: (String upload, Array[VCard] originals, Array[VCard] revised, Hash[String, String] saved, current: Integer) -> Admin::ImportSidebar
     def walk_sidebar(upload, originals, revised, saved, current:)
-      rows = walk_order(revised).map { |index|
-        # A literal of several elements is an Array until something
-        # says otherwise, and an inline annotation needs its own line.
-        dropped = Import::Vcf.read(originals.fetch(index)).dropped
-        [import_contact(revised.fetch(index), index), Import::Vcf.losses(dropped).length, index] #: [Contact, Integer, Integer]
+      rows = span("import.sidebar") {
+        walk_order(revised).map { |index|
+          # A literal of several elements is an Array until something
+          # says otherwise, and an inline annotation needs its own line.
+          dropped = Import::Vcf.read(originals.fetch(index)).dropped
+          [import_contact(revised.fetch(index), index), Import::Vcf.losses(dropped).length, index] #: [Contact, Integer, Integer]
+        }
       }
       Admin::ImportSidebar.new(upload:, rows:, saved:, current:)
     end
@@ -170,8 +178,10 @@ module ProTacts
     # moves its row the way it would move the contact's.
     #: (Array[VCard] revised) -> Array[Integer]
     def walk_order(revised)
-      contacts = revised.each_with_index.map { |card, index| import_contact(card, index) }
-      contacts.each_index.sort_by { |index| [Admin::Format.sort_key(contacts.fetch(index)), index] }
+      span("import.walk_order") {
+        contacts = revised.each_with_index.map { |card, index| import_contact(card, index) }
+        contacts.each_index.sort_by { |index| [Admin::Format.sort_key(contacts.fetch(index)), index] }
+      }
     end
 
     # A row opened: the card it arrived as beside the card that is
@@ -225,48 +235,53 @@ module ProTacts
       sidebar = walk_sidebar(upload, originals, revised, saved, current: index)
 
       response["Content-Type"] = "text/html; charset=utf-8"
-      return Admin::ImportSaved.call(
-        contact:,
-        login: @login,
-        groups: store.groups_of(contact.id),
-        all_groups: store.group_choices,
-        aside: Admin::ImportOriginal.new(card: original, dropped:),
-        sidebar:,
-        edit: "/import/#{upload}/#{index}/edit",
-        land: "/import/#{upload}/#{index}",
-        notice:,
-      ) if contact
+      return span("import.render") {
+        Admin::ImportSaved.call(
+          contact:,
+          login: @login,
+          groups: store.groups_of(contact.id),
+          all_groups: store.group_choices,
+          aside: Admin::ImportOriginal.new(card: original, dropped:),
+          sidebar:,
+          edit: "/import/#{upload}/#{index}/edit",
+          land: "/import/#{upload}/#{index}",
+          notice:,
+        )
+      } if contact
 
       arriving = import_contact(card, index)
-      matches = Import::Match.candidates(arriving, store.contacts)
+      book = span("import.contacts") { |step| store.contacts.tap { step&.set_data("rows", it.length) } }
+      matches = span("import.match") { Import::Match.candidates(arriving, book) }
       target = into.nil? || into.empty? ? nil : store.contact(into)
       # The row opened with no choice made is the first choice
       # offered, the best match
       # (docs/plans/2026-09-23-update-is-the-default.md).
       target ||= matches.first if into.nil?
-      merge = target && Import::Merge.new(target, card)
-      Admin::ContactsEdit.call(
-        contact: merge ? merge.contact : arriving,
-        login: @login,
-        notice:,
-        action: "/import/#{upload}/#{index}",
-        # The submit says what it does — the import of this one
-        # contact, or the update of the one it is folded into —
-        # because this is the one editor in the app whose Save can
-        # create the record rather than amend it. An update names the
-        # contact it writes, the two modes differing nowhere else the
-        # eye lands: the fields over a fold are the same shape as over
-        # an arriving card, and the toggle above them
-        # (Admin::ImportTarget) a pill whose taken side lifts one step.
-        # The row beside it wears its check only once this has been
-        # pressed (Admin::ImportSidebar).
-        save: target ? "Update #{target.name || target.id}" : "Import",
-        aside: Admin::ImportOriginal.new(card: original, dropped: merge ? dropped + merge.left : dropped),
-        fields: import_picker(group, joined, named, member: target,
-                                                    tags: Import::Vcf.categories(original) + Import::Monica.groups(original)),
-        lead: import_target(upload, index, matches, target),
-        sidebar:,
-      )
+      merge = target && span("import.merge") { Import::Merge.new(target, card) }
+      span("import.render") {
+        Admin::ContactsEdit.call(
+          contact: merge ? merge.contact : arriving,
+          login: @login,
+          notice:,
+          action: "/import/#{upload}/#{index}",
+          # The submit says what it does — the import of this one
+          # contact, or the update of the one it is folded into —
+          # because this is the one editor in the app whose Save can
+          # create the record rather than amend it. An update names the
+          # contact it writes, the two modes differing nowhere else the
+          # eye lands: the fields over a fold are the same shape as over
+          # an arriving card, and the toggle above them
+          # (Admin::ImportTarget) a pill whose taken side lifts one step.
+          # The row beside it wears its check only once this has been
+          # pressed (Admin::ImportSidebar).
+          save: target ? "Update #{target.name || target.id}" : "Import",
+          aside: Admin::ImportOriginal.new(card: original, dropped: merge ? dropped + merge.left : dropped),
+          fields: import_picker(group, joined, named, member: target,
+                                                      tags: Import::Vcf.categories(original) + Import::Monica.groups(original)),
+          lead: import_target(upload, index, matches, target),
+          sidebar:,
+        )
+      }
     end
 
     # The toggle at the top of an unsaved row's editor, or none when
@@ -488,15 +503,16 @@ module ProTacts
                              joined: ticked, named: wanted)
         end
 
-        written = Import::Write.update(store, target.id, edited, birthday:,
-                                       joins: ticked - was, leaves: was - ticked, named: wanted)
+        written = span("import.write") {
+          Import::Write.update(store, target.id, edited, birthday:, joins: ticked - was, leaves: was - ticked, named: wanted)
+        }
         # Staged after the write rather than before, unlike a new
         # contact's below: until it lands this row is still the card
         # it arrived as, and staging the contact's card in its place
         # would make that the card a refused or failed save came back
         # to.
         revised[index] = edited
-        Import::Staged.update(upload, joined(revised))
+        span("import.restage") { Import::Staged.update(upload, joined(revised)) }
         return walk_on(r, upload, index, written, saved, revised)
       end
 
@@ -527,8 +543,8 @@ module ProTacts
       # renders every row from these bytes, so a row that has come in
       # is still a row the list has to be able to name.
       revised[index] = edited
-      Import::Staged.update(upload, joined(revised))
-      written = Import::Write.call(store, edited, joins: ticked, named: wanted, everyone: syncing)
+      span("import.restage") { Import::Staged.update(upload, joined(revised)) }
+      written = span("import.write") { Import::Write.call(store, edited, joins: ticked, named: wanted, everyone: syncing) }
       walk_on(r, upload, index, written, saved, revised)
     end
 
@@ -601,7 +617,12 @@ module ProTacts
       revised = Import::Staged.read(upload, Import::Staged::REVISED)
       return nil if original.nil? || revised.nil?
 
-      [Import::Vcf.cards(original), Import::Vcf.cards(revised)]
+      span("import.staged") { |step|
+        step&.set_data("bytes", original.bytesize + revised.bytesize)
+        cards = [Import::Vcf.cards(original), Import::Vcf.cards(revised)] #: [Array[VCard], Array[VCard]]
+        step&.set_data("cards", cards[0].length)
+        cards
+      }
     end
 
     # A staged card read as the contact the editor edits. The id is

@@ -12,6 +12,7 @@ require "pro_tacts/web"
 # (docs/plans/2026-09-21-import-a-vcf.md).
 class AdminImportPagesTest < Minitest::Test
   include Rack::Test::Methods
+  include SentryTracing
   include ThrowawayContacts
 
   JANE = <<~CARD.gsub("\n", "\r\n")
@@ -973,6 +974,25 @@ class AdminImportPagesTest < Minitest::Test
       assert_includes last_response.body, %(<input type="hidden" name="into" value="jane">)
       assert_includes last_response.body, %(>Update Jane Booles</button>)
     end
+  end
+
+  # Each step of the walk that grows with the file is a span on its
+  # request's transaction, and none carries a card's content (the
+  # import branch's comment). The upload and the Save answer 303s,
+  # traced only under config.ru's statuses.
+  def test_the_walk_times_its_steps_without_the_cards
+    setup_sentry_tracing
+    with_contacts({"jane" => STORED_JANE}) do |_store|
+      id = upload(JANE + PLAIN)
+      save(id, 0, first: "Jane", last: "Booles")
+
+      transactions = sentry_events.grep(Sentry::TransactionEvent)
+      ops = transactions.flat_map { |transaction| transaction.spans.map { it[:op] } }.grep(/\Aimport\./).uniq.sort
+      assert_equal %w[contacts match merge pare render restage sidebar split stage staged walk_order write].map { "import.#{it}" }, ops
+      transactions.each { refute_match(/Booles|Jane/, JSON.generate(it.to_h)) }
+    end
+  ensure
+    teardown_sentry_test
   end
 
   # New contact stays a choice, asked for with an empty `into` where
