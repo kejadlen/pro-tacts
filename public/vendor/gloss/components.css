@@ -1,4 +1,4 @@
-/* Vendored from kejadlen/gloss @ 1b7b1455f6177993182b2bff7a262537480c53e2, 2026-09-03.
+/* Vendored from kejadlen/gloss @ fb134aa388f33f6b5971724505e06fc5631636f4, 2026-10-13.
    Gloss ships this as plain CSS meant to be copied into a consuming
    project (see install.md) — there is no build step to run here.
    Refresh with `rake gloss:vendor GLOSS=/path/to/gloss/checkout`. */
@@ -57,8 +57,11 @@ a.btn {
 }
 
 /* Quiet variants (default, ghost) carry no fill at rest; hovering picks up
-   a flat tint of the stock instead of darkening a border that isn't there. */
-:is(button:not(.icon-button), a.btn):not([data-variant="primary"]):not([data-variant="dark"]):not([data-variant="danger"]):hover:not(:disabled):not([aria-disabled="true"]) {
+   a flat tint of the stock instead of darkening a border that isn't there.
+   Tabs are <button>s too but own their hover (tabs.css): this rule's
+   specificity would otherwise paint the selected segment the colour of its
+   own track until the pointer left it. */
+:is(button:not(.icon-button), a.btn):not([role="tab"]):not([data-variant="primary"]):not([data-variant="dark"]):not([data-variant="danger"]):hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--gl-color-surface-fill);
   color: var(--gl-color-text-primary);
 }
@@ -213,11 +216,14 @@ button:not(.icon-button):disabled,
 
 /* Input / Select — bordered, matched to each other exactly. Both tags ARE
    the component, so they are styled bare; nothing else on this site uses a
-   text input or a select. */
+   text input or a select. Inline padding is the xs rung less the border;
+   block padding is a full xs rung, so a control stands a touch taller than
+   a default Button. */
 input:not([type="checkbox"]):not([type="radio"]),
 select {
   width: 100%;
-  padding: var(--gl-space-xs) var(--gl-space-s);
+  padding: var(--gl-space-xs) calc(var(--gl-space-xs) - 1px);
+  line-height: 1.15;
   background: var(--gl-color-surface-card);
   border: 1px solid var(--gl-color-border-default);
   border-radius: var(--gl-radius-sm);
@@ -749,10 +755,10 @@ dialog > *:not(header):not(footer) {
    shape. The keyboard wiring lives in assets/js/system.js and is
    variant-agnostic — it only cares about `[data-tabs]` / `[role=tab]`.
 
-   Two real variants: `underline` (mono, accent underline — primary section
-   nav, the default) and `segmented` (pill track, active segment lifts to the
-   surface — filters like All · Overdue · Upcoming, never primary
-   navigation), chosen with `data-variant="segmented"` on the tablist since
+   Two real variants: `underline` (mono labels over a hairline, the selected
+   one marked by a short accent bar — primary section nav, the default) and
+   `segmented` (pill track, active segment lifts to the surface — filters
+   like All · Overdue · Upcoming, never primary navigation), chosen with `data-variant="segmented"` on the tablist since
    neither has a natural attribute of its own. */
 
 /* Every rule below the list container pairs [role="tablist"] with
@@ -763,26 +769,53 @@ dialog > *:not(header):not(footer) {
 
 [role="tablist"] {
   display: flex;
-  gap: var(--gl-space-m);
-  border-bottom: 1px solid var(--gl-color-border-hairline);
+  gap: var(--gl-space-3xs);
+  border-bottom: var(--gl-border-w) solid var(--gl-color-border-hairline);
 }
-[role="tablist"] [role="tab"] {
-  padding: 0.5rem 0;
-  margin-bottom: -1px;
+
+/* Underline. Mono labels standing on the hairline, with a 2px accent bar
+   drawn over the hairline under the selected label. Hover fills the tab
+   with surface-fill-2, squared off at the bottom so it reads as a tab
+   standing on the line rather than a floating pill. It is one step darker
+   than the surface-fill a quiet Button uses, because at ~1.1:1 that one
+   all but vanished on the card; hover also darkens the label to
+   text-primary. The bar is a pseudo-element, not a border, so it lies flat
+   instead of inheriting the button's radius and curling up at the ends.
+   Scoped away from segmented, which shares the element but none of this
+   shape. */
+[role="tablist"]:not([data-variant="segmented"]) [role="tab"] {
+  position: relative;
+  padding: var(--gl-space-3xs) var(--gl-space-2xs);
   background: none;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--gl-radius-sm) var(--gl-radius-sm) 0 0;
   color: var(--gl-color-text-secondary);
   font-family: var(--gl-font-mono);
   font-size: var(--gl-step--1);
-  letter-spacing: 0.02em;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
   cursor: pointer;
-  transition: color var(--gl-dur-fast) var(--gl-ease), border-color var(--gl-dur-fast) var(--gl-ease);
+  transition: background-color var(--gl-dur-fast) var(--gl-ease), color var(--gl-dur-fast) var(--gl-ease);
 }
-[role="tablist"] [role="tab"]:hover { color: var(--gl-color-text-primary); }
-[role="tablist"] [role="tab"][aria-selected="true"] {
+[role="tablist"]:not([data-variant="segmented"]) [role="tab"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: var(--gl-space-2xs);
+  bottom: calc(-1 * var(--gl-border-w));
+  height: 2px;
+  background: transparent;
+  transition: background-color var(--gl-dur-fast) var(--gl-ease);
+}
+[role="tablist"]:not([data-variant="segmented"]) [role="tab"]:hover {
+  background: var(--gl-color-surface-fill-2);
   color: var(--gl-color-text-primary);
-  border-bottom-color: var(--gl-color-accent);
+}
+[role="tablist"]:not([data-variant="segmented"]) [role="tab"][aria-selected="true"] {
+  color: var(--gl-color-text-primary);
+}
+[role="tablist"]:not([data-variant="segmented"]) [role="tab"][aria-selected="true"]::after {
+  background: var(--gl-color-accent);
 }
 
 [role="tablist"][data-variant="segmented"] {
@@ -804,6 +837,7 @@ dialog > *:not(header):not(footer) {
   color: var(--gl-color-text-secondary);
   transition: background-color var(--gl-dur-fast) var(--gl-ease), color var(--gl-dur-fast) var(--gl-ease);
 }
+[role="tablist"][data-variant="segmented"] [role="tab"]:hover { color: var(--gl-color-text-primary); }
 [role="tablist"][data-variant="segmented"] [role="tab"][aria-selected="true"] {
   color: var(--gl-color-text-primary);
   background: var(--gl-color-surface-card);
