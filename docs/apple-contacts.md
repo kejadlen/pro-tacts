@@ -8,8 +8,8 @@ iOS say so.
 
 [sabre-osx]: https://sabre.io/dav/clients/osx-addressbook/
 
-Scope: client behavior only. For the specifications themselves, see the
-table in the README. For request and response shapes, see
+Scope: client behavior only. For the specifications themselves, see
+`docs/rfcs/README.md`; for the responses the server sends, `docs/carddav.md`. For request and response shapes, see
 `2026-01-12-carddav-reference.md`.
 
 ## Turn on the client's debug log first
@@ -573,7 +573,7 @@ difference as a fixture the test suite replays.
 
 ## Reference implementations to compare against
 
-The README's "Reference implementations" section covers what `servers/`
+`docs/carddav.md`'s "Reference implementations" section covers what `servers/`
 runs and which of them to trust. What it is for is this: when pro-tacts
 and a working server disagree, the diff between two recordings of the
 same client action is the fastest way to find out why.

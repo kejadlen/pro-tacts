@@ -4,7 +4,7 @@ The specifications this server implements, kept here so the code's
 citations can be checked offline and so section numbers stay pinned to
 the text they were verified against.
 
-`lib/pro_tacts/web.rb` cites these by number and section next to the
+`lib/pro_tacts/web/dav.rb` cites these by number and section next to the
 handler that implements each one, and `lib/pro_tacts/vcard.rb` cites RFC
 2426 for the card format.
 

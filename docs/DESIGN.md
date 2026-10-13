@@ -123,9 +123,9 @@ it — and a quiet log has nothing to say.
 ## Records are cards, not forms
 
 A contact or group opens as a full card, not a row in a split pane and not a
-modal. The card *is* the record — reading it and editing it are the same view.
-There is no view mode, no edit mode, and no Save button. A value is clicked,
-changed, and committed.
+modal. Editing it is a second screen at its own URL, laid out on the same
+grid, whose one Save writes every change at once
+(`docs/plans/2026-09-05-web-card-editor.md`, "Roads not taken").
 
 Consequences worth keeping:
 
@@ -141,8 +141,10 @@ Consequences worth keeping:
   names the attribute types available. Multi-part additions (picking a group,
   then a role) are steps inside that one dialog, never a chain of popovers —
   and the dialog is the view's one floated layer.
-- **Removal is inline and reversible-feeling.** A small, low-contrast control
-  on the row itself; `--gl-color-danger` only on hover.
+- **Removal is blanking.** A value emptied in the editor is removed by the
+  save, and the row says so before then. A control that removes outright
+  (the birthday's) is small and low-contrast; `--gl-color-danger` only on
+  hover.
 
 ## Alignment is the layout
 
@@ -163,8 +165,7 @@ break inside the value column and stay in it.
 ## Relationships are navigable
 
 A contact shows its groups; a group shows its contacts. Both render as tags,
-and **every tag is a link** — clicking it opens that record's card. A remove
-control inside a tag stops there and does not navigate.
+and **every tag is a link** — clicking it opens that record's card.
 
 Relationships are symmetric in the data and should feel symmetric in the UI:
 whatever a contact can say about a group, a group can say about the contact,
@@ -199,4 +200,4 @@ Ask, in order:
 6. Does it pass Gloss' refusals checklist, the consolidated list of
    generated-interface tells the system refuses to produce?
 7. Is there a literal hex, duration, or new class in the diff? There shouldn't
-   be. Is there a Save button? There shouldn't be.
+   be.

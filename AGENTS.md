@@ -4,9 +4,10 @@ A CardDAV server for a family address book, in Ruby on Roda.
 Contacts are vCard 3.0 documents in SQLite, served as the bytes that
 were stored.
 
-`README.md` covers the protocol, the minimal property set macOS Contacts
-needs, and the client quirks behind it. Read it before changing any
-response — the shape of those responses is empirical, not arbitrary.
+`docs/carddav.md` covers the minimal property set macOS Contacts needs,
+and `docs/apple-contacts.md` the client quirks behind it. Read both before
+changing any response — the shape of those responses is empirical, not
+arbitrary.
 
 ## Commands
 
@@ -51,6 +52,7 @@ dev.ru              # demo.ru, marked as a dev run, for `rake dev`
 db/migrations/      # Run on every store open
 sig/                # RBS for what an inline comment cannot say
 docs/DESIGN.md      # Who the admin screens are for
+docs/carddav.md     # The responses a client needs
 docs/apple-contacts.md # What the Apple clients do off-spec
 docs/rfcs/          # Vendored spec texts the code cites
 docs/plans/         # Dated design records
@@ -99,8 +101,8 @@ no `sync:*` group; a test that needs everyone's book makes it.
   refuses a write the browser marks as cross-site before any route
   runs; a form's POST from this app's own pages is same-origin and
   passes, and so does a DAV client, which sends no Sec-Fetch-Site.
-- Failed DAV exchanges are written whole to `log/exchange.log` under the
-  id Sentry carries as the `exchange` tag. Look there first when a
+- Failed DAV exchanges are written whole to the data directory's
+  `log/exchange.log` under the id Sentry carries as the `exchange` tag. Look there first when a
   client asks for something, and promote one with
   `rake fixtures:extract`.
 
