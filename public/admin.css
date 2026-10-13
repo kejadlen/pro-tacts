@@ -210,7 +210,7 @@
    spinner they must show plus the box's own chrome — border-box
    widths count the padding and border inside, so a bare 6ch left
    ~1ch of content and nothing to click a caret into. Derived from
-   the padding var so the pair moves with the token; the same
+   the input's own padding calc so the pair moves with it; the same
    block-padding shed every other record control gets. */
 .card-body form.field-stack .field > .date-row {
   display: flex;
@@ -226,7 +226,7 @@
    sizes (below). */
 .card-body form.field-stack .field > .date-row > input[type="number"] {
   flex: 1 1 auto;
-  width: calc(7ch + 2 * var(--gl-space-s) + 2px);
+  width: calc(7ch + 2 * (var(--gl-space-xs) - 1px) + 2px);
   padding-block: var(--gl-space-3xs);
 }
 /* The picker's date input (Admin::ContactsEdit#birthday_picker),
@@ -398,11 +398,14 @@
    (base.css only resets it), and the editor's note field is one —
    multiline text beside a .field caption. The box mirrors field.css's
    input rule in the vars that rule itself uses, so the two controls
-   read as one component; resize stays vertical, the one freedom a
-   text area has that a text input does not. */
+   read as one component. Line-height is the one var left behind:
+   1.15 is the Button-height match, a one-line control's concern, and
+   wrapped note text reads better on a looser line. Resize stays
+   vertical, the one freedom a text area has that a text input
+   does not. */
 textarea {
   width: 100%;
-  padding: var(--gl-space-xs) var(--gl-space-s);
+  padding: var(--gl-space-xs) calc(var(--gl-space-xs) - 1px);
   background: var(--gl-color-surface-card);
   border: 1px solid var(--gl-color-border-default);
   border-radius: var(--gl-radius-sm);
@@ -793,7 +796,7 @@ body {
   display: inline-flex;
 }
 input[type="search"] {
-  padding-inline-end: calc(var(--gl-space-s) + 2 * var(--gl-space-2xs) +
+  padding-inline-end: calc(var(--gl-space-xs) - 1px + 2 * var(--gl-space-2xs) +
     2 * var(--gl-space-3xs) + 1.15 * 0.8125rem);
 }
 /* WebKit and Blink draw their own cancel on a search field; Firefox
