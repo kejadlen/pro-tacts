@@ -4,15 +4,14 @@ module ProTacts
   module Admin
     # The trunk every form card shares: the record's caption row and
     # card (admin.css), the form as the card's body, and the action
-    # bar under both — a shape ContactsEdit, GroupsEdit, and
-    # ImportUpload each carried by hand before this.
+    # bar under both.
     #
     # The form is the caller's block rather than the component's,
     # because its rhythm is the caller's question: an editor's rows
     # are a field-stack on the record's grid, and an upload's lone
     # field is a Gloss settings field with no grid to align to.
-    # Everything around the form is the same for all three, which is
-    # why it lives here.
+    # Everything around the form is the same for every caller, which
+    # is why it lives here.
     #
     # `back` names the caption row's link, `[href, label]`, the label
     # a string or whatever `render` takes (GroupsEdit's is a
@@ -110,14 +109,11 @@ module ProTacts
             h1(class: "type-h2") { @heading } if @heading
             yield
           end
-          # A dialog footer's shape (admin.css), outside the form and
-          # reaching it by id, and absent outright when there is
-          # nothing to submit and nowhere to cancel to — a card that
-          # only reads (ImportSaved). The submit is the form's; Cancel
-          # is navigation — a link in Gloss's `.btn` contract, which is
-          # what an anchor that acts like a button opts into — and
-          # goes where the back link goes, so each is absent when its
-          # half is.
+          # A dialog footer's shape (admin.css), absent outright when
+          # there is nothing to submit and nowhere to cancel to — a
+          # card that only reads (ImportSaved). Cancel is navigation: a
+          # link in Gloss's `.btn` contract, which is what an anchor
+          # that acts like a button opts into.
           if @submit || @back
             footer do
               a(href: @back&.fetch(0), class: "btn") { "Cancel" } if @back

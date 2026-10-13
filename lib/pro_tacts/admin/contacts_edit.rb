@@ -121,11 +121,8 @@ module ProTacts
         # composed contact's, the one a save is guarded against.
         @own = contact.own
         @notice = notice
-        # N's first three components (RFC 2426 section 3.1.2: family;
-        # given; additional) — the three fields the create dialog also
-        # asks for. The prefixes and suffixes after them are preserved
-        # byte-for-byte by the save's raw splice (CardForm.n_line),
-        # never rendered here.
+        # N's first three components; the prefixes and suffixes after
+        # them are never rendered here, and CardForm.n_line keeps them.
         family, given, additional = contact.name_components || []
         @first = given
         @middle = additional
@@ -292,8 +289,8 @@ module ProTacts
       # one per type named in the dialog, in the order they were
       # asked for. Nothing stands here until something is added and
       # nothing lingers after: an empty row waiting to be used is the
-      # scaffold docs/DESIGN.md refuses ("Records are cards, not
-      # forms"). That verb — make a row, now, without a round trip —
+      # scaffold docs/DESIGN.md refuses ("Empty attributes do not
+      # render"). That verb — make a row, now, without a round trip —
       # is what CSS could not do and what Alpine is here for (see
       # Layout).
       #
@@ -376,9 +373,9 @@ module ProTacts
       # bytes, so the prefill is Contact#birthday and not a reading
       # off the card — why, and why every shape the grammar admits is
       # editable here, is docs/plans/2026-09-07-web-birthday-editor.md.
-      # It renders only over a held birthday: an empty row was an
-      # attribute rendering nothing (docs/DESIGN.md), and a birthday
-      # arrives through the add dialog like every other property. Every
+      # It renders only over a held birthday (docs/DESIGN.md, "Empty
+      # attributes do not render"), and a birthday arrives through the
+      # add dialog like every other property. Every
       # standing row holds one, so the removal state rides on it
       # unconditionally.
       #: () -> void
@@ -496,9 +493,8 @@ module ProTacts
         end
       end
 
-      # Where a property a contact does not have yet gets named —
-      # docs/DESIGN.md's "a quiet add affordance opens a native dialog
-      # that names the attribute types available." It holds no value,
+      # Where a property a contact does not have yet gets named
+      # (docs/DESIGN.md, "Adding is explicit"). It holds no value,
       # so there is nothing staged out of sight and Cancel is a plain
       # hide with nothing to undo; Add is the only thing that changes
       # the form, and what it changes is visible in the card the
@@ -512,10 +508,10 @@ module ProTacts
       #
       # A radiogroup rather than a fieldset, and no legend: the
       # dialog's header already names what is being picked, and a
-      # legend under it read as a second heading for one control.
+      # legend under it reads as a second heading for one control.
       # Gloss's `dialog > *` padding also outranks its `fieldset`
       # reset, and a legend renders above the padding box rather than
-      # inside it, so the two stacked into a gap nothing asked for.
+      # inside it, so the two stack into a gap nothing asked for.
       def add_property_dialog
         dialog(id: "add-property", popover: "auto") do
           header { "Add a property" }

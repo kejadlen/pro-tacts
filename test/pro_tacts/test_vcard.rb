@@ -113,9 +113,8 @@ class VCardTest < Minitest::Test
   # UTF-8 at all never become a card: better than a store serving them
   # back as `text/vcard; charset=utf-8` while they are no such thing.
   # Relabelled first, as the route would (Web#write_card), and this
-  # pins the line that catches it — the card, before any walk or any
-  # bind below it could meet the bytes, and now before a store is even
-  # handed one.
+  # pins the line that catches it: the card, before any walk, bind, or
+  # store could meet the bytes.
   def test_bytes_that_are_not_utf_8_are_not_a_card
     invalid = "BEGIN:VCARD\r\nFN:\xFF\xFE\r\nEND:VCARD\r\n".dup.force_encoding(Encoding::UTF_8)
 

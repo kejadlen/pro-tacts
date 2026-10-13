@@ -8,9 +8,8 @@ class ProfileTest < Minitest::Test
     ProTacts::Profile.render(hostname:, username:)
   end
 
-  # The name comes from the environment now rather than an argument, so
-  # the tests that care about it swap the config the same way the
-  # install screen's do.
+  # The name comes from the environment, so the tests that care about
+  # it swap the config the same way the install screen's do.
   def with_config(env = {})
     original = ProTacts.config
     ProTacts.config = ProTacts::Config.new(env)

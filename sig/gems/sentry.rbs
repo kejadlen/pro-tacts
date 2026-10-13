@@ -1,9 +1,10 @@
 # Sentry is reached wherever a handler has something to report: the
 # exception-capturing middleware web.rb mounts, the refusal warnings
-# RefusalAlerts sends, the arrival messages dav.rb and store.rb send,
-# and the photo decode refusal contact.rb captures. ExchangeLog tags the
-# request's scope and reads whether anything was reported under it, and
-# Tracing hands Sentry its spans and scrubs the transactions they become.
+# RefusalAlerts sends, the arrival messages dav.rb and edited_contact.rb
+# send, and the photo decode refusal contact.rb captures. ExchangeLog
+# tags the request's scope and reads whether anything was reported under
+# it, and Tracing hands Sentry its spans and scrubs the transactions
+# they become.
 module Sentry
   class TransactionEvent
     def contexts: () -> Hash[Symbol, Hash[Symbol, untyped]]

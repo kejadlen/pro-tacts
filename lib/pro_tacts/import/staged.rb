@@ -8,32 +8,12 @@ require "pro_tacts/change_id"
 module ProTacts
   module Import
     # An import in progress, on disk between the requests that make it
-    # up (docs/plans/2026-09-21-import-a-vcf.md). A review is a walk
-    # over the contacts in a file, a screen at a time, and what the
-    # walk is reading and writing has to outlive each request.
-    #
-    # Three slots per import. ORIGINAL is the uploaded file, written
-    # once and never again: it is what the left-hand card renders, and
-    # a card that has been edited still has to show what it arrived
-    # as. REVISED is the cards as they will be written — pared to what
-    # this book reads when the import opens (Vcf.read), and rewritten
-    # whole each time the editor saves one of them. SAVED is what the
-    # import has already done: the group it files its arrivals under,
-    # and which of its cards are contacts now.
-    #
-    # That last one is what makes the walk resumable rather than
-    # batched. A card is written the moment its Save is pressed
-    # (Import::Write), so the store is the record of it and this slot
-    # is only how the list knows which rows are done. Nothing here
-    # holds a decision back: the groups a contact joins are ticked and
-    # written by that same Save, so they are never staged at all.
-    #
-    # On disk rather than in the browser: a book with pictures in it is
-    # tens of megabytes, and a form carrying it back and forth is the
-    # upload done once per screen. Under the data directory, which is
-    # the one place this app writes (Config#data_dir), and not the
-    # system temp dir: a half-finished import is this server's own
-    # state, short-lived without being anyone else's.
+    # up: its three slots, and why on disk, are
+    # docs/plans/2026-09-21-import-a-vcf.md, "The import waits on the
+    # server". Under the data directory, which is the one place this
+    # app writes (Config#data_dir), and not the system temp dir: a
+    # half-finished import is this server's own state, short-lived
+    # without being anyone else's.
     module Staged
       # Where they wait, a directory per import. Beside the database
       # rather than in it: these are not cards yet, and nothing reads
@@ -51,10 +31,8 @@ module ProTacts
       GROUP = "group" #: String
       CONTACTS = "contacts" #: String
 
-      # How long an import is worth keeping. Long enough to work down
-      # a book's worth of contacts over an evening, and short enough
-      # that a window closed on the review screen does not leave that
-      # book on disk for a week.
+      # How long an import is worth keeping: an evening's walk, and no
+      # longer (the plan's "The import waits on the server").
       LIFETIME = 86_400 #: Integer
 
       # A new import, under a fresh id, which is what every screen of
@@ -69,11 +47,8 @@ module ProTacts
         FileUtils.mkdir_p(directory)
         File.binwrite(directory / file_name(ORIGINAL), original)
         File.binwrite(directory / file_name(REVISED), revised)
-        # The group is settled here rather than at the end, there
-        # being no end to settle it at any more: every Save files its
-        # contact under it, and nothing renames it afterwards — a
-        # rename would leave what is already in the book under the old
-        # name and put the rest somewhere else. Nothing saved yet, and
+        # The group is settled here, and never renamed (the plan's
+        # "Nothing waits for the end"). Nothing saved yet, and
         # empty rather than absent, so every slot of an import that
         # exists is a file that exists and a write can say which of
         # the two it found (#write).

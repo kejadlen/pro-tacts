@@ -3,9 +3,8 @@
 # (`#:` before a method, `# @rbs` for everything else), so the type and
 # the implementation are read and changed together.
 #
-# sig/ holds only what inline comments cannot express: the gems we call
-# into, which ship no signatures of their own, and the two Data classes
-# (see sig/pro_tacts/). Both are documented where they are defined.
+# sig/ holds only what inline comments cannot express, each file saying
+# why (docs/plans/2026-08-20-type-checking.md).
 target :lib do
   check "lib", inline: true
   # Phlex ships no RBS of its own, and the admin views are built on it —

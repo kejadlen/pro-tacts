@@ -41,14 +41,13 @@ module ProTacts
   # records, describe the card a client downloads, not the bytes on
   # disk.
   #
-  # The signature lives in sig/pro_tacts/store.rbs, for the Change Data
-  # class the inline syntax cannot read.
+  # Its Data classes, which the inline syntax cannot read, are signed in
+  # sig/pro_tacts/store.rbs.
   class Store
     # @rbs @database: Sequel::Database
 
     # One entry in the change log: what happened to a card, what it
-    # hashed to afterwards, and which of its lines the write moved. The
-    # signature is in sig/pro_tacts/store.rbs with Store's own.
+    # hashed to afterwards, and which of its lines the write moved.
     # @rbs skip
     Change = Data.define(:sequence, :card_id, :action, :etag, :diff, :created_at)
 
@@ -67,8 +66,7 @@ module ProTacts
     # at which moment, with a detail shaped by the action — the name a
     # create or rename left, the lines a `lines` write moved in
     # CardDiff's spelling, the card a join or leave moved, and a
-    # delete's tombstone carrying the whole group. The signature is in
-    # sig/pro_tacts/store.rbs with Store's own.
+    # delete's tombstone carrying the whole group.
     # @rbs skip
     GroupChange = Data.define(:sequence, :group_id, :action, :detail, :created_at)
 
@@ -99,8 +97,7 @@ module ProTacts
 
     # stored cards by id, the birthdays by card id, the groups, their
     # photos by group id, and the books — the name each named one goes
-    # by, keyed by login. What
-    # `rake db:dump` writes (tasks/db.rake).
+    # by, keyed by login. What `rake db:dump` writes (tasks/db.rake).
     # @rbs skip
     Snapshot = Data.define(:cards, :birthdays, :groups, :group_photos, :books)
 
@@ -111,8 +108,7 @@ module ProTacts
     # #group_choices reads only the row and a count of who is in it,
     # which the import's picker sorts by (Admin::ImportGroups). The
     # label is the same SQL one (#group_label), so a choice and a tag
-    # never disagree about what to call a nameless group. Signed in
-    # sig/pro_tacts/store.rbs, being a Data class.
+    # never disagree about what to call a nameless group.
     # @rbs skip
     GroupChoice = Data.define(:id, :name, :label, :member_count)
 
@@ -270,9 +266,8 @@ module ProTacts
     # comparing two of them learns whether to resync — never what
     # changed. The change log's sequence is that value, for the one
     # indexed read it costs. It moves on a rewrite that stores identical
-    # bytes too, where the hash this replaced did not: the promise
-    # trades a spurious resync — every etag unchanged, nothing fetched —
-    # for never missing a change.
+    # bytes too: the promise trades a spurious resync — every etag
+    # unchanged, nothing fetched — for never missing a change.
     #: () -> String
     def ctag
       latest_sequence.to_s
@@ -289,17 +284,9 @@ module ProTacts
     end
 
     # The id a sync token names this database by: a digest of the
-    # change log's first entry — the write every token's sequences
-    # count from, and the one row nothing ever rewrites. #reid can move
-    # its card_id, so the stamp is the digest's whole input; no write
-    # touches a log row's created_at. Derived rather than stored
-    # (docs/plans/2026-09-24-sync-tokens-name-their-database.md), so a
-    # reseed or a dump restored — a new first entry at a new moment —
-    # makes every token the old database issued stop reading, and the
-    # route answers the 410 rather than a delta against a history the
-    # client never saw. An empty log digests nothing, so a token taken
-    # from a book that was empty 410s once after its first card lands:
-    # a resync of nothing.
+    # change log's first entry's created_at, derived rather than stored
+    # (docs/plans/2026-09-24-sync-tokens-name-their-database.md, "The
+    # token" and "The costs").
     #: () -> String
     def database_id
       first = change_log.order(:sequence).first
@@ -905,8 +892,8 @@ module ProTacts
     # Drops the index and derives it again from the stored cards alone.
     # Always safe to run: nothing is authoritative here, so if the
     # projection ever disagrees with the cards, this is the repair. Raw
-    # rows rather than #contacts, which compose birthdays in: the index
-    # reflects what is stored, and no stored card carries a BDAY.
+    # rows rather than #contacts, which compose: the index reflects
+    # what is stored (#reindex).
     #: () -> void
     def rebuild_index
       @database.transaction do
@@ -1207,10 +1194,6 @@ module ProTacts
       Sequel::Migrator.run(@database, MIGRATIONS.to_s)
     end
 
-    # The birthday travels beside the card rather than inside it, and
-    # Contact composes the served one — its vcard, its etag, everything
-    # a caller reads — with the inherited lines beside it, so all
-    # describe what a client downloads rather than the bytes on disk.
     #: (Hash[Symbol, untyped] row, Birthday? birthday, Array[Contact::Inherited] inherited) -> Contact
     def contact_from(row, birthday, inherited)
       Contact.new(

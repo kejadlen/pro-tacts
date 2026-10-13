@@ -5,18 +5,9 @@ module ProTacts
     # The contacts already in the book that an arriving card may be
     # the same person as, offered beside that card's editor as the
     # ones it could update instead of arriving new
-    # (docs/plans/2026-09-23-merging-on-import.md).
-    #
-    # Edit distance over the three things a person is recognised by —
-    # the name, an email address, a phone number — because what an
-    # import meets is the same person spelled a little differently: a
-    # typo, a middle initial, a dot in an address, a number written
-    # with its country code on one side and without on the other. A
-    # contact is offered when any one of the
-    # three comes close enough — the same email under a nickname is
-    # the case worth catching, and a sum would bury it — and the
-    # offers are ranked by all three, so the one agreeing on more
-    # comes first. The offer changes nothing until it is taken.
+    # (docs/plans/2026-09-23-merging-on-import.md, "Finding them": edit
+    # distance over the name, each email and each phone, offered on
+    # the best one field and ranked by the sum).
     module Match
       # How alike two values must be to offer the contact, as the share
       # of the longer one an edit leaves alone: "Jon Smith" and "John
@@ -111,13 +102,8 @@ module ProTacts
       end
 
       # Two addresses as alike as the parts before their @, at one
-      # domain, and not alike at all at two: "jane@booles.family" and
-      # "jane@work.example" are different mailboxes, however alike the
-      # names on them. The domain has to agree rather than count
-      # toward the distance, because it is shared by everyone at it —
-      # over whole addresses "ada@example.com" is four edits in
-      # sixteen from "mary@example.com", two people alike for the
-      # length of a provider.
+      # domain, and not alike at all at two (the plan's "Finding
+      # them").
       #: (Array[String] ours, Array[String] theirs) -> Float
       def self.closest_address(ours, theirs)
         ours.product(theirs).map { |a, b|

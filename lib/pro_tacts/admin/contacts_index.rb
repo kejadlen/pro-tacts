@@ -15,8 +15,8 @@ module ProTacts
     #
     # Nothing on the page narrows the list. Finding a contact is the
     # header's search, which matches every field rather than the name
-    # alone; a filter here was a second, weaker match that could only
-    # disagree with it. This page is for reading the book by letter.
+    # alone; a filter here would be a second, weaker match that could
+    # only disagree with it. This page is for reading the book by letter.
     class ContactsIndex < Phlex::HTML
       # @rbs @rows: Array[Contact]
       # @rbs @login: String
@@ -26,11 +26,10 @@ module ProTacts
       def initialize(contacts:, groups:, login:)
         @login = login
         @rows = contacts.sort_by { [Format.sort_key(it), it.id] }
-        # Whole groups inverted into memberships, the way the dashboard
-        # inverts them for search: which groups a contact is in is the
-        # store's fact, read from that side once instead of per row.
-        # all_groups arrives ordered by id, so the inversion keeps the
-        # order a rename must not move a tag in.
+        # Whole groups inverted into memberships, the way Admin::Search
+        # inverts them: which groups a contact is in is the store's
+        # fact, read from that side once instead of per row. The
+        # inversion keeps Store#all_groups' order.
         @groups_of = {}
         groups.each { |group| group.members.each { (@groups_of[it] ||= []) << group } }
       end

@@ -112,11 +112,10 @@ module ProTacts
       # not readable text.
       ELIDE_ABOVE = 120 #: Integer
 
-      # A diff's line or a card's, elided: text in, for the lines a
-      # change log holds, a parsed line in for the ones a card does
-      # (#elide_line). Two views render one of these — a contact's raw
-      # card and a group's lent lines — which is why the machinery
-      # lives here rather than in either view.
+      # A change log's line, elided as a card's is (#elide_line): text
+      # in rather than a parsed line. Both change logs render these — a
+      # contact's and a group's — which is why the machinery lives here
+      # rather than in either view.
       #: (String text) -> String
       def self.elide_text(text)
         line = VCard::Parser.lines(text).first
@@ -192,8 +191,8 @@ module ProTacts
         "#{digest[0, ETAG_DIGITS]}…"
       end
 
-      # The other way to render one of those stamps: as itself, minus
-      # the milliseconds. What the change log records happened at a
+      # A stamp like #time_ago's, rendered as itself minus the
+      # milliseconds. What the change log records happened at a
       # moment someone may need to line up against a client's own logs,
       # so this one stays absolute where #time_ago goes coarse — and the
       # fraction is the clock's precision rather than the change's.

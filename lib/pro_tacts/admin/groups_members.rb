@@ -26,10 +26,8 @@ module ProTacts
     # the state reach only inside their x-data element — which puts
     # the filter inside the form it filters: Enter in it is guarded
     # rather than submitted, the import's own answer where there is
-    # no outside to stand in (Admin::GroupFilter). The filter, the
-    # cap, and the show-all button are GroupFilter's; the offer to
-    # make what the filter names is not rendered, a filter word not
-    # being able to mint a contact.
+    # no outside to stand in (Admin::GroupFilter), whose filter, cap,
+    # and show-all button these are, without its offer.
     class GroupsMembers < Phlex::HTML
       # @rbs @group: Group
       # @rbs @login: String
@@ -47,8 +45,7 @@ module ProTacts
         # The order the show screen's list reads (Format.sort_key),
         # which is the order the book is browsed in everywhere else.
         @contacts = contacts.sort_by { [Format.sort_key(it), it.id] }
-        # The members are never capped, GroupFilter.capped's own rule:
-        # those are the boxes the screen is opened to untick.
+        # The members are never capped (GroupFilter.capped).
         @capped = GroupFilter.capped(@contacts.map(&:id), joined: group.members)
       end
 

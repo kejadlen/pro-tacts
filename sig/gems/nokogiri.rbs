@@ -5,7 +5,7 @@
 # and the plist elements Profile calls directly are declared below.
 #
 # `root` is declared non-nil because Nokogiri::XML only returns a
-# document without one for input that is not XML at all, and web.rb
+# document without one for input that is not XML at all, and web/dav.rb
 # raises on that case explicitly rather than reading a nil root.
 module Nokogiri
   def self.XML: (String string_or_io) -> Nokogiri::XML::Document

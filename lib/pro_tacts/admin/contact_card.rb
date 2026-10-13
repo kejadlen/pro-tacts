@@ -10,9 +10,10 @@ require "pro_tacts/vcard"
 module ProTacts
   module Admin
     # A contact's details as a card: the header its rows sit under and
-    # the rows themselves, every row's type in one column and its
-    # value in the other (docs/DESIGN.md, "Alignment is the layout"),
-    # and an attribute with no data getting no row at all.
+    # the rows themselves, on docs/DESIGN.md's grid ("Alignment is the
+    # layout", "Empty attributes do not render"). Each row leads with
+    # its mono type label, no row's glyph being in Icon's set yet
+    # (docs/DESIGN.md, the icon rule).
     #
     # The contact's own page (ContactsShow) renders it inside its
     # record, and an import's saved row renders it beside the card
@@ -78,17 +79,11 @@ module ProTacts
           # the avatar is the row's visual anchor, not a caption.
           render Avatar.new(contact: @contact, size: "xl") if @contact.photo
         end
-        # The grid holds what the contact has and nothing it does
-        # not — a groupless contact on a walk screen has no groups
-        # row, there being no member to name and no dialog to
-        # open (#groups_row's own reason).
         dl(class: "detail-grid") { rows }
       end
 
       private
 
-      # A missing TYPE parameter still gets a key: the fallback names
-      # the kind of value, so no row renders unlabeled in the grid.
       # Every row hands over the group that lends it, nil where the
       # card's own — provenance carried on the row
       # (Contact::Phone#lent_by and kin), not re-derived from the

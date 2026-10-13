@@ -9,8 +9,8 @@ require "pro_tacts/admin/record_card"
 module ProTacts
   module Admin
     # GET /groups/:id/edit — a group's editor: Admin::ContactsEdit's
-    # shape over what a group holds, which is a name, the addresses and
-    # note it lends, and who it lends them to. The address rows are the
+    # shape over what a group holds, which is a name and the addresses
+    # and note it lends. The address rows are the
     # contact editor's own — addressed by digest, blank removes
     # (docs/plans/2026-09-05-web-card-editor.md) — and the save runs
     # the contact editor's own splice over the group's lines
@@ -19,9 +19,8 @@ module ProTacts
     #
     # Membership is edited from the group's card (Admin::GroupsShow),
     # not here: it is a relationship, not a line the group holds. The
-    # form carries
-    # no `members[]`, so a save says nothing about membership
-    # (#apply_edit's is-a-Hash posture) and leaves it as it stands.
+    # form carries no `members[]`, so a save leaves membership as it
+    # stands (Web#apply_group_edit).
     class GroupsEdit < Phlex::HTML
       # @rbs @group: Group
       # @rbs @login: String

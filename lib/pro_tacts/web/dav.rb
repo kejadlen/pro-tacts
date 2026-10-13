@@ -237,8 +237,7 @@ module ProTacts
             # resource supports. Answering an unsupported report with an
             # empty 207 reads to the client as a successful empty result,
             # and to us as nothing at all: 207 is not a status the
-            # exchange log keeps, so the one signal that a client wanted
-            # something unimplemented never fired.
+            # exchange log keeps.
             #
             # 403 with the precondition named in a DAV:error body is the
             # marshalling RFC 4918 section 16 defines, and 403 is its

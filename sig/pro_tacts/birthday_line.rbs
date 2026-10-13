@@ -1,6 +1,5 @@
 # BirthdayLine's variants are Data classes, whose members the inline
-# parser cannot read (see sig/pro_tacts/birthday.rbs for the same
-# limit). Each is marked `@rbs skip` in birthday_line.rb and signed
+# parser cannot read (see sig/pro_tacts/contact.rbs). Each is marked `@rbs skip` in birthday_line.rb and signed
 # here; the module's own reader carries its signature inline.
 module ProTacts
   module BirthdayLine

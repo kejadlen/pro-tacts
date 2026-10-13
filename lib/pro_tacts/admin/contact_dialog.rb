@@ -22,32 +22,20 @@ module ProTacts
     # form above it by id, since a footer sibling is not inside the
     # form.
     #
-    # Name only, by task uw's first cut: a created card has no prior
-    # octets to preserve, so a form is safe for it, and everything else
-    # a contact carries arrives by editing the record — which belongs
-    # on the details page, where the surgical mutator will live. N and
-    # FN both written because RFC 2426 section 4 requires them of every
-    # card; the three name fields are N's first three components
-    # (family;given;additional), and FN is derived from them in the
-    # western order the fixture sessions show macOS writing. The middle
-    # box stands outside the required pair — it is never the name a
-    # contact is made by — so it carries no rule of NamePair's.
+    # Name only: what a created card carries, and why nothing more, is
+    # CardForm.new_card's; everything else arrives through the editor
+    # (ContactsEdit). The middle box stands outside the required pair —
+    # it is never the name a contact is made by — so it carries no rule
+    # of NamePair's.
     #
-    # A popover cannot be declared open in markup, so the empty-name
-    # refusal is not a re-opened dialog: each name box is `required`
-    # while the other is blank (NamePair) — native validation, which no
-    # browser submit gets past — and the server's backstop for a
-    # hand-crafted empty POST answers with a toast on the dashboard
-    # instead (see Web's POST handler).
-    # `autofocus` fires when the popover is shown, being scoped to the
-    # popover.
+    # Each name box is `required` while the other is blank (NamePair),
+    # native validation no browser submit gets past; the server's
+    # backstop is Web's POST /contacts. `autofocus` fires when the
+    # popover is shown, being scoped to the popover.
     #
-    # No company variant of this dialog: organizations are created by
-    # the clients (Contacts.app's own Company flow PUTs a finished
-    # card) and by import, and each web-side affordance tried for one
-    # cost the common path chrome it could not pay for
-    # (docs/plans/2026-09-24-company-cards.md, "Creating"). The editor
-    # knows a company card when it edits one (Contact#company?).
+    # No company variant (docs/plans/2026-09-24-company-cards.md,
+    # "Creating"). The editor knows a company card when it edits one
+    # (Contact#company?).
     class ContactDialog < Phlex::HTML
       def view_template
         dialog(id: "new-contact", popover: "auto") do

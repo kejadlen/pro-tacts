@@ -6,16 +6,11 @@ module ProTacts
   # header is words, is docs/plans/2026-09-25-one-note-per-contact.md.
   #
   # Pure text algebra, the two halves of one round trip: #join is what
-  # composition writes, exactly one way, so an untouched card composes
-  # back to the bytes it was served with; #split is what a PUT is read
-  # with, tolerant of the whitespace a person's editing moves between
-  # sections, because headers and not separators are the structure.
-  # Neither knows what a group is — attribution is EditedContact's,
-  # which knows what the contact's groups lend.
+  # composition writes, #split what a PUT is read with. Neither knows
+  # what a group is — attribution is EditedContact's, which knows what
+  # the contact's groups lend.
   module NoteSections
-    # The fixed half of every header. Rare enough at line start that a
-    # collision needs a member's own text to open a line with the
-    # phrase plus a lending group's label.
+    # The fixed half of every header.
     HEADER = "Shared · ".freeze #: String
 
     # One labeled part of a combined value: the lending group's label
@@ -47,18 +42,17 @@ module ProTacts
     end
 
     # The value read back: everything before the first header is the
-    # member's own text, each header opens the section of its label,
-    # and a section runs to the next header or the end. A header is a
-    # line exactly equal to `Shared · <label>:` with trailing
-    # whitespace gone, for none of the labels it names — a label
-    # nothing lends is a header nowhere, so stale text from an old
-    # value reads as member text and not as a mangle. Duplicate labels
-    # are the caller's to refuse before this: one header cannot say
-    # which of two it names. Leading and trailing blank lines come
-    # off both halves — they are the separators the composer writes and
-    # whatever a person left behind — and blank lines inside a body
-    # stay, a multiline note keeping its own paragraphs. A member text
-    # that was all blanks reads as "", which is the caller's no-note.
+    # member's own text, each header opens the section of its label, and
+    # a section runs to the next header or the end. A header is a line
+    # exactly equal to `Shared · <label>:` with trailing whitespace
+    # gone, for one of the labels given — a label nothing lends is a
+    # header nowhere. Duplicate labels are the caller's to refuse before
+    # this: one header cannot say which of two it names. Leading and
+    # trailing blank lines come off both halves — they are the
+    # separators the composer writes and whatever a person left behind —
+    # and blank lines inside a body stay, a multiline note keeping its
+    # own paragraphs. A member text that was all blanks reads as "",
+    # which is the caller's no-note.
     #: (String value, Array[String] labels) -> Split
     def self.split(value, labels)
       headers = labels.to_h {

@@ -248,10 +248,9 @@ module ProTacts
     # The one reading that is not the section grammar's: a value with
     # no headers that is exactly a lent note's text is a client of the
     # two-line shape sending back what macOS truncated it to — the
-    # last NOTE, which composition put last (docs/apple-contacts.md,
+    # last NOTE, which that shape put last (docs/apple-contacts.md,
     # "Only the last of two notes survives"). It reads as that note
-    # present and every other one gone, the reading the line matching
-    # made of the same card before sections existed.
+    # present and every other one gone.
     #: (VCard vcard, Array[Contact::Inherited] rows) -> [VCard, Array[GroupEdit]]
     def subtract_notes(vcard, rows)
       notes = vcard.lines.select { it.names?("NOTE") }
@@ -264,8 +263,8 @@ module ProTacts
       end
 
       # No NOTE at all is every section deleted — the cleared field,
-      # which takes the member's own text with it the way taking the
-      # lent line always did.
+      # which takes the member's own text with it (the plan's "The
+      # split").
       deletions = rows.map { |row|
         GroupEdit.new(group_id: row.group.id, position: row.position, line: nil)
       }
@@ -279,13 +278,7 @@ module ProTacts
       value = values.join("\n\n")
       split = NoteSections.split(value, labels)
       if split.sections.empty?
-        # A value with no headers that is exactly a lent note's text is
-        # a client of the two-line shape sending back what macOS
-        # truncated it to — the last NOTE, which composition put last
-        # (docs/apple-contacts.md, "Only the last of two notes
-        # survives"). It reads as that note present and every other
-        # one gone, the reading the line matching made of the same
-        # card before sections existed.
+        # The two-line shape's truncation (see the method comment).
         kept = rows.find { |row| lent_text(row) == value }
         unless kept.nil?
           return [

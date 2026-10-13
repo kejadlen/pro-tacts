@@ -54,8 +54,6 @@ module ProTacts
             end
             render UpcomingBirthdays.new(upcoming: @upcoming)
           end
-          # In the page but out of the columns: a popover opens from
-          # wherever it sits, and hidden is its resting state.
           render ContactDialog.new
         end
       end

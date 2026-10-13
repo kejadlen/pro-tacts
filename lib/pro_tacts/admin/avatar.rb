@@ -9,7 +9,7 @@ module ProTacts
     # the views that render this slot — the dashboard's rows, the
     # birthdays' rows, the detail header — should not disagree about
     # what an avatar is. (The detail header asks for it only when a
-    # picture exists; see ContactsShow.)
+    # picture exists; see ContactCard.)
     #
     # The picture renders from the photo route rather than the decoded
     # bytes in hand, so the page carries a URL where it would otherwise

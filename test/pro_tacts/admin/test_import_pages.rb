@@ -952,9 +952,6 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
-  # Swept out from under a screen left open, or come back to after
-  # its last row was saved: the import is gone and only the person
-  # has another copy.
   # A card that looks like someone already in the book offers to
   # update them instead, at the top of its editor, and that offer is
   # the default: a row opened with no choice made folds into the best
@@ -1109,6 +1106,9 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # Swept out from under a screen left open, or come back to after
+  # its last row was saved: the import is gone and only the person
+  # has another copy.
   def test_a_walk_that_is_gone_says_so
     with_contacts({}) do |store|
       id = upload(JANE)

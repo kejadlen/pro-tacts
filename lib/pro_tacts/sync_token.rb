@@ -4,13 +4,9 @@ module ProTacts
   # A sync token as this server spells one: the ctag it was minted at,
   # the book it was minted for, and the database that minted it, in a
   # URI. Opaque to the client (RFC 6578 section 3) and the URI form is
-  # conventional, but not opaque to this server, which has to tell its
-  # own token from one another book minted — the one a rename leaves a
-  # user holding included (docs/plans/2026-09-12-per-user-books.md,
-  # "The wire") — and from one another database minted: a reseed or a
-  # dump restored repeats the sequences, and the id is what refuses
-  # that token rather than answering a delta against a history it
-  # never saw
+  # conventional, but not opaque to this server, which refuses a token
+  # another book minted (docs/plans/2026-09-12-per-user-books.md, "The
+  # wire") or another database did
   # (docs/plans/2026-09-24-sync-tokens-name-their-database.md).
   # Built on the ctag so that a client polling either one sees changes
   # at the same points.

@@ -10,8 +10,8 @@ module ProTacts
 
     # The length a contact's id is minted at. Store#put overwrites
     # rather than refuses, so the width is the only guard a create has:
-    # 48 bits, for a family's book. The admin create draws it (Web's
-    # contacts branch); Store#reid measures ids against it.
+    # 48 bits, for a family's book. The admin create, the import, and
+    # Store#reid draw at it; #minted? measures ids against it.
     CONTACT_LENGTH = 12 #: Integer
 
     # SecureRandom rather than rand: the draws have to be independent of

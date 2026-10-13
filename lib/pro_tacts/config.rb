@@ -42,8 +42,8 @@ module ProTacts
       !value.nil? && value.match?(TRUTHY)
     end
 
-    # Root data directory: holds the contacts database, and the exported
-    # card mirror once there is one. Overridable with
+    # Root data directory: the database, the exchange log, staged
+    # imports, and the dump default under it. Overridable with
     # PRO_TACTS_DATA_DIR.
     #: () -> Pathname
     def data_dir
@@ -54,7 +54,7 @@ module ProTacts
     # derived from the cards (see ProTacts::Store). PRO_TACTS_DATABASE
     # overrides the whole path rather than a name under the data
     # directory, so a deployment can put the database on a different
-    # volume from the exports.
+    # volume from the rest of the data.
     #: () -> Pathname
     def database_path
       path = @env.fetch("PRO_TACTS_DATABASE", nil)

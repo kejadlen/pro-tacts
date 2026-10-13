@@ -30,7 +30,7 @@ class SyncTokenTest < Minitest::Test
 
   # The shapes macOS was recorded sending before tokens named their
   # database: no book at all (fixture 08), and a book but no database
-  # (fixture 12's request, the spelling this change retires).
+  # (fixture 12's request).
   def test_a_token_from_before_databases_reads_as_nothing
     assert_nil ProTacts::SyncToken.read("http://pro-tacts/sync/1", BOOK, DATABASE)
     assert_nil ProTacts::SyncToken.read("http://pro-tacts/sync/22/#{BOOK}", BOOK, DATABASE)

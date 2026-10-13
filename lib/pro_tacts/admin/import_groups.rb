@@ -24,12 +24,9 @@ module ProTacts
     # sight, ticked: everyone's book, and the group for the import.
     # Both can be unticked — an arrival that does not belong with the
     # lot is a thing the walk is for deciding, and so is a card that
-    # is to sit on the server without going out to anybody's phone. The filter, the cap on how many rows
-    # stand shown and the button that lifts it are the dialog's
-    # (Admin::GroupFilter,
-    # docs/plans/2026-09-22-a-few-groups-at-a-time.md): a book with
-    # three hundred groups buries either picker, and this is the one
-    # the walk opens once per contact.
+    # is to sit on the server without going out to anybody's phone.
+    # The filter, the cap on how many rows stand shown and the button
+    # that lifts it are Admin::GroupFilter's.
     #
     # A named group is not created here: it is made by the Save, with
     # the contact it was named for (Import::Write#group_id), because a
@@ -62,11 +59,10 @@ module ProTacts
       # the Save that would have staged it is the Save that writes the
       # contact.
       #
-      # Both are rows the cap spares, for the dialog's own reason: a
-      # box this contact has already been given is one the walk came
-      # back to untick. The names take rows from the limit without
-      # being in the list the cap reads, so they are counted into it
-      # rather than listed in it.
+      # Both are rows the cap spares, the names counted into the limit
+      # rather than listed in it (GroupFilter.capped;
+      # docs/plans/2026-09-22-a-few-groups-at-a-time.md, "Both
+      # pickers").
       #
       # `was` is the groups a contact the book already has is in, for a
       # card being folded into it (Import::Merge): sent back beside the
@@ -87,10 +83,8 @@ module ProTacts
           @was.each do |id|
             input(type: "hidden", name: "was[]", value: id)
           end
-          # Enter guarded rather than the filter moved: the dialog
-          # keeps its filter outside the form it filters, and here
-          # there is no outside — the boxes are the editor's own
-          # fields (GroupFilter#initialize).
+          # Enter guarded, the boxes being the editor's own fields with
+          # no outside to the form (GroupFilter#initialize).
           render GroupFilter.new(in_form: true)
           div(class: "field-stack", x_ref: "options") do
             @groups.each do |group|

@@ -5,10 +5,8 @@ require "pro_tacts/admin/layout"
 module ProTacts
   module Admin
     # GET /setup — the screen a device installs the CardDAV account
-    # from. Until this existed the profile was rendered by rake on the
-    # machine the repository is checked out on, so provisioning a phone
-    # meant mailing a file to it; here the device that can reach the app
-    # is the device that can provision itself from it.
+    # from, so the device that can reach the app provisions itself
+    # rather than being mailed a profile rendered on a checkout.
     #
     # /setup rather than /profile: in a web app a profile is the reader's
     # own account page, and this is the device's setup — the one thing

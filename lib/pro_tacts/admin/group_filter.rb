@@ -14,20 +14,15 @@ module ProTacts
     # two where a contact's groups are picked — the dialog on a stored
     # contact's card (Admin::GroupDialog) and the boxes beside an
     # arriving one (Admin::ImportGroups) — and the members screen,
-    # where a group's contacts are (Admin::GroupsMembers). A book with
-    # three groups and a book with three hundred are the same screen,
-    # and the import's is the screen the walk opens once per contact,
-    # so the two are the same problem — and a second answer to it
-    # would only be a place where they could disagree. The members
+    # where a group's contacts are (Admin::GroupsMembers); why one
+    # answer for all of them is the plan's "Both pickers". The members
     # screen renders the filter, the cap, and the show-all button,
     # and not the offer to make what the filter names: a filter word
     # cannot mint a contact — that is the dashboard's dialog, with
     # its name fields — so its placeholder says nothing about adding,
     # and `named` idles, nothing rendering Fresh to push onto it.
     #
-    # The contacts page does not use it: a list that is only read, not
-    # picked from, leaves finding to the header's search, which matches
-    # more than a name (Admin::ContactsIndex).
+    # The contacts page does not use it (Admin::ContactsIndex).
     #
     # Alpine does the filtering, matching each row's label as
     # Format.search_key folds it — lowercased, accents folded —
@@ -35,9 +30,8 @@ module ProTacts
     # is ever spliced into script.
     # A row it hides still submits its box: hiding is not unticking,
     # and a contact's other groups are not being answered for by a
-    # word typed to find one of them. Every row stays in the page for
-    # the same reason the plan gives — the filter is client-side, so a
-    # row the server left out is a row nothing here can reach.
+    # word typed to find one of them. Every row stays in the page (the
+    # plan, "Why the rows stay in the page").
     class GroupFilter < Phlex::HTML
       # How many rows a list opens with. The dialog is a popover and
       # cannot scroll past its own footer (see the plan, and the
@@ -92,13 +86,10 @@ module ProTacts
         {data: {label: Format.search_key(label), capped:}, ":hidden": "!visible($el)"}
       end
 
-      # Which of `ids` the cap holds back, in the order they render.
-      # A row already ticked is never capped, however far down the
-      # list it sorts: those are the boxes a person opens the list to
-      # untick, and one hidden from them makes the list disagree with
-      # the screen it was opened from. They take rows from the limit
-      # rather than standing outside it, so what stands shown is the
-      # limit or the ticked rows, whichever is longer. `shown` is for
+      # Which of `ids` the cap holds back, in the order they render. A
+      # row already ticked is never capped and takes a row from the
+      # limit (the plan, "The groups a contact is in are never
+      # capped"). `shown` is for
       # rows that are always there and are not in `ids` — the names an
       # import is about to make — which take from the limit the same
       # way.
@@ -225,11 +216,8 @@ module ProTacts
       end
 
       # The way past the cap for someone who is looking rather than
-      # naming: the filter reaches a group already known by name, this
-      # reaches the list. It counts the whole list rather than the part
-      # under the cap, that being the number a person is deciding
-      # whether to read. It stands down while the filter is typed
-      # into, which lifts the cap itself.
+      # naming; what it counts and when it stands down are the plan's
+      # "What lifts it".
       #
       # It goes both ways, the label saying which way the next press
       # goes: a list unrolled is the long list the cap exists to

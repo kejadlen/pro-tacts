@@ -1,4 +1,5 @@
-# Change is a Data class, whose members the inline parser cannot read
+# Change, GroupChange, RecentContact, UpcomingBirthday, GroupChoice, and
+# Snapshot are Data classes, whose members the inline parser cannot read
 # (see sig/pro_tacts/contact.rbs). Store itself is an ordinary class and
 # its types are inline in store.rb.
 module ProTacts

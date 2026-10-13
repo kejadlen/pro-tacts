@@ -30,12 +30,8 @@ class BirthdayTest < Minitest::Test
     assert_raises(ArgumentError) { ProTacts::Birthday.new(year: 10_000, month: 4, day: 12) }
   end
 
-  # The shape pattern matches by range, and a range admits any
-  # Comparable within its bounds — so a String component is refused as a
-  # shape problem. A non-Integer numeric would pass; no producer can
-  # make one (SQLite integer columns and String#to_i are Integers),
-  # which the constructor's comment records as the boundary of the
-  # check.
+  # A String misses the range patterns and is refused; a non-Integer
+  # numeric would pass, a boundary Birthday.new's comment explains.
   def test_components_that_are_not_integers_are_refused
     assert_raises(ArgumentError) { ProTacts::Birthday.new(year: "1985", month: 4, day: 12) }
     assert_raises(ArgumentError) { ProTacts::Birthday.new(year: 1985, month: "4", day: 12) }
@@ -46,7 +42,6 @@ class BirthdayTest < Minitest::Test
     assert_equal "BDAY;X-APPLE-OMIT-YEAR=1604:1604-04-12", ProTacts::Birthday.new(month: 4, day: 12).to_line
   end
 
-  # The four shapes no client displays are never sent.
   def test_the_shapes_no_client_displays_serve_nothing
     [ProTacts::Birthday.new(year: 1985, month: 4), ProTacts::Birthday.new(year: 1985),
       ProTacts::Birthday.new(month: 4), ProTacts::Birthday.new(day: 12)].each do |birthday|
@@ -92,7 +87,6 @@ class BirthdayTest < Minitest::Test
     assert_equal Date.new(2026, 9, 3), ProTacts::Birthday.new(month: 9, day: 3).next_on(today)
   end
 
-  # One already passed wraps onto next year rather than going missing.
   def test_next_on_wraps_a_passed_birthday_onto_next_year
     assert_equal Date.new(2027, 3, 15), ProTacts::Birthday.new(year: 1990, month: 3, day: 15).next_on(Date.new(2026, 9, 3))
   end

@@ -8,28 +8,9 @@ module ProTacts
   module Import
     # Monica 4's account export (Settings, Export, "Export to JSON"),
     # read as the .vcf the rest of the import already walks
-    # (docs/plans/2026-09-25-importing-from-monica.md).
-    #
-    # Monica's own vCards leave out most of what Monica is for — notes,
-    # relationships, pets — and its JSON export is the one place those
-    # come out whole. So this composes a card per contact out of it, and
-    # everything after the upload is the walk as it was: the composed
-    # file is staged as the import's original, pared by Vcf.read, and
-    # read beside the editor a contact at a time.
-    #
-    # A composed card carries everything, not only what this book
-    # reads. What Monica knows and no screen here shows goes in as an
-    # X-MONICA- line, struck on the card as exported like any other
-    # line not coming in: the left-hand card is the whole record, so
-    # nothing is lost without having been shown first. What reads as
-    # prose about the person — the notes, the relationships, the pets —
-    # is joined into the one NOTE instead, that being the one place in
-    # a contact that holds prose.
-    #
-    # The shapes read here are Monica's own export resources
-    # (app/ExportResources on its 4.x branch): each record is its
-    # columns, a `properties` object, and a `data` array of collections
-    # `{count, type, values}` named by the resource they hold.
+    # (docs/plans/2026-09-25-importing-from-monica.md, which says why
+    # the JSON, where each part of a contact goes, and the shapes of
+    # Monica's export resources read here).
     module Monica
       # Monica's relationship type names, as its English interface
       # spells them (resources/lang/en/app.php). A type an account made
@@ -73,10 +54,8 @@ module ProTacts
       end
 
       # The export as a .vcf, a card per contact in the order the export
-      # lists them. A contact Monica only knows by name — `is_partial`,
-      # the relative added from someone else's page — is not a card of
-      # its own; it is a name in the relationships of the contacts it
-      # is related to.
+      # lists them, less the `is_partial` ones Monica only knows by name
+      # (the plan's "Where each part goes").
       #: (String bytes) -> String
       def self.vcf(bytes)
         account = account_of(bytes)
@@ -189,11 +168,8 @@ module ProTacts
       end
 
       # A SpecialDate (Monica's own date model) as BDAY, where a card can
-      # spell it: a whole date, or a month and day when Monica was told
-      # the year is unknown. One Monica worked out from an age holds a
-      # year it guessed and a day it made up, which no card can spell
-      # truthfully, so it stays behind as a line of its own for the
-      # importer to read and enter on the contact's own page.
+      # spell it, and an age-based one as a line of its own left behind
+      # (the plan's "Where each part goes").
       #: (untyped date) -> String?
       def self.birthday(date)
         return nil unless date.is_a?(Hash)

@@ -39,12 +39,12 @@ module ProTacts
       # index rows, and the card is served from its bytes regardless.
       class ParseError < StandardError; end
 
-      # Something this parser was built to assume it would never read.
-      # Not a judgment on the card: the assumptions are about macOS
-      # Contacts, the only client this address book serves
-      # (test/fixtures/macos-exchange is the evidence for each), and a
-      # card can break one while being a perfectly good vCard. Raising
-      # is how the assumption gets checked instead of merely held.
+      # Something this parser was built to assume it would never read. Not
+      # a judgment on the card: the assumptions are about the Apple
+      # clients this address book serves (test/fixtures/macos-exchange is
+      # the evidence for each), and a card can break one while being a
+      # perfectly good vCard. Raising is how the assumption gets checked
+      # instead of merely held.
       #
       # A ParseError so it rides the same rails as any line that will
       # not read — the bytes are still served, index rows are what is
@@ -150,9 +150,7 @@ module ProTacts
 
         # Whether this line failed to read without breaking an
         # assumption: ordinary bad input, against the news a broken
-        # assumption is. Asked here for the same reason
-        # broke_assumption? is, so no caller has to know the error
-        # taxonomy to tell the two apart.
+        # assumption is. Asked here for broke_assumption?'s reason.
         #: () -> bool
         def unreadable? = !error.nil? && !broke_assumption?
 
@@ -337,8 +335,6 @@ module ProTacts
         values = [parameter_value]
         values << parameter_value while @scanner.skip(/,/)
         values.map {
-          # A two-element literal is an Array until something says
-          # otherwise, and an inline annotation needs its own line.
           [name, it] #: [String, String]
         }
       end

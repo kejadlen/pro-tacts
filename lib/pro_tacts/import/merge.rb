@@ -8,23 +8,12 @@ module ProTacts
   module Import
     # An arriving card folded into a contact the book already has: what
     # the walk's editor renders when its toggle names that contact
-    # rather than a new one (docs/plans/2026-09-23-merging-on-import.md).
-    #
-    # The contact's own card is the base and keeps every byte it has;
-    # the arriving card adds only what the contact does not hold yet. A
-    # phone, an email or an address comes in beside the ones the
-    # contact has, unless it is one of them. A name, a nickname, a
-    # note, a photo, an organization or a birthday — what a contact
-    # holds one of — comes in only where the contact has none, and
-    # where the two differ the book's own stands. What that leaves behind is #left, struck on
-    # the card as exported the way every other line not coming in is
-    # (Admin::ImportOriginal), so nothing is lost without having been
-    # shown first.
+    # rather than a new one (docs/plans/2026-09-23-merging-on-import.md,
+    # "The fold"). What it leaves behind is #left, struck on the card
+    # as exported (Admin::ImportOriginal).
     #
     # Nothing here writes. The editor renders over #contact, and the
-    # save derives it again to check the etag the form carried, so a
-    # contact that changed in between refuses the save the way any
-    # stale editor does.
+    # save derives it again to check the etag the form carried.
     class Merge
       # @rbs @into: Contact
       # @rbs @labels: Hash[String, Array[VCard::Parser::Line]]

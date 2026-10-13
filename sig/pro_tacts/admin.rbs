@@ -1,5 +1,5 @@
 # lib/pro_tacts/admin is ignored by the Steepfile — built on Phlex,
-# which ships no signatures — but web.rb still calls its views, and
+# which ships no signatures — but checked code still calls its views, and
 # a checked file cannot reference a constant nothing declares. This
 # holds exactly that entry surface; the views' own files carry none.
 # When Phlex gets a stand-in under sig/gems and admin is checked for
@@ -90,7 +90,7 @@ module ProTacts
     end
 
     # Rendered by Dashboard, not called from checked code; only
-    # its LIMIT is read in web.rb.
+    # its LIMIT is read, in web/contacts.rb.
     class UpcomingBirthdays
       LIMIT: Integer
     end

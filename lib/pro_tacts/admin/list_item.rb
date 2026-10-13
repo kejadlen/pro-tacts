@@ -4,9 +4,9 @@ module ProTacts
   module Admin
     # One row of a card list: an li holding a link, an optional avatar
     # in front, the block's label in a bold column that flexes, and an
-    # optional muted label behind it — the row shape every browse
-    # screen shares (the dashboard's contacts and group results,
-    # /contacts, /groups). The middle column is the one piece of
+    # optional muted label behind it — the row shape the browse
+    # screens share (the dashboard's and the search's rows, /groups, a
+    # group's members). The middle column is the one piece of
     # layout this owns: min-width 0 lets a long name shrink instead
     # of pushing what trails it off the card.
     class ListItem < Phlex::HTML

@@ -14,15 +14,11 @@ module ProTacts
     # answer neither question this card is for: what did the source
     # actually say, and what of it is not coming with it.
     #
-    # A line that is not coming in is struck in Gloss's danger color,
-    # which is what that color means on this surface — the blanked
-    # editor row wears it for the same reason (admin.css) — and says
-    # so in words beside it, because a strike alone is a color and
-    # colors are not read the same by everyone.
-    #
-    # Nothing here is a control. What to do about a struck line is
-    # done in the editor beside it: read the spouse's name off this
-    # card and type it into the note on that one.
+    # A line that is not coming in is struck in Gloss's danger color
+    # and says so in words beside it (the plan, "The walk"); the
+    # blanked editor row wears that color for the same reason
+    # (admin.css). Nothing here is a control: what to do about a
+    # struck line is done in the editor beside it.
     class ImportOriginal < Phlex::HTML
       # @rbs @card: ::ProTacts::VCard
       # @rbs @dropped: Array[String]

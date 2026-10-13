@@ -6,16 +6,8 @@ require "pro_tacts/admin/group_dialog"
 
 module ProTacts
   module Admin
-    # GET /contacts/:id — a contact's card, read-only. Follows
-    # docs/DESIGN.md's alignment rule even before there is anything to
-    # edit: every row's type sits in one column and its value in the
-    # other, and an attribute with no data gets no row at all.
-    #
-    # The mockup this was built from leads each row with a Lucide icon
-    # instead of a type label once there is more than one row of the
-    # same kind; nothing here vendors an icon set yet, so every row
-    # keeps its mono type label for now. Revisit once Gloss or this
-    # project settles on how icons ship.
+    # GET /contacts/:id — a contact's card (ContactCard), read-only;
+    # its edit link opens ContactsEdit.
     class ContactsShow < Phlex::HTML
       # The groups come from the store beside the contact rather than
       # off it: a contact's card carries what its groups lend it, never
@@ -53,10 +45,8 @@ module ProTacts
             end
             render ContactCard.new(contact: @contact, groups: @groups, dialog: true)
           end
-          # The stored card in its own card under the record: the bytes
-          # are the truth the grid above interprets, and they stay
-          # reachable — collapsed by default, because the record is
-          # about the person and the bytes are about the wire. Native
+          # The stored card in its own card under the record, collapsed
+          # (docs/DESIGN.md, "The stored card is reachable"). Native
           # <details>, because a disclosure needs no script (see
           # Layout — Alpine is loaded, and this is not what for);
           # and the one thing a card that will not parse has to show
@@ -70,11 +60,10 @@ module ProTacts
             end
           end
           # What this card has done, under the bytes it currently is:
-          # the log the sync tokens count on (Store#changes_of), which
-          # until now nothing here showed. Collapsed and in the raw
-          # card's shape for the raw card's reason — the record is
-          # about the person, and a sequence of etags is about the
-          # wire — and last of the three, because a history is read
+          # the log the sync tokens count on (Store#changes_of).
+          # Collapsed and in the raw card's shape for the raw card's
+          # reason — a sequence of etags is about the wire, not the
+          # person — and last of the three, because a history is read
           # after the thing that has one.
           div(class: "card") do
             div(class: "card-body") do
@@ -145,8 +134,7 @@ module ProTacts
       end
 
       # The stored card for display: byte for byte, except a value long
-      # enough to be a wall. The count says exactly what is there; what
-      # it stands in for is not readable text.
+      # enough to be a wall (Format::ELIDE_ABOVE).
       #: () -> String
       def raw_card
         @contact.vcard.lines.map { Format.elide_line(it) }.join

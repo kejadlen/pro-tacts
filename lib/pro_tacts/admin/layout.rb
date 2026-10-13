@@ -14,15 +14,14 @@ module ProTacts
     # screen: search-first (docs/DESIGN.md) wants finding a contact
     # possible from anywhere, and the dialog it opens rides along in
     # every render. `wide` opts a screen out of the reading width a
-    # single column wants (see admin.css) — the dashboard root is the
-    # one screen that asks.
+    # single column wants (see admin.css) — the dashboard, and the
+    # import walk's screens.
     #
     # Alpine loads on every screen, and it is the only script here.
-    # The admin UI was script-free until the edit screen needed to
-    # add a row to a form without a round trip: CSS can reveal a
-    # fixed set of elements but cannot make one, so every version of
-    # that built out of `:has()` and hidden inputs traded a real
-    # affordance away — a cap on how many, or a field that stayed
+    # It is for adding a row to a form without a round trip: CSS can
+    # reveal a fixed set of elements but cannot make one, and any
+    # version built out of `:has()` and hidden inputs trades a real
+    # affordance away — a cap on how many, or a field that stays
     # behind after it was used. Alpine is the smallest thing that
     # buys back the missing verb. Where markup alone still does the
     # job it keeps doing it: the popovers open and close by the
@@ -64,11 +63,7 @@ module ProTacts
             # (`rake dev` names its own).
             title { "#{ProTacts.config.instance_name} — #{@title}" }
             link(rel: "icon", href: ProTacts.config.favicon)
-            # No webfont (docs/DESIGN.md), so there is no font link
-            # among these. What was here before was a remote Google
-            # Fonts stylesheet, and the self-hosted woff2s meant to
-            # replace it were never added — the @font-face rules
-            # pointed at three files that 404ed.
+            # No webfont (docs/DESIGN.md), so no font link among these.
             link(rel: "stylesheet", href: "/vendor/gloss/tokens.css")
             link(rel: "stylesheet", href: "/vendor/gloss/base.css")
             link(rel: "stylesheet", href: "/vendor/gloss/components.css")
@@ -192,9 +187,8 @@ module ProTacts
             # A server-rendered toast, Gloss's [role=status] contract:
             # the one line a refused write leaves behind, fixed to the
             # corner until the next navigation carries it off — no
-            # dismiss control, because with no script there is nothing
-            # to dismiss it with, and "leave" is the design doc's own
-            # word for what a toast does next.
+            # dismiss control, "leave" being the design doc's own word
+            # for what a toast does next.
             if @notice
               div(role: "status", data: {fixed: true}) { span { @notice } }
             end

@@ -18,35 +18,19 @@ require "pro_tacts/import/vcf"
 module ProTacts
   class Web < Roda
     # The import screens: a .vcf, read, looked over contact by
-    # contact, and written into the store
-    # (docs/plans/2026-09-21-import-a-vcf.md).
-    # They replace the rake tasks that read Contacts.app on a Mac,
-    # built a plan directory, and carried it to a host over HTTP — a
-    # .vcf is what every address book on earth already exports, and
-    # the machine holding it is whichever one the browser is on.
-    #
-    # Two screens, because an import is a walk rather than a
-    # submission: choose the file, and open any of its contacts
-    # beside the card it arrived as. The Save on that screen is the
-    # import of that one contact — not a note kept until a confirm
-    # at the end — and then the walk is on the next row nobody has
-    # read, so what is left when the walk stops is only the part
-    # nobody looked at. The list is a sidebar rather than a screen
-    # of its own (Admin::ImportSidebar): it stands beside every
-    # card, so opening a row never costs your place in it, and what
-    # the file is losing is said on the rows (the dropped count) and
-    # on the cards (the struck lines) rather than on a screen about
-    # the file — a stop between saves that repeated what the list
-    # beside every card already said.
+    # contact beside the list of them (Admin::ImportSidebar), and
+    # written into the store a Save at a time
+    # (docs/plans/2026-09-21-import-a-vcf.md, "The walk" through
+    # "Nothing waits for the end").
     #
     # Every screen re-reads the whole staged file, so each step that
     # grows with it is a span (Web#span) counting cards, never their
     # content.
     #
-    # Under the same identity gate as every other route (web.rb),
-    # which is also where the arrivals' books come from: a card this
-    # creates joins everyone's book the way a client's create does, so
-    # the person importing does not have to be the person syncing.
+    # Under the same identity gate as every other route (web.rb). A
+    # card this creates is ticked into everyone's book rather than the
+    # importer's own, so the person importing does not have to be the
+    # person syncing.
     hash_branch("import") do |r|
       r.is do
         r.get do
@@ -95,8 +79,8 @@ module ProTacts
 
     # The upload's own POST: the file — a .vcf, or a Monica export
     # read as one — read and judged whole before anything is staged,
-    # the old `execute`'s rule that a source which will not read
-    # brings in nothing. What it stages is both readings —
+    # so a source that will not read brings in nothing. What it
+    # stages is both readings —
     # the file as it arrived, and the cards pared to what this book
     # shows — and then it is the walk's first card.
     #: (untyped r) -> untyped
@@ -107,16 +91,13 @@ module ProTacts
       name = File.basename(upload[:filename].to_s)
       # Relabelled and judged in the same breath, Web#write_card's rule
       # for the one other body this app reads: a multipart part arrives
-      # as binary, and a force_encoding nobody validates is a lie every
-      # later reader inherits.
+      # as binary.
       bytes = upload.fetch(:tempfile).read.force_encoding(Encoding::UTF_8)
       return import_screen(notice: "#{name} is not UTF-8 text.") unless bytes.valid_encoding?
 
       begin
         # A Monica export is read as the cards it composes, and from
-        # here on is a .vcf like any other: the composed file is what
-        # the walk stages as the import's original and strikes lines
-        # out of (Import::Monica).
+        # here on is a .vcf like any other (Import::Monica).
         bytes = span("import.monica") { Import::Monica.vcf(bytes) } if Import::Monica.export?(bytes)
         cards = span("import.split") { |step| Import::Vcf.cards(bytes).tap { step.set_attribute("cards", it.length) } }
       rescue Import::Vcf::Invalid => error
@@ -128,25 +109,16 @@ module ProTacts
         Import::Staged.open(
           original: bytes,
           revised: joined(revised),
-          # Named here and not at the end, there being no end to name
-          # it at: every Save files its contact under it. Not the
-          # importer's to rename either — a name typed before anything
-          # has been looked at is a name for nothing, and one typed
-          # after would split an import across two groups. What is
-          # editable is the membership, beside each contact's own card
-          # and a contact at a time (#import_picker).
+          # Named now and never renamed (the plan's "Nothing waits
+          # for the end"); its membership is ticked a contact at a time
+          # (#import_picker).
           group: Import::Write.default_group,
         )
       }
-      # Straight to the first contact rather than to a screen about
-      # the file: the walk is the point, and a list that has just been
-      # built from a file nobody has looked at yet is a stop on the
-      # way to the same place — the list stands beside every card
-      # anyway (Admin::ImportSidebar). The first contact is the list's
-      # first row (#walk_order), not the file's first card.
-      #
-      # A 303, the other writes' answer, because what follows is a
-      # walk: every screen of it is a GET a back button can revisit.
+      # Straight to the first contact (the plan's "The walk"): the
+      # list's first row (#walk_order), not the file's first card. A
+      # 303, the other writes' answer, because every screen of the
+      # walk is a GET a back button can revisit.
       r.redirect "/import/#{id}/#{walk_order(revised).fetch(0)}", 303
     end
 
@@ -158,8 +130,6 @@ module ProTacts
     def walk_sidebar(upload, originals, revised, saved, current:)
       rows = span("import.sidebar") {
         walk_order(revised).map { |index|
-          # A literal of several elements is an Array until something
-          # says otherwise, and an inline annotation needs its own line.
           dropped = Import::Vcf.read(originals.fetch(index)).dropped
           [import_contact(revised.fetch(index), index), Import::Vcf.losses(dropped).length, index] #: [Contact, Integer, Integer]
         }
@@ -184,17 +154,12 @@ module ProTacts
       }
     end
 
-    # A row opened: the card it arrived as beside the card that is
-    # coming in. The right-hand half is the contact editor itself, not a
-    # copy of it: a field the two disagreed about would be a field an
-    # import writes and an edit cannot undo.
+    # A row opened: the card it arrived as beside the contact editor
+    # itself (docs/plans/2026-09-21-import-a-vcf.md, "The walk").
     #
-    # A row this walk has saved opens over the stored contact rather
-    # than the staged card — a look back, not a navigation away from
-    # the list to the contact's own page — and reads: the write
-    # happened at the row's Save, so there is no form to submit and
-    # what it wrote is changed where every other contact is
-    # (Admin::ImportSaved). A stored id naming no contact (deleted
+    # A row this walk has saved opens over the stored contact, to read
+    # rather than to submit (Admin::ImportSaved; the plan's "Nothing
+    # waits for the end"). A stored id naming no contact (deleted
     # from the book since its Save) is the unsaved screen, there
     # being nothing stored to open; its Save is the import POST's own
     # double-write guard to catch.
@@ -203,18 +168,14 @@ module ProTacts
     # which: nil for the screen no choice was made about, which folds
     # into the contact the card looks like most (Import::Match), blank
     # for a new contact, or the id of one the book already has, whose
-    # editor this becomes with the card folded in
-    # (Import::Merge) — the lines that fold leaves behind struck on the
-    # card as exported beside it, as the ones the import itself drops
-    # are. An id naming nobody (a contact deleted since the toggle was
-    # drawn) is the new contact, there being nothing to fold into.
+    # editor this becomes with the card folded in (Import::Merge), the
+    # lines the fold leaves behind struck beside it. An id naming
+    # nobody (a contact deleted since the toggle was drawn) is the new
+    # contact, there being nothing to fold into.
     #
     # `joined` and `named` are the groups a refused save had ticked,
-    # and none on the way in: nothing is staged between screens, the
-    # Save that would have written an answer being the Save that
-    # writes the contact, so a card opened afresh is asked the
-    # question with the defaults ticked (#import_picker) rather than
-    # with an earlier answer read back.
+    # and none on the way in: nothing is staged between screens (the
+    # plan's "Writing them in").
     #: (String upload, Integer index, ?into: String?, ?notice: String?, ?joined: Array[String]?, ?named: Array[String]?) -> String?
     def card_screen(upload, index, into: "", notice: nil, joined: nil, named: nil)
       staged = staged_cards(upload)
@@ -264,16 +225,10 @@ module ProTacts
           login: @login,
           notice:,
           action: "/import/#{upload}/#{index}",
-          # The submit says what it does — the import of this one
-          # contact, or the update of the one it is folded into —
-          # because this is the one editor in the app whose Save can
-          # create the record rather than amend it. An update names the
-          # contact it writes, the two modes differing nowhere else the
-          # eye lands: the fields over a fold are the same shape as over
-          # an arriving card, and the toggle above them
-          # (Admin::ImportTarget) a pill whose taken side lifts one step.
-          # The row beside it wears its check only once this has been
-          # pressed (Admin::ImportSidebar).
+          # The submit says what it does, this being the one editor
+          # whose Save can create the record (the plan's "The walk"). An
+          # update names the contact it writes, the two modes differing
+          # nowhere else the eye lands.
           save: target ? "Update #{target.name || target.id}" : "Import",
           aside: Admin::ImportOriginal.new(card: original, dropped: merge ? dropped + merge.left : dropped),
           fields: import_picker(group, joined, named, member: target,
@@ -333,36 +288,17 @@ module ProTacts
       )
     end
 
-    # The groups beside one card: this book's own list, with the two
-    # an arrival comes in under already ticked. Both are boxes like
-    # any other — unticking everyone's book is how a card comes in
-    # without going out to anybody's phone, and unticking the
-    # import's own group is how an arrival that does not belong with
-    # the lot says so.
-    #
-    # The group for the import is a name rather than an id until
-    # something makes it, which is the first Save to go in under it
-    # (Import::Write#group_id), so it rides as one of the staged
-    # names on that first screen and as an ordinary box after.
-    # Everyone's book is missing from the list on one screen in the
-    # life of a server — the first card of the first import into an
-    # empty book, which is the write that creates it — and a row for
-    # a group that does not exist would be a worse answer than none.
-    #
-    # A card being folded into a contact the book already has
-    # (`member`) comes in under that contact's groups instead of
-    # everyone's book: they are ticked, and sent back as `was[]` so the
-    # save moves only what was toggled. The group for the import is
-    # ticked beside them all the same, so the group the walk ends on
-    # lists every contact it touched.
-    #
-    # The card's own tags (CATEGORIES, which Monica writes a contact's
-    # tags as) are ticked too: a group of that name where the book has
-    # one, and a name for the Save to make where it does not
-    # (Import::Write#group_id), so an import from a book that sorted
-    # its people by tag arrives sorted the same way. A tag spelling a
-    # sync group is left alone — which phones a card goes out to is
-    # the one box here a tag should not be able to tick.
+    # The groups beside one card: this book's own list, ticked with
+    # the import's group (a staged name until the first Save makes it,
+    # Import::Write#group_id) and everyone's book where it exists yet
+    # (docs/plans/2026-09-21-import-a-vcf.md, "Writing them in"). A
+    # fold into `member` ticks that contact's groups instead of
+    # everyone's book, sent back as `was[]`
+    # (docs/plans/2026-09-23-merging-on-import.md, "The Save"). The
+    # card's own tags are ticked too, as a group or a name to make,
+    # less any spelling a sync group
+    # (docs/plans/2026-09-25-importing-from-monica.md, "Tags are
+    # groups").
     #: (String group, Array[String]? joined, Array[String]? named, ?member: Contact?, ?tags: Array[String]) -> Admin::ImportGroups
     def import_picker(group, joined, named, member: nil, tags: [])
       choices = store.group_choices
@@ -411,11 +347,10 @@ module ProTacts
       end
 
       # A card being folded into a contact the book already has
-      # (#card_screen's `into`): that contact's editor, the fold
-      # derived again here rather than trusted from the page, so the
-      # etag below refuses a save over a contact that changed since.
-      # One gone since is refused outright — writing the card as a new
-      # contact instead would be a different Save than the one pressed.
+      # (#card_screen's `into`), the fold derived again here rather
+      # than trusted from the page, and refused outright if the
+      # contact is gone (docs/plans/2026-09-23-merging-on-import.md,
+      # "The Save").
       into = r.params["into"].to_s
       target = into.empty? ? nil : store.contact(into)
       if !into.empty? && target.nil?
@@ -428,41 +363,23 @@ module ProTacts
       into = target ? target.id : ""
 
       # The groups ride in the same form and are written by the same
-      # Save (Admin::ImportGroups): a card the walk has looked at is
-      # decided about in both ways at once. Only ids naming a group,
-      # #apply_groups' own rule, and the boxes are the whole answer —
-      # none ticked is none joined, the group for the import included,
-      # which is a box like any other here (#import_picker). A name
-      # typed into the filter is committed by its tick into the
-      # standing names (Admin::GroupFilter), so it survives the
-      # filter being cleared, and is made by the write below
-      # (Import::Write#group_id). `was` is the groups a contact being
-      # updated was in when the page loaded, #apply_groups' own `was`,
-      # and none for a new one.
-      #
-      # Read before the refusals rather than after, so a card sent
-      # back to be fixed comes back with its boxes as they were
-      # ticked: nothing is staged, and the form is the only record of
-      # them until the write.
+      # Save (Admin::ImportGroups). Only ids naming a group, and `was`,
+      # are #apply_groups' own; the boxes are the whole answer, the
+      # group for the import included, and a ticked name is made by
+      # the write (Import::Write#group_id). Read before the refusals,
+      # so a card sent back comes back with its boxes as they were
+      # ticked (the plan's "Writing them in").
       choices = store.group_choices
       known = choices.map(&:id)
       ticked = ids_in(r.params["groups"]) & known
       was = ids_in(r.params["was"]) & known
       wanted = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
-      # Everyone's book is one of those boxes, and the only one the
-      # write cannot take as an id: on the screen where unticking it
-      # matters least — the first card into an empty book — the group
-      # does not exist yet, so there is no row and no answer, and the
-      # card joins it the way every other create does
-      # (Import::Write#call).
+      # Everyone's book, which may not exist yet to tick, rides as an
+      # answer rather than an id (Import::Write.call's `everyone`).
       everyone = choices.find { it.name == Group::EVERYONE }
       syncing = everyone.nil? || ticked.include?(everyone.id)
 
-      # N and FN are mandatory (RFC 2426 section 4), so a save blank
-      # throughout is refused — the toast is the backstop, the form's
-      # name pair (Admin::NamePair) being the browser's own refusal of
-      # the same, and a company's organization field the one name it
-      # has (Admin::CardForm.nameless?).
+      # A blank name is refused, #apply_edit's check.
       first = r.params["first"].to_s.strip
       middle = r.params["middle"].to_s.strip
       last = r.params["last"].to_s.strip
@@ -506,11 +423,8 @@ module ProTacts
         written = span("import.write") {
           Import::Write.update(store, target.id, edited, birthday:, joins: ticked - was, leaves: was - ticked, named: wanted)
         }
-        # Staged after the write rather than before, unlike a new
-        # contact's below: until it lands this row is still the card
-        # it arrived as, and staging the contact's card in its place
-        # would make that the card a refused or failed save came back
-        # to.
+        # Staged after the write, unlike a new contact's below
+        # (docs/plans/2026-09-23-merging-on-import.md, "The Save").
         revised[index] = edited
         span("import.restage") { Import::Staged.update(upload, joined(revised)) }
         return walk_on(r, upload, index, written, saved, revised)
@@ -523,13 +437,9 @@ module ProTacts
       # rendered for it, and a replace here would delete it.
       unless carries_own_bday?(contact)
         line = birthday&.to_line
-        # A birthday with no wire form — a year on its own, a month
-        # without its day — is one a vCard 3.0 card cannot spell
-        # (docs/plans/2026-08-31-partial-birthdays.md). A stored
-        # contact keeps one in the model and serves a card without it;
-        # a staged contact has no model, so the card is the whole of
-        # what it is, and writing it without the date would lose the
-        # date the moment it was typed. Say so instead.
+        # A birthday no vCard 3.0 card can spell is refused rather
+        # than lost, a staged contact being only its card
+        # (docs/plans/2026-09-21-import-a-vcf.md, "The walk").
         if birthday && line.nil?
           return card_screen(upload, index,
                              notice: "A card cannot hold a birthday that partial. Import the contact, then add the date on its own page.",
@@ -562,9 +472,7 @@ module ProTacts
       return close_walk(r, upload) if saved.length + 1 == revised.length
 
       # Onto the next row still to save below this one, in the list's
-      # order (#walk_order) — the walk steps from card to card, a
-      # screen between saves having only ever repeated what the list
-      # beside every card says. Below rather than first, so a row
+      # order (#walk_order). Below rather than first, so a row
       # passed over stays passed over: skipping one is opening the
       # next, and the walk comes back round to it only once the rows
       # after it are saved. `saved` was read before this write, so the
@@ -578,19 +486,12 @@ module ProTacts
       r.redirect "/import/#{upload}/#{below.find { remaining.include?(it) } || remaining.fetch(0)}", 303
     end
 
-    # The end of the walk: the file and the walk's own notes gone, and
-    # the group the import filed under standing where the walk stood.
-    # Reached one way only, by saving the last card there was to save,
-    # because that is the only end a walk has. Leaving one needs no
-    # screen and no button: the staged file expires on its own
-    # (Import::Staged::LIFETIME), and what has come in has come in.
-    #
-    # There is no screen of its own for what arrived, because the
-    # group for the import is that screen and outlives this one — a
-    # list of the same contacts, rendered once rather than twice, on a
-    # page that is still there tomorrow. A walk whose every card was
-    # saved out of that group has none, and the whole book is where
-    # they went.
+    # The end of the walk, reached only by saving the last card there
+    # was to save: the file and the walk's own notes gone, and the
+    # group the import filed under standing where the walk stood — or
+    # the whole book, for a walk whose every card left that group
+    # (docs/plans/2026-09-21-import-a-vcf.md, "Nothing waits for the
+    # end").
     #: (untyped r, String upload) -> untyped
     def close_walk(r, upload)
       return expired_screen if Import::Staged.read(upload, Import::Staged::SAVED).nil?
@@ -602,10 +503,8 @@ module ProTacts
       r.redirect(filed ? "/groups/#{filed.id}" : "/contacts", 303)
     end
 
-    # The import's two readings, or none when it is gone — swept out
-    # from under a screen left open overnight, or closed already by
-    # the Save that took the last card in. Ordinary enough for the
-    # screen to say so and ask for the file again.
+    # The import's two readings, or none when it is gone
+    # (Import::Staged.read).
     #
     # The re-read parses files this already parsed, which is not a
     # second judgment of them: the bytes are what was staged, and this
@@ -630,12 +529,9 @@ module ProTacts
     # written, and no group lends a card that is not stored yet a
     # line.
     #
-    # The birthday comes out of the card and into the model, which is
-    # the split Store#put makes on the way in
-    # (docs/plans/2026-09-11-every-birthday-in-the-model.md) — made
-    # here too, so the editor renders the same row over an import as
-    # over a contact. A BDAY the model does not read stays in the
-    # card, that method's own rule.
+    # The birthday comes out of the card and into the model, Store#put's
+    # split and its rule for a BDAY the model does not read, so the
+    # editor renders the same row over an import as over a contact.
     #: (VCard card, Integer index) -> Contact
     def import_contact(card, index)
       bdays, rest = card.extract("BDAY")

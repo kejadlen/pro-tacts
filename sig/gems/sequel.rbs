@@ -1,5 +1,5 @@
 # Sequel ships no signatures, so this describes the parts pro-tacts
-# calls: one SQLite database, four datasets over it, and the schema DSL
+# calls: one SQLite database, the datasets over it, and the schema DSL
 # that creates them. A row is a hash keyed by column, whose values carry
 # whatever type the column held, which is why the store converts them at
 # its edge rather than trusting them.

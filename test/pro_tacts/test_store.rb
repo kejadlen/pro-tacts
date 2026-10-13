@@ -227,10 +227,8 @@ class StoreTest < Minitest::Test
   end
 
   # The ctag is the change log's sequence, so it moves forward on a
-  # removal too — it never returns to an earlier value, where the
-  # membership hash this replaced did. A client that saw the earlier
-  # value resyncs and finds every etag unchanged; the trade the
-  # sequence makes for one indexed read and a monotonic answer.
+  # removal too. A membership hash would return to an earlier value,
+  # and a client that saw it would miss the change.
   def test_the_ctag_moves_on_a_removal_and_never_returns
     with_store({"aiden" => AIDEN}) do |store|
       alone = store.ctag
@@ -851,7 +849,7 @@ class StoreTest < Minitest::Test
 
   # A birthday no client can see — year alone, month alone, day alone,
   # year and month — survives a round trip the client never saw a
-  # birthday in. Planted directly, because no writer produces one yet.
+  # birthday in.
   def test_a_birthday_no_client_can_see_survives_a_card_without_one
     with_store({"aiden" => AIDEN}) do |store|
       database(store)[:birthdays].insert(card_id: "aiden", year: 1985)
@@ -1099,7 +1097,6 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # Planted directly, because no writer produces one yet.
   def test_birthdays_on_no_calendar_day_are_left_out
     september = Date.new(2026, 9, 3)
 
@@ -1111,8 +1108,8 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The transaction the whole design turns on, now with a third piece:
-  # a birthday must not survive a write whose log entry failed.
+  # The transaction the whole design turns on, birthdays included: a
+  # birthday must not survive a write whose log entry failed.
   def test_a_failed_birthday_write_leaves_no_birthday
     Dir.mktmpdir do |dir|
       path = Pathname.new(dir) / "contacts.db"
@@ -1306,12 +1303,6 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The schema is the only gate on what a group may hold until
-  # authoring exists, so what it admits is worth pinning: an address
-  # or a note, bare or parameterized, in whatever case the author
-  # spelled the name. Everything else is refused — a phone or an email
-  # reaches a person rather than a household, and a grouped ADR is half
-  # of a labeled property whose other half no group may hold.
   def test_a_group_inspects_to_its_label_and_member_count
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       id = FixtureData.seed_group(store, name: "Household", members: %w[znorth aiden])
@@ -1322,6 +1313,12 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # The schema is the gate on what a group may hold
+  # (Store#set_group_lines), so what it admits is worth pinning: an
+  # address or a note, bare or parameterized, in whatever case the
+  # author spelled the name. Everything else is refused — a phone or an
+  # email reaches a person rather than a household, and a grouped ADR is
+  # half of a labeled property whose other half no group may hold.
   def test_a_group_holds_only_addresses_and_notes
     with_store({"aiden" => AIDEN}) do |store|
       properties = database(store)[:group_properties]

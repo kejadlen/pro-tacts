@@ -1,9 +1,8 @@
 # Contact::Phone, ::Email, ::Note, ::Inherited, ::Photo, and ::Address are
-# Data classes, whose
-# members the inline parser cannot read (see sig/pro_tacts/birthday.rbs
-# for the same limit). Each is marked `@rbs skip` in contact.rb and
-# signed here; Contact itself is a plain class and carries its
-# signature inline.
+# Data classes, whose members the inline parser cannot read: Data.define
+# leaves them no constant super class. Each is marked `@rbs skip` in
+# contact.rb and signed here; Contact itself is a plain class and
+# carries its signature inline.
 module ProTacts
   class Contact
     class Phone

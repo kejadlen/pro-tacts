@@ -188,8 +188,8 @@ module ProTacts
       # differently now was edited in between — another tab, or a
       # client sync — so applying this save over that one would revert
       # it. The refusal re-renders from the current card, so the screen
-      # shows what changed; the check shares write_card's millisecond
-      # race window between check and write, noted there.
+      # shows what changed. Like write_card's, the check is not atomic
+      # with the write.
       return refuse.call(contact, notice: "This contact changed since the page loaded; nothing was saved.") if r.params["etag"].to_s != contact.etag
 
       # The one state the birthday row cannot write, refused whole:
@@ -209,9 +209,7 @@ module ProTacts
     # or left elsewhere since stays as it is, and a stale page has
     # nothing to revert and no snapshot to refuse. Only ids naming a
     # group: Store#add_member reads the group with `sole`, so a doctored
-    # one would be a 500 rather than the bad input it is. A `new` name
-    # is a group the filter box offered to create, joined in the same
-    # save; a blank one is none.
+    # one would be a 500 rather than the bad input it is.
     #: (untyped r, String id) -> String?
     def apply_groups(r, id)
       contact = store.contact(id)
@@ -220,9 +218,9 @@ module ProTacts
       known = store.group_choices.map(&:id)
       checked = ids_in(r.params["groups"]) & known
       was = ids_in(r.params["was"]) & known
-      # The names the picker's offer committed, each made with this
-      # save (Admin::GroupFilter::Named) — a tick is what commits a
-      # name, so there is no single `new` riding the filter to read.
+      # The names the picker's offer committed by their ticks, each
+      # made with this save (Admin::GroupFilter::Named); a blank one is
+      # none.
       names = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
       # The walk's row, when the dialog was opened from one
       # (Admin::ImportSaved's `land`): where a save returns to and a

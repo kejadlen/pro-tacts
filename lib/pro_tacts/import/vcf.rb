@@ -5,24 +5,12 @@ module ProTacts
   module Import
     # An uploaded .vcf, read as the cards it holds and as what this
     # server does not recognise in them
-    # (docs/plans/2026-09-21-import-a-vcf.md).
+    # (docs/plans/2026-09-21-import-a-vcf.md, "What comes in").
     #
-    # Nothing here rebuilds a card out of fields: a contact arrives as a
-    # vCard and is stored as one, and every line this address book reads
-    # travels through untouched. What an import does not do is carry in
-    # what nothing here will ever show. RFC 6352 section 6.3.2.2 binds
-    # this server to keep what a client submits and does not understand,
-    # and it does (vcard.rb); an import is the other direction, a person
-    # choosing what their own book is made of.
-    #
-    # So this module owes two readings. The split into cards, and then
-    # per card the split #read makes: what is coming in, and what is
-    # being left behind. A contact's own screen shows both at once —
-    # the card as it was exported with the doomed lines struck, beside
-    # the card that is coming in, open in the editor — so nothing is
-    # lost without having been shown first (Admin::ImportOriginal),
-    # and the count of what one is losing is the mark its row in the
-    # walk wears (Admin::ImportSidebar).
+    # Two readings: the split into cards, and per card the split #read
+    # makes into what is coming in and what is left behind, which the
+    # walk strikes on the card as exported (Admin::ImportOriginal) and
+    # counts on its row (Admin::ImportSidebar).
     module Vcf
       # A file that is not a set of vCards.
       class Invalid < StandardError; end
@@ -35,38 +23,22 @@ module ProTacts
       LABEL = "X-ABLABEL" #: String
 
       # The properties this address book reads, and so the properties
-      # an import brings in. The envelope (BEGIN, END, VERSION, UID),
-      # the fields a screen shows (Contact's own readers: N, FN,
-      # NICKNAME, TEL, EMAIL, ADR, NOTE, PHOTO, and the X-ABLabel that
-      # names a row), the two a company card is read by (ORG, whose
-      # name the editor's Organization field falls back to and which
-      # the dashboard's search reads, and X-ABShowAs, which puts that
-      # field there — docs/plans/2026-09-24-company-cards.md), and
-      # BDAY, which the store takes into the model on the way in
+      # an import brings in: the envelope, the fields a screen shows
+      # (Contact's own readers, and the X-ABLabel that names a row), the
+      # two a company card is read by (ORG and X-ABShowAs,
+      # docs/plans/2026-09-24-company-cards.md), and BDAY, which the
+      # store takes into the model on the way in
       # (docs/plans/2026-09-11-every-birthday-in-the-model.md).
-      #
-      # Everything else is unknown, which here means "no screen will
-      # show it". The list is the reader's, not the writer's: adding a
-      # screen for a property is what brings it in, and until then
-      # importing one would only pad the cards with what nobody can
-      # read.
       KNOWN = [
         *%w[BEGIN END VERSION UID N FN NICKNAME BDAY TEL EMAIL ADR NOTE PHOTO ORG X-ABSHOWAS],
         LABEL,
       ].freeze #: Array[String]
 
-      # Unknown, and not worth saying so. PRODID names the program
-      # that wrote the file rather than anything about the person, and
-      # every export carries one; SOURCE and REV, which Monica writes
-      # on every card, are where the card came from and when it last
-      # changed there — the export's facts again. Counted as a loss it would put a
-      # line in every file's summary and a mark on every contact's
-      # row, for a fact nobody is going to copy into a card. What goes
-      # quiet is the asking, not the dropping — the line still does
-      # not come in, and the card as exported still shows it struck
-      # (Admin::ImportOriginal), because that card is the file's own
-      # bytes and a line shown plain there would be a line claiming to
-      # arrive.
+      # Unknown, and not worth saying so: facts about the export rather
+      # than the person, still dropped and still struck, but never
+      # counted as a loss (docs/plans/2026-09-21-import-a-vcf.md, "What
+      # comes in"; SOURCE and REV,
+      # docs/plans/2026-09-25-importing-from-monica.md).
       NOISE = %w[PRODID SOURCE REV].freeze #: Array[String]
 
       # Tags (RFC 2426 section 3.6.1), which come in as groups rather
@@ -77,19 +49,15 @@ module ProTacts
       CATEGORIES = "CATEGORIES" #: String
 
       # What an import makes of one card: the card as it will come in,
-      # and the lines it leaves behind. Both, because the review
-      # screen shows them side by side — the original with its doomed
-      # lines struck, and the card that is actually coming in, open in
-      # the editor (Admin::ImportOriginal). Signed in
+      # and the lines it leaves behind. Signed in
       # sig/pro_tacts/import.rbs, being a Data class.
       # @rbs skip
       Reading = Data.define(:card, :dropped)
 
       # One property the file carries that KNOWN does not name, across
       # every card in it: how many lines wear it, and a few of their
-      # real values. The review screen's summary of what the whole
-      # file is losing, read before working down the contacts one by
-      # one. Signed in sig/pro_tacts/import.rbs, being a Data class.
+      # real values. Signed in sig/pro_tacts/import.rbs, being a Data
+      # class.
       # @rbs skip
       Unknown = Data.define(:name, :count, :examples)
 
@@ -133,16 +101,10 @@ module ProTacts
       end
 
       # Every property in these cards that KNOWN does not name, by
-      # name rather than by the spelling the line wore: the three
-      # choices read the same whatever parameters a line carries, so
-      # `X-SOCIALPROFILE;type=twitter` is not a second decision from
-      # `X-SOCIALPROFILE`. Ordered by name, a list to work down.
-      #
-      # An unreadable line is not among them and asks nothing: the
-      # parser hands one back without a property, so there is no
-      # property name to decide about and nothing to say about it on
-      # a screen. It travels with the card rather than being thrown
-      # away unnamed (vcard/parser.rb's own posture).
+      # name rather than by the spelling the line wore, so
+      # `X-SOCIALPROFILE;type=twitter` is not a second entry from
+      # `X-SOCIALPROFILE`. Ordered by name. An unreadable line has no
+      # property name and is not among them (#read keeps it).
       #: (Array[VCard] cards) -> Array[Unknown]
       def self.unknown(cards)
         seen = {} #: Hash[String, Array[String]]
@@ -163,8 +125,7 @@ module ProTacts
       end
 
       # Whether a property is one this address book reads, asked of a
-      # name as a line spells it — the one question the survey, the
-      # review screen and the write all ask.
+      # name as a line spells it.
       #: (String name) -> bool
       def self.known?(name)
         KNOWN.include?(name.upcase)
@@ -205,11 +166,8 @@ module ProTacts
       # ones are what no screen here would ever show, which is what
       # the review screen strikes through.
       #
-      # A line that would not read is kept. The parser hands one back
-      # without a property name, so there is nothing to have shown on
-      # a screen and nothing anyone could have decided about it, and
-      # throwing it away unnamed is worse than letting it ride in the
-      # card's bytes (vcard/parser.rb's own posture).
+      # A line that would not read is kept (the plan's "What comes
+      # in").
       #: (VCard card) -> Reading
       def self.read(card)
         lines = card.lines
@@ -245,9 +203,8 @@ module ProTacts
 
       # A line unfolded, without its terminator, cut short of a
       # payload nobody wants to read — the one rendering of a line
-      # this import shows, in the survey's examples and in the review
-      # screen's reading of the original card
-      # (Admin::ImportOriginal).
+      # this import shows (Admin::ImportOriginal), and Unknown's
+      # examples.
       #: (VCard::Parser::Line line) -> String
       def self.summary(line)
         text = VCard::Parser.unfold(line.verbatim).chomp

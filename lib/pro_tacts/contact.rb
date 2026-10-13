@@ -150,22 +150,19 @@ module ProTacts
     # shared line from a line of its own (EditedContact).
     attr_reader :inherited
 
-    # The card to serve: the stored one with the inherited lines and
-    # the birthday composed back in, in that order, each immediately
-    # before END:VCARD — stored + inherited + birthday, the card a
-    # client downloads. A lent NOTE is the one exception: it composes
-    # as a labeled section inside the member's single NOTE, not as a
-    # second line, because macOS keeps only the last of two and a PUT
-    # stores the truncation (docs/plans/2026-09-25-one-note-per-
-    # contact.md, "The served shape"). A birthday with no wire form,
-    # or none at all, and an empty inheritance leave their halves as
-    # they lie, and an empty inheritance is #insert's own no-op — the
-    # same card object — so a contact in no group serves exactly the
-    # bytes it did before groups existed, etag included. Composed on
-    # first ask and
+    # The card to serve: the stored one with the inherited lines and the
+    # birthday composed back in, in that order, each immediately before
+    # END:VCARD — stored + inherited + birthday, the card a client
+    # downloads. A lent NOTE is the one exception: it composes as a
+    # labeled section inside the member's single NOTE, not as a second
+    # line (docs/plans/2026-09-25-one-note-per-contact.md). A birthday
+    # with no wire form, or none at all, and an empty inheritance leave
+    # their halves as they lie, and an empty inheritance is #insert's
+    # own no-op — the same card object — so a contact in no group serves
+    # exactly its stored bytes, etag included. Composed on first ask and
     # memoized, and the etag's derivation deferred with it: a caller
-    # that reads neither — and the listing paths read neither — pays
-    # for no composition of its own.
+    # that reads neither — and the listing paths read neither — pays for
+    # no composition of its own.
     #: () -> VCard
     def vcard
       return @vcard if defined?(@vcard)
@@ -385,21 +382,20 @@ module ProTacts
 
     private
 
-    # Which of the composed card's lines the groups lend, keyed by
-    # where each sits in #vcard's parse: #vcard appends what the
-    # groups lend after the stored card's own lines, so a walk that
-    # spends the stored card's copies first leaves every lent line to
-    # pair with the inherited row composition placed there. A member
-    # whose own card spells a line exactly as its group lends — an
-    # address already on the card when its holder joined — reads as
-    # the member's own first and the group's second, where a match on
-    # bytes named the group over both copies and the member's own
-    # address read as the group's. Keyed by position rather than by
-    # the Line itself because a Line is a value: the two copies a card
-    # holds of one line hash alike, and only where each sits tells
-    # them apart. A NOTE is never matched: a lent one composes as a
-    # section of the member's single NOTE, so a screen marking one
-    # reads the inheritance directly.
+    # Which of the composed card's lines the groups lend, keyed by where
+    # each sits in #vcard's parse: #vcard appends what the groups lend
+    # after the stored card's own lines, so a walk that spends the
+    # stored card's copies first leaves every lent line to pair with the
+    # inherited row composition placed there. A member whose own card
+    # spells a line exactly as its group lends — an address already on
+    # the card when its holder joined — reads as the member's own first
+    # and the group's second; a match on bytes would name the group over
+    # both copies. Keyed by position rather than by the Line itself
+    # because a Line is a value: the two copies a card holds of one line
+    # hash alike, and only where each sits tells them apart. A NOTE is
+    # never matched: a lent one composes as a section of the member's
+    # single NOTE, so a screen marking one reads the inheritance
+    # directly.
     #: () -> Hash[Integer, Group]
     def lent_at
       return @lent_at if defined?(@lent_at)

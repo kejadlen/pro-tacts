@@ -363,9 +363,7 @@ class ContactTest < Minitest::Test
     )
   end
 
-  # No inheritance composes the same bytes and the same etag as before
-  # groups existed: an empty inheritance is insert's own no-op, so a
-  # contact in no group serves its stored card untouched.
+  # An empty inheritance is insert's own no-op.
   def test_a_contact_in_no_group_serves_its_stored_bytes_and_etag
     card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
 

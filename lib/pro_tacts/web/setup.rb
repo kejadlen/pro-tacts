@@ -4,11 +4,9 @@ require "pro_tacts/profile"
 module ProTacts
   class Web < Roda
     # The configuration profile, served so the device reading this can
-    # provision itself: until this route existed the only renderer was
-    # the Rakefile, so putting the account on a phone meant running
-    # rake on the machine holding the checkout and mailing the file
-    # over. It is now the only renderer — rake profile:install downloads
-    # from here. The screen and the document are separate paths because a
+    # provision itself, and the only renderer of it: rake
+    # profile:install downloads from here. The screen and the document
+    # are separate paths because a
     # mobileconfig is not a page — the screen says what the download
     # will do, and only the link fires the install flow.
     #

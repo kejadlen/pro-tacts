@@ -13,22 +13,17 @@ end
 
 desc "Start development server, reloading on changes"
 task :dev do
-  # The dev server serves the fixture book, which demo.ru seeds from
-  # test/fixtures/cards when it finds no database — so a client always
-  # sees known state and the real data/ directory stays out of the dev
-  # loop. Seeded there rather than here because the preview app serves
-  # the same book from the same file. Only rackup reloads under entr, and
-  # a reload finds the database already seeded, so a client's edits
-  # survive a restart and a fresh `rake dev` is what resets to the
-  # fixtures: the data lives in a session-scoped tmpdir, so two servers
-  # running at once each get their own database, the directory goes when
-  # the task does, and the next run starts from no database at all.
+  # The dev server serves the fixture book demo.ru seeds (see there for
+  # when it reseeds), so a client sees known state and the real data/
+  # directory stays out of the dev loop. The data lives in a
+  # session-scoped tmpdir: two servers running at once each get their
+  # own database, and the directory goes when the task does.
   # entr's watch list is fd's snapshot at launch: a file created
   # after `rake dev` starts is never watched, and edits to it never
   # reload the server — restart the task when work adds a file.
   # A dev session's exchanges go to their own log, truncated per start,
   # so reading a session back never means picking it out of older ones —
-  # log/exchange.log stays the deployment default. An exported
+  # the data directory's log/exchange.log stays the default. An exported
   # PRO_TACTS_EXCHANGE_LOG (e.g. stderr) wins over both.
   ENV["PRO_TACTS_EXCHANGE_LOG"] ||= "log/dev.log"
   File.truncate("log/dev.log", 0) if File.exist?("log/dev.log")

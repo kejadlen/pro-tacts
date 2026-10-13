@@ -34,9 +34,8 @@ module ProTacts
     # escape's inverse: unescapes backslash, the component separators, and
     # the `\n` line-break escape (RFC 2426 section 2.4.2). Nothing that
     # serves a card needs this — a served card is the stored bytes going
-    # out unparsed — but a view that displays a structured value (an
-    # admin screen, not this server's CardDAV responses) has to undo the
-    # escaping or show the reader literal backslashes.
+    # out unparsed — but a reader of values does (Parser::Property#text
+    # and #components).
     #: (String text) -> String
     def self.unescape(text)
       text.gsub(/\\[\\;,n]/) { it == "\\n" ? "\n" : it[1..].to_s }

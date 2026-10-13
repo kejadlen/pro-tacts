@@ -4,8 +4,8 @@ require "rack/test"
 
 require "pro_tacts/web"
 
-# Which requests Sentry keeps a transaction for, now that Tracing's scrub
-# rather than trace_ignore_status_codes decides it.
+# Tracing's scrub, not trace_ignore_status_codes, decides which
+# requests Sentry keeps a transaction for.
 class TracingTest < Minitest::Test
   include Rack::Test::Methods
   include SentryTracing

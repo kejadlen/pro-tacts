@@ -2,23 +2,18 @@ require "pro_tacts/admin/phlex"
 
 module ProTacts
   module Admin
-    # Lucide icons, inlined: docs/DESIGN.md's icon register — Lucide
-    # at 16–20px, stroke in currentColor, never filled — and this is
-    # the set landing there. The path data below is lucide-static's
-    # own (v0.548.0, ISC license), copied verbatim rather than redrawn,
-    # and inlined rather than served as a file because currentColor
-    # cannot cross an <img>: the stroke has to inherit from the
-    # element that carries the glyph, Gloss's IconButton included. A
-    # new glyph lands the same way this one did — named in the
-    # registry, its shapes verbatim, this comment's version moved with
-    # it.
+    # Lucide icons, inlined: the set docs/DESIGN.md's icon rule names.
+    # The path data below is lucide-static's own (v0.548.0, ISC
+    # license), copied verbatim rather than redrawn. A new glyph lands
+    # the same way — named in the registry, its shapes verbatim, this
+    # comment's version moved with it.
     class Icon < Phlex::SVG
       # @rbs @name: Symbol
       # @rbs @size: Integer
 
       # One glyph's shapes, each an element name and its attributes,
       # verbatim from the lucide-static SVG's own children: x, the
-      # remove control's two strokes; calendar, the birthday row's
+      # remove and clear controls' two strokes; calendar, the birthday row's
       # picker; the import row's verdict, a circle either way and
       # a check in it when the row is in the book;
       # chevron-down, the account menu's opening direction;

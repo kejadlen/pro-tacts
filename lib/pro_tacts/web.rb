@@ -74,6 +74,15 @@ module ProTacts
       "Not Found"
     end
 
+    # The login is ambient — the proxy writes it for whichever tailnet
+    # device is asking — so no cookie is involved and SameSite holds
+    # nothing back: a page on another site could submit a form here and
+    # the app would apply it as whoever's device opened it. A write the
+    # browser marks as anything but same-origin gets an empty 403. One
+    # carrying no Sec-Fetch-Site at all passes, because that is every
+    # DAV client and curl, and no page a current browser sends.
+    plugin :sec_fetch_site_csrf, allow_missing: true, csrf_failure: :empty_403
+
     # The identity gate's refusal, as an exception mapped to a
     # response: ProxyAuth.login raises MissingLogin for a request that
     # names nobody, and this answers it with the 401. `classes:` keeps
@@ -91,15 +100,6 @@ module ProTacts
     # it hands an attacker nothing: the proxy overwrites the header on
     # every request, so knowing which one it is buys no way to forge
     # it.
-    # The login is ambient — the proxy writes it for whichever tailnet
-    # device is asking — so no cookie is involved and SameSite holds
-    # nothing back: a page on another site could submit a form here and
-    # the app would apply it as whoever's device opened it. A write the
-    # browser marks as anything but same-origin gets an empty 403. One
-    # carrying no Sec-Fetch-Site at all passes, because that is every
-    # DAV client and curl, and no page a current browser sends.
-    plugin :sec_fetch_site_csrf, allow_missing: true, csrf_failure: :empty_403
-
     plugin :error_handler, classes: [ProxyAuth::MissingLogin] do |_e|
       response.status = 401
       response["WWW-Authenticate"] = "Proxy-Identity"

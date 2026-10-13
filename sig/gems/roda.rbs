@@ -57,7 +57,7 @@ class Roda
 
     # The host the request named, without any port, inherited from
     # Rack::Request for the same reason as #media_type. The setup route
-    # provisions an account for it (see web.rb).
+    # provisions an account for it (see web/setup.rb).
     def host: () -> String
 
     # The request's query and form parameters, inherited from

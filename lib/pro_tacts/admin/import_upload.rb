@@ -6,17 +6,14 @@ require "pro_tacts/admin/record_card"
 module ProTacts
   module Admin
     # GET /import — the screen an address book arrives on
-    # (docs/plans/2026-09-21-import-a-vcf.md).
-    # Until this existed an import meant rake tasks reading Contacts.app
-    # on a Mac and carrying a plan to a host over HTTP; now it is the
-    # file that Mac already knows how to export.
+    # (docs/plans/2026-09-21-import-a-vcf.md): the file a Mac already
+    # knows how to export.
     #
     # The form takes one file: a .vcf, or the JSON Monica 4 exports an
-    # account as (Import::Monica), which is read as the .vcf it composes.
-    # Looking over what is
-    # in it needs the file open, so that is the next screen's
-    # (ImportReview, over the walk's list of its contacts and the pair
-    # of cards a row there opens).
+    # account as (Import::Monica), which is read as the .vcf it
+    # composes. Looking over what is in it needs the file open, so
+    # that is the walk's (Web#card_screen: the list of its contacts
+    # and the pair of cards a row there opens).
     #
     # Nothing comes back here at the end of a walk. What arrived is
     # the group the import filed it under, a page that lists the same

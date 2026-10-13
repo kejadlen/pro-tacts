@@ -115,8 +115,9 @@ module ProTacts
 
       # Only ids that name a card: a membership row is a foreign key,
       # and a doctored id is ordinary bad input rather than a 500. A
-      # POST carrying no list keeps the membership it found, the
-      # phones' is-a-Hash posture (Admin::GroupsEdit).
+      # POST carrying no list keeps the membership it found, as an
+      # absent field keeps a card's lines (Admin::CardForm.edited_values);
+      # the editor's own form never carries one (Admin::GroupsEdit).
       submitted = r.params["members"]
       members =
         if submitted.is_a?(Array)

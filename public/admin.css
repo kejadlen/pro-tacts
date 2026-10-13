@@ -3,9 +3,8 @@
    system elevates by. The page takes the fill step instead: one
    alias repointed to a value already on the ramp, no new color. Dark
    keeps its own block in tokens.css (its page/card step already
-   reads), so the repoint carries tokens.css's own scoping — the
-   media-query light block plus forced light, both excluding forced
-   dark — and wins by stylesheet order on equal specificity. */
+   reads), so the repoint takes that block's scoping inverted: light
+   by preference unless forced dark, or forced light. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --gl-color-surface-page: var(--gl-color-surface-fill);
@@ -17,9 +16,7 @@
 
 /* Pro-tacts' own layer on top of Gloss (see docs/DESIGN.md) — page
    chrome and the detail grid, neither of which Gloss defines a
-   component for. Every value below is a var(--gl-*) or a structural
-   rem width in the spirit of card.css's own max-width: 18rem; nothing
-   here is a hex, a px, or a duration. */
+   component for. */
 
 /* The record: its caption row and its card, one block. The gap is
    the dashboard's section-head-to-card step (s, not the column's m)
@@ -34,22 +31,19 @@
 
 /* Each record page's one action, on the back-link's line: the
    details page's edit link at the right edge, the editor's add
-   button in the same place, pinned the way the dashboard's
-   section-head pins its action. In flow the control — half again
-   taller than a type-label line — grew the row, and the card under
-   it moved with it. Pinning takes it out of flow, centered on the
-   row it acts on and straddling it a few pixels either side, into
-   padding above and gap below that nothing else occupies.
+   button in the same place, pinned for .section-head's reason.
+   Centered on the row it acts on, it straddles it a few pixels
+   either side, into padding above and gap below that nothing else
+   occupies.
 
    The row is the link's own height — the div is a flex box so the
    anchor sizes it as an item, at the label's step--2/1 — and not
-   the body-text line box the div would otherwise inherit, which
-   stood a good 15px taller and read as the page's content starting
-   that much lower than a list page's: the site header owes the
-   first ink under it the same distance on every page, and a
-   record's back link is that ink. Navigation is a link and opening
-   a popover is a button, so the pinning rule below reaches for
-   both, and either mode leaves the row the same height. */
+   the body-text line box the div would otherwise inherit, a good
+   15px taller, which reads as the page's content starting that much
+   lower than a list page's: the site header owes the first ink
+   under it the same distance on every page, and a record's back
+   link is that ink. Navigation is a link and opening a popover is a
+   button, so the pinning rule below reaches for both. */
 .record-nav {
   position: relative;
   display: flex;
@@ -77,17 +71,13 @@
    top than the padding the body gives prose: the heading is the
    card's own edge, and the m of air above content a page has
    already headed reads as blank space rather than as room to read
-   in — the detail-header's own reason, both on the contact's page
-   and in a walk's read screen (ContactCard, the one renderer).
-   Every record card takes the step, not only the named ones: this
-   is the gap a page's header owes its content (the record-nav row
-   over the card, held to the s a section-head's list gets) — an
-   editor's fields at the body's m landed a good 10px deeper than
-   a list page's first row, and the page-to-page difference is
-   what the eye reads as the gap changing. The lone name of a
-   group that lends nothing once kept the body's even padding to
-   sit centered in the card; it takes the step now with the rest
-   (Admin::GroupsShow). */
+   in, both on the contact's page and in a walk's read screen
+   (ContactCard, the one renderer). Every record card takes the
+   step, editors and a group's lone name included: this is the gap
+   a page's header owes its content (the record-nav row over the
+   card, held to the s a section-head's list gets), and an editor's
+   fields at the body's m land a good 10px deeper than a list
+   page's first row, which the eye reads as the gap changing. */
 .record .card-body {
   padding-block-start: var(--gl-space-s);
 }
@@ -161,22 +151,19 @@
 
 /* An editor row is a detail row that happens to be editable: caption
    in the type column, control in the value column, on .detail-grid's
-   own template (docs/DESIGN.md, "Alignment is the layout" — the same
-   record before and after an edit should read as the same object).
+   own template (docs/DESIGN.md, "Alignment is the layout").
    Gloss's .field stacks its caption over its control, which is right
    for the settings-form pattern it was written for and wrong for a
    record: it spends a line and a gap on every row, and this card is
    eight rows deep before a contact has an email. Baseline for the
-   reason .detail-grid gives — caption and control carry different
-   type sizes, so lining their boxes up leaves their text on
-   different lines. The class rather than the element: a row is a
-   label when it holds one control and a div when it holds a stack
+   reason .detail-grid gives. The class rather than the element: a
+   row is a label when it holds one control and a div when it holds a stack
    of them (an address — see the nested-stack rule below), and both
    are the record's rows. The value track is minmax(0, 1fr) rather
    than a bare 1fr: a bare fr floors the track at its content's
    intrinsic minimum, and a form control's minimum — a select's
    widest option, an input's default size — is wider than a phone's
-   value column, which pushed rows past the card's edge. */
+   value column, and pushes rows past the card's edge. */
 .card-body form.field-stack > .field {
   display: grid;
   grid-template-columns: var(--type-column) minmax(0, 1fr);
@@ -565,9 +552,9 @@ textarea:focus {
 /* A run with an accent configured (PRO_TACTS_ACCENT; Layout marks the
    root) wears that Gloss accent instead of the default, and the chrome
    bars fill with it, so a working copy cannot pass for the deployment
-   at a glance — `rake dev` picks ink blue. The whole root repoints
-   rather than the bars alone, so a view still shows one accent. Clay
-   was passed over for dev for sitting too near danger. The fill is the
+   at a glance (docs/DESIGN.md). The whole root repoints rather than
+   the bars alone, so a view still shows one accent. Dev wears ink
+   blue, not clay, which sits too near danger. The fill is the
    accent under accent-fg, the pairing Gloss's primary button uses;
    accent-soft would be a pale band in dark mode, where tokens.css
    never derives it again. */
@@ -613,8 +600,7 @@ textarea:focus {
 
 /* The viewport-tall column the footer's `margin-top: auto` measures
    against. Gloss's own body rule sets type and surface and leaves
-   layout to the page, which until there was a footer meant nothing at
-   all. */
+   layout to the page. */
 body {
   min-height: 100dvh;
   display: flex;
@@ -624,14 +610,13 @@ body {
 /* The reading column's width: wide enough that the editor's widest
    row — the birthday's three controls, ~343px at minimum — fits the
    value column with room for the month select to grow (the value
-   column at 40rem is ~412px), which 34rem missed by ~30px.
+   column at 40rem is ~412px), which 34rem misses by ~30px.
 
    The declared width is what the body's column costs: auto inline
-   margins on a flex item override the cross-axis stretch that used to
-   size this box, leaving it shrink-to-fit — which took the dashboard's
-   two columns down to one, its grid tracks being fractions of a width
-   that had stopped existing. The auto margins go on centering it under
-   the cap. */
+   margins on a flex item override the cross-axis stretch, leaving it
+   shrink-to-fit — which takes the dashboard's two columns down to
+   one, its grid tracks being fractions of a width that does not
+   exist. The auto margins center it under the cap. */
 .admin-main {
   width: 100%;
   max-width: 40rem;
@@ -649,10 +634,9 @@ body {
   max-width: 68rem;
 }
 
-/* The dashboard itself: equal fluid columns that collapse to one when
-   the viewport cannot hold two side by side, the ambient birthdays
-   column stacking under the primary one. `align-items: start` keeps a
-   short column from stretching its card to match its neighbor. */
+/* The dashboard's two columns (docs/DESIGN.md). `align-items: start`
+   keeps a short column from stretching its card to match its
+   neighbor. */
 .dashboard {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
@@ -662,12 +646,10 @@ body {
 
 /* The import review's two cards: the contact as the file wrote it
    beside the contact that is landing, open in the editor
-   (Admin::ImportOriginal, Admin::ContactsEdit). The dashboard's own
-   columns and for its reason -- two where the viewport holds two,
-   one stacked column where it does not -- with `align-items: start`
-   so the shorter card does not stretch to match its neighbor. 22rem
-   rather than the dashboard's 20rem: the left card holds content
-   lines, which are longer than a contact's name. */
+   (Admin::ImportOriginal, Admin::ContactsEdit), on .dashboard's
+   columns for its reason. 22rem rather than the dashboard's 20rem:
+   the left card holds content lines, which are longer than a
+   contact's name. */
 .paired {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
@@ -675,9 +657,8 @@ body {
   align-items: start;
 }
 
-/* A card's content lines as the file wrote them, and the review
-   list's property names one rung up (Admin::ImportOriginal,
-   Admin::ImportReview): monospace, because these are the bytes and
+/* A card's content lines as the file wrote them
+   (Admin::ImportOriginal): monospace, because these are the bytes and
    not a rendering of them, and wrapping rather than scrolling
    because a long value is the thing being judged. */
 .card-lines {
@@ -874,10 +855,9 @@ input[type="search"]::-webkit-search-cancel-button {
   rotate: 180deg;
 }
 
-/* Gloss zeroes every heading's margin (base/typography.css), which
-   leaves a section's type-label flush against the list it names. The
-   one vertical rhythm this layer adds, and shared by both dashboard
-   columns — every section is a type-label over a list. */
+/* Gloss zeroes every heading's margin (base.css), which leaves a
+   section's type-label flush against the list it names; every
+   section is a type-label over a list. */
 section > h2 {
   margin-bottom: var(--gl-space-s);
 }
@@ -891,8 +871,8 @@ section > h2 {
    the two columns' headings and cards would no longer sit on shared
    lines. Centered on the line it carries the row's own geometry,
    and its text lands on the heading's: both are near-identical mono
-   sizes, so center-on-line is baseline-on-line. The h2 is no longer
-   the section's direct child, so the row takes over the heading's
+   sizes, so center-on-line is baseline-on-line. The h2 is not the
+   section's direct child here, so the row takes over the heading's
    spacing to the list below. */
 .section-head {
   position: relative;
@@ -1016,7 +996,7 @@ section > h2 {
   gap: var(--gl-space-xs);
 }
 
-/* base/typography.css's `li + li { margin-top: var(--gl-space-3xs); }`
+/* base.css's `li + li { margin-top: var(--gl-space-3xs); }`
    is a prose-list rule (Markdown bullet lists) that also matches
    Card's row list, adding a stray gap below every row but the last. */
 .card > li {
@@ -1093,17 +1073,14 @@ span.avatar[data-size="lg"] {
   align-items: start;
 }
 /* Breathing room before the property grid — but only when there's a
-   grid to make room for. A contact with no properties renders no
-   .detail-grid at all (see ContactsShow#has_data?), and this rule
-   staying silent then is what keeps its name centered in the card
-   rather than pinned to the top with dead space below it. */
+   grid to make room for. A group that lends nothing renders no
+   .detail-grid at all (GroupsShow#lends?), and this rule staying
+   silent then is what keeps no dead space under its lone name. */
 .detail-header:has(+ .detail-grid) {
   margin-bottom: var(--gl-space-m);
 }
 
-/* The detail card's load-bearing rule: type in one column, value in
-   the other, every row aligned to the same grid regardless of what
-   kind of attribute it is. See docs/DESIGN.md, "Alignment is the
+/* The detail card's grid: docs/DESIGN.md, "Alignment is the
    layout." `align-items: baseline` rather than the grid default
    (stretch, which top-aligns each cell's content): dt and dd carry
    different type styles — .type-label at --gl-step--2/1, .type-body-sm
@@ -1126,15 +1103,15 @@ span.avatar[data-size="lg"] {
 }
 
 /* The group a row is lent by, tagged at the right edge of the value
-   column on the row's own first line (ContactsShow#row). Under the
-   value it read as a mark between two rows — the grid's row gap is
-   wider than a line, but not by enough to say which row a line below
-   a value belongs to. Pinned to row 1 of the value cell, it can only
+   column on the row's own first line (ContactCard#row). Under the
+   value it would read as a mark between two rows — the grid's row
+   gap is wider than a line, but not by enough to say which row a
+   line below a value belongs to. Pinned to row 1 of the value cell, it can only
    be read as this row's.
 
    A nested grid rather than a float or a flex row, because the value
    is several block lines for an address and one for everything else:
-   the lines stack down column 1 as they always did, and the tag
+   the lines stack down column 1, and the tag
    takes column 2 of the first row alone. No wrapper element to make
    them one flex item, and no source-order inversion — the value is
    still read before the group that lends it.
@@ -1181,8 +1158,8 @@ a.tag {
    Gloss's own spend more of a short dialog on chrome than on content.
    The body takes one step on every side and the bars take it on
    theirs, so the title, the fields, and the buttons share one edge:
-   Gloss's side step left the buttons adrift from the corner, and a
-   narrower step for the bars alone broke the edge. */
+   Gloss's side step leaves the buttons adrift from the corner, and a
+   narrower step for the bars alone breaks the edge. */
 dialog > header,
 dialog > footer {
   padding: var(--gl-space-2xs) var(--gl-space-s);
@@ -1225,10 +1202,8 @@ dialog > .field-stack > .filter > input[type="search"] {
 }
 
 /* The groups dialog's list is the one that can outgrow the screen, so
-   it is the one that scrolls — the popover cannot, Gloss giving a
-   dialog height: fit-content and overflow: hidden, and what a dialog
-   taller than the viewport loses off the bottom is the footer holding
-   Save (docs/plans/2026-09-22-a-few-groups-at-a-time.md). The cap is
+   it is the one that scrolls, not the popover, which clips its footer
+   (docs/plans/2026-09-22-a-few-groups-at-a-time.md). The cap is
    still what keeps the opening list short; this is for the two lists
    the cap does not shorten, the whole list once it is asked for and a
    contact's own memberships, which are never capped. The filter and
@@ -1241,7 +1216,7 @@ dialog > .field-stack > .filter > input[type="search"] {
 
 /* The stored card in its own collapsed card under the record — the
    column's gap spaces the two, so no margin here. <details> is native,
-   keeping the admin UI script-free; the summary rides the label
+   needing no script; the summary rides the label
    register, the pre scrolls rather than wraps: the bytes are the wire
    format, folded lines and all. */
 .card-body summary {
@@ -1312,14 +1287,14 @@ dialog > .field-stack > .filter > input[type="search"] {
 /* Wider than the wide column, because three things stand in it: the
    list, the card as exported, and the editor. The editor's own widest
    row is sized against the value column the reading width names (see
-   .admin-main below), so squeezing it to a third of 68rem is what put
-   the pair one under the other in the first place. */
+   .admin-main above), so a third of 68rem would put the pair one
+   under the other. */
 .admin-main:has(.walk) {
   max-width: 92rem;
 }
 
 /* The pair inside the walk is two columns or one, never the auto-fit
-   in between: at this width the fallback was always the stack, and a
+   in between: at this width auto-fit's fallback is always the stack, and a
    card read beside its own source is the whole point of the screen.
    It collapses with the walk itself, on the walk's own breakpoint. */
 .walk .paired {
@@ -1338,10 +1313,9 @@ dialog > .field-stack > .filter > input[type="search"] {
    gains a check when the row is — in the success color, confirmed
    being that color's one meaning (docs/DESIGN.md) — and the name a
    step quieter with it, a done thing receding so the rows still to
-   do carry the walk's own ink. The first try was a rail in the
-   accent down the inside edge of every row that was not, which said
-   which ones were left without saying the other half of it. The
-   word is still in the row for a screen reader, which cannot see a
+   do carry the walk's own ink — not an accent rail on the rows
+   still to do, which says which are left without saying the other
+   half. The word is still in the row for a screen reader, which cannot see a
    check.
 
    Both rules below carry `:only-child` for the specificity rather
@@ -1359,9 +1333,7 @@ dialog > .field-stack > .filter > input[type="search"] {
 
 /* The row being read. The fill is the hover gesture too, so the name
    takes the weight that says this one is not merely under a pointer.
-   accent-soft would have said it in one declaration and is not an
-   option here: tokens.css never derives it again in dark mode (see
-   the accent block above). */
+   Not accent-soft, for the accent block's reason above. */
 .walk-list a:only-child[aria-current] {
   background: var(--gl-color-surface-fill-2);
 }

@@ -66,8 +66,9 @@ module ProTacts
       private_class_method :matches?
 
       # Every value of the contact a word is matched against as text:
-      # its names, emails, addresses, notes, and groups. An address is
-      # its components run together, so "main st" finds a street.
+      # its names, organization, emails, addresses, notes, and groups.
+      # An address is its components run together, so "main st" finds
+      # a street.
       #: (Contact contact, Array[String] labels) -> Array[String]
       def self.text_fields(contact, labels)
         [

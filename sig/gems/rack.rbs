@@ -1,8 +1,8 @@
 # Rack ships no signatures. This names the vocabulary the middleware in
 # lib/pro_tacts speaks — the environment, the response triple, and an
 # app to delegate to — plus the two constants used directly: the status
-# phrases the debug logger prints, and the middleware config.ru's
-# comment explains (web.rb mounts it so a body can be read twice).
+# phrases ExchangeLog and RefusalAlerts print, and the middleware web.rb
+# mounts so a body can be read twice.
 module Rack
   # The CGI-ish hash a middleware is called with. Values stay untyped:
   # anything upstream may put anything in it, which is why the code

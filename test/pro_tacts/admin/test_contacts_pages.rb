@@ -319,13 +319,10 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # Every asset the layout asks for is this app's own. The webfont
-  # that used to be linked here came from Google, and the self-hosted
-  # faces meant to replace it were never added — the @font-face rules
-  # pointed at three files that 404ed. Both are gone, and
-  # --gl-font-mono falls through to the platform's own monospace.
-  # Alpine is vendored beside the Gloss CSS for the same reason (see
-  # tasks/alpine.rake): this app is reachable only over Tailscale.
+  # This app is reachable only over Tailscale, so Alpine is vendored
+  # (tasks/alpine.rake) and there is no webfont: --gl-font-mono falls
+  # through to the platform's monospace. The IBM Plex refutation
+  # guards against @font-face rules pointing at files that 404.
   def test_the_layout_asks_for_nothing_off_this_host
     with_contacts({}) do
       get "/"
@@ -342,10 +339,8 @@ class AdminContactsPagesTest < Minitest::Test
 
   # The search rides every screen's header (docs/DESIGN.md), the
   # dashboard's and a record's alike — finding a contact never
-  # requires going home first. The dashboard no longer focuses
-  # anything on load: the search is a button and `/` away
-  # (Admin::SearchDialog), and the only autofocus left is inside the
-  # popovers, which fires as each one opens.
+  # requires going home first. The dashboard focuses nothing on
+  # load: the search is a button and `/` away (Admin::SearchDialog).
   def test_the_search_renders_on_every_screen
     with_contacts({"ada" => ADA}) do
       ["/", "/contacts/ada"].each do |path|
@@ -371,8 +366,7 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The dashboard answers no query: the results page it used to be is
-  # gone, and a stale ?q= link lands on recency like any other visit.
+  # A stale ?q= link lands on recency like any other visit.
   def test_the_dashboard_ignores_a_query
     grace = ADA.sub("Ada Lovelace", "Grace Hopper").sub("UID:ada", "UID:grace")
 

@@ -37,8 +37,6 @@ config = ProTacts.config
 # PRO_TACTS_DATABASE alone so the two paths agree).
 unless config.database_path.exist?
   store = FixtureData.install(config.data_dir)
-  # The book the stand-in login syncs; `rake dev` named it here before
-  # the preview wanted the same book.
   store.name_book(ProTacts::StubLogin::LOGIN, "alpha")
   store.close
 end

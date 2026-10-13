@@ -349,8 +349,8 @@ module ProTacts
       end
 
       # FN's text, from the boxes that make it: the western order the
-      # create dialog has always written (Admin::ContactDialog), each
-      # blank box left out rather than spacing the line.
+      # fixture sessions show macOS writing, each blank box left out
+      # rather than spacing the line.
       #: (String first, String middle, String last) -> String
       def self.display_name(first, middle, last)
         [first, middle, last].reject(&:empty?).join(" ")
@@ -378,8 +378,6 @@ module ProTacts
           readings.replace(property.components)
         end
         components << "" while components.length < 5
-        # The form's three, in the value's own order: family, given,
-        # additional.
         [last, first, middle].each_with_index do |value, position|
           current = readings[position].to_s
           components[position] = value == current ? components.fetch(position) : VCard.escape(value)
