@@ -265,16 +265,23 @@ module ProTacts
         return
       end
 
-      signature = PHOTO_SIGNATURES.find { bytes.start_with?(it.first) }
-      if signature.nil?
+      photo = Contact.photo_of(bytes)
+      if photo.nil?
         Sentry.capture_message(
           "a card's PHOTO decoded to no image format this server recognizes",
           level: :warning,
         )
-        return
       end
+      photo
+    end
 
-      Photo.new(mime_type: signature.fetch(1), bytes:)
+    # Bytes as a picture a browser can show, named by their magic
+    # bytes (PHOTO_SIGNATURES), or nil for a format the list does not
+    # cover. A card's PHOTO and a group's upload are judged alike.
+    #: (String bytes) -> Photo?
+    def self.photo_of(bytes)
+      signature = PHOTO_SIGNATURES.find { bytes.start_with?(it.first) }
+      Photo.new(mime_type: signature.fetch(1), bytes:) if signature
     end
 
     # The substrate the typed accessors sit on, and the read for what

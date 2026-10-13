@@ -1553,6 +1553,49 @@ class StoreTest < Minitest::Test
     end
   end
 
+  JPEG = ProTacts::Contact.photo_of("\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\xFF".b) #: ProTacts::Contact::Photo
+  PNG = ProTacts::Contact.photo_of("\x89PNG\r\n\x1A\n\x00\x00\xFF".b) #: ProTacts::Contact::Photo
+
+  # A group's photo is the page's alone: it reads back byte for byte
+  # under its sniffed type, and no member's card moves for it.
+  def test_a_group_photo_reads_back_and_reaches_no_card
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, members: ["aiden"])
+
+      store.set_group_photo(id, JPEG)
+
+      assert store.group(id).photo
+      assert_equal JPEG, store.group_photo(id)
+      assert_equal AIDEN, store.contact("aiden").vcard.to_s
+      assert_equal %w[put], store.changes_of("aiden").map(&:action)
+    end
+  end
+
+  def test_a_group_photo_is_replaced_and_removed
+    with_store do |store|
+      id = FixtureData.seed_group(store, members: [])
+      store.set_group_photo(id, JPEG)
+
+      store.set_group_photo(id, PNG)
+      assert_equal PNG, store.group_photo(id)
+
+      store.remove_group_photo(id)
+      refute store.group(id).photo
+      assert_nil store.group_photo(id)
+    end
+  end
+
+  def test_a_deleted_group_takes_its_photo_away
+    with_store do |store|
+      id = FixtureData.seed_group(store, members: [])
+      store.set_group_photo(id, JPEG)
+
+      store.delete_group(id)
+
+      assert_nil store.group_photo(id)
+    end
+  end
+
   def test_a_regroup_leaves_and_joins
     with_store({"aiden" => AIDEN}) do |store|
       left = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])

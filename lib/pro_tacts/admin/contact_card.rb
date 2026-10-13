@@ -4,7 +4,7 @@ require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/card_form"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/group_dialog"
-require "pro_tacts/admin/group_label"
+require "pro_tacts/admin/group_tag"
 require "pro_tacts/vcard"
 
 module ProTacts
@@ -130,7 +130,7 @@ module ProTacts
           dt(class: "type-label") { "notes" }
           dd(class: "type-body-sm") do
             div(style: "white-space: pre-wrap;") { text }
-            group_tag(lent.group)
+            render GroupTag.new(group: lent.group)
           end
         end
       end
@@ -151,17 +151,13 @@ module ProTacts
         dd(class: "type-body-sm") do
           if @groups.any?
             div(class: "tag-set") do
-              @groups.each { group_tag(it) }
+              @groups.each { render GroupTag.new(group: it) }
             end
           end
           button(type: "button", data_size: "sm", popovertarget: GroupDialog::ID) { "edit groups" } if @dialog
         end
       end
 
-      #: (Group group) -> void
-      def group_tag(group)
-        a(href: "/groups/#{group.id}", class: "tag") { render GroupLabel.new(group:) }
-      end
 
       # The type in one column and the value in the other, with the
       # group that lends the row named under the value when one does.
@@ -178,7 +174,7 @@ module ProTacts
           # The groups row's own tag, pinned to this row's first line
           # at the right edge of the value column (admin.css) — under
           # the value it could be read as marking the row below.
-          group_tag(lent_by) if lent_by
+          render GroupTag.new(group: lent_by) if lent_by
         end
       end
 

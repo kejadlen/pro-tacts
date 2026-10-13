@@ -51,9 +51,10 @@ module ProTacts
       attr_reader cards: Hash[String, String]
       attr_reader birthdays: Hash[String, Birthday]
       attr_reader groups: Array[Group]
+      attr_reader group_photos: Hash[String, Contact::Photo]
       attr_reader books: Hash[String, String]
 
-      def self.new: (cards: Hash[String, String], birthdays: Hash[String, Birthday], groups: Array[Group], books: Hash[String, String]) -> instance
+      def self.new: (cards: Hash[String, String], birthdays: Hash[String, Birthday], groups: Array[Group], group_photos: Hash[String, Contact::Photo], books: Hash[String, String]) -> instance
     end
   end
 end

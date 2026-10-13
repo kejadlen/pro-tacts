@@ -22,8 +22,9 @@ module ProTacts
       # picker; the import row's verdict, a circle either way and
       # a check in it when the row is in the book;
       # chevron-down, the account menu's opening direction;
-      # search, the glyph on the header's search button; and house,
-      # the phone header's way home from the search page. A tag
+      # search, the glyph on the header's search button; house,
+      # the phone header's way home from the search page; and image,
+      # a group tag's mark that the group has a photo. A tag
       # per shape rather than a bare list of path data, because
       # calendar's frame is a rect and redrawing it as a path would
       # be this file copying something other than what Lucide ships.
@@ -51,6 +52,11 @@ module ProTacts
         search: [
           [:path, {d: "m21 21-4.34-4.34"}],
           [:circle, {cx: 11, cy: 11, r: 8}],
+        ],
+        image: [
+          [:rect, {width: 18, height: 18, x: 3, y: 3, rx: 2, ry: 2}],
+          [:circle, {cx: 9, cy: 9, r: 2}],
+          [:path, {d: "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"}],
         ],
         house: [
           [:path, {d: "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"}],

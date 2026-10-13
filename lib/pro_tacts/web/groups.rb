@@ -1,3 +1,5 @@
+require "digest"
+
 require "pro_tacts/admin/card_form"
 require "pro_tacts/admin/groups_edit"
 require "pro_tacts/admin/groups_index"
@@ -6,6 +8,10 @@ require "pro_tacts/admin/groups_show"
 
 module ProTacts
   class Web < Roda
+    # The largest group photo an upload may carry: a phone's
+    # full-size JPEG fits, and the page shows the bytes as they came.
+    GROUP_PHOTO_LIMIT = 10_000_000 #: Integer
+
     # The group screens, the contacts' own shape: the collection's
     # GET and create, then a record's GET, its editor, the POST that
     # applies it, and the members screen beside both — membership is
@@ -43,6 +49,27 @@ module ProTacts
         r.get "members" do
           group = store.group(id)
           members_screen(group) if group
+        end
+
+        # The group's photo (docs/plans/2026-10-12-group-photos.md):
+        # served for its page's <img>, and set or removed from its
+        # editor. Above the editor's POST, the members route's reason.
+        r.is "photo" do
+          r.get do
+            photo = store.group_photo(id)
+
+            # The page never points at a photo the group lacks, so one
+            # with none is the 404 case.
+            if photo
+              response["Content-Type"] = photo.mime_type
+              response["ETag"] = %("#{Digest::SHA256.hexdigest(photo.bytes)}")
+              photo.bytes
+            end
+          end
+
+          r.post do
+            apply_photo(r, id)
+          end
         end
 
         # Membership from the group's side, the members screen's save
@@ -132,6 +159,33 @@ module ProTacts
       checked = ids_in(r.params["members"]) & known
       was = ids_in(r.params["was"]) & known
       store.edit_members(id, join: checked - was, leave: was - checked)
+      r.redirect "/groups/#{id}", 303
+    end
+
+    # The editor's photo form: a removal, or an upload judged by its
+    # magic bytes and its size before anything is written.
+    #: (untyped r, String id) -> String?
+    def apply_photo(r, id)
+      group = store.group(id)
+      return if group.nil?
+
+      if r.params.key?("remove")
+        store.remove_group_photo(id)
+        return r.redirect("/groups/#{id}", 303)
+      end
+
+      upload = file_in(r.params["photo"])
+      return group_edit_screen(group, notice: "Choose a photo to upload.") if upload.nil?
+
+      tempfile = upload.fetch(:tempfile)
+      if tempfile.size > GROUP_PHOTO_LIMIT
+        return group_edit_screen(group, notice: "That photo is over #{GROUP_PHOTO_LIMIT / 1_000_000} MB; nothing was saved.")
+      end
+
+      photo = Contact.photo_of(tempfile.read.b)
+      return group_edit_screen(group, notice: "That file is not a JPEG, PNG, or GIF; nothing was saved.") if photo.nil?
+
+      store.set_group_photo(id, photo)
       r.redirect "/groups/#{id}", 303
     end
 

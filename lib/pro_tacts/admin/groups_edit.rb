@@ -32,6 +32,9 @@ module ProTacts
       FORM = "group-form" #: String
       private_constant :FORM
 
+      PHOTO_FORM = "group-photo-form" #: String
+      private_constant :PHOTO_FORM
+
       #: (group: Group, login: String, ?notice: String?) -> void
       def initialize(group:, login:, notice: nil)
         @group = group
@@ -86,10 +89,39 @@ module ProTacts
               end
             end
           end
+          photo_section
         end
       end
 
       private
+
+      # The group's photo, set or removed on its own rather than with
+      # the form above: it lends nothing, so it has no place in the
+      # version guard or the lines the save splices, and an upload
+      # needs a multipart form the editor's save does not.
+      #: () -> void
+      def photo_section
+        render RecordCard.new(
+          nav: -> {
+            span(class: "type-label") { "photo" }
+            if @group.photo
+              form(action: "/groups/#{@group.id}/photo", method: "post") do
+                button(type: "submit", name: "remove", value: "1", data_size: "sm") { "remove photo" }
+              end
+            end
+          },
+          submit: "Upload", form: PHOTO_FORM,
+        ) do
+          form(action: "/groups/#{@group.id}/photo", method: "post", enctype: "multipart/form-data",
+               class: "field-stack", id: PHOTO_FORM) do
+            img(class: "group-photo", src: "/groups/#{@group.id}/photo", alt: "") if @group.photo
+            label(class: "field") do
+              span { @group.photo ? "Replace" : "Photo" }
+              input(type: "file", name: "photo", accept: "image/jpeg,image/png,image/gif", required: true)
+            end
+          end
+        end
+      end
 
       # ContactsEdit#address_row, over a group's line.
       #: (Contact::Address address) -> void

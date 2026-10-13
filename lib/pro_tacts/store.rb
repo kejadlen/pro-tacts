@@ -19,16 +19,17 @@ module ProTacts
   # The transactional store: one SQLite database holding each contact's
   # card exactly as it was submitted.
   #
-  # Six kinds of state live here and they are not equally precious.
+  # Seven kinds of state live here and they are not equally precious.
   # Only the cards, the change log, the birthdays, the groups, the
-  # books, and the group change log cannot be rebuilt, and each is
-  # argued where it was decided: the first two in
+  # books, the group change log, and the group photos cannot be
+  # rebuilt, and each is argued where it was decided: the first two in
   # docs/plans/2026-08-25-sqlite-schema.md,
   # "What the tables are for", the birthdays in
   # docs/plans/2026-08-31-partial-birthdays.md, the groups in
   # docs/plans/2026-08-24-vcard-storage-and-groups.md, the books in
   # docs/plans/2026-09-19-books-in-the-dump.md, the group change log
-  # in docs/plans/2026-09-23-group-change-log.md. Everything else
+  # in docs/plans/2026-09-23-group-change-log.md, the group photos in
+  # docs/plans/2026-10-12-group-photos.md. Everything else
   # is an index derived from the cards, and #rebuild_index will make
   # it again from nothing.
   #
@@ -96,11 +97,12 @@ module ProTacts
     # @rbs skip
     UpcomingBirthday = Data.define(:contact, :occurs_on)
 
-    # stored cards by id, the birthdays by card id, the groups, and the
-    # books — the name each named one goes by, keyed by login. What
+    # stored cards by id, the birthdays by card id, the groups, their
+    # photos by group id, and the books — the name each named one goes
+    # by, keyed by login. What
     # `rake db:dump` writes (tasks/db.rake).
     # @rbs skip
-    Snapshot = Data.define(:cards, :birthdays, :groups, :books)
+    Snapshot = Data.define(:cards, :birthdays, :groups, :group_photos, :books)
 
     # A group as a picker names it: enough to show it and to submit it,
     # and no more. A Group carries the lines it lends and the ids of
@@ -225,6 +227,10 @@ module ProTacts
           },
           birthdays: birthdays_by_id,
           groups: all_groups,
+          group_photos: group_photos.order(:group_id).select_map(:group_id).to_h { |id|
+            photo = group_photo(id.to_s) || raise("group #{id}'s photo went missing mid-snapshot")
+            [id.to_s, photo] #: [String, Contact::Photo]
+          },
           books: all_books,
         )
       end
@@ -747,6 +753,32 @@ module ProTacts
       end
     end
 
+    # A group's photo, or nil for a group without one. The bytes were
+    # judged on the way in (#set_group_photo), so a row that no longer
+    # sniffs to an image is corruption to raise on, the birthdays' rule.
+    #: (String id) -> Contact::Photo?
+    def group_photo(id)
+      bytes = group_photos.where(group_id: id).get(:bytes)
+      return if bytes.nil?
+
+      Contact.photo_of(bytes.b) or raise "group #{id}'s stored photo sniffs to no image format"
+    end
+
+    # Sets a group's photo, replacing any it had. Logged nowhere: the
+    # picture is the admin's alone, and the dump is its backup
+    # (docs/plans/2026-10-12-group-photos.md).
+    #: (String id, Contact::Photo photo) -> void
+    def set_group_photo(id, photo)
+      group_photos
+        .insert_conflict(target: :group_id, update: {bytes: Sequel[:excluded][:bytes]})
+        .insert(group_id: id, bytes: Sequel.blob(photo.bytes))
+    end
+
+    #: (String id) -> void
+    def remove_group_photo(id)
+      group_photos.where(group_id: id).delete
+    end
+
     # A card joins a group, and starts serving what the group lends.
     # Joining twice is joining once, and only the join that moved
     # membership is logged in the group's own log. Joining a `sync:`
@@ -932,6 +964,11 @@ module ProTacts
       @database[:group_properties]
     end
 
+    #: () -> Sequel::Dataset
+    def group_photos
+      @database[:group_photos]
+    end
+
     # The one-note invariant's raise: a card this server built with
     # more than one NOTE is a bug, and a raise reaches Sentry with the
     # request (docs/plans/2026-09-25-one-note-per-contact.md, "The
@@ -1062,7 +1099,8 @@ module ProTacts
     end
 
     # Groups rows read whole: the lines and members of every group in
-    # `rows`, two reads however many groups there are.
+    # `rows`, and which have a photo, three reads however many groups
+    # there are. The photo read takes ids, never bytes.
     #: (Array[Hash[Symbol, untyped]] rows) -> Array[Group]
     def load_groups(rows)
       ids = rows.map { it.fetch(:id).to_s }
@@ -1070,6 +1108,7 @@ module ProTacts
         .group_by { it.fetch(:group_id).to_s }
       members = group_members.where(group_id: ids).order(:card_id).all
         .group_by { it.fetch(:group_id).to_s }
+      photos = group_photos.where(group_id: ids).select_map(:group_id).map(&:to_s)
       rows.map { |row|
         id = row.fetch(:id).to_s
         Group.new(
@@ -1078,6 +1117,7 @@ module ProTacts
           label: row.fetch(:label).to_s,
           lines: lines.fetch(id, []).map { it.fetch(:line).to_s },
           members: members.fetch(id, []).map { it.fetch(:card_id).to_s },
+          photo: photos.include?(id),
         )
       }
     end

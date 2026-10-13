@@ -48,6 +48,10 @@ module ProTacts
             end
             div(class: "card") do
               div(class: "card-body") do
+                # The group's photo, this page's alone
+                # (docs/plans/2026-10-12-group-photos.md). Alt is empty:
+                # the name is the heading right under it.
+                img(class: "group-photo", src: "/groups/#{@group.id}/photo", alt: "") if @group.photo
                 div(class: "detail-header") do
                   h1(class: "type-h2") { render GroupLabel.new(group: @group) }
                 end

@@ -36,6 +36,9 @@ module Sequel
   # the read that lends an unnamed group's lines under something.
   def self.function: (Symbol name, *untyped arguments) -> untyped
 
+  # A string bound as a BLOB rather than TEXT: a group photo's bytes.
+  def self.blob: (String bytes) -> untyped
+
   class Database
     def []: (Symbol table) -> Dataset
 
@@ -117,6 +120,8 @@ module Sequel
     def empty?: () -> bool
     def columns: () -> Array[Symbol]
     def single_value: () -> untyped
+    # One column of the first row, or nil for no row.
+    def get: (Symbol column) -> untyped
     def select_map: (untyped columns) -> Array[untyped]
 
     def insert: (Sequel::row values) -> Integer

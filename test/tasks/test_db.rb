@@ -34,6 +34,23 @@ class DbTasksTest < Minitest::Test
     end
   end
 
+  # A group's photo is beside its YAML, named by the type it sniffed
+  # to, and leaves the dump when it leaves the store.
+  def test_the_dump_writes_a_groups_photo_beside_it
+    with_store do |store, root|
+      group = store.create_group(name: "Booles")
+      bytes = "\x89PNG\r\n\x1A\n\x00\xFF".b
+      store.set_group_photo(group, ProTacts::Contact.photo_of(bytes))
+
+      dump(root)
+      assert_equal bytes, (root / "dump" / "groups" / "#{group}.png").binread
+
+      store.remove_group_photo(group)
+      dump(root)
+      assert_equal ["#{group}.yml"], (root / "dump" / "groups").children.map { it.basename.to_s }
+    end
+  end
+
   # A deployment that has named no book still gets the file, so the
   # dump says there are none rather than leaving it to a missing file.
   def test_a_store_that_has_named_no_book_dumps_the_file_anyway

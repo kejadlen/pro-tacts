@@ -1,7 +1,9 @@
 # A readable copy of what the store cannot rebuild: each stored card as
-# its bytes, the birthdays, the groups, and the books, split the way
-# the store splits them (docs/plans/2026-09-12-database-dump.md,
-# docs/plans/2026-09-19-books-in-the-dump.md). cards/ and
+# its bytes, the birthdays, the groups and their photos, and the books,
+# split the way the store splits them
+# (docs/plans/2026-09-12-database-dump.md,
+# docs/plans/2026-09-19-books-in-the-dump.md,
+# docs/plans/2026-10-12-group-photos.md). cards/ and
 # groups/ are made to hold exactly what the store holds, so a dump kept
 # in version control shows deletions too; anything else in the
 # directory is left alone.
@@ -40,9 +42,12 @@ namespace :db do
       }
       dump_file(dump / "birthdays.yml", YAML.dump(birthdays))
 
+      # A photo beside its group's YAML, named by the type its bytes
+      # sniffed to, so the dump opens as the picture it is.
+      photos = snapshot.group_photos.to_h { |id, photo| ["#{id}.#{photo.mime_type.delete_prefix("image/")}", photo.bytes] }
       dump_directory(groups, snapshot.groups.to_h { |group|
         ["#{group.id}.yml", YAML.dump({"name" => group.name, "lines" => group.lines, "members" => group.members})]
-      })
+      }.merge(photos))
 
       dump_file(dump / "books.yml", YAML.dump(snapshot.books))
     end

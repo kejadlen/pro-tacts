@@ -361,6 +361,118 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
+  ## The photo
+
+  JPEG = "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\xFF".b #: String
+
+  def upload(bytes, type = "image/jpeg")
+    Rack::Test::UploadedFile.new(StringIO.new(bytes), type, original_filename: "family.jpg")
+  end
+
+  # An upload lands on the group's page, which shows it from the photo
+  # route; no member's card carries it.
+  def test_an_uploaded_photo_shows_on_the_groups_page_alone
+    with_contacts(BOOLES) do |store|
+      id = household(store)
+      george = store.contact("george").vcard.to_s
+
+      post "/groups/#{id}/photo", photo: upload(JPEG)
+
+      assert_equal 303, last_response.status
+      assert_equal "/groups/#{id}", URI(last_response["Location"]).path
+      get "/groups/#{id}"
+      assert_includes last_response.body, %(<img class="group-photo" src="/groups/#{id}/photo" alt="">)
+      get "/groups"
+      refute_includes last_response.body, "/photo"
+      assert_equal george, store.contact("george").vcard.to_s
+    end
+  end
+
+  def test_the_photo_route_serves_the_bytes
+    with_contacts({}) do |store|
+      id = household(store, members: [])
+      post "/groups/#{id}/photo", photo: upload(JPEG)
+
+      get "/groups/#{id}/photo"
+
+      assert_equal 200, last_response.status
+      assert_equal "image/jpeg", last_response["Content-Type"]
+      assert_equal JPEG, last_response.body.b
+    end
+  end
+
+  def test_a_group_without_a_photo_renders_none_and_routes_to_404
+    with_contacts({}) do |store|
+      id = household(store, members: [])
+
+      get "/groups/#{id}"
+      refute_includes last_response.body, "group-photo"
+
+      get "/groups/#{id}/photo"
+      assert_equal 404, last_response.status
+    end
+  end
+
+  # The bytes decide what a file is, not its name or its claimed type.
+  def test_an_upload_that_is_no_image_is_refused
+    with_contacts({}) do |store|
+      id = household(store, members: [])
+
+      post "/groups/#{id}/photo", photo: upload("not a picture", "image/jpeg")
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "That file is not a JPEG, PNG, or GIF; nothing was saved."
+      refute store.group(id).photo
+    end
+  end
+
+  def test_an_upload_over_the_limit_is_refused
+    with_contacts({}) do |store|
+      id = household(store, members: [])
+
+      post "/groups/#{id}/photo", photo: upload(JPEG + ("\x00" * ProTacts::Web::GROUP_PHOTO_LIMIT).b)
+
+      assert_includes last_response.body, "That photo is over 10 MB; nothing was saved."
+      refute store.group(id).photo
+    end
+  end
+
+  # A member's chips mark the group with a photo, on the contact's
+  # page and in the contacts list alike; a group without one is bare.
+  def test_a_groups_chip_marks_its_photo
+    with_contacts(BOOLES) do |store|
+      id = household(store)
+      plain = store.create_group(name: "Logicians")
+      store.add_member(plain, "george")
+      post "/groups/#{id}/photo", photo: upload(JPEG)
+
+      ["/contacts/george", "/contacts"].each do |path|
+        get path
+        assert_match %r{<a href="/groups/#{id}" class="tag"><svg[^>]*>.*?</svg>Booles<span class="gl-visually-hidden">has a photo</span></a>},
+                     last_response.body
+        assert_includes last_response.body, %(<a href="/groups/#{plain}" class="tag">Logicians</a>)
+      end
+    end
+  end
+
+  def test_the_editor_offers_an_upload_and_a_removal_once_there_is_one
+    with_contacts({}) do |store|
+      id = household(store, members: [])
+
+      get "/groups/#{id}/edit"
+      assert_includes last_response.body, %(enctype="multipart/form-data")
+      refute_includes last_response.body, "remove photo"
+
+      post "/groups/#{id}/photo", photo: upload(JPEG)
+      get "/groups/#{id}/edit"
+      assert_includes last_response.body, "remove photo"
+
+      post "/groups/#{id}/photo", remove: "1"
+      assert_equal 303, last_response.status
+      refute store.group(id).photo
+    end
+  end
+
   ## The members screen
 
   def test_the_card_links_to_the_members_screen

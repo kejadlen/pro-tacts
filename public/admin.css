@@ -1066,6 +1066,18 @@ span.avatar[data-size="lg"] {
   font-size: var(--gl-step-3);
 }
 
+/* A group's photo, at the top of its card: a family picture, shown
+   whole rather than cropped to a box, and never stretched past its
+   own size. The height cap keeps a portrait from pushing the name off
+   the first screen. */
+.group-photo {
+  display: block;
+  max-width: 100%;
+  max-height: 28rem;
+  margin-inline: auto;
+  border-radius: var(--gl-radius-md);
+}
+
 /* The detail card's masthead: the name in its own column at the left,
    the avatar anchored top-right (grid rather than float because
    .card-body is a flex column — floats on its children are ignored),

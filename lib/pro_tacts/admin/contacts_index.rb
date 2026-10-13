@@ -2,7 +2,7 @@ require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/format"
-require "pro_tacts/admin/group_label"
+require "pro_tacts/admin/group_tag"
 require "pro_tacts/admin/layout"
 
 module ProTacts
@@ -75,7 +75,7 @@ module ProTacts
             groups = @groups_of[contact.id]
             if groups
               div(class: "tag-set", style: "margin-top: var(--gl-space-3xs);") do
-                groups.each { |group| a(href: "/groups/#{group.id}", class: "tag") { render GroupLabel.new(group:) } }
+                groups.each { |group| render GroupTag.new(group:) }
               end
             end
           end

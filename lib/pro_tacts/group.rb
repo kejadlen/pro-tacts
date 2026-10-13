@@ -6,18 +6,26 @@ require "pro_tacts/vcard"
 
 module ProTacts
   # A group as the admin screens read one: its own row, the lines it
-  # lends in the order it lends them, and its members' card ids. The
+  # lends in the order it lends them, its members' card ids, and
+  # whether it has a photo (docs/plans/2026-10-12-group-photos.md). The
   # label is the SQL one Store#group_label computes, so a tag and a
   # heading can never disagree about what to call a nameless group.
   #
   # The signature lives in sig/pro_tacts/group.rbs, this being a Data
   # class.
   # @rbs skip
-  Group = Data.define(:id, :name, :label, :lines, :members)
+  Group = Data.define(:id, :name, :label, :lines, :members, :photo)
 
   # Reopened rather than defined in the block above, for the reason
   # CardDiff is.
   class Group
+    # A photo is the exception, not the rule, so a group built without
+    # saying is one without.
+    #: (?photo: bool, **untyped) -> void
+    def initialize(photo: false, **)
+      super
+    end
+
     # The group names that choose what a client syncs: `sync:*` for
     # everyone, `sync:<login>` for one user
     # (docs/plans/2026-09-12-per-user-books.md). Unique like every
