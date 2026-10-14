@@ -232,13 +232,15 @@ module ProTacts
       end
     end
 
-    # Every contact, ordered by id so that a listing does not depend on
-    # what SQLite feels like returning.
-    #: () -> Array[Contact]
-    def contacts
+    # Every contact, or only those of these ids, ordered by id so that a
+    # listing does not depend on what SQLite feels like returning. The
+    # ids narrow the read itself, so a book or a multiget composes no
+    # card it will not serve.
+    #: (?Array[String]? ids) -> Array[Contact]
+    def contacts(ids = nil)
       birthdays = birthdays_by_id
       inherited = inherited_by_id
-      cards.order(:id).map {
+      (ids ? cards.where(id: ids) : cards).order(:id).map {
         id = it.fetch(:id).to_s
         contact_from(it, birthdays[id], inherited.fetch(id, []))
       }

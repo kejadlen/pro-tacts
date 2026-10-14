@@ -193,9 +193,10 @@ module ProTacts
               end
             elsif (sequence = SyncToken.read(token, book_digest, store.database_id)) && sequence <= store.latest_sequence
               net = store.changes(after: sequence).map { it.card_id }.uniq
+              found = members(net)
               multistatus("card", sync_token:) do |d|
                 net.each do |id|
-                  contact = contacts.find { it.id == id }
+                  contact = found[id]
                   contact ? etag_response(d, contact) : d.missing(contact_href(id))
                 end
               end
@@ -219,15 +220,17 @@ module ProTacts
             # address-data the client asks for is section 10.4.
             wants_cards = doc.xpath("//address-data").any?
 
+            requested = doc.xpath("//href").map { it.text }
+            ids = requested.map { it[%r{\A/dav/addressbook/([^/]+)\.vcf\z}, 1] }
+            found = members(ids.compact)
             multistatus("card") do |d, card|
-              doc.xpath("//href").map { it.text }.each do |requested|
-                id = requested[%r{\A/dav/addressbook/([^/]+)\.vcf\z}, 1]
-                contact = id && contacts.find { it.id == id }
+              requested.zip(ids).each do |href, id|
+                contact = id && found[id]
 
                 if contact
                   wants_cards ? card_response(d, card, contact) : etag_response(d, contact)
                 else
-                  d.missing(requested)
+                  d.missing(href)
                 end
               end
             end
@@ -315,7 +318,16 @@ module ProTacts
     # that collection (docs/plans/2026-09-12-per-user-books.md).
     #: () -> Array[Contact]
     def contacts
-      @contacts ||= store.contacts.select { book.include?(it.id) }
+      @contacts ||= store.contacts(book.to_a)
+    end
+
+    # The members of the requester's book among these ids, keyed by id:
+    # a report naming a few cards reads those and not the whole book.
+    #: (Array[String] ids) -> Hash[String, Contact]
+    def members(ids)
+      store.contacts(ids.select { book.include?(it) }).to_h {
+        [it.id, it] #: [String, Contact]
+      }
     end
 
     #: () -> Set[String]
