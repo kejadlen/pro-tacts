@@ -400,8 +400,12 @@ module ProTacts
     def lent_at
       return @lent_at if defined?(@lent_at)
 
-      remaining = @stored.lines.map { it.verbatim.chomp }.tally
       rows = @inherited.reject { note_row?(it.line) } #: Array[Contact::Inherited]
+      # Nothing lent outside a note is nothing to place, and the walk
+      # below copies every line of both cards to find that out.
+      return @lent_at = {} if rows.empty?
+
+      remaining = @stored.lines.map { it.verbatim.chomp }.tally
       @lent_at = {} #: Hash[Integer, Group]
       vcard.lines.each_with_index do |served, index|
         next if served.names?("NOTE")
