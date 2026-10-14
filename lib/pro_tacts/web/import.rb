@@ -119,7 +119,7 @@ module ProTacts
       # list's first row (#walk_order), not the file's first card. A
       # 303, the other writes' answer, because every screen of the
       # walk is a GET a back button can revisit.
-      r.redirect "/import/#{id}/#{walk_order(revised).fetch(0)}", 303
+      r.redirect "/import/#{id}/#{walk_order(import_contacts(revised)).fetch(0)}", 303
     end
 
     # The walk's list of contacts, as every screen of it shows them:
@@ -129,9 +129,10 @@ module ProTacts
     #: (String upload, Array[VCard] originals, Array[VCard] revised, Hash[String, String] saved, current: Integer) -> Admin::ImportSidebar
     def walk_sidebar(upload, originals, revised, saved, current:)
       rows = span("import.sidebar") {
-        walk_order(revised).map { |index|
+        contacts = import_contacts(revised)
+        walk_order(contacts).map { |index|
           dropped = Import::Vcf.read(originals.fetch(index)).dropped
-          [import_contact(revised.fetch(index), index), Import::Vcf.losses(dropped).length, index] #: [Contact, Integer, Integer]
+          [contacts.fetch(index), Import::Vcf.losses(dropped).length, index] #: [Contact, Integer, Integer]
         }
       }
       Admin::ImportSidebar.new(upload:, rows:, saved:, current:)
@@ -145,11 +146,12 @@ module ProTacts
     # named by its place (the Integer route), which a save cannot
     # move; its position in the list is read off the revised cards
     # afresh on every screen, so a family name changed on the way in
-    # moves its row the way it would move the contact's.
-    #: (Array[VCard] revised) -> Array[Integer]
-    def walk_order(revised)
+    # moves its row the way it would move the contact's. The contacts
+    # rather than the cards, so the sidebar sorts the ones it shows
+    # instead of reading every card a second time.
+    #: (Array[Contact] contacts) -> Array[Integer]
+    def walk_order(contacts)
       span("import.walk_order") {
-        contacts = revised.each_with_index.map { |card, index| import_contact(card, index) }
         contacts.each_index.sort_by { |index| [Admin::Format.sort_key(contacts.fetch(index)), index] }
       }
     end
@@ -480,7 +482,7 @@ module ProTacts
       # `first` because empty is the case the line above took, and
       # reaching it is a broken assumption rather than a screen to
       # render.
-      order = walk_order(revised)
+      order = walk_order(import_contacts(revised))
       remaining = order.reject { |i| saved.key?(i.to_s) || i == index }
       below = order.drop(order.index(index).to_i + 1)
       r.redirect "/import/#{upload}/#{below.find { remaining.include?(it) } || remaining.fetch(0)}", 303
@@ -537,6 +539,12 @@ module ProTacts
       bdays, rest = card.extract("BDAY")
       birthday = bdays.filter_map { it.property }.filter_map { Birthday.from_property(it) }.first
       Contact.new(id: index.to_s, stored: birthday ? rest : card, birthday:, inherited: [])
+    end
+
+    # Every staged card as #import_contact reads it, in file order.
+    #: (Array[VCard] revised) -> Array[Contact]
+    def import_contacts(revised)
+      revised.each_with_index.map { |card, index| import_contact(card, index) }
     end
 
     #: (Contact contact) -> bool
