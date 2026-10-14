@@ -104,11 +104,21 @@ module ProTacts
     # anything here sees them (ProTacts::Web's write_card). This is the
     # assertion under those callers, not a check any of them makes; the
     # store's bind holds the same line a third time below the card.
-    #: (String bytes) -> void
-    def initialize(bytes)
+    #: (String bytes, ?lines: Array[Parser::Line]?) -> void
+    def initialize(bytes, lines: nil)
       raise ArgumentError, "not valid UTF-8: a card is text" unless bytes.valid_encoding?
 
       @bytes = bytes
+      @lines = lines if lines
+    end
+
+    # A card made of lines already read, keeping that reading: a file
+    # split into cards (Import::Vcf.cards) or a card split by #extract
+    # has walked every one of them, and the bytes they join back into
+    # read as the same lines, so a second walk would find nothing new.
+    #: (Array[Parser::Line] lines) -> VCard
+    def self.of(lines)
+      new(lines.map(&:verbatim).join, lines:)
     end
 
     # The card's properties, folded off the same single walk #lines is
@@ -164,7 +174,7 @@ module ProTacts
     #: (String name) -> [Array[Parser::Line], VCard]
     def extract(name)
       taken, rest = lines.partition { it.names?(name) }
-      [taken, VCard.new(rest.map(&:verbatim).join)]
+      [taken, VCard.of(rest)]
     end
 
     #: () -> String

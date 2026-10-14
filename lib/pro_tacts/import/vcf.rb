@@ -87,7 +87,7 @@ module ProTacts
             open << line
             next unless name&.casecmp?("END")
 
-            cards << VCard.new(open.map(&:verbatim).join)
+            cards << VCard.of(open)
             open = nil
           end
         end
@@ -176,7 +176,7 @@ module ProTacts
           property = line.property
           property.nil? || (known?(property.name) && !orphaned.include?(property.group))
         }
-        Reading.new(card: VCard.new(kept.map(&:verbatim).join), dropped:)
+        Reading.new(card: VCard.of(kept), dropped:)
       end
 
       # The group prefixes (`item1.`) with nothing left in them but a
