@@ -246,6 +246,13 @@ module ProTacts
       }
     end
 
+    # Every contact's id, in #contacts' order, for a caller that only
+    # asks which cards exist: no card is read to answer.
+    #: () -> Array[String]
+    def contact_ids
+      cards.order(:id).select_map(:id).map(&:to_s)
+    end
+
     # Every contact paired with its card's updated_at, newest first — the
     # read behind any "recently updated" surface. Same shape and cost as
     # #contacts, ordered by the column SQLite already stamps rather than

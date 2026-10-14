@@ -121,7 +121,7 @@ module ProTacts
       submitted = r.params["members"]
       members =
         if submitted.is_a?(Array)
-          submitted.map(&:to_s) & store.contacts.map(&:id)
+          submitted.map(&:to_s) & store.contact_ids
         else
           group.members
         end #: Array[String]
@@ -156,7 +156,7 @@ module ProTacts
       group = store.group(id)
       return if group.nil?
 
-      known = store.contacts.map(&:id)
+      known = store.contact_ids
       checked = ids_in(r.params["members"]) & known
       was = ids_in(r.params["was"]) & known
       store.edit_members(id, join: checked - was, leave: was - checked)
