@@ -300,6 +300,16 @@ class VCardLinesTest < Minitest::Test
       VCARD.new("not a card\r\n").insert(["BDAY:1985-04\r\n"]).to_s
   end
 
+  # Only a physical line opening on END:VCARD anchors, and the last of
+  # them: the same text inside a value or a fold's continuation is not
+  # the end.
+  def test_insert_anchors_on_the_last_line_that_opens_on_end
+    card = "BEGIN:VCARD\r\nNOTE:END:VCARD\r\n END:VCARD\r\nend:vcard"
+
+    assert_equal "BEGIN:VCARD\r\nNOTE:END:VCARD\r\n END:VCARD\r\nBDAY:1985-04\r\nend:vcard",
+      VCARD.new(card).insert(["BDAY:1985-04"]).to_s
+  end
+
   def test_insert_with_nothing_leaves_the_card_alone
     assert_equal CARD, VCARD.new(CARD).insert([]).to_s
   end

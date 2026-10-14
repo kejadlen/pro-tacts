@@ -133,13 +133,20 @@ module ProTacts
 
       # Reopened for the reason Property is.
       class Line
+        # #names?' pattern for each name, built on its first ask: the
+        # names are the code's own and the group schema's (ADR, NOTE),
+        # a handful, and a pattern built per call was most of what a
+        # listing of contacts allocated.
+        NAME_PATTERNS = {} #: Hash[String, Regexp]
+
         # Whether this line names the property, a group prefix
         # (`item1.BDAY`) counting as naming it. Asked of the line rather
         # than the property because a line that will not parse still has
         # a name in it.
         #: (String name) -> bool
         def names?(name)
-          verbatim.match?(/\A(?:[A-Za-z0-9-]+\.)?#{Regexp.escape(name)}[;:]/i)
+          pattern = NAME_PATTERNS[name] ||= /\A(?:[A-Za-z0-9-]+\.)?#{Regexp.escape(name)}[;:]/i
+          verbatim.match?(pattern)
         end
 
         # Whether this line broke one of the parser's assumptions rather
@@ -254,23 +261,14 @@ module ProTacts
       # folded under it, kept together because a property and its fold
       # are one unit (RFC 2426 section 2.6). Slicing before each
       # non-continuation, rather than chunking, is what attaches a
-      # continuation to the line above it. The empty string the
-      # byte-level split leaves behind is not a line — dropping it loses
-      # nothing, an empty group joining to nothing.
+      # continuation to the line above it. The physical lines keep their
+      # terminators (String#lines), so no split of a card can lose or
+      # normalize a line break.
       #: (String card) -> Array[String]
       def self.logical_lines(card)
-        physical_lines(card)
+        card.lines
           .slice_when { |_line, next_line| !next_line.match?(CONTINUATION) }
           .map(&:join)
-          .reject { it == "" }
-      end
-
-      # Physical lines with their terminators attached, so no split of
-      # a card can lose or normalize a line break. Public for VCard,
-      # whose surgery on a card's bytes wants the same split.
-      #: (String card) -> Array[String]
-      def self.physical_lines(card)
-        card.split(/(?<=\n)/, -1)
       end
 
       private_class_method :line_of, :logical_lines

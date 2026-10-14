@@ -19,8 +19,10 @@ module ProTacts
     }.freeze #: Hash[String, String]
 
     # The line inserted lines go immediately before, so a property
-    # lands inside the envelope however bare the card is.
-    END_LINE = /\AEND:VCARD/i #: Regexp
+    # lands inside the envelope however bare the card is. Matched at
+    # the start of a physical line in the whole card, so #insert finds
+    # it without splitting a card's every line out to look.
+    END_LINE = /^END:VCARD/i #: Regexp
 
     # Text values escape backslash, the component separator, and the
     # sub-component separator (RFC 2426 section 2.4.2); CRLF and CR are
@@ -237,12 +239,12 @@ module ProTacts
     def insert(lines)
       return self if lines.empty?
 
-      physical = Parser.physical_lines(@bytes)
-      index = physical.rindex { it.match?(END_LINE) }
+      index = @bytes.byterindex(END_LINE)
       return VCard.new(@bytes + terminate(lines).join) if index.nil?
 
-      physical.insert(index, *terminate(lines, physical.fetch(index)))
-      VCard.new(physical.join)
+      eol = @bytes.byteindex("\n", index)
+      neighbour = @bytes.byteslice(index, eol ? eol - index + 1 : @bytes.bytesize).to_s
+      VCard.new(@bytes.dup.bytesplice(index, 0, terminate(lines, neighbour).join))
     end
 
     private
