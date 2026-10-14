@@ -1,6 +1,19 @@
-FROM ruby:4.0-slim AS build
+# The Ruby both stages build on. A release also builds this file on
+# rubylang/ruby:master-noble, Ruby HEAD as the core team builds it every
+# few hours, configured with --enable-zjit (see ci.yml's build-head).
+ARG RUBY_IMAGE=ruby:4.0-slim
 
-RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
+FROM ${RUBY_IMAGE} AS build
+
+# The official image's own gem layout, restated for a base that has
+# none: rubylang/ruby installs gems beside Ruby and keeps bundle config
+# in ~/.bundle, neither of which the runtime stage copies.
+ENV GEM_HOME=/usr/local/bundle BUNDLE_APP_CONFIG=/usr/local/bundle BUNDLE_SILENCE_ROOT_WARNING=1
+
+# pkg-config, patch and zlib, for the HEAD build: no precompiled
+# nokogiri, sqlite3 or google-protobuf is cut for an unreleased Ruby, so
+# its bundle compiles them from source.
+RUN apt-get update && apt-get install -y build-essential pkg-config patch zlib1g-dev && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -9,7 +22,10 @@ RUN bundle config set without development && bundle install
 
 COPY . .
 
-FROM ruby:4.0-slim
+FROM ${RUBY_IMAGE}
+
+ENV GEM_HOME=/usr/local/bundle BUNDLE_APP_CONFIG=/usr/local/bundle BUNDLE_SILENCE_ROOT_WARNING=1
+ENV PATH=/usr/local/bundle/bin:$PATH
 
 # The image's own tag, and the release's name (see ci.yml) — the one
 # build fact the app reads back out, in the admin footer. It carries the
@@ -20,6 +36,10 @@ ENV VERSION=${VERSION}
 # rackup defaults to development, which wraps the app in Rack::Lint and
 # ShowExceptions.
 ENV RACK_ENV=production
+# Empty but for the HEAD build, which passes --zjit so the app runs
+# under ZJIT without anyone having to ask for it.
+ARG RUBYOPT
+ENV RUBYOPT=${RUBYOPT}
 # Set TZ at runtime — Date.today drives the birthday list's rollover.
 
 # git, for the commit `rake db:dump` makes of what it wrote
@@ -31,6 +51,10 @@ WORKDIR /app
 
 COPY --from=build /usr/local/bundle /usr/local/bundle
 COPY --from=build /app /app
+
+# An image tagged for ZJIT checks it really has it, rather than trusting
+# the base was configured with it.
+RUN case "$RUBYOPT" in *--zjit*) ruby -e 'abort "ZJIT is off" unless defined?(RubyVM::ZJIT) && RubyVM::ZJIT.enabled?' ;; esac
 
 EXPOSE 9292
 
