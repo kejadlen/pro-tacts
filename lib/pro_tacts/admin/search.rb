@@ -54,7 +54,7 @@ module ProTacts
       end
       private_class_method :words
 
-      #: (Contact contact, Array[String] words, Array[String] labels) -> bool
+      #: (ListedContact contact, Array[String] words, Array[String] labels) -> bool
       def self.matches?(contact, words, labels)
         texts = text_fields(contact, labels).map { Format.search_key(it) }
         phones = contact.phones.map { digits(it.value) }
@@ -69,7 +69,7 @@ module ProTacts
       # its names, organization, emails, addresses, notes, and groups.
       # An address is its components run together, so "main st" finds
       # a street.
-      #: (Contact contact, Array[String] labels) -> Array[String]
+      #: (ListedContact contact, Array[String] labels) -> Array[String]
       def self.text_fields(contact, labels)
         [
           contact.name,
@@ -83,7 +83,7 @@ module ProTacts
       end
       private_class_method :text_fields
 
-      #: (Contact contact, Array[String] words) -> bool
+      #: (ListedContact contact, Array[String] words) -> bool
       def self.name_hit?(contact, words)
         name_words = [contact.name, contact.nickname].compact.flat_map { Format.search_key(it).split }
         words.all? { |word| name_words.any? { it.start_with?(word) } }

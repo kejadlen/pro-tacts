@@ -88,6 +88,7 @@ module Sequel
     def self.register_extension: (Symbol name, Module extension) -> void
 
     def where: (*untyped conditions) -> Dataset
+    def exclude: (*untyped conditions) -> Dataset
     def order: (*untyped columns) -> Dataset
     def distinct: (*untyped columns) -> Dataset
     # The columns a joined dataset comes back with, named rather than

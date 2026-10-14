@@ -18,11 +18,11 @@ module ProTacts
     # alone; a filter here would be a second, weaker match that could
     # only disagree with it. This page is for reading the book by letter.
     class ContactsIndex < Phlex::HTML
-      # @rbs @rows: Array[Contact]
+      # @rbs @rows: Array[ListedContact]
       # @rbs @login: String
       # @rbs @groups_of: Hash[String, Array[Group]]
 
-      #: (contacts: Array[Contact], groups: Array[Group], login: String) -> void
+      #: (contacts: Array[ListedContact], groups: Array[Group], login: String) -> void
       def initialize(contacts:, groups:, login:)
         @login = login
         @rows = contacts.sort_by { [Format.sort_key(it), it.id] }
@@ -60,7 +60,7 @@ module ProTacts
 
       private
 
-      #: (Contact contact) -> void
+      #: (ListedContact contact) -> void
       def render_row(contact)
         # Not a ListItem, whose one anchor wraps the whole row, because
         # the chips are links too and an anchor cannot hold one. The
@@ -88,14 +88,14 @@ module ProTacts
       # and anything that is no letter at all files under "#", after
       # Z. The rows arrive sorted, and group_by keeps their order
       # within each letter.
-      #: () -> Array[[String, Array[Contact]]]
+      #: () -> Array[[String, Array[ListedContact]]]
       def letter_groups
         @rows
           .group_by { letter_of(it) }
           .sort_by { |letter, _| [letter == "#" ? 1 : 0, letter] }
       end
 
-      #: (Contact contact) -> String
+      #: (ListedContact contact) -> String
       def letter_of(contact)
         base = Format.sort_key(contact).unicode_normalize(:nfd)[0].to_s
         base.match?(/[a-z]/) ? base.upcase : "#"

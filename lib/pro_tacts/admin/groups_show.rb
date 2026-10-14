@@ -24,11 +24,11 @@ module ProTacts
       # @rbs @group: Group
       # @rbs @login: String
       # @rbs @reading: Contact
-      # @rbs @contacts: Array[Contact]
-      # @rbs @members: Array[Contact]
+      # @rbs @contacts: Array[ListedContact]
+      # @rbs @members: Array[ListedContact]
       # @rbs @changes: Array[Store::GroupChange]
 
-      #: (group: Group, contacts: Array[Contact], changes: Array[Store::GroupChange], login: String) -> void
+      #: (group: Group, contacts: Array[ListedContact], changes: Array[Store::GroupChange], login: String) -> void
       def initialize(group:, contacts:, changes:, login:)
         @group = group
         @login = login

@@ -32,7 +32,7 @@ module ProTacts
     end
 
     class ContactsIndex
-      def self.call: (contacts: Array[Contact], groups: Array[Group], login: String) -> String
+      def self.call: (contacts: Array[ListedContact], groups: Array[Group], login: String) -> String
     end
 
     class GroupsIndex
@@ -40,7 +40,7 @@ module ProTacts
     end
 
     class GroupsShow
-      def self.call: (group: Group, contacts: Array[Contact], changes: Array[Store::GroupChange], login: String) -> String
+      def self.call: (group: Group, contacts: Array[ListedContact], changes: Array[Store::GroupChange], login: String) -> String
     end
 
     class GroupsEdit
@@ -48,7 +48,7 @@ module ProTacts
     end
 
     class GroupsMembers
-      def self.call: (group: Group, contacts: Array[Contact], login: String) -> String
+      def self.call: (group: Group, contacts: Array[ListedContact], login: String) -> String
     end
 
     class DeviceSetup
@@ -85,7 +85,7 @@ module ProTacts
     # contacts are ordered (Web#walk_order), and its search_key is the
     # fold Search matches on.
     module Format
-      def self.sort_key: (Contact contact) -> String
+      def self.sort_key: (Contact | ListedContact contact) -> String
       def self.search_key: (String value) -> String
     end
 

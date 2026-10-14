@@ -26,17 +26,17 @@ module ProTacts
     end
 
     class RecentContact
-      attr_reader contact: Contact
+      attr_reader contact: ListedContact
       attr_reader updated_at: String
 
-      def self.new: (contact: Contact, updated_at: String) -> instance
+      def self.new: (contact: ListedContact, updated_at: String) -> instance
     end
 
     class UpcomingBirthday
-      attr_reader contact: Contact
+      attr_reader contact: ListedContact
       attr_reader occurs_on: Date
 
-      def self.new: (contact: Contact, occurs_on: Date) -> instance
+      def self.new: (contact: ListedContact, occurs_on: Date) -> instance
     end
 
     class GroupChoice

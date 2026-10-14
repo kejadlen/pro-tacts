@@ -17,10 +17,10 @@ module ProTacts
     # the contact's name is adjacent text in every slot, so the image
     # is decoration, not information.
     class Avatar < Phlex::HTML
-      # @rbs @contact: Contact
+      # @rbs @contact: Contact | ListedContact
       # @rbs @size: String?
 
-      #: (contact: Contact, ?size: String?) -> void
+      #: (contact: Contact | ListedContact, ?size: String?) -> void
       def initialize(contact:, size: nil)
         @contact = contact
         @size = size

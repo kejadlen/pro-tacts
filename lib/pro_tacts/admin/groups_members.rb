@@ -31,14 +31,14 @@ module ProTacts
     class GroupsMembers < Phlex::HTML
       # @rbs @group: Group
       # @rbs @login: String
-      # @rbs @contacts: Array[Contact]
+      # @rbs @contacts: Array[ListedContact]
       # @rbs @capped: Array[String]
 
       # The form's id, for the footer's Save outside it.
       FORM = "members-form" #: String
       private_constant :FORM
 
-      #: (group: Group, contacts: Array[Contact], login: String) -> void
+      #: (group: Group, contacts: Array[ListedContact], login: String) -> void
       def initialize(group:, contacts:, login:)
         @group = group
         @login = login

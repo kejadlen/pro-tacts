@@ -1154,7 +1154,36 @@ class StoreTest < Minitest::Test
 
       assert_equal composed, store.contact("aiden").vcard.to_s
       assert_equal composed, store.contacts.find { it.id == "aiden" }.vcard.to_s
-      assert_equal composed, store.contacts_by_recency.find { it.contact.id == "aiden" }.contact.vcard.to_s
+      listed = store.contacts_by_recency.find { it.contact.id == "aiden" }.contact
+      assert_equal store.contact("aiden").addresses.map(&:street), listed.addresses.map(&:street)
+      assert_equal store.contact("aiden").notes.map(&:value), listed.notes.map(&:value)
+    end
+  end
+
+  # A listed contact is the index's reading of the card, and reads the
+  # same as the contact itself does: names, a labelled phone, quoted
+  # and repeated parameters, an email, the birthday, and whether there
+  # is a picture, without the picture's payload.
+  def test_a_listed_contact_reads_as_the_contact_does
+    card = PhotoCard.photo("aiden", bytes: 64).sub(
+      "END:VCARD\r\n",
+      "N:North;Aiden;;;\r\nNICKNAME:Ade\r\nORG:Calculus\\, Ltd\r\n" \
+      "item1.TEL;TYPE=CELL;TYPE=pref:+44 20 7946 0000\r\nitem1.X-ABLabel:_$!<Mobile>!$_\r\n" \
+      "EMAIL;TYPE=\"work,internet\":a@example.com\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n",
+    )
+
+    with_store({"aiden" => card, "znorth" => ZED}) do |store|
+      contact = store.contact("aiden")
+      listed = store.listed_contacts(["aiden"]).fetch(0)
+
+      %i[id name name_components nickname organization company? birthday photo?].each do |reading|
+        assert_equal contact.public_send(reading), listed.public_send(reading), reading
+      end
+      assert_equal contact.phones.map { [it.value, it.label, it.types] }, listed.phones.map { [it.value, it.label, it.types] }
+      assert_equal contact.emails.map { [it.value, it.types] }, listed.emails.map { [it.value, it.types] }
+      assert_predicate listed, :photo?
+      refute_predicate store.listed_contacts(["znorth"]).fetch(0), :photo?
+      assert_equal %w[aiden znorth], store.listed_contacts.map(&:id)
     end
   end
 

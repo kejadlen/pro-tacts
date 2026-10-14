@@ -14,7 +14,7 @@ module ProTacts
       # composition is the listing screens', not Contact's: the card
       # holds the two facts independently, and other screens (the
       # detail card, the birthdays column) show the plain name.
-      #: (Contact contact) -> String
+      #: (Contact | ListedContact contact) -> String
       def self.name_label(contact)
         nickname = contact.nickname
         name = contact.name
@@ -29,7 +29,7 @@ module ProTacts
       # case-insensitive, so the card's spelling of a family name does
       # not move it. Every listing of contacts sorts by it, the id
       # breaking a tie.
-      #: (Contact contact) -> String
+      #: (Contact | ListedContact contact) -> String
       def self.sort_key(contact)
         family, = contact.name_components || []
         (family || contact.name || contact.id).to_s.downcase
@@ -56,7 +56,7 @@ module ProTacts
       # no person to split in two), to one first letter of FN rather
       # than a guess at where a first/last split would fall in free
       # text, and of the id when the card carries no name at all.
-      #: (Contact contact) -> String
+      #: (Contact | ListedContact contact) -> String
       def self.initials(contact)
         family, given = contact.name_components || []
         letters = [given, family].filter_map { it[0] if it }
@@ -68,7 +68,7 @@ module ProTacts
       # A contact's birthday, for display: the model's, including the
       # shapes no client is sent, then a BDAY still in the card — read the
       # way a write reads one, else shown raw. The prose is Birthday#to_s.
-      #: (Contact contact) -> String?
+      #: (Contact | ListedContact contact) -> String?
       def self.birthday(contact)
         birthday = contact.birthday
         return birthday.to_s if birthday

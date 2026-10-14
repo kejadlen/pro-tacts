@@ -273,25 +273,32 @@ module ProTacts
     end
 
     # Whether the card carries a picture an avatar should ask the photo
-    # route for: #photo's answer read off the first bytes alone, the
-    # magic number being all the sniff looks at. The rest of the
-    # payload is not decoded, so a PHOTO broken past its first bytes
-    # renders as an image the route then refuses — the price of not
-    # decoding every picture on a page to draw a list of them.
+    # route for: #photo's answer read off the first bytes alone
+    # (Contact.photo_head?).
     #: () -> bool
     def photo?
       value = vcard.property("PHOTO")&.value
-      return false if value.nil?
-
-      head = Base64.strict_decode64(value[0, PHOTO_HEAD].to_s)
-      PHOTO_SIGNATURES.any? { head.start_with?(it.first) }
-    rescue ArgumentError
-      false
+      !value.nil? && Contact.photo_head?(value)
     end
 
     # Base64 characters enough to decode past the longest signature:
     # twelve bytes, four characters to every three.
     PHOTO_HEAD = 16 #: Integer
+
+    # Whether a PHOTO value's first characters decode to an image's
+    # magic bytes, the only bytes the sniff looks at. The rest of the
+    # payload is not decoded, so a PHOTO broken past them renders as an
+    # image the photo route then refuses: the price of not decoding
+    # every picture on a page to draw a list of them. A value cut to
+    # PHOTO_HEAD reads the same, which is what lets the index hand over
+    # no more of one (Store#listed_contacts).
+    #: (String value) -> bool
+    def self.photo_head?(value)
+      head = Base64.strict_decode64(value[0, PHOTO_HEAD].to_s)
+      PHOTO_SIGNATURES.any? { head.start_with?(it.first) }
+    rescue ArgumentError
+      false
+    end
 
     # Bytes as a picture a browser can show, named by their magic
     # bytes (PHOTO_SIGNATURES), or nil for a format the list does not

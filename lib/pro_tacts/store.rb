@@ -10,6 +10,7 @@ require "pro_tacts/change_id"
 require "pro_tacts/contact"
 require "pro_tacts/edited_contact"
 require "pro_tacts/group"
+require "pro_tacts/listed_contact"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
@@ -253,20 +254,23 @@ module ProTacts
       cards.order(:id).select_map(:id).map(&:to_s)
     end
 
-    # Every contact paired with its card's updated_at, newest first — the
-    # read behind any "recently updated" surface. Same shape and cost as
-    # #contacts, ordered by the column SQLite already stamps rather than
+    # Every contact, or only those of these ids, as a list shows it
+    # (ListedContact), ordered by id like #contacts: the read behind
+    # every screen that lists contacts rather than opening one.
+    #: (?Array[String]? ids) -> Array[ListedContact]
+    def listed_contacts(ids = nil)
+      listed_by_id(ids).values
+    end
+
+    # Every contact as a list shows it, paired with its card's
+    # updated_at, newest first — the read behind any "recently updated"
+    # surface, ordered by the column SQLite already stamps rather than
     # by id.
     #: () -> Array[RecentContact]
     def contacts_by_recency
-      birthdays = birthdays_by_id
-      inherited = inherited_by_id
-      cards.order(Sequel.desc(:updated_at)).map {
-        id = it.fetch(:id).to_s
-        RecentContact.new(
-          contact: contact_from(it, birthdays[id], inherited.fetch(id, [])),
-          updated_at: it.fetch(:updated_at).to_s,
-        )
+      listed = listed_by_id(nil)
+      cards.order(Sequel.desc(:updated_at)).select(:id, :updated_at).map {
+        RecentContact.new(contact: listed.fetch(it.fetch(:id).to_s), updated_at: it.fetch(:updated_at).to_s)
       }
     end
 
@@ -313,13 +317,13 @@ module ProTacts
     # table rather than scanning cards for BDAY.
     #: (Integer limit, ?today: Date) -> Array[UpcomingBirthday]
     def upcoming_birthdays(limit, today: Date.today)
-      inherited = inherited_by_id
-      birthdays
-        .join(:cards, id: :card_id)
-        .map { upcoming_from(it, today, inherited.fetch(it.fetch(:card_id).to_s, [])) }
-        .compact
-        .sort_by { [it.occurs_on, it.contact.id] }
-        .first(limit)
+      coming = birthdays.all.filter_map { |row|
+        occurs_on = birthday_from(row).next_on(today)
+        pair = [row.fetch(:card_id).to_s, occurs_on] #: [String, Date]
+        pair if occurs_on
+      }.sort_by { |id, occurs_on| [occurs_on, id] }.first(limit)
+      listed = listed_by_id(coming.map(&:first))
+      coming.map { |id, occurs_on| UpcomingBirthday.new(contact: listed.fetch(id), occurs_on:) }
     end
 
     # `sole` rather than `first`: the id is the primary key, so a second
@@ -1244,6 +1248,48 @@ module ProTacts
       }
     end
 
+    # The index's reading of these cards, or of every card, keyed by id
+    # in id order: each card written back out of its indexed lines with
+    # the PHOTO left out, and composed as #contacts composes the stored
+    # one, so a list reads the same names, numbers and lent lines a
+    # contact's page does without reading a picture to show a name. The
+    # index holds what #reindex read off the stored card, and a line
+    # that would not read is in neither. Of a PHOTO, the first
+    # characters alone, which is all Contact.photo_head? decodes.
+    #: (Array[String]? ids) -> Hash[String, ListedContact]
+    def listed_by_id(ids)
+      scope = ids ? card_properties.where(card_id: ids) : card_properties
+      lines = scope.exclude(name: "PHOTO").order(:card_id, :position).all.group_by { it.fetch(:card_id).to_s }
+      parameters = (ids ? card_parameters.where(card_id: ids) : card_parameters)
+        .order(:card_id, :position, Sequel.lit("rowid")).all
+        .group_by { "#{it.fetch(:card_id)} #{it.fetch(:position)}" }
+      # Latest position first, so the to_h below keeps each card's
+      # first PHOTO: the one Contact#photo reads.
+      heads = scope.where(name: "PHOTO").order(:card_id, Sequel.desc(:position))
+        .select(:card_id, Sequel.function(:substr, :value, 1, Contact::PHOTO_HEAD).as(:head)).all
+        .to_h {
+          [it.fetch(:card_id).to_s, it.fetch(:head).to_s] #: [String, String]
+        }
+      birthdays = birthdays_by_id
+      inherited = inherited_by_id
+      (ids ? cards.where(id: ids) : cards).order(:id).select_map(:id).to_h { |raw|
+        id = raw.to_s
+        text = lines.fetch(id, []).map { |row|
+          pairs = parameters.fetch("#{id} #{row.fetch(:position)}", []).map {
+            [it.fetch(:name).to_s, it.fetch(:value).to_s] #: [String, String]
+          }
+          property = VCard::Parser::Property.new(
+            group: row.fetch(:property_group)&.to_s, name: row.fetch(:name).to_s, parameters: pairs, value: row.fetch(:value).to_s,
+          )
+          "#{VCard.header_of(property)}#{property.value}\r\n"
+        }.join
+        contact = Contact.new(id:, stored: VCard.new(text), birthday: birthdays[id], inherited: inherited.fetch(id, []))
+        head = heads[id]
+        listed = ListedContact.new(contact, photo: !head.nil? && Contact.photo_head?(head))
+        [id, listed] #: [String, ListedContact]
+      }
+    end
+
     # Every birthday, keyed by card, for the listing reads that compose
     # a whole collection in one pass.
     #: () -> Hash[String, Birthday]
@@ -1356,17 +1402,6 @@ module ProTacts
     #: (Hash[Symbol, untyped] row) -> Birthday
     def birthday_from(row)
       Birthday.new(year: row[:year], month: row[:month], day: row[:day])
-    end
-
-    # One joined birthday-and-card row as an UpcomingBirthday, or nil
-    # for a shape that lands on no calendar day (Birthday#next_on).
-    #: (Hash[Symbol, untyped] row, Date today, Array[Contact::Inherited] inherited) -> UpcomingBirthday?
-    def upcoming_from(row, today, inherited)
-      birthday = birthday_from(row)
-      occurs_on = birthday.next_on(today)
-      return if occurs_on.nil?
-
-      UpcomingBirthday.new(contact: contact_from(row, birthday, inherited), occurs_on:)
     end
 
     #: (Hash[Symbol, untyped] row) -> Change
