@@ -1,6 +1,7 @@
-# Import::Vcf::Unknown and ::Reading are Data classes, whose members the
-# inline parser cannot read (see sig/pro_tacts/contact.rbs). Each is
-# marked `@rbs skip` where it is defined and signed here.
+# Import::Vcf::Unknown and ::Reading, and Import::Staged::Row, are Data
+# classes, whose members the inline parser cannot read (see
+# sig/pro_tacts/contact.rbs). Each is marked `@rbs skip` where it is
+# defined and signed here.
 module ProTacts
   module Import
     module Vcf
@@ -17,6 +18,17 @@ module ProTacts
         attr_reader dropped: Array[::ProTacts::VCard::Parser::Line]
 
         def self.new: (card: ::ProTacts::VCard, dropped: Array[::ProTacts::VCard::Parser::Line]) -> instance
+      end
+    end
+
+    module Staged
+      class Row
+        attr_reader label: String
+        attr_reader sort_key: String
+        attr_reader losses: Integer
+
+        def self.new: (label: String, sort_key: String, losses: Integer) -> instance
+        def to_h: () -> Hash[Symbol, untyped]
       end
     end
   end

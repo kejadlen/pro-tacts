@@ -23,9 +23,10 @@ module ProTacts
     # (docs/plans/2026-09-21-import-a-vcf.md, "The walk" through
     # "Nothing waits for the end").
     #
-    # Every screen re-reads the whole staged file, so each step that
-    # grows with it is a span (Web#span) counting cards, never their
-    # content.
+    # Every screen reads the one card it shows and the walk's list,
+    # staged as rows at the upload (#import_row); each step that grows
+    # with the file or the book is a span (Web#span) counting cards,
+    # never their content.
     #
     # Under the same identity gate as every other route (web.rb). A
     # card this creates is ticked into everyone's book rather than the
@@ -80,9 +81,10 @@ module ProTacts
     # The upload's own POST: the file — a .vcf, or a Monica export
     # read as one — read and judged whole before anything is staged,
     # so a source that will not read brings in nothing. What it
-    # stages is both readings —
-    # the file as it arrived, and the cards pared to what this book
-    # shows — and then it is the walk's first card.
+    # stages is both readings — the file as it arrived, and the cards
+    # pared to what this book shows — a card at a time, with the
+    # walk's list read off them once, and then it is the walk's first
+    # card.
     #: (untyped r) -> untyped
     def stage_upload(r)
       upload = file_in(r.params["vcf"])
@@ -104,11 +106,17 @@ module ProTacts
         return import_screen(notice: error.message)
       end
 
-      revised = span("import.pare") { cards.map { Import::Vcf.read(it).card } }
+      readings = span("import.pare") { cards.map { Import::Vcf.read(it) } }
+      rows = span("import.rows") {
+        readings.each_with_index.map { |reading, index|
+          import_row(reading.card, index, Import::Vcf.losses(reading.dropped).length)
+        }
+      }
       id = span("import.stage") {
         Import::Staged.open(
-          original: bytes,
-          revised: joined(revised),
+          originals: cards.map(&:to_s),
+          revised: readings.map { it.card.to_s },
+          rows:,
           # Named now and never renamed (the plan's "Nothing waits
           # for the end"); its membership is ticked a contact at a time
           # (#import_picker).
@@ -119,23 +127,32 @@ module ProTacts
       # list's first row (#walk_order), not the file's first card. A
       # 303, the other writes' answer, because every screen of the
       # walk is a GET a back button can revisit.
-      r.redirect "/import/#{id}/#{walk_order(import_contacts(revised)).fetch(0)}", 303
+      r.redirect "/import/#{id}/#{walk_order(rows).fetch(0)}", 303
     end
 
     # The walk's list of contacts, as every screen of it shows them:
-    # the contact each card will be written as, how many of its
+    # the name each card will be written under, how many of its
     # original's lines are not coming with it, and which rows are in
     # the book already. `current` is the row whose screen is open.
-    #: (String upload, Array[VCard] originals, Array[VCard] revised, Hash[String, String] saved, current: Integer) -> Admin::ImportSidebar
-    def walk_sidebar(upload, originals, revised, saved, current:)
-      rows = span("import.sidebar") {
-        contacts = import_contacts(revised)
-        walk_order(contacts).map { |index|
-          dropped = Import::Vcf.read(originals.fetch(index)).dropped
-          [contacts.fetch(index), Import::Vcf.losses(dropped).length, index] #: [Contact, Integer, Integer]
-        }
+    # Drawn from the staged rows (#import_row), not the cards.
+    #: (String upload, Array[Import::Staged::Row] rows, Hash[String, String] saved, current: Integer) -> Admin::ImportSidebar
+    def walk_sidebar(upload, rows, saved, current:)
+      listed = walk_order(rows).map { |index|
+        row = rows.fetch(index)
+        [row.label, row.losses, index] #: [String, Integer, Integer]
       }
-      Admin::ImportSidebar.new(upload:, rows:, saved:, current:)
+      Admin::ImportSidebar.new(upload:, rows: listed, saved:, current:)
+    end
+
+    # One card's row in the walk's list, read off the contact it will
+    # be written as: once per card at the upload, and again for the
+    # card a Save rewrites, so no screen reads every card to draw the
+    # list (docs/plans/2026-10-14-lists-read-the-index.md, "The
+    # import"). The losses are the original's, which no Save moves.
+    #: (VCard card, Integer index, Integer losses) -> Import::Staged::Row
+    def import_row(card, index, losses)
+      contact = import_contact(card, index)
+      Import::Staged::Row.new(label: Admin::Format.name_label(contact), sort_key: Admin::Format.sort_key(contact), losses:)
     end
 
     # The rows' places in the file, in the order the list shows them:
@@ -144,16 +161,13 @@ module ProTacts
     # where the book's id would, as a number: a row's id is that place
     # spelled as a string, and "10" sorts before "2". A row is still
     # named by its place (the Integer route), which a save cannot
-    # move; its position in the list is read off the revised cards
-    # afresh on every screen, so a family name changed on the way in
-    # moves its row the way it would move the contact's. The contacts
-    # rather than the cards, so the sidebar sorts the ones it shows
-    # instead of reading every card a second time.
-    #: (Array[Contact] contacts) -> Array[Integer]
-    def walk_order(contacts)
-      span("import.walk_order") {
-        contacts.each_index.sort_by { |index| [Admin::Format.sort_key(contacts.fetch(index)), index] }
-      }
+    # move; its position in the list is its row's sort key, which the
+    # Save that rewrites a card writes again (#import_row), so a family
+    # name changed on the way in moves its row the way it would move
+    # the contact's.
+    #: (Array[Import::Staged::Row] rows) -> Array[Integer]
+    def walk_order(rows)
+      rows.each_index.sort_by { |index| [rows.fetch(index).sort_key, index] }
     end
 
     # A row opened: the card it arrived as beside the contact editor
@@ -180,12 +194,11 @@ module ProTacts
     # plan's "Writing them in").
     #: (String upload, Integer index, ?into: String?, ?notice: String?, ?joined: Array[String]?, ?named: Array[String]?) -> String?
     def card_screen(upload, index, into: "", notice: nil, joined: nil, named: nil)
-      staged = staged_cards(upload)
-      return expired_screen if staged.nil?
+      rows = Import::Staged.rows(upload)
+      return expired_screen if rows.nil?
 
-      originals, revised = staged
-      original = originals[index]
-      card = revised[index]
+      original = staged_card(upload, Import::Staged::ORIGINAL, index)
+      card = staged_card(upload, Import::Staged::REVISED, index)
       # An index past the end of the file is the empty-body 404 the
       # not_found handler fills in, the same as a contact id nobody
       # has.
@@ -195,7 +208,7 @@ module ProTacts
       stored = saved[index.to_s]
       contact = stored ? store.contact(stored) : nil
       dropped = Import::Vcf.read(original).dropped
-      sidebar = walk_sidebar(upload, originals, revised, saved, current: index)
+      sidebar = walk_sidebar(upload, rows, saved, current: index)
 
       response["Content-Type"] = "text/html; charset=utf-8"
       return span("import.render") {
@@ -213,13 +226,15 @@ module ProTacts
       } if contact
 
       arriving = import_contact(card, index)
-      book = span("import.contacts") { |step| store.contacts.tap { step.set_attribute("rows", it.length) } }
+      book = span("import.contacts") { |step| store.listed_contacts.tap { step.set_attribute("rows", it.length) } }
       matches = span("import.match") { Import::Match.candidates(arriving, book) }
       target = into.nil? || into.empty? ? nil : store.contact(into)
       # The row opened with no choice made is the first choice
       # offered, the best match
-      # (docs/plans/2026-09-23-update-is-the-default.md).
-      target ||= matches.first if into.nil?
+      # (docs/plans/2026-09-23-update-is-the-default.md), read whole
+      # now that it is the one being folded into.
+      best = matches.first
+      target ||= store.contact(best.id) if into.nil? && best
       merge = target && span("import.merge") { Import::Merge.new(target, card) }
       span("import.render") {
         Admin::ContactsEdit.call(
@@ -248,12 +263,13 @@ module ProTacts
     # them — a toggle has to show the side it is on, and a contact
     # edited since it was offered can have stopped looking like the
     # card.
-    #: (String upload, Integer index, Array[Contact] matches, Contact? target) -> Admin::ImportTarget?
+    #: (String upload, Integer index, Array[ListedContact] matches, Contact? target) -> Admin::ImportTarget?
     def import_target(upload, index, matches, target)
-      matches = [target, *matches] if target && matches.none? { it.id == target.id }
-      return nil if matches.empty?
+      offered = matches #: Array[Contact | ListedContact]
+      offered = [target, *matches] if target && matches.none? { it.id == target.id }
+      return nil if offered.empty?
 
-      Admin::ImportTarget.new(row: "/import/#{upload}/#{index}", matches:, into: target)
+      Admin::ImportTarget.new(row: "/import/#{upload}/#{index}", matches: offered, into: target)
     end
 
     # The editor over a stored row's contact, reached from that row's
@@ -266,11 +282,10 @@ module ProTacts
     # goes back to the row screen.
     #: (untyped r, String upload, Integer index, ?contact: Contact?, ?notice: String?) -> untyped
     def edit_card_screen(r, upload, index, contact: nil, notice: nil)
-      staged = staged_cards(upload)
-      return expired_screen if staged.nil?
+      rows = Import::Staged.rows(upload)
+      return expired_screen if rows.nil?
 
-      originals, revised = staged
-      original = originals[index]
+      original = staged_card(upload, Import::Staged::ORIGINAL, index)
       return nil if original.nil?
 
       _group, saved = Import::Staged.saved(upload)
@@ -286,7 +301,7 @@ module ProTacts
         action: "/import/#{upload}/#{index}",
         save: "Save",
         aside: Admin::ImportOriginal.new(card: original, dropped: Import::Vcf.read(original).dropped),
-        sidebar: walk_sidebar(upload, originals, revised, saved, current: index),
+        sidebar: walk_sidebar(upload, rows, saved, current: index),
       )
     end
 
@@ -325,11 +340,10 @@ module ProTacts
     # card and its groups going in together.
     #: (untyped r, String upload, Integer index) -> untyped
     def save_card(r, upload, index)
-      staged = staged_cards(upload)
-      return expired_screen if staged.nil?
+      rows = Import::Staged.rows(upload)
+      return expired_screen if rows.nil?
 
-      _originals, revised = staged
-      card = revised[index]
+      card = staged_card(upload, Import::Staged::REVISED, index)
       return nil if card.nil?
 
       _group, saved = Import::Staged.saved(upload)
@@ -427,9 +441,8 @@ module ProTacts
         }
         # Staged after the write, unlike a new contact's below
         # (docs/plans/2026-09-23-merging-on-import.md, "The Save").
-        revised[index] = edited
-        span("import.restage") { Import::Staged.update(upload, joined(revised)) }
-        return walk_on(r, upload, index, written, saved, revised)
+        span("import.restage") { restage(upload, index, edited, rows) }
+        return walk_on(r, upload, index, written, saved, rows)
       end
 
       # The birthday goes back into the card, an import having no
@@ -454,24 +467,33 @@ module ProTacts
       # Staged before it is stored, and kept afterwards: the list
       # renders every row from these bytes, so a row that has come in
       # is still a row the list has to be able to name.
-      revised[index] = edited
-      span("import.restage") { Import::Staged.update(upload, joined(revised)) }
+      span("import.restage") { restage(upload, index, edited, rows) }
       written = span("import.write") { Import::Write.call(store, edited, joins: ticked, named: wanted, everyone: syncing) }
-      walk_on(r, upload, index, written, saved, revised)
+      walk_on(r, upload, index, written, saved, rows)
+    end
+
+    # A Save's card staged in place of the one it rewrote, and its row
+    # read again off it (#import_row): `rows` comes back holding the new
+    # row, for the walk on from it.
+    #: (String upload, Integer index, VCard edited, Array[Import::Staged::Row] rows) -> void
+    def restage(upload, index, edited, rows)
+      row = import_row(edited, index, rows.fetch(index).losses)
+      Import::Staged.update(upload, index, edited.to_s, row)
+      rows[index] = row
     end
 
     # A row's Save landed, as a new contact or an updated one: the row
     # noted as saved, and the walk on from it. `saved` is the rows
-    # saved before this one, and `revised` the file's cards with this
+    # saved before this one, and `rows` the walk's list with this
     # row's save staged among them.
-    #: (untyped r, String upload, Integer index, Contact written, Hash[String, String] saved, Array[VCard] revised) -> untyped
-    def walk_on(r, upload, index, written, saved, revised)
+    #: (untyped r, String upload, Integer index, Contact written, Hash[String, String] saved, Array[Import::Staged::Row] rows) -> untyped
+    def walk_on(r, upload, index, written, saved, rows)
       Import::Staged.record(upload, index.to_s, written.id)
 
       # The last one: there is nothing left to come back to, so the
       # walk is over rather than a list of rows that all say the same
       # thing.
-      return close_walk(r, upload) if saved.length + 1 == revised.length
+      return close_walk(r, upload) if saved.length + 1 == rows.length
 
       # Onto the next row still to save below this one, in the list's
       # order (#walk_order). Below rather than first, so a row
@@ -482,7 +504,7 @@ module ProTacts
       # `first` because empty is the case the line above took, and
       # reaching it is a broken assumption rather than a screen to
       # render.
-      order = walk_order(import_contacts(revised))
+      order = walk_order(rows)
       remaining = order.reject { |i| saved.key?(i.to_s) || i == index }
       below = order.drop(order.index(index).to_i + 1)
       r.redirect "/import/#{upload}/#{below.find { remaining.include?(it) } || remaining.fetch(0)}", 303
@@ -505,25 +527,14 @@ module ProTacts
       r.redirect(filed ? "/groups/#{filed.id}" : "/contacts", 303)
     end
 
-    # The import's two readings, or none when it is gone
-    # (Import::Staged.read).
-    #
-    # The re-read parses files this already parsed, which is not a
-    # second judgment of them: the bytes are what was staged, and this
-    # is the only way back to the cards. A file that read on the way
-    # in and will not read now is a broken assumption and raises.
-    #: (String upload) -> [Array[VCard], Array[VCard]]?
-    def staged_cards(upload)
-      original = Import::Staged.read(upload, Import::Staged::ORIGINAL)
-      revised = Import::Staged.read(upload, Import::Staged::REVISED)
-      return nil if original.nil? || revised.nil?
-
-      span("import.staged") { |step|
-        step.set_attribute("bytes", original.bytesize + revised.bytesize)
-        cards = [Import::Vcf.cards(original), Import::Vcf.cards(revised)] #: [Array[VCard], Array[VCard]]
-        step.set_attribute("cards", cards[0].length)
-        cards
-      }
+    # One staged card, as it arrived or as it will be written, or none
+    # for a place past the file's last card (Import::Staged.card). Its
+    # bytes are what the upload split and judged (#stage_upload), so
+    # this is not a second judgment of them.
+    #: (String upload, String slot, Integer index) -> VCard?
+    def staged_card(upload, slot, index)
+      bytes = Import::Staged.card(upload, slot, index)
+      bytes && VCard.new(bytes)
     end
 
     # A staged card read as the contact the editor edits. The id is
@@ -541,27 +552,9 @@ module ProTacts
       Contact.new(id: index.to_s, stored: birthday ? rest : card, birthday:, inherited: [])
     end
 
-    # Every staged card as #import_contact reads it, in file order.
-    #: (Array[VCard] revised) -> Array[Contact]
-    def import_contacts(revised)
-      revised.each_with_index.map { |card, index| import_contact(card, index) }
-    end
-
     #: (Contact contact) -> bool
     def carries_own_bday?(contact)
       contact.stored.lines.any? { it.names?("BDAY") }
-    end
-
-    # Cards back into a file, each keeping its own bytes. A break
-    # after any that did not carry one: a file whose last card ends
-    # without a newline is still a file, and two cards glued at
-    # END:VCARDBEGIN:VCARD is not.
-    #: (Array[VCard] cards) -> String
-    def joined(cards)
-      cards.map { |card|
-        bytes = card.to_s
-        bytes.end_with?("\n") ? bytes : "#{bytes}\r\n"
-      }.join
     end
 
     # The file part the form sent, and none for a POST carrying no

@@ -8,10 +8,12 @@ require "pro_tacts/change_id"
 module ProTacts
   module Import
     # An import in progress, on disk between the requests that make it
-    # up: its three slots, and why on disk, are
-    # docs/plans/2026-09-21-import-a-vcf.md, "The import waits on the
-    # server". Under the data directory, which is the one place this
-    # app writes (Config#data_dir), and not the system temp dir: a
+    # up: why on disk is docs/plans/2026-09-21-import-a-vcf.md, "The
+    # import waits on the server", and why a file per card with the
+    # list's rows beside them is
+    # docs/plans/2026-10-14-lists-read-the-index.md, "The import".
+    # Under the data directory, which is the one place this app writes
+    # (Config#data_dir), and not the system temp dir: a
     # half-finished import is this server's own state, short-lived
     # without being anyone else's.
     module Staged
@@ -23,7 +25,23 @@ module ProTacts
       ORIGINAL = "original" #: String
       REVISED = "revised" #: String
       SAVED = "saved" #: String
-      SLOTS = [ORIGINAL, REVISED, SAVED].freeze #: Array[String]
+      ROWS = "rows" #: String
+      # The walk's notes, a JSON file each.
+      SLOTS = [SAVED, ROWS].freeze #: Array[String]
+
+      # The cards' two slots, each a directory holding a file per card
+      # named by its place in the file, so a screen reads the one card
+      # it shows rather than every card the upload held.
+      CARDS = [ORIGINAL, REVISED].freeze #: Array[String]
+
+      # One row of the walk's list as it was last read: what the row is
+      # called and sorted by, off the card as it will be written, and
+      # how many of its original's lines are not coming with it
+      # (Web#walk_sidebar). Read once at the upload and again for the
+      # one card a Save rewrites, rather than off every card on every
+      # screen.
+      # @rbs skip
+      Row = Data.define(:label, :sort_key, :losses)
 
       # The two halves of the saved slot: the name of the group this
       # import files its arrivals under, and the contact each saved
@@ -39,14 +57,16 @@ module ProTacts
       # it carries. Minted, so the id a link or a form hands back is
       # checked against the one shape this writes (#path) rather than
       # trusted as a filename.
-      #: (original: String, revised: String, group: String) -> String
-      def self.open(original:, revised:, group:)
+      #: (originals: Array[String], revised: Array[String], rows: Array[Row], group: String) -> String
+      def self.open(originals:, revised:, rows:, group:)
         sweep
         id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
         directory = root / id
-        FileUtils.mkdir_p(directory)
-        File.binwrite(directory / file_name(ORIGINAL), original)
-        File.binwrite(directory / file_name(REVISED), revised)
+        {ORIGINAL => originals, REVISED => revised}.each do |slot, cards|
+          FileUtils.mkdir_p(directory / slot)
+          cards.each_with_index { |bytes, index| File.binwrite(directory / slot / "#{index}.vcf", bytes) }
+        end
+        File.binwrite(directory / file_name(ROWS), JSON.generate(rows.map(&:to_h)))
         # The group is settled here, and never renamed (the plan's
         # "Nothing waits for the end"). Nothing saved yet, and
         # empty rather than absent, so every slot of an import that
@@ -73,19 +93,45 @@ module ProTacts
         File.read(file.to_s, encoding: Encoding::UTF_8)
       end
 
-      # The cards as they will be written, rewritten: the editor's
-      # save, and one of the two writes this takes after the import
-      # opens. Whole rather than a card at a time, because the file is
-      # the unit a re-read splits (Vcf.cards) and a card's index in it
-      # is how a screen names one.
-      #
-      # Still rewritten for a card that was just saved into the store,
-      # rather than dropped from the file: the walk's list renders
-      # every row from these bytes, and a row that has come in is one
-      # it still has to be able to name (Admin::ImportSidebar).
-      #: (String id, String revised) -> void
-      def self.update(id, revised)
-        write(id, REVISED, revised)
+      # One card's bytes from either cards slot, by its place in the
+      # file, or none for an import that is gone or a place past its
+      # last card.
+      #: (String id, String slot, Integer index) -> String?
+      def self.card(id, slot, index)
+        file = card_path(id, slot, index)
+        return nil if file.nil? || !file.file?
+
+        # #read's encoding, for #read's reason.
+        File.read(file.to_s, encoding: Encoding::UTF_8)
+      end
+
+      # The walk's list, a Row per card in file order, or none for an
+      # import that is gone. A slot that will not read back as rows is
+      # #saved's broken assumption, and JSON or Row says so.
+      #: (String id) -> Array[Row]?
+      def self.rows(id)
+        raw = read(id, ROWS)
+        return nil if raw.nil?
+
+        parsed = JSON.parse(raw, symbolize_names: true) #: Array[Hash[Symbol, untyped]]
+        parsed.map { Row.new(label: it.fetch(:label), sort_key: it.fetch(:sort_key), losses: it.fetch(:losses)) }
+      end
+
+      # One card as it will be written, rewritten, with its row: the
+      # editor's save, and one of the writes this takes after the
+      # import opens. Still rewritten for a card that was just saved
+      # into the store, rather than dropped: the walk's list names
+      # every row, and a row that has come in is one it still has to
+      # be able to name (Admin::ImportSidebar).
+      #: (String id, Integer index, String bytes, Row row) -> void
+      def self.update(id, index, bytes, row)
+        file = card_path(id, REVISED, index) or raise ArgumentError, "#{id} is not an import id"
+        raise ArgumentError, "#{id} has no card #{index}" unless file.file?
+
+        File.binwrite(file.to_s, bytes)
+        rows = rows(id) or raise ArgumentError, "#{id} is not an import in progress"
+        rows[index] = row
+        write(id, ROWS, JSON.generate(rows.map(&:to_h)))
       end
 
       # What this import has done: the group it files under, and the
@@ -165,6 +211,16 @@ module ProTacts
         directory / file_name(slot)
       end
 
+      # One card's file in a cards slot, checked as #path checks: the
+      # place is an Integer the route matched, and never below zero.
+      #: (String id, String slot, Integer index) -> Pathname?
+      def self.card_path(id, slot, index)
+        directory = import_root(id)
+        return nil if directory.nil? || !CARDS.include?(slot) || index.negative?
+
+        directory / slot / "#{index}.vcf"
+      end
+
       # One slot, rewritten. Both refusals name which of the two
       # things went wrong: an id this never minted, or an import that
       # is no longer here.
@@ -187,13 +243,12 @@ module ProTacts
         ids
       end
 
-      # The cards are a .vcf, and the walk's notes beside them are not.
       #: (String slot) -> String
       def self.file_name(slot)
-        slot == ORIGINAL || slot == REVISED ? "#{slot}.vcf" : "#{slot}.json"
+        "#{slot}.json"
       end
 
-      private_class_method :root, :import_root, :path, :file_name, :write, :ids
+      private_class_method :root, :import_root, :path, :card_path, :file_name, :write, :ids
     end
   end
 end

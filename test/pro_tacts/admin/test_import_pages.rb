@@ -985,7 +985,7 @@ class AdminImportPagesTest < Minitest::Test
 
       transactions = sentry_events.grep(Sentry::TransactionEvent)
       ops = transactions.flat_map { |transaction| transaction.spans.map { it[:op] } }.grep(/\Aimport\./).uniq.sort
-      assert_equal %w[contacts match merge pare render restage sidebar split stage staged walk_order write].map { "import.#{it}" }, ops
+      assert_equal %w[contacts match merge pare render restage rows split stage write].map { "import.#{it}" }, ops
       transactions.each { refute_match(/Booles|Jane/, JSON.generate(it.to_h)) }
     end
   ensure

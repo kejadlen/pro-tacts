@@ -15,7 +15,7 @@ module ProTacts
     # (Admin::ContactsShow#diff_lines, .diff-removed in admin.css).
     class ImportSidebar < Phlex::HTML
       # @rbs @upload: String
-      # @rbs @rows: Array[[::ProTacts::Contact, Integer, Integer]]
+      # @rbs @rows: Array[[String, Integer, Integer]]
       # @rbs @saved: Hash[String, String]
       # @rbs @current: Integer?
 
@@ -25,7 +25,7 @@ module ProTacts
       # (Web#walk_order); `saved` the contact each row that has come in
       # was written as, by the row's place in the file; `current` the
       # row whose screen is open.
-      #: (upload: String, rows: Array[[::ProTacts::Contact, Integer, Integer]], saved: Hash[String, String], current: Integer) -> void
+      #: (upload: String, rows: Array[[String, Integer, Integer]], saved: Hash[String, String], current: Integer) -> void
       def initialize(upload:, rows:, saved:, current:)
         @upload = upload
         @rows = rows
@@ -38,8 +38,8 @@ module ProTacts
       def view_template
         nav(class: "record walk-list") do
           ul(class: "card") do
-            @rows.each do |(contact, dropped, index)|
-              row(contact, dropped, index)
+            @rows.each do |(label, dropped, index)|
+              row(label, dropped, index)
             end
           end
         end
@@ -47,8 +47,8 @@ module ProTacts
 
       private
 
-      #: (::ProTacts::Contact contact, Integer dropped, Integer index) -> void
-      def row(contact, dropped, index)
+      #: (String label, Integer dropped, Integer index) -> void
+      def row(label, dropped, index)
         stored = @saved[index.to_s]
         li do
           # Every row opens in the walk, a saved one included, as the
@@ -61,7 +61,7 @@ module ProTacts
             aria_current: ("page" if index == @current),
             data: {state: stored ? "saved" : "unsaved"}) do
             div(style: "flex: 1; min-width: 0;") do
-              div(style: "font-weight: 550;") { Format.name_label(contact) }
+              div(style: "font-weight: 550;") { label }
               unless stored
                 span(class: "type-label diff-removed") { "-#{dropped}" } if dropped.positive?
               end

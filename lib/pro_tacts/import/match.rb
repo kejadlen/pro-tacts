@@ -25,13 +25,13 @@ module ProTacts
       PHONE_DIGITS = 10 #: Integer
 
       # The contacts `arriving` might be, most alike first.
-      #: (Contact arriving, Array[Contact] contacts) -> Array[Contact]
+      #: (Contact arriving, Array[ListedContact] contacts) -> Array[ListedContact]
       def self.candidates(arriving, contacts)
         scored = contacts.filter_map { |contact|
           fields = likeness(arriving, contact)
           next if (fields.max || 0.0) < THRESHOLD
 
-          pair = [contact, fields.sum(0.0)] #: [Contact, Float]
+          pair = [contact, fields.sum(0.0)] #: [ListedContact, Float]
           pair
         }
         scored.sort_by { -it[1] }.first(LIMIT).map { it[0] }
@@ -39,7 +39,7 @@ module ProTacts
 
       # How alike the two are in each of the three, from 0 for nothing
       # alike to 1 for a value they share.
-      #: (Contact arriving, Contact stored) -> Array[Float]
+      #: (Contact arriving, ListedContact stored) -> Array[Float]
       def self.likeness(arriving, stored)
         [
           closest(names(arriving), names(stored)),
@@ -90,13 +90,13 @@ module ProTacts
       # The name as its words, sorted: "Booles, Jane" and "Jane
       # Booles" are one name written two ways, and an edit distance
       # over the two spellings would call them strangers.
-      #: (Contact contact) -> Array[String]
+      #: (Contact | ListedContact contact) -> Array[String]
       def self.names(contact)
         [contact.name.to_s.downcase.scan(/[[:alnum:]]+/).sort.join(" ")].reject(&:empty?)
       end
 
       # An address's case is no part of it.
-      #: (Contact contact) -> Array[String]
+      #: (Contact | ListedContact contact) -> Array[String]
       def self.emails(contact)
         contact.emails.map { it.value.strip.downcase }.reject(&:empty?)
       end
@@ -113,7 +113,7 @@ module ProTacts
         }.max || 0.0
       end
 
-      #: (Contact contact) -> Array[String]
+      #: (Contact | ListedContact contact) -> Array[String]
       def self.phones(contact)
         contact.phones.map { phone(it.value) }.reject(&:empty?)
       end
