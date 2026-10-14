@@ -27,7 +27,7 @@ module ProTacts
       end
 
       def view_template
-        if @contact.photo
+        if @contact.photo?
           img(class: "avatar", src: "/contacts/#{@contact.id}/photo", alt: "", **attributes)
         else
           span(class: "avatar", **attributes) { Format.initials(@contact) }

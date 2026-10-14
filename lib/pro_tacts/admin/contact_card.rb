@@ -77,7 +77,7 @@ module ProTacts
           # beside the name in type-h2 would repeat what the name
           # already says. The dashboard rows keep theirs — there
           # the avatar is the row's visual anchor, not a caption.
-          render Avatar.new(contact: @contact, size: "xl") if @contact.photo
+          render Avatar.new(contact: @contact, size: "xl") if @contact.photo?
         end
         dl(class: "detail-grid") { rows }
       end

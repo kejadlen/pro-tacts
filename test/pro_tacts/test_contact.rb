@@ -598,6 +598,24 @@ class ContactTest < Minitest::Test
     assert_match(/PHOTO decoded to no image format/, sentry_messages.fetch(0))
   end
 
+  # The avatar's question, answered from the first bytes: the same
+  # yes and no as #photo for a picture and for none, and a yes for a
+  # payload broken past its signature, which only the full decode can
+  # see. Nothing reports on the way, the photo route's decode being
+  # where a broken picture is news.
+  def test_photo_asks_only_the_payloads_first_bytes
+    broken_tail = CARD.sub("FN:Aiden\r\n", "PHOTO;ENCODING=b:#{Base64.strict_encode64("\xFF\xD8\xFF\xE0" + "x" * 20)}!!\r\n")
+    not_an_image = CARD.sub("FN:Aiden\r\n", photo_property("text, not an image"))
+    undecodable = CARD.sub("FN:Aiden\r\n", "PHOTO;ENCODING=b:not base64!!\r\n")
+
+    assert_predicate contact(PhotoCard.photo("aiden", bytes: 64)), :photo?
+    assert_predicate contact(broken_tail), :photo?
+    refute_predicate contact, :photo?
+    refute_predicate contact(not_an_image), :photo?
+    refute_predicate contact(undecodable), :photo?
+    assert_empty sentry_events
+  end
+
   # One PHOTO property carrying a PNG payload, for the sniff's rows.
   def photo_property(payload)
     "PHOTO;ENCODING=b;TYPE=JPEG:#{Base64.strict_encode64(payload)}\r\n"
