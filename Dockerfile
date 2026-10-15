@@ -45,7 +45,17 @@ ENV RUBYOPT=${RUBYOPT}
 # git, for the commit `rake db:dump` makes of what it wrote
 # (tasks/db.rake): a snapshot is then something to revert to rather
 # than the last one overwritten.
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git libjemalloc2 && rm -rf /var/lib/apt/lists/*
+
+# jemalloc in place of glibc's malloc, which keeps what a request
+# freed and spreads it over an arena per request thread, so a server
+# that has drawn a few big pages rests near its peak. Two arenas, and a
+# background thread handing back what has gone unused for a second, so
+# it rests near what it holds instead
+# (docs/plans/2026-10-15-resting-memory.md). Named by soname, which the
+# loader finds on either architecture's library path.
+ENV LD_PRELOAD=libjemalloc.so.2
+ENV MALLOC_CONF=narenas:2,background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:0
 
 WORKDIR /app
 
