@@ -41,13 +41,14 @@ module ProTacts
     end
 
     # escape's inverse: unescapes backslash, the component separators, and
-    # the `\n` line-break escape (RFC 2426 section 2.4.2). Nothing that
+    # the line-break escape in either case, `\n` or `\N` (RFC 2426
+    # section 4's ESCAPED-CHAR; escape writes the first). Nothing that
     # serves a card needs this — a served card is the stored bytes going
     # out unparsed — but a reader of values does (Parser::Property#text
     # and #components).
     #: (String text) -> String
     def self.unescape(text)
-      text.gsub(/\\[\\;,n]/) { it == "\\n" ? "\n" : it[1..].to_s }
+      text.gsub(/\\[\\;,nN]/) { it.casecmp?("\\n") ? "\n" : it[1..].to_s }
     end
 
     # Takes Apple's own label wrapping back off: the vocabulary Contacts

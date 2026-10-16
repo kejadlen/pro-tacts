@@ -161,4 +161,23 @@ class ImportMatchTest < Minitest::Test
       assert_equal digits.chars.last(Match::PHONE_DIGITS).join, Match.phone(spelled + tc.draw(from_regex("[^0-9]{0,3}", fullmatch: true)))
     end
   end
+
+  # Emails as a card might carry them: real addresses, ones sharing a
+  # local part or a domain, and the malformed — no @, nothing before it.
+  def email = one_of(emails, sampled_from(["ada@example.com", "ADA@example.com", "@example.com", "ada", ""]), text(max_size: 8))
+
+  def phone = one_of(sampled_from(["+1 555 0100", "(555) 0100", "n/a", ""]), text(max_size: 8))
+
+  # A likeness is a share, between 0 for nothing alike and 1 for a value
+  # both share, whatever the cards hold — and so the ranking over them
+  # always has numbers to sort.
+  def test_every_likeness_is_a_share
+    Hegel.test(test_cases: 1_000) do |tc|
+      lines = ->(name, values) { values.map { "#{name}:#{ProTacts::VCard.escape(it)}" } }
+      arriving = contact("ada", tc.draw(text(max_size: 8)).gsub(/[\r\n]/, ""), *lines.("EMAIL", tc.draw(arrays(email, max_size: 2))), *lines.("TEL", tc.draw(arrays(phone, max_size: 2))))
+      stored = contact("bob", tc.draw(text(max_size: 8)).gsub(/[\r\n]/, ""), *lines.("EMAIL", tc.draw(arrays(email, max_size: 2))), *lines.("TEL", tc.draw(arrays(phone, max_size: 2))))
+
+      assert Match.likeness(arriving, stored).all? { (0.0..1.0).cover?(it) }, Match.likeness(arriving, stored).inspect
+    end
+  end
 end

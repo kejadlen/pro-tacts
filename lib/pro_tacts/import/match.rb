@@ -82,8 +82,13 @@ module ProTacts
         ours.product(theirs).map { |a, b| likeness_of(a, b) }.max || 0.0
       end
 
+      # A value they share is wholly alike, the empty one included: two
+      # addresses with nothing before the @ at one domain are one
+      # address, not a 0/0.
       #: (String a, String b) -> Float
       def self.likeness_of(a, b)
+        return 1.0 if a == b
+
         1.0 - distance(a, b).fdiv([a.length, b.length].max.to_i)
       end
 

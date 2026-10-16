@@ -103,6 +103,18 @@ class VCardTest < Minitest::Test
     end
   end
 
+  # RFC 2426 section 4 spells the line-break escape two ways, "\n" and
+  # "\N", and a value read back is the text written whichever spelling
+  # each line break arrived in.
+  def test_either_spelling_of_the_line_break_escape_reads_as_a_line_break
+    Hegel.test(test_cases: 1_000) do |tc|
+      value = tc.draw(escapey_text).gsub(/\r\n|\r/, "\n")
+      escaped = value.chars.map { it == "\n" ? tc.draw(sampled_from(["\\n", "\\N"])) : ProTacts::VCard.escape(it) }.join
+
+      assert_equal value, ProTacts::VCard.unescape(escaped)
+    end
+  end
+
   # The byte-stability a splice relies on: any value, escapes the
   # writer never makes included, joins back from its raw components as
   # the bytes it was.
