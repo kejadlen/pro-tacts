@@ -368,7 +368,7 @@ module ProTacts
         # by default, so it names none.
         Phone.new(
           value:,
-          label: group && labels[group],
+          label: group && labels[group.downcase],
           types: property.types - %w[voice],
           line:,
           lent_by:,
@@ -489,7 +489,9 @@ module ProTacts
     # describes. Read off the composed card: a group lends only bare
     # `ADR` and `NOTE` (db/migrations/004_groups.rb), so an inherited
     # line can never collide with a member's own `item` numbering
-    # (docs/plans/2026-09-18-phone-labels.md, "Reading").
+    # (docs/plans/2026-09-18-phone-labels.md, "Reading"). Keyed
+    # lowercased, a group name comparing without case as a property
+    # name does and as EditedContact#label_of pairs them.
     #: () -> Hash[String, String]
     def labels_by_group
       properties
@@ -500,7 +502,7 @@ module ProTacts
           text = text_of(property)
           next if text.nil?
 
-          [group, text] #: [String, String]
+          [group.downcase, text] #: [String, String]
         }
         .to_h
     end

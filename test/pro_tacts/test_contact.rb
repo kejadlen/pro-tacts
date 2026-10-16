@@ -168,6 +168,17 @@ class ContactTest < Minitest::Test
     assert_equal %w[work], phones.fetch(1).types
   end
 
+  # A group name compares without case, so a label spelt `ITEM1.` names
+  # `item1.TEL`, as the editor and the import pair them.
+  def test_a_phones_label_reads_whatever_case_its_group_is_spelt_in
+    labeled = STRUCTURED.sub(
+      "TEL;TYPE=work:+1-555-0199\r\n",
+      "item1.TEL;TYPE=work:+1-555-0199\r\nITEM1.X-ABLabel:Google Voice\r\n",
+    )
+
+    assert_equal "Google Voice", contact(labeled).phones.fetch(1).label
+  end
+
   def test_a_phone_in_a_group_with_no_labeling_line_reads_no_label
     grouped = STRUCTURED.sub("TEL;TYPE=work:", "item2.TEL;TYPE=work:")
 

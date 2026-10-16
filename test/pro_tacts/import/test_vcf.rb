@@ -303,8 +303,13 @@ class ImportVcfTest < Minitest::Test
     "item4.X-ABLabel:_$!<Home>!$_", "X-SOCIALPROFILE:x", "PRODID:-//Apple", "CATEGORIES:Family",
   ].freeze #: Array[String]
 
+  # Each line's group spelt in either case, as a client may write it
+  # on one line and not the next: a group name compares without case.
   def card_text
-    arrays(sampled_from(LINES), max_size: 8).map { |lines|
+    line = tuples(sampled_from(LINES), sampled_from(%i[itself upcase capitalize])).map { |text, spelling|
+      text.sub(/\A\w+\./) { it.public_send(spelling) }
+    }
+    arrays(line, max_size: 8).map { |lines|
       ["BEGIN:VCARD", "VERSION:3.0", *lines, "END:VCARD"].map { "#{it}\r\n" }.join
     }
   end
@@ -335,9 +340,9 @@ class ImportVcfTest < Minitest::Test
 
   # The groups a reading's card keeps a label in, and the groups it
   # keeps anything else in.
-  def labeled_groups(card) = card.properties.select { it.name.casecmp?(Vcf::LABEL) }.map(&:group).uniq
+  def labeled_groups(card) = card.properties.select { it.name.casecmp?(Vcf::LABEL) }.map { it.group&.downcase }.uniq
 
-  def anchored_groups(card) = card.properties.reject { it.name.casecmp?(Vcf::LABEL) }.filter_map(&:group).uniq
+  def anchored_groups(card) = card.properties.reject { it.name.casecmp?(Vcf::LABEL) }.filter_map { it.group&.downcase }.uniq
 
   # A label names the line beside it, so none comes in without one.
   def test_no_label_comes_in_without_a_line_to_name

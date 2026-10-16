@@ -174,7 +174,7 @@ module ProTacts
         orphaned = orphaned_groups(lines)
         kept, dropped = lines.partition { |line|
           property = line.property
-          property.nil? || (known?(property.name) && !orphaned.include?(property.group))
+          property.nil? || (known?(property.name) && !orphaned.include?(property.group&.downcase))
         }
         Reading.new(card: VCard.of(kept), dropped:)
       end
@@ -199,7 +199,11 @@ module ProTacts
           # A label is in its group without anchoring it, so a group
           # holding nothing else is one with nothing but a label in it.
           anchors = !property.name.casecmp?(LABEL) && known?(property.name)
-          anchored[group] = anchored.fetch(group, false) || anchors
+          # Without case, as a property name compares and as
+          # EditedContact#label_of and Merge pair a label with its
+          # line: `ITEM1.X-ABLabel` names `item1.TEL`'s group.
+          key = group.downcase
+          anchored[key] = anchored.fetch(key, false) || anchors
         end
         anchored.reject { |_group, kept| kept }.keys
       end
