@@ -22,6 +22,15 @@ RUN bundle config set without development && bundle install
 
 COPY . .
 
+# On HEAD the install above compiled the native gems from source and
+# rewrote the lock to what it installed; COPY then restored the
+# repository's lock, pinning precompiled variants the image does not
+# carry, and `bundle exec` in the container (the console task execs
+# one) resolves against the lock. Install again off the restored lock
+# so it agrees with the installed set; on a released Ruby this is a
+# verifying no-op.
+RUN bundle install
+
 FROM ${RUBY_IMAGE}
 
 ENV GEM_HOME=/usr/local/bundle BUNDLE_APP_CONFIG=/usr/local/bundle BUNDLE_SILENCE_ROOT_WARNING=1
