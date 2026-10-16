@@ -1,11 +1,15 @@
 require_relative "../../test_helper"
 
+require "hegel"
+
 require "pro_tacts/contact"
 require "pro_tacts/import/match"
 
 # The contacts an arriving card might be
 # (docs/plans/2026-09-23-merging-on-import.md).
 class ImportMatchTest < Minitest::Test
+  include Hegel::Syntax::Methods
+
   Match = ProTacts::Import::Match
 
   def contact(id, name, *lines)
@@ -105,5 +109,56 @@ class ImportMatchTest < Minitest::Test
     )
 
     assert_empty Match.candidates(arriving, [contact("jane", "Jane Booles")])
+  end
+
+  ## Property tests
+
+  # Strings over a two-letter alphabet share most of their characters,
+  # so the distances between them are small and varied; strings from
+  # all of Unicode are mostly as far apart as they are long.
+  def word = one_of(from_regex("[ab]{0,8}", fullmatch: true), text(max_size: 8))
+
+  # Levenshtein's distance is a metric, and the match ranks by it as
+  # one: the same in both directions ...
+  def test_the_distance_is_symmetric
+    Hegel.test(test_cases: 1_000) do |tc|
+      a, b = tc.draw(word), tc.draw(word)
+
+      assert_equal Match.distance(a, b), Match.distance(b, a)
+    end
+  end
+
+  # ... never shorter than a detour through a third string ...
+  def test_the_distance_obeys_the_triangle_inequality
+    Hegel.test(test_cases: 1_000) do |tc|
+      a, b, c = tc.draw(word), tc.draw(word), tc.draw(word)
+
+      assert_operator Match.distance(a, c), :<=, Match.distance(a, b) + Match.distance(b, c)
+    end
+  end
+
+  # ... and bounded by the strings themselves: at least the difference
+  # in their lengths, at most the longer one's length, and zero only
+  # between equals — which is what keeps a likeness between 0 and 1.
+  def test_the_distance_is_bounded_by_the_lengths
+    Hegel.test(test_cases: 1_000) do |tc|
+      a, b = tc.draw(word), tc.draw(word)
+      distance = Match.distance(a, b)
+
+      assert_includes (a.length - b.length).abs..[a.length, b.length].max, distance
+      assert_equal a == b, distance.zero?
+    end
+  end
+
+  # A number's punctuation and its country code are no part of it:
+  # whatever surrounds a number's digits, it compares as those digits'
+  # last ten.
+  def test_a_phone_compares_as_its_last_ten_digits_whatever_surrounds_them
+    Hegel.test(test_cases: 1_000) do |tc|
+      digits = tc.draw(from_regex("[0-9]{0,14}", fullmatch: true))
+      spelled = digits.chars.map { tc.draw(from_regex("[^0-9]{0,2}", fullmatch: true)) + it }.join
+
+      assert_equal digits.chars.last(Match::PHONE_DIGITS).join, Match.phone(spelled + tc.draw(from_regex("[^0-9]{0,3}", fullmatch: true)))
+    end
   end
 end

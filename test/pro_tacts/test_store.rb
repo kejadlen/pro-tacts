@@ -2,9 +2,11 @@ require_relative "../test_helper"
 require_relative "../photo_card"
 
 require "digest"
+require "fileutils"
 require "pathname"
 require "tmpdir"
 
+require "hegel"
 require "sequel"
 
 require "pro_tacts/store"
@@ -2500,6 +2502,105 @@ class StoreTest < Minitest::Test
       assert_equal({"aiden" => ProTacts::Birthday.new(year: 1985, month: 4, day: 12)}, snapshot.birthdays)
       assert_equal [["Booles", ["aiden"]]], snapshot.groups.map { [it.name, it.members] }
       assert_equal({"alpha@example.com" => "Alpha Chen"}, snapshot.books)
+    end
+  end
+
+  ## The change log, driven
+
+  # Clients' writes and the admin's in any order, against the two
+  # promises the change log makes (Store's class comment, and #put):
+  # a client holding any token it was ever handed catches up to the
+  # book by applying what #changes hands it, and a card's history,
+  # its diffs replayed oldest first, rebuilds the card it ends in.
+  class ChangeLogMachine < Hegel::StateMachine
+    # A few ids, so writes land on cards that exist as often as not.
+    IDS = %w[ada bob cy].freeze #: Array[String]
+
+    def initialize(store, tc)
+      @store = store
+      # A token with the book its client held when it took it: the
+      # first is a client that has never synced.
+      @tokens = Hegel::Stateful::Pool.new(tc)
+      @tokens.add([0, {}])
+    end
+
+    # A card a write might carry: any name, and a TEL or two that may
+    # repeat, which a diff counts rather than sets. Any name but one
+    # holding a NUL, which no write survives today: Sequel writes the
+    # card into its INSERT as a literal, SQLite's tokenizer stops at the
+    # NUL, and the write raises with the card's bytes in its message.
+    # That is the store's open question, not this machine's.
+    def card(tc, id)
+      name = ProTacts::VCard.escape(tc.draw(text(max_size: 10, min_codepoint: 1)))
+      phones = tc.draw(arrays(sampled_from(["TEL:+1 555 0100\r\n", "TEL:+1 555 0199\r\n"]), max_size: 3))
+      ProTacts::VCard.new("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:#{name}\r\n#{phones.join}UID:#{id}\r\nEND:VCARD\r\n")
+    end
+
+    # What a client downloading the whole book now would hold: each
+    # card's etag, by id.
+    def book = @store.contacts.to_h { [it.id, it.etag] }
+
+    rule(:put) do |tc|
+      id = tc.draw(sampled_from(IDS))
+      @store.put(id, card(tc, id), client: tc.draw(booleans))
+    end
+
+    rule(:edit) do |tc|
+      id = tc.draw(sampled_from(IDS))
+      tc.assume(@store.contact(id))
+      @store.save_edit(id, card(tc, id), birthday: nil)
+    end
+
+    rule(:delete) do |tc|
+      @store.delete(tc.draw(sampled_from(IDS)))
+    end
+
+    rule(:sync) do
+      @tokens.add([@store.latest_sequence, book])
+    end
+
+    # A client's sync-collection report (RFC 6578 section 3.2): the
+    # entries after its token, applied in order to what it held.
+    rule(:catch_up) do |tc|
+      sequence, held = tc.draw(@tokens.values_reusable)
+      caught_up = @store.changes(after: sequence).each_with_object(held.dup) { |change, cards|
+        if change.action == ProTacts::Store::Action::DELETE
+          cards.delete(change.card_id)
+        else
+          cards[change.card_id] = change.etag
+        end
+      }
+      raise "a client at #{sequence} caught up to #{caught_up}, not #{book}" unless caught_up == book
+    end
+
+    rule(:read_history) do |tc|
+      id = tc.draw(sampled_from(IDS))
+      rebuilt = Hash.new(0)
+      @store.changes_of(id).reverse_each do |change|
+        change.diff.removed.each { rebuilt[it] -= 1 }
+        change.diff.added.each { rebuilt[it] += 1 }
+      end
+      lines = @store.contact(id)&.vcard&.lines&.map(&:content)&.reject(&:empty?) || []
+      raise "#{id}'s history rebuilds #{rebuilt}, not #{lines}" unless rebuilt.reject { |_, count| count.zero? } == lines.tally
+    end
+
+    invariant(:the_ctag_is_the_last_entry) do
+      raise "the ctag is #{@store.ctag}" unless @store.ctag == (@store.changes.last&.sequence || 0).to_s
+    end
+  end
+
+  # Each run starts from a copy of one migrated database rather than
+  # migrating its own, which is most of what opening a store costs.
+  def test_the_change_log_keeps_its_promises_whatever_the_writes
+    Dir.mktmpdir do |dir|
+      template = Pathname.new(dir) / "template.db"
+      ProTacts::Store.connect(template) {}
+      runs = 0
+      Hegel.test(test_cases: 100, stateful_step_count: 20) do |tc|
+        path = Pathname.new(dir) / "#{runs += 1}.db"
+        FileUtils.cp(template, path)
+        ProTacts::Store.connect(path) { |store| Hegel::Stateful.run(ChangeLogMachine.new(store, tc), tc) }
+      end
     end
   end
 

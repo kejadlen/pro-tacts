@@ -1,9 +1,13 @@
 require_relative "../test_helper"
 
+require "hegel"
+
 require "pro_tacts/birthday"
 require "pro_tacts/vcard"
 
 class BirthdayTest < Minitest::Test
+  include Hegel::Syntax::Methods
+
   # The six shapes RFC 6350 section 4.3.1 admits, one assertion per
   # shape so a failure names the one that broke.
   def test_every_admitted_shape_constructs
@@ -190,6 +194,97 @@ class BirthdayTest < Minitest::Test
       property("1604-04-12", parameters: [["X-APPLE-OMIT-YEAR", "1604"], ["X-OTHER", "1"]]),
       property("1985-04-12", group: "item1"), property("--0412", group: "item1")].each do |unmodeled|
       assert_nil ProTacts::Birthday.from_property(unmodeled), unmodeled.value
+    end
+  end
+
+  ## Property tests
+
+  # Any birthday the constructor admits, all six shapes.
+  def any_birthday
+    year = integers(min_value: 0, max_value: 9999)
+    month = integers(min_value: 1, max_value: 12)
+    day = integers(min_value: 1, max_value: 31)
+    one_of(
+      tuples(year, month, day), tuples(year, month, just(nil)), tuples(year, just(nil), just(nil)),
+      tuples(just(nil), month, day), tuples(just(nil), month, just(nil)), tuples(just(nil), just(nil), day),
+    ).map { |y, m, d| ProTacts::Birthday.new(year: y, month: m, day: d) }
+  end
+
+  # The spellings a shape is read in (the patterns on Birthday): a
+  # full date bare or with any time RFC 2426 section 3.1.5 allows,
+  # and a month-day in both its basic and extended form.
+  def spelling(birthday)
+    y = birthday.year&.then { format("%04d", it) }
+    m, d = [birthday.month, birthday.day].map { it&.then { format("%02d", it) } }
+    case [y, m, d]
+    in [String, String, String]
+      from_regex("(T[0-9]{2}:?[0-9]{2}(:?[0-9]{2}(\\.[0-9]+)?)?(Z|[+-][0-9]{2}:?[0-9]{2})?)?", fullmatch: true)
+        .map { "#{y}-#{m}-#{d}#{it}" }
+    in [nil, String, String] then sampled_from(["--#{m}#{d}", "--#{m}-#{d}"])
+    in [String, String, nil] then just("#{y}-#{m}")
+    in [String, nil, nil] then just(y)
+    in [nil, String, nil] then just("--#{m}")
+    in [nil, nil, String] then just("---#{d}")
+    end
+  end
+
+  # Every admitted birthday, in every spelling its shape has, reads
+  # back as itself — VALUE=date or not, which names the default and
+  # so says nothing. A full date in 1604 is the one that reads as
+  # something else, a month and day (Birthday::NO_YEAR, and
+  # docs/plans/2026-09-11-every-birthday-in-the-model.md, "1604 means
+  # no year"); a partial date in 1604 keeps its year.
+  def test_every_spelling_of_every_shape_reads_back
+    Hegel.test(test_cases: 1_000) do |tc|
+      birthday = tc.draw(any_birthday)
+      value = tc.draw(spelling(birthday))
+      parameters = tc.draw(sampled_from([[], [["VALUE", "date"]], [["value", "DATE"]]]))
+
+      expected = birthday.year == 1604 && birthday.day ? birthday.with(year: nil) : birthday
+      assert_equal expected, ProTacts::Birthday.from_property(property(value, parameters:))
+    end
+  end
+
+  # A spelling with one component out of its range is in no spelling
+  # this reads, so it stays in the card as it came rather than reaching
+  # a constructor that would refuse it.
+  def test_a_component_out_of_range_reads_as_nothing
+    Hegel.test(test_cases: 1_000) do |tc|
+      month = tc.draw(one_of(just(0), integers(min_value: 13, max_value: 99)).map { it.to_s.rjust(2, "0") })
+      day = tc.draw(one_of(just(0), integers(min_value: 32, max_value: 99)).map { it.to_s.rjust(2, "0") })
+      value = tc.draw(sampled_from(["1985-#{month}-12", "1985-04-#{day}", "--#{month}12", "--04#{day}",
+                                    "1985-#{month}", "--#{month}", "---#{day}"]))
+
+      assert_nil ProTacts::Birthday.from_property(property(value))
+    end
+  end
+
+  # What a served birthday sends, read back the way a client's PUT of
+  # it is read, is the birthday it was — the round trip that serving
+  # only the two shapes Apple keeps exists for, a 1604 full date
+  # aside as above.
+  def test_a_served_birthday_reads_back_from_its_line
+    Hegel.test(test_cases: 1_000) do |tc|
+      birthday = tc.draw(any_birthday)
+      tc.assume(birthday.served?)
+
+      read = ProTacts::VCard::Parser.lines("#{birthday.to_line}\r\n").fetch(0).property
+      expected = birthday.year == 1604 ? birthday.with(year: nil) : birthday
+      assert_equal expected, ProTacts::Birthday.from_property(read)
+    end
+  end
+
+  # The day a birthday next lands on is the first day from today on
+  # that is its day — the month's last when the month has no such day
+  # — so none is skipped and none comes early.
+  def test_next_on_is_the_first_day_from_today_that_is_the_birthday
+    Hegel.test(test_cases: 1_000) do |tc|
+      birthday = tc.draw(any_birthday)
+      tc.assume(birthday.month && birthday.day)
+      today = tc.draw(dates(min_value: Date.new(1900, 1, 1), max_value: Date.new(2200, 12, 31)))
+
+      lands = ->(date) { date.month == birthday.month && date.day == [birthday.day, Date.new(date.year, date.month, -1).day].min }
+      assert_equal (today..).find(&lands), birthday.next_on(today)
     end
   end
 end

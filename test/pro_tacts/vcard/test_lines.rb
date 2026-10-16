@@ -2,10 +2,14 @@ require_relative "../../test_helper"
 
 require "digest"
 
+require "hegel"
+
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
 class VCardLinesTest < Minitest::Test
+  include Hegel::Syntax::Methods
+
   VCARD = ProTacts::VCard
   CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada\r\nUID:ada\r\nEND:VCARD\r\n"
 
@@ -312,5 +316,104 @@ class VCardLinesTest < Minitest::Test
 
   def test_insert_with_nothing_leaves_the_card_alone
     assert_equal CARD, VCARD.new(CARD).insert([]).to_s
+  end
+
+  ## Property tests
+
+  # The names the cards below are made of. X-TEL is the near miss a
+  # name match has to tell apart from TEL, and item1.TEL the group
+  # prefix it has to see through.
+  NAMES = %w[FN NOTE TEL item1.TEL X-TEL EMAIL].freeze #: Array[String]
+
+  # The names an edit asks after: BDAY is one no card below carries,
+  # #insert's case.
+  ASKED = %w[FN NOTE TEL EMAIL BDAY].freeze #: Array[String]
+
+  # A card as a client might send it: an envelope around content lines
+  # in either line-break convention, some folded, some that will not
+  # read, and an END that may close the bytes with no terminator.
+  def any_card
+    composite { |dtc|
+      body = dtc.draw(arrays(content_line, max_size: 8))
+      last = dtc.draw(sampled_from(["\r\n", "\n", ""]))
+      ProTacts::VCard.new("BEGIN:VCARD\r\nVERSION:3.0\r\n#{body.join}END:VCARD#{last}")
+    }
+  end
+
+  def content_line
+    composite { |dtc|
+      terminator = dtc.draw(sampled_from(["\r\n", "\n"]))
+      value = dtc.draw(from_regex('[^\r\n]{0,12}', fullmatch: true))
+      fold = dtc.draw(integers(min_value: 0, max_value: value.length))
+      folded = fold.zero? ? value : value.dup.insert(fold, "#{terminator} ")
+      dtc.draw(booleans(p: 0.1)) ? "garbage#{terminator}" : "#{dtc.draw(sampled_from(NAMES))}:#{folded}#{terminator}"
+    }
+  end
+
+  # Lines an edit hands in, bare or terminated, each naming `name`.
+  def edit_lines(name)
+    line = tuples(from_regex('[^\r\n]{0,12}', fullmatch: true), sampled_from(["", "\r\n", "\n"]))
+    arrays(line, max_size: 3).map { |lines| lines.map { |value, terminator| "#{name}:#{value}#{terminator}" } }
+  end
+
+  def first_named(card, name) = card.lines.index { it.names?(name) }
+
+  def reading(lines) = lines.map { [it.property, it.verbatim, it.error.class] }
+
+  # #extract hands the remainder back already read (VCard.of), on the
+  # promise that its bytes read as those same lines: no split leaves a
+  # continuation stranded or a terminator missing.
+  def test_an_extracted_remainder_reads_as_the_lines_it_was_made_of
+    Hegel.test(test_cases: 1_000) do |tc|
+      card = tc.draw(any_card)
+      _, rest = card.extract(tc.draw(sampled_from(ASKED)))
+
+      assert_equal reading(rest.lines), reading(ProTacts::VCard.new(rest.to_s).lines)
+    end
+  end
+
+  # #replace touches the named lines and no others: with them taken
+  # out again, the card is the one the original leaves when they are
+  # taken out of it, byte for byte, and what was taken is the lines
+  # handed in — present or absent before, folded or not.
+  def test_replace_changes_the_named_lines_and_no_others
+    Hegel.test(test_cases: 1_000) do |tc|
+      card = tc.draw(any_card)
+      name = tc.draw(sampled_from(ASKED))
+      lines = tc.draw(edit_lines(name))
+      taken, rest = card.replace(name, lines).extract(name)
+
+      assert_equal [lines.map(&:chomp), card.extract(name).last.to_s], [taken.map(&:content), rest.to_s]
+    end
+  end
+
+  # In place: the replacement starts where the first line it replaces
+  # stood, not at the card's end.
+  def test_replace_lands_where_the_first_named_line_stood
+    Hegel.test(test_cases: 1_000) do |tc|
+      card = tc.draw(any_card)
+      name = tc.draw(sampled_from(NAMES.grep_v(/[-.]/)))
+      tc.assume(card.lines.any? { it.names?(name) })
+      lines = tc.draw(edit_lines(name).filter(&:any?))
+
+      assert_equal first_named(card, name), first_named(card.replace(name, lines), name)
+    end
+  end
+
+  # #substitute swaps the first line whose bytes the digest names and
+  # no other: every line around it keeps its bytes and its place, and
+  # the card's bytes read as exactly that.
+  def test_substitute_swaps_the_addressed_line_and_keeps_the_rest
+    Hegel.test(test_cases: 1_000) do |tc|
+      card = tc.draw(any_card)
+      before = card.lines.map(&:verbatim)
+      addressed = card.lines.fetch(tc.draw(integers(min_value: 0, max_value: before.length - 1)))
+      lines = tc.draw(edit_lines(tc.draw(sampled_from(NAMES))))
+
+      at = before.index(addressed.verbatim)
+      terminator = addressed.verbatim[/\r?\n\z/] || "\r\n"
+      expected = [*before.take(at), *lines.map { it.end_with?("\n") ? it : it + terminator }, *before.drop(at + 1)]
+      assert_equal expected, card.substitute(addressed.digest, lines).lines.map(&:verbatim)
+    end
   end
 end

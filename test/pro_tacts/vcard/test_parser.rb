@@ -383,6 +383,46 @@ class VCardParserTest < Minitest::Test
     end
   end
 
+  # Fragments a card is made of, the line breaks and the grammar's
+  # punctuation among them, joined in any order: the inputs a draw
+  # from all of Unicode almost never assembles into something
+  # card-shaped enough to reach a fold or a bare CR.
+  FRAGMENTS = ["BEGIN:VCARD", "END:VCARD", "item1.", "TEL", "x", ":", ";", "=", ",", "\"", ".",
+               "\r\n", "\n", "\r", " ", "\t", "é"].freeze #: Array[String]
+
+  # No read raises on a card's behalf: whatever the bytes, the walk
+  # comes back as lines, and between them they hold every byte, in
+  # order — the guarantee behind serving a card from its bytes however
+  # it reads.
+  def test_any_text_walks_into_lines_that_rejoin_as_it
+    card_like = arrays(sampled_from(FRAGMENTS), max_size: 40).map(&:join)
+    Hegel.test(test_cases: 1_000) do |tc|
+      card = tc.draw(one_of(text(max_size: 200), card_like))
+
+      assert_equal card, lines(card).map(&:verbatim).join
+    end
+  end
+
+  # RFC 2426 section 2.6 puts no constraint on where a fold lands, mid-
+  # token and mid-escape included, so a content line folded between
+  # any of its characters reads as the line unfolded.
+  def test_a_fold_anywhere_reads_as_the_line_unfolded
+    token = from_regex("[A-Za-z0-9-]{1,8}", fullmatch: true)
+    line = composite { |dtc|
+      parameters = dtc.draw(arrays(tuples(token, from_regex('[^\x00-\x1f\x7f";:,]{0,8}', fullmatch: true)), max_size: 3))
+      value = dtc.draw(from_regex('[^\r\n]{0,40}', fullmatch: true))
+      "#{dtc.draw(token)}#{parameters.map { |name, setting| ";#{name}=#{setting}" }.join}:#{value}"
+    }
+    Hegel.test(test_cases: 1_000) do |tc|
+      unfolded = tc.draw(line)
+      cuts = tc.draw(sets(integers(min_value: 1, max_value: unfolded.length - 1))) if unfolded.length > 1
+      fold = tc.draw(sampled_from(["\r\n ", "\r\n\t", "\n "]))
+      folded = unfolded.chars.each_with_index.map { |char, index| cuts&.include?(index) ? "#{fold}#{char}" : char }.join
+
+      assert_equal properties("#{unfolded}\r\n"), properties("#{folded}\r\n")
+    end
+  end
+
   # One value, two readings, and only the caller knows which its property
   # wants: N is structured, so the escaped "\;" is a character inside a
   # component — read as text it comes back spelled like the separator

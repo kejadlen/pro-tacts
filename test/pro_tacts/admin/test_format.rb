@@ -1,10 +1,14 @@
 require_relative "../../test_helper"
 
+require "hegel"
+
 require "pro_tacts/admin/format"
 require "pro_tacts/contact"
 require "pro_tacts/vcard"
 
 class FormatTest < Minitest::Test
+  include Hegel::Syntax::Methods
+
   CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada Lovelace\r\nN:Lovelace;Ada;;;\r\n" \
     "UID:ada\r\nEND:VCARD\r\n"
 
@@ -179,5 +183,18 @@ class FormatTest < Minitest::Test
     assert_equal "2h ago", ProTacts::Admin::Format.time_ago((now - 2 * 3600).iso8601(3))
     assert_equal "3d ago", ProTacts::Admin::Format.time_ago((now - 3 * 86_400).iso8601(3))
     assert_equal "2mo ago", ProTacts::Admin::Format.time_ago((now - 60 * 86_400).iso8601(3))
+  end
+
+  ## Property tests
+
+  # A search key is already folded, so folding it again changes
+  # nothing: a query and a value both reach the comparison as keys,
+  # however many times either was folded on the way.
+  def test_a_search_key_is_its_own_key
+    Hegel.test(test_cases: 1_000) do |tc|
+      key = ProTacts::Admin::Format.search_key(tc.draw(text(max_size: 20)))
+
+      assert_equal key, ProTacts::Admin::Format.search_key(key)
+    end
   end
 end

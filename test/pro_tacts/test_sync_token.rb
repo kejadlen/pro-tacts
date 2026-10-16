@@ -1,8 +1,12 @@
 require_relative "../test_helper"
 
+require "hegel"
+
 require "pro_tacts/sync_token"
 
 class SyncTokenTest < Minitest::Test
+  include Hegel::Syntax::Methods
+
   BOOK = ProTacts::SyncToken.book("alpha@example.com")
   DATABASE = "0f1e2d3c4b5a6978" #: String
 
@@ -45,5 +49,34 @@ class SyncTokenTest < Minitest::Test
   def test_a_book_is_sixteen_hex_digits_of_its_login
     assert_match(/\A[0-9a-f]{16}\z/, BOOK)
     refute_equal BOOK, ProTacts::SyncToken.book("zed@example.com")
+  end
+
+  ## Property tests
+
+  def database_id = from_regex("[0-9a-f]{16}", fullmatch: true)
+
+  # Any sequence a book's ctag reaches, minted for any login's book on
+  # any database, reads back as that sequence there.
+  def test_any_minted_token_reads_back_as_its_sequence
+    Hegel.test(test_cases: 1_000) do |tc|
+      sequence = tc.draw(integers(min_value: 0))
+      book = ProTacts::SyncToken.book(tc.draw(text))
+      database = tc.draw(database_id)
+
+      assert_equal sequence, ProTacts::SyncToken.read(ProTacts::SyncToken.mint(sequence.to_s, book, database), book, database)
+    end
+  end
+
+  # And reads as nothing anywhere else: on another book or another
+  # database, a token is one this server never minted for it.
+  def test_a_token_reads_as_nothing_off_the_book_and_database_that_minted_it
+    Hegel.test(test_cases: 1_000) do |tc|
+      sequence = tc.draw(integers(min_value: 0)).to_s
+      minted_for = [ProTacts::SyncToken.book(tc.draw(text)), tc.draw(database_id)]
+      read_on = [ProTacts::SyncToken.book(tc.draw(text)), tc.draw(database_id)]
+      tc.assume(minted_for != read_on)
+
+      assert_nil ProTacts::SyncToken.read(ProTacts::SyncToken.mint(sequence, *minted_for), *read_on)
+    end
   end
 end

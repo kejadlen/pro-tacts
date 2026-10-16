@@ -1,5 +1,7 @@
 require_relative "../test_helper"
 
+require "hegel"
+
 require "pro_tacts/note_sections"
 
 # The text algebra of the one NOTE a served card carries, on its own
@@ -9,6 +11,8 @@ require "pro_tacts/note_sections"
 # each alone where they do not — the split tolerating the whitespace a
 # person's editing moves, the join writing one shape only.
 class NoteSectionsTest < Minitest::Test
+  include Hegel::Syntax::Methods
+
   NEIGHBOURS = ProTacts::NoteSections.header("Neighbours") #: String
 
   def section(label, text) = ProTacts::NoteSections::Section.new(label:, text:)
@@ -115,5 +119,65 @@ class NoteSectionsTest < Minitest::Test
     )
 
     assert_equal [section("Dog walkers", "Sunday"), section("Neighbours", "bins")], read.sections
+  end
+
+  ## Property tests
+
+  def labels = arrays(from_regex('[^\n]{1,12}', fullmatch: true), max_size: 4).map(&:uniq)
+
+  # A text as the join is handed one: lines of anything, no blank line
+  # at either end — the space between parts is the composer's — and no
+  # line that reads as a header of a label in play, since one line
+  # cannot be both a person's words and a section's start.
+  def body(labels)
+    headers = labels.map { ProTacts::NoteSections.header(it) }
+    arrays(from_regex('[^\n]{0,12}', fullmatch: true), max_size: 4)
+      .map { |lines| trim(lines).join("\n") }
+      .filter { |text| text.split("\n").none? { headers.include?(it.rstrip) } }
+  end
+
+  def trim(lines)
+    lines.drop_while { it.strip.empty? }.reverse.drop_while { it.strip.empty? }.reverse
+  end
+
+  # The two halves are one round trip (the module comment): what the
+  # join writes, the split reads back as the member text and sections
+  # it was made of, whatever labels nothing lends are also in play.
+  def test_the_split_reads_back_what_the_join_wrote
+    Hegel.test(test_cases: 1_000) do |tc|
+      lending = tc.draw(labels)
+      idle = tc.draw(labels) - lending
+      member = tc.draw(body(lending + idle))
+      sections = lending.map { section(it, tc.draw(body(lending + idle))) }
+
+      read = split(ProTacts::NoteSections.join(member, sections), lending + idle)
+      assert_equal ProTacts::NoteSections::Split.new(member:, sections:), read
+    end
+  end
+
+  # Lines a person might leave in a note they edited: the headers
+  # themselves, spelled right and nearly, blanks, and words.
+  def edited_line(labels)
+    one_of(
+      sampled_from(labels).map { ProTacts::NoteSections.header(it) },
+      sampled_from(labels).map { "#{ProTacts::NoteSections.header(it)} " },
+      sampled_from(labels).map { " #{ProTacts::NoteSections.header(it)}" },
+      sampled_from(["", " ", "\t", "\r"]),
+      from_regex('[^\n]{0,12}', fullmatch: true),
+    )
+  end
+
+  # Whatever a person left in the note, reading it once settles it:
+  # the value the split's reading joins back into reads the same way
+  # again, so a save followed by a serve followed by a save is not a
+  # drift.
+  def test_a_split_is_settled_by_one_reading
+    Hegel.test(test_cases: 1_000) do |tc|
+      in_play = tc.draw(labels.filter(&:any?))
+      value = tc.draw(arrays(edited_line(in_play), max_size: 10)).join("\n")
+      read = split(value, in_play)
+
+      assert_equal read, split(ProTacts::NoteSections.join(read.member, read.sections), in_play)
+    end
   end
 end
