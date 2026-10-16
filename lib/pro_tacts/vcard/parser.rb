@@ -301,6 +301,9 @@ module ProTacts
         return nil if @scanner.eos?
 
         property = content_line
+        # Line breaks with nothing between them are no second content
+        # line, after the first as before it: `NOTE:a\r\r\n` carries one.
+        nil while @scanner.skip(LINE_BREAK)
         return property if @scanner.eos?
 
         raise BrokenAssumption, "a bare CR packed a second content line into one line #{here}"

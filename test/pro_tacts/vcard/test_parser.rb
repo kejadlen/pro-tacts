@@ -246,6 +246,21 @@ class VCardParserTest < Minitest::Test
     assert_equal %w[FN], properties("FN:A\r").map { it.name }
   end
 
+  # Line breaks with nothing between them pack no second content line,
+  # whatever mix of CR, LF and CRLF ends a line: the line reads as its
+  # one property, and nothing reports a break (`NOTE:a\r\r\n` was the
+  # case this shrank to).
+  def test_a_run_of_line_breaks_ends_one_content_line
+    Hegel.test(test_cases: 1_000) do |tc|
+      value = tc.draw(from_regex("[^\\r\\n]{0,10}", fullmatch: true))
+      breaks = tc.draw(arrays(sampled_from(["\r", "\n", "\r\n"]), min_size: 1, max_size: 4)).join
+      walked = lines("NOTE:#{value}#{breaks}")
+
+      assert_equal [false], walked.map(&:broke_assumption?).uniq
+      assert_equal [value], walked.filter_map(&:property).map(&:value)
+    end
+  end
+
   # BrokenAssumption is a ParseError: it reads no differently from a
   # line that merely will not read, and the class exists so Store can
   # report the break, not so anything can branch on it.
