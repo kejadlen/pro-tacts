@@ -339,6 +339,21 @@ class ImportVcfTest < Minitest::Test
     end
   end
 
+  # A BEGIN inside a card, anywhere between its BEGIN and END, refuses
+  # the file: that card never ended, and reading on would fold it into
+  # the next.
+  def test_a_card_begun_inside_another_refuses_the_file
+    Hegel.test(test_cases: 1_000) do |tc|
+      cards = tc.draw(arrays(card_text, min_size: 1, max_size: 3))
+      which = tc.draw(integers(min_value: 0, max_value: cards.length - 1))
+      lines = cards.fetch(which).lines
+      at = tc.draw(integers(min_value: 1, max_value: lines.length - 1))
+      cards[which] = lines.insert(at, tc.draw(sampled_from(["BEGIN:VCARD\r\n", "begin:vcard\r\n"]))).join
+
+      assert_raises(Vcf::Invalid) { Vcf.cards(cards.join) }
+    end
+  end
+
   # The groups a reading's card keeps a label in, and the groups it
   # keeps anything else in — a line that will not read included, its
   # group read off its bytes.

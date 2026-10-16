@@ -70,7 +70,11 @@ module ProTacts
       # bytes it arrived in. A card is what lies from BEGIN to END, and
       # the lines between cards are blank or the file is not a set of
       # vCards — refused whole rather than partly imported: a source
-      # that will not read brings in nothing.
+      # that will not read brings in nothing. A BEGIN inside a card is
+      # refused the same way: vCard 3.0 nests a card only escaped into
+      # one AGENT value (RFC 2426 section 3.5.4), so a second BEGIN is
+      # a card that never ended, and reading on would fold two people
+      # into one.
       #: (String bytes) -> Array[VCard]
       def self.cards(bytes)
         cards = [] #: Array[VCard]
@@ -84,6 +88,8 @@ module ProTacts
 
             open = [line]
           else
+            raise Invalid, "a card begins inside another: #{summary(line)}" if name&.casecmp?("BEGIN")
+
             open << line
             next unless name&.casecmp?("END")
 
