@@ -156,7 +156,7 @@ module ProTacts
       #: (VCard card) -> Array[String]
       def self.categories(card)
         card.properties.select { it.name.casecmp?(CATEGORIES) }.flat_map { |property|
-          property.value.split(/(?<!\\),/).map { VCard.unescape(it).strip }
+          property.value.split(VCard::VALUE_SEPARATOR).map { VCard.unescape(it).strip }
         }.reject(&:empty?).uniq
       end
 
@@ -194,9 +194,12 @@ module ProTacts
           next if property.nil?
 
           group = property.group
-          next if group.nil? || property.name.casecmp?(LABEL)
+          next if group.nil?
 
-          anchored[group] = anchored.fetch(group, false) || known?(property.name)
+          # A label is in its group without anchoring it, so a group
+          # holding nothing else is one with nothing but a label in it.
+          anchors = !property.name.casecmp?(LABEL) && known?(property.name)
+          anchored[group] = anchored.fetch(group, false) || anchors
         end
         anchored.reject { |_group, kept| kept }.keys
       end

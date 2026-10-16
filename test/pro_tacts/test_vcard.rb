@@ -62,6 +62,13 @@ class VCardTest < Minitest::Test
     assert_equal ["Smith; Jr.", "John"], ProTacts::VCard.split_components("Smith\\; Jr.;John")
   end
 
+  # The backslash before this ";" is the second half of an escaped
+  # backslash, so the separator is a separator: the case the property
+  # below shrank to.
+  def test_split_components_ends_a_component_at_an_escaped_backslash
+    assert_equal ["C:\\", "John"], ProTacts::VCard.split_components("C:\\\\;John")
+  end
+
   # The third component is the case the byte-stability argument on
   # VCard.split_raw_components turns on: an escape neither half of the
   # pair recognizes, which a round trip through them would corrupt.
@@ -70,6 +77,41 @@ class VCardTest < Minitest::Test
       ProTacts::VCard.split_raw_components("Smith\\; Jr.;John;a\\xb")
     assert_equal "Smith\\; Jr.;John;a\\xb",
       ProTacts::VCard.split_raw_components("Smith\\; Jr.;John;a\\xb").join(";")
+  end
+
+  # Text heavy in the characters the escapes give meaning to, which a
+  # draw from all of Unicode reaches too rarely to land beside one
+  # another: a separator after a backslash, a backslash at a
+  # component's end, an escape neither half recognizes.
+  ESCAPEY = %W[; , \\ \\; \\\\ \\n \\x \n \r\n a].freeze #: Array[String]
+
+  def escapey_text = one_of(text(max_size: 20), arrays(sampled_from(ESCAPEY), max_size: 8).map(&:join))
+
+  # The two halves of a structured value agree: components escaped and
+  # joined by the writer read back, through the reader's split, as the
+  # components they were — whatever text they hold, a trailing
+  # backslash included. One empty component is the empty value, the
+  # same bytes as none, and reads as none; every caller pads to the
+  # positions it splices (Admin::CardForm).
+  def test_escaped_components_split_back_as_they_were
+    Hegel.test(test_cases: 1_000) do |tc|
+      components = tc.draw(arrays(escapey_text, min_size: 1, max_size: 7))
+      value = components.map { ProTacts::VCard.escape(it) }.join(";")
+      expected = value.empty? ? [] : components.map { it.gsub(/\r\n|\r/, "\n") }
+
+      assert_equal expected, ProTacts::VCard.split_components(value)
+    end
+  end
+
+  # The byte-stability a splice relies on: any value, escapes the
+  # writer never makes included, joins back from its raw components as
+  # the bytes it was.
+  def test_raw_components_join_back_byte_for_byte
+    Hegel.test(test_cases: 1_000) do |tc|
+      value = tc.draw(escapey_text)
+
+      assert_equal value, ProTacts::VCard.split_raw_components(value).join(";")
+    end
   end
 
   # The writer's line header, for a value-only edit: group, name,
@@ -105,6 +147,27 @@ class VCardTest < Minitest::Test
 
     assert_equal "TEL;TYPE=cell:", ProTacts::VCard.header_of(bare)
     assert_equal 'TEL;X-FOO="a:b,c":', ProTacts::VCard.header_of(quoted)
+  end
+
+  # Whatever a parse could have read, header_of renders a header that
+  # reads back as it: group, name, and every parameter, a value the
+  # grammar must quote included. A parameter value is anything but the
+  # controls (tab aside) and DQUOTE, which neither spelling can hold.
+  def test_a_rendered_header_reads_back_as_the_property
+    token = from_regex("[A-Za-z0-9-]{1,10}", fullmatch: true)
+    parameter_value = from_regex('[^\x00-\x08\x0a-\x1f\x7f"]{0,12}', fullmatch: true)
+    value = from_regex('[^\r\n]{0,40}', fullmatch: true)
+    Hegel.test(test_cases: 1_000) do |tc|
+      property = ProTacts::VCard::Parser::Property.new(
+        group: tc.draw(optional(token)),
+        name: tc.draw(token),
+        parameters: tc.draw(arrays(tuples(token, parameter_value), max_size: 4)),
+        value: tc.draw(value),
+      )
+      line = "#{ProTacts::VCard.header_of(property)}#{property.value}\r\n"
+
+      assert_equal [property], ProTacts::VCard::Parser.lines(line).map(&:property)
+    end
   end
 
   ## The card's bytes

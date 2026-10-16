@@ -24,6 +24,13 @@ module ProTacts
     # it without splitting a card's every line out to look.
     END_LINE = /^END:VCARD/i #: Regexp
 
+    # A ";" after an even run of backslashes (#split_raw_components),
+    # and a "," after one: the separator of a list of text values,
+    # CATEGORIES's tags (RFC 2426 section 3.6.1), escaped by the same
+    # backslash for the same reason.
+    COMPONENT_SEPARATOR = /(?<!\\)(?:\\\\)*\K;/ #: Regexp
+    VALUE_SEPARATOR = /(?<!\\)(?:\\\\)*\K,/ #: Regexp
+
     # Text values escape backslash, the component separator, and the
     # sub-component separator (RFC 2426 section 2.4.2); CRLF and CR are
     # normalized to the `\n` escape because a raw line break would end
@@ -60,9 +67,15 @@ module ProTacts
     # byte for byte, where unescape-then-re-escape is not byte-stable
     # (#unescape leaves an unrecognized escape like "\x" alone, and
     # #escape would double its backslash).
+    #
+    # A separator is escaped by the backslash before it only when that
+    # backslash is not itself the second half of a "\\": a component
+    # ending in an escaped backslash ends at the ";" after it. So the
+    # split counts the run of backslashes in pairs, and \K leaves the
+    # pairs on the component they close.
     #: (String value) -> Array[String]
     def self.split_raw_components(value)
-      value.split(/(?<!\\);/, -1)
+      value.split(COMPONENT_SEPARATOR, -1)
     end
 
     # split_raw_components with each component unescaped — the

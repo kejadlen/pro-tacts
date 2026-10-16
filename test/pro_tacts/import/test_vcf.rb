@@ -1,11 +1,15 @@
 require_relative "../../test_helper"
 
+require "hegel"
+
 require "pro_tacts/import/vcf"
 
 # Reading an uploaded .vcf: the split into cards, and the survey of
 # what this address book does not show
 # (docs/plans/2026-09-21-import-a-vcf.md).
 class ImportVcfTest < Minitest::Test
+  include Hegel::Syntax::Methods
+
   Vcf = ProTacts::Import::Vcf
 
   JANE = <<~CARD.gsub("\n", "\r\n")
@@ -205,6 +209,15 @@ class ImportVcfTest < Minitest::Test
     assert_includes reading.dropped.map { Vcf.summary(it) }, "item2.X-ABLabel:_$!<Spouse>!$_"
   end
 
+  # A label alone in its group names nothing at all, so it stays
+  # behind like one whose line is leaving: the case the property below
+  # shrank to.
+  def test_a_label_with_no_line_in_its_group_stays_behind
+    reading = Vcf.read(Vcf.cards(JANE.sub("END:VCARD", "item9.X-ABLabel:orphan\r\nEND:VCARD")).fetch(0))
+
+    refute_includes reading.card.to_s, "orphan"
+  end
+
   # There is no property name to have shown on a screen and nothing
   # anyone could have decided about it, so it rides along rather than
   # being thrown away unnamed.
@@ -270,4 +283,92 @@ class ImportVcfTest < Minitest::Test
     assert_empty Vcf.unknown([card])
   end
 
+  # A tag ending in a backslash escapes it, and the comma after that
+  # escaped backslash still separates.
+  def test_a_tag_ending_in_a_backslash_ends_at_the_comma
+    card = Vcf.cards("BEGIN:VCARD\r\nVERSION:3.0\r\nCATEGORIES:C:\\\\,school\r\nEND:VCARD\r\n").fetch(0)
+
+    assert_equal ["C:\\", "school"], Vcf.categories(card)
+  end
+
+  ## Property tests
+
+  # Lines from an Apple export's vocabulary: rows this book reads and
+  # rows it does not, labels hung off both by group, a label whose
+  # group holds nothing else, and the noise and tags read apart.
+  LINES = [
+    "N:Booles;Jane;;;", "FN:Jane Booles", "TEL:+1 555 0100", "item1.TEL:+1 555 0101",
+    "item1.X-ABLabel:_$!<Mobile>!$_", "item2.X-ABRELATEDNAMES:Sam", "item2.X-ABLabel:_$!<Spouse>!$_",
+    "item3.X-ABLabel:orphan", "item4.ADR:;;1 Main St;;;;", "item4.X-ABRELATEDNAMES:Pat",
+    "item4.X-ABLabel:_$!<Home>!$_", "X-SOCIALPROFILE:x", "PRODID:-//Apple", "CATEGORIES:Family",
+  ].freeze #: Array[String]
+
+  def card_text
+    arrays(sampled_from(LINES), max_size: 8).map { |lines|
+      ["BEGIN:VCARD", "VERSION:3.0", *lines, "END:VCARD"].map { "#{it}\r\n" }.join
+    }
+  end
+
+  # A file is the cards it holds, one after another, maybe with blank
+  # lines between them, and reads as those cards byte for byte.
+  def test_a_file_reads_as_the_cards_it_was_made_of
+    Hegel.test(test_cases: 1_000) do |tc|
+      cards = tc.draw(arrays(card_text, min_size: 1, max_size: 4))
+      file = cards.map { it + tc.draw(sampled_from(["", "\r\n", "\n", "\r\n\r\n"])) }.join
+
+      assert_equal cards, Vcf.cards(file).map(&:to_s)
+    end
+  end
+
+  # A line anywhere outside a card, between two or after the last,
+  # refuses the whole file rather than bringing in the cards around it.
+  def test_a_line_outside_a_card_refuses_the_file
+    Hegel.test(test_cases: 1_000) do |tc|
+      cards = tc.draw(arrays(card_text, min_size: 1, max_size: 4))
+      stray = tc.draw(one_of(sampled_from(LINES), from_regex("[A-Za-z][^\r\n]{0,10}", fullmatch: true)))
+      tc.assume(!stray.match?(/\ABEGIN/i))
+      at = tc.draw(integers(min_value: 1, max_value: cards.length))
+
+      assert_raises(Vcf::Invalid) { Vcf.cards(cards.insert(at, "#{stray}\r\n").join) }
+    end
+  end
+
+  # The groups a reading's card keeps a label in, and the groups it
+  # keeps anything else in.
+  def labeled_groups(card) = card.properties.select { it.name.casecmp?(Vcf::LABEL) }.map(&:group).uniq
+
+  def anchored_groups(card) = card.properties.reject { it.name.casecmp?(Vcf::LABEL) }.filter_map(&:group).uniq
+
+  # A label names the line beside it, so none comes in without one.
+  def test_no_label_comes_in_without_a_line_to_name
+    Hegel.test(test_cases: 1_000) do |tc|
+      card = Vcf.read(Vcf.cards(tc.draw(card_text)).fetch(0)).card
+
+      assert_empty labeled_groups(card) - anchored_groups(card)
+    end
+  end
+
+  # And the other half: a row coming in brings its label.
+  def test_a_row_coming_in_brings_its_label
+    Hegel.test(test_cases: 1_000) do |tc|
+      original = Vcf.cards(tc.draw(card_text)).fetch(0)
+      card = Vcf.read(original).card
+
+      assert_equal labeled_groups(original) & anchored_groups(card), labeled_groups(card)
+    end
+  end
+
+  # Tags written into a CATEGORIES line, each escaped as RFC 2426
+  # section 2.4.2 has a text value escaped, read back as the tags they
+  # were — blank ones and repeats aside, which name no group.
+  def test_categories_read_back_as_the_tags_written
+    tag = one_of(text(max_size: 10), arrays(sampled_from([",", "\\", ";", " ", "a"]), max_size: 5).map(&:join))
+    Hegel.test(test_cases: 1_000) do |tc|
+      tags = tc.draw(arrays(tag, min_size: 1, max_size: 5))
+      line = "CATEGORIES:#{tags.map { ProTacts::VCard.escape(it) }.join(",")}"
+      card = Vcf.cards("BEGIN:VCARD\r\nVERSION:3.0\r\n#{line}\r\nEND:VCARD\r\n").fetch(0)
+
+      assert_equal tags.map { it.gsub(/\r\n|\r/, "\n").strip }.reject(&:empty?).uniq, Vcf.categories(card)
+    end
+  end
 end
