@@ -251,10 +251,9 @@ module ProTacts
                   end
                   birthday_row
                   added_rows
-                  # The first NOTE the card carries: this row edits one,
-                  # and a save writes one (CardForm.contact_card's
-                  # replace).
-                  note = @own.notes.first&.value
+                  # Every NOTE the card carries, joined: this row edits
+                  # one, and a save writes one (CardForm.note_of).
+                  note = CardForm.note_of(@own)
                   label(class: "field", data: {blank_removes: !!note}) do
                     span { "Note" }
                     textarea(name: "note", rows: 4,

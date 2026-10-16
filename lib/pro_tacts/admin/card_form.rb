@@ -64,9 +64,6 @@ module ProTacts
       # docs/plans/2026-10-07-switching-company-and-person.md.
       #: (Contact contact, String first, String middle, String last, Hash[String, untyped] params) -> VCard
       def self.contact_card(contact, first, middle, last, params)
-        nickname = params["nickname"].to_s.strip
-        note = params["note"].to_s.strip
-
         # The rows are read off the contact's own card, the one the form
         # rendered (Admin::ContactsEdit) and the one this save splices:
         # a line a group lends is on neither, so no digest here can name
@@ -81,8 +78,8 @@ module ProTacts
           else
             person_name(contact, vcard, first, middle, last, params["organization"]&.to_s&.strip)
           end
-        vcard = vcard.replace("NICKNAME", text_lines("NICKNAME", nickname))
-        vcard = vcard.replace("NOTE", text_lines("NOTE", note))
+        vcard = edited_text(vcard, "NICKNAME", params["nickname"], own.nickname)
+        vcard = edited_text(vcard, "NOTE", params["note"], note_of(own))
         vcard = edited_values(own.phones, "phone", "TEL", vcard, params)
         vcard = edited_values(own.emails, "email", "EMAIL", vcard, params)
         edited_addresses(own, vcard, params)
@@ -96,7 +93,7 @@ module ProTacts
       #: (Group group, Hash[String, untyped] params) -> Array[String]
       def self.group_lines(group, params)
         reading = group.reading
-        card = reading.stored.replace("NOTE", text_lines("NOTE", params["note"].to_s.strip))
+        card = edited_text(reading.stored, "NOTE", params["note"], note_of(reading))
         card = edited_addresses(reading, card, params)
         card.lines.filter_map {
           line = it.content
@@ -122,6 +119,33 @@ module ProTacts
         return if year.nil? && month.nil? && day.nil?
 
         Birthday.new(year:, month:, day:)
+      end
+
+      # The note the editor renders: every NOTE the member's own card
+      # carries, joined the way composition joins them
+      # (Contact#composed_note), so a card from before the one-note
+      # invariant shows its second note rather than losing it to a save
+      # that wrote only the first (docs/plans/2026-09-25-one-note-per-
+      # contact.md). Nil for none, the row's blank-removes cue.
+      #: (Contact contact) -> String?
+      def self.note_of(contact)
+        notes = contact.notes.map(&:value)
+        notes.join("\n\n") unless notes.empty?
+      end
+
+      # A text property's half of the surgical save: the lines stay as
+      # they are where the field submits what the form rendered from
+      # them, and are replaced by #text_lines otherwise. Compared as
+      # the field comes back — stripped, a textarea's line breaks CRLF
+      # (the HTML form-submission newline normalization) — so a save
+      # that left the field alone cannot re-escape, unfold, or strip
+      # the parameters off a line it never changed.
+      #: (VCard vcard, String name, untyped submitted, String? rendered) -> VCard
+      def self.edited_text(vcard, name, submitted, rendered)
+        value = submitted.to_s.gsub(/\r\n?/, "\n").strip
+        return vcard if value == rendered.to_s.strip
+
+        vcard.replace(name, text_lines(name, value))
       end
 
       # The single-value rows' half of the surgical save, walked once
@@ -155,7 +179,7 @@ module ProTacts
             next if property.nil?
 
             submitted = edits[row.line.digest]
-            next if submitted.nil? || submitted.to_s.strip == row.value
+            next if submitted.nil? || submitted.to_s.strip == row.value.strip
 
             value = submitted.to_s.strip
             vcard = vcard.substitute(
@@ -168,7 +192,7 @@ module ProTacts
         submitted = Array(params["new_#{field}"]) #: Array[untyped]
         added = submitted.filter_map {
           value = it.to_s.strip
-          "#{name}:#{VCard.escape(value)}\r\n" unless value.empty?
+          "#{name}:#{VCard.escape(value)}" unless value.empty?
         } #: Array[String]
         vcard.insert(added)
       end
@@ -208,7 +232,7 @@ module ProTacts
       #: (Contact::Address address, untyped submitted) -> bool
       def self.address_unchanged?(address, submitted)
         Contact::ADDRESS_COMPONENTS.all? { |name|
-          submitted[name].to_s.strip == address.public_send(name).to_s
+          submitted[name].to_s.strip == address.public_send(name).to_s.strip
         }
       end
 
@@ -237,13 +261,13 @@ module ProTacts
         Contact::ADDRESS_COMPONENTS.each_with_index do |name, index|
           position = index + 1
           value = submitted[name].to_s.strip
-          current = address && address.public_send(name).to_s
+          current = address && address.public_send(name).to_s.strip
           components[position] = value == current ? components.fetch(position) : VCard.escape(value)
         end
         return if components.all?(&:empty?)
 
         header = property ? VCard.header_of(property) : "ADR:"
-        "#{header}#{components.join(";")}\r\n"
+        "#{header}#{components.join(";")}"
       end
 
       # One component off the wire: nil for blank, the integer it names
@@ -265,7 +289,7 @@ module ProTacts
       def self.text_lines(name, value)
         return [] if value.empty?
 
-        ["#{name}:#{VCard.escape(value)}\r\n"]
+        ["#{name}:#{VCard.escape(value)}"]
       end
 
       # A company's name, written where macOS writes one (exchange
@@ -280,12 +304,12 @@ module ProTacts
       # keeps its bytes.
       #: (VCard vcard, String organization) -> VCard
       def self.company_name(vcard, organization)
-        vcard = vcard.replace("N", ["N:;;;;\r\n"]) unless vcard.property("N")&.components&.all?(&:empty?)
-        vcard = vcard.replace("FN", ["FN:#{VCard.escape(organization)}\r\n"]) unless vcard.property("FN")&.text == organization
+        vcard = vcard.replace("N", ["N:;;;;"]) unless vcard.property("N")&.components&.all?(&:empty?)
+        vcard = vcard.replace("FN", ["FN:#{VCard.escape(organization)}"]) unless vcard.property("FN")&.text == organization
         vcard = edited_organization(vcard, organization)
         return vcard if vcard.property("X-ABShowAs")&.text == "COMPANY"
 
-        vcard.replace("X-ABShowAs", ["X-ABShowAs:COMPANY\r\n"])
+        vcard.replace("X-ABShowAs", ["X-ABShowAs:COMPANY"])
       end
 
       # A person's name, into N and FN, and the flag gone: a person is
@@ -295,7 +319,8 @@ module ProTacts
       # field leaves it be, the birthday group's posture.
       #: (Contact contact, VCard vcard, String first, String middle, String last, String? organization) -> VCard
       def self.person_name(contact, vcard, first, middle, last, organization)
-        vcard = vcard.replace("N", [n_line(vcard, first, middle, last)])
+        line = n_line(vcard, first, middle, last)
+        vcard = vcard.replace("N", [line]) if line
         vcard = edited_fn(contact, vcard, first, middle, last)
         vcard = edited_organization(vcard, organization) if organization
         vcard.replace("X-ABShowAs", [])
@@ -324,7 +349,7 @@ module ProTacts
         property = vcard.property("ORG")
         units = [] #: Array[String]
         units = VCard.split_raw_components(property.value).drop(1) if property
-        vcard.replace("ORG", ["ORG:#{[VCard.escape(organization), *units].join(";")}\r\n"])
+        vcard.replace("ORG", ["ORG:#{[VCard.escape(organization), *units].join(";")}"])
       end
 
       # FN's replacement, or the card untouched: the display name is the
@@ -343,9 +368,10 @@ module ProTacts
         named = !vcard.property("FN").nil?
         # A company's FN is its organization's name (#company_name), so
         # a card leaving that kind takes its display name from the pair.
-        return vcard if named && !contact.company? && first == given.to_s && middle == additional.to_s && last == family.to_s
+        unchanged = first == given.to_s.strip && middle == additional.to_s.strip && last == family.to_s.strip
+        return vcard if named && !contact.company? && unchanged
 
-        vcard.replace("FN", ["FN:#{VCard.escape(display_name(first, middle, last))}\r\n"])
+        vcard.replace("FN", ["FN:#{VCard.escape(display_name(first, middle, last))}"])
       end
 
       # FN's text, from the boxes that make it: the western order the
@@ -367,8 +393,12 @@ module ProTacts
       # moved a phone number must not rewrite the name it left alone. A
       # card with no N a form can read splices into a bare
       # five-component value; one short of five is padded, the same
-      # empties a whole-N writer would leave.
-      #: (VCard vcard, String first, String middle, String last) -> String
+      # empties a whole-N writer would leave. Nil where every name box
+      # submits what it rendered, so the line keeps what no box models
+      # — its parameters, its group, its folds — and is not rewritten.
+      # A box's value arrives stripped, and is compared with the reading
+      # stripped likewise.
+      #: (VCard vcard, String first, String middle, String last) -> String?
       def self.n_line(vcard, first, middle, last)
         property = vcard.property("N")
         components = [] #: Array[String]
@@ -377,16 +407,18 @@ module ProTacts
           components.replace(VCard.split_raw_components(property.value))
           readings.replace(property.components)
         end
+        currents = Array.new(3) { readings[it].to_s.strip }
+        return if property && [last, first, middle] == currents
+
         components << "" while components.length < 5
         [last, first, middle].each_with_index do |value, position|
-          current = readings[position].to_s
-          components[position] = value == current ? components.fetch(position) : VCard.escape(value)
+          components[position] = value == currents.fetch(position) ? components.fetch(position) : VCard.escape(value)
         end
-        "N:#{components.join(";")}\r\n"
+        "N:#{components.join(";")}"
       end
 
       private_class_method :edited_values, :edited_addresses, :address_unchanged?,
-                           :address_line, :birthday_component, :text_lines, :edited_fn, :display_name,
+                           :address_line, :birthday_component, :text_lines, :edited_text, :edited_fn, :display_name,
                            :n_line, :company_name, :person_name, :edited_organization
     end
   end

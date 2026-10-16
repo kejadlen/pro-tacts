@@ -77,9 +77,9 @@ module ProTacts
                 end
                 @reading.addresses.each { |address| address_row(address) }
                 added_address_row
-                # The first NOTE, the contact editor's own rule: this
-                # row edits one, and a save writes one.
-                note = @reading.notes.first&.value
+                # Every NOTE, joined, the contact editor's own rule:
+                # this row edits one, and a save writes one.
+                note = CardForm.note_of(@reading)
                 label(class: "field", data: {blank_removes: !!note}) do
                   span { "Note" }
                   textarea(name: "note", rows: 4,
