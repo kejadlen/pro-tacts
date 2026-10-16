@@ -185,20 +185,20 @@ module ProTacts
       # without its `item3.X-ABRELATEDNAMES` would leave a name for a
       # line that is not there. A grouped property this book reads —
       # `item1.ADR`, say — anchors its own group, because it is coming
-      # in.
+      # in, and so does a line that will not read, which comes in
+      # whatever it is (#read): its group is read off its bytes, there
+      # being no property to read it from.
       #: (Array[VCard::Parser::Line] lines) -> Array[String]
       def self.orphaned_groups(lines)
         anchored = {} #: Hash[String, bool]
         lines.each do |line|
           property = line.property
-          next if property.nil?
-
-          group = property.group
+          group = property ? property.group : VCard::Parser.unfold(line.verbatim)[/\A([A-Za-z0-9-]+)\./, 1]
           next if group.nil?
 
           # A label is in its group without anchoring it, so a group
           # holding nothing else is one with nothing but a label in it.
-          anchors = !property.name.casecmp?(LABEL) && known?(property.name)
+          anchors = property.nil? || (!property.name.casecmp?(LABEL) && known?(property.name))
           # Without case, as a property name compares and as
           # EditedContact#label_of and Merge pair a label with its
           # line: `ITEM1.X-ABLabel` names `item1.TEL`'s group.

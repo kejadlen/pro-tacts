@@ -301,6 +301,7 @@ class ImportVcfTest < Minitest::Test
     "item1.X-ABLabel:_$!<Mobile>!$_", "item2.X-ABRELATEDNAMES:Sam", "item2.X-ABLabel:_$!<Spouse>!$_",
     "item3.X-ABLabel:orphan", "item4.ADR:;;1 Main St;;;;", "item4.X-ABRELATEDNAMES:Pat",
     "item4.X-ABLabel:_$!<Home>!$_", "X-SOCIALPROFILE:x", "PRODID:-//Apple", "CATEGORIES:Family",
+    "item5.TEL;=:+1 555 0102", "item5.X-ABLabel:unreadable",
   ].freeze #: Array[String]
 
   # Each line's group spelt in either case, as a client may write it
@@ -339,10 +340,15 @@ class ImportVcfTest < Minitest::Test
   end
 
   # The groups a reading's card keeps a label in, and the groups it
-  # keeps anything else in.
-  def labeled_groups(card) = card.properties.select { it.name.casecmp?(Vcf::LABEL) }.map { it.group&.downcase }.uniq
+  # keeps anything else in — a line that will not read included, its
+  # group read off its bytes.
+  def group_of(line) = (line.property&.group || line.verbatim[/\A([A-Za-z0-9-]+)\./, 1])&.downcase
 
-  def anchored_groups(card) = card.properties.reject { it.name.casecmp?(Vcf::LABEL) }.filter_map { it.group&.downcase }.uniq
+  def label?(line) = line.property&.name&.casecmp?(Vcf::LABEL)
+
+  def labeled_groups(card) = card.lines.select { label?(it) }.map { group_of(it) }.uniq
+
+  def anchored_groups(card) = card.lines.reject { label?(it) }.filter_map { group_of(it) }.uniq
 
   # A label names the line beside it, so none comes in without one.
   def test_no_label_comes_in_without_a_line_to_name
