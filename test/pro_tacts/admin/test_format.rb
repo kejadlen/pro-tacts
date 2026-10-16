@@ -197,4 +197,32 @@ class FormatTest < Minitest::Test
       assert_equal key, ProTacts::Admin::Format.search_key(key)
     end
   end
+
+  ## Eliding a line
+
+  # An elided line still reads as the line it stands for: its group,
+  # its name, and each parameter, a long value as its count and every
+  # other as it was — quoted where the grammar must quote it, so a
+  # parameter holding `:` or `,` is not cut apart on the way to the
+  # screen.
+  def test_an_elided_line_reads_as_its_line_with_long_values_counted
+    token = from_regex("[A-Za-z0-9-]{1,8}", fullmatch: true)
+    short = from_regex('[^\x00-\x08\x0a-\x1f\x7f"]{0,12}', fullmatch: true)
+    long = from_regex("[a-z:,;]{121,140}", fullmatch: true)
+    Hegel.test(test_cases: 1_000) do |tc|
+      property = ProTacts::VCard::Parser::Property.new(
+        group: tc.draw(optional(token)),
+        name: tc.draw(token),
+        parameters: tc.draw(arrays(tuples(token, one_of(short, long)), max_size: 3)),
+        value: tc.draw(one_of(short.map { it.delete(":;,\\") }, long)),
+      )
+      line = ProTacts::VCard.new("#{ProTacts::VCard.header_of(property)}#{property.value}\r\n").lines.fetch(0)
+      count = ->(value) { value.bytesize > ProTacts::Admin::Format::ELIDE_ABOVE ? "[#{value.bytesize} octets elided]" : value }
+
+      elided = ProTacts::VCard.new(ProTacts::Admin::Format.elide_line(line)).lines.fetch(0).property
+
+      assert_equal property.with(parameters: property.parameters.map { [it[0], count.(it[1])] }, value: count.(property.value)),
+                   elided
+    end
+  end
 end

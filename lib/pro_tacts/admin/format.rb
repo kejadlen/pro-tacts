@@ -125,8 +125,9 @@ module ProTacts
       # One line of the display card: verbatim when nothing in it runs
       # past ELIDE_ABOVE; rebuilt from its parse when something does,
       # each long value standing in as its count. The rebuild is the
-      # parser's spelling rather than the bytes' — an elided line is a
-      # rendering — and the line keeps its own terminator so the
+      # writer's spelling rather than the bytes' (VCard.header_of, which
+      # quotes a parameter value PTEXT cannot hold) — an elided line is
+      # a rendering — and the line keeps its own terminator so the
       # card's line-break convention survives.
       #: (VCard::Parser::Line line) -> String
       def self.elide_line(line)
@@ -137,10 +138,9 @@ module ProTacts
           property.value.bytesize > ELIDE_ABOVE
         return line.verbatim unless long
 
-        header = property.group ? "#{property.group}.#{property.name}" : property.name
-        params = property.parameters.map { |name, value| "#{name}=#{count_octets(value)}" }
+        elided = property.with(parameters: property.parameters.map { |name, value| [name, count_octets(value)] })
         terminator = line.verbatim[/\r?\n\z/] || "\r\n"
-        "#{[header, *params].join(';')}:#{count_octets(property.value)}#{terminator}"
+        "#{VCard.header_of(elided)}#{count_octets(property.value)}#{terminator}"
       end
 
       # A line that would not parse has no structure to rebuild from,
