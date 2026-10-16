@@ -114,20 +114,42 @@ module ProTacts
       # an address a group lends it is an address it has.
       #: (VCard::Parser::Property property) -> bool
       def held?(property)
+        if property.name.casecmp?("TEL")
+          return @into.properties.any? { it.name.casecmp?("TEL") && same_number?(it.text, property.text) }
+        end
+
         key = key(property)
         @into.properties.any? { it.name.casecmp?(property.name) && key(it) == key }
       end
 
-      # A value as two spellings of it compare: a number by its digits
-      # (Match.phone), an address by its components, the rest without
-      # case or the space around it.
+      # A value as two spellings of it compare: an address by its
+      # components, the rest without case or the space around it.
       #: (VCard::Parser::Property property) -> String
       def key(property)
         case property.name.upcase
-        when "TEL" then Match.phone(property.text)
         when "ADR" then property.components.map { it.strip.downcase }.join(";")
         else property.text.strip.downcase
         end
+      end
+
+      # Two spellings of one number, the match's comparison
+      # (Match.phone): the same last ten digits, a country code or a
+      # trunk prefix on one side and not the other being one number
+      # (docs/plans/2026-09-23-merging-on-import.md, "Finding them").
+      # What the match can only score, the fold must decide — a number
+      # it calls held is one it drops — so two country codes that
+      # differ are two numbers, `+44 20 7946 0958` and `+1 207 946
+      # 0958` both kept; the leading zeros off a prefix are a trunk,
+      # which names no country. A value with no digits at all is no
+      # number, and compares as text.
+      #: (String ours, String theirs) -> bool
+      def same_number?(ours, theirs)
+        digits = [ours, theirs].map { it.delete("^0-9") }
+        return ours.strip.casecmp?(theirs.strip) if digits.any?(&:empty?)
+        return false unless Match.phone(ours) == Match.phone(theirs)
+
+        prefixes = digits.map { it[0...-Match::PHONE_DIGITS].to_s.sub(/\A0+/, "") }
+        prefixes.any?(&:empty?) || prefixes.uniq.length == 1
       end
 
       # A line's bytes as they join the contact's card, with the label

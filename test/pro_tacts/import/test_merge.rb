@@ -1,11 +1,15 @@
 require_relative "../../test_helper"
 
+require "hegel"
+
 require "pro_tacts/contact"
 require "pro_tacts/import/merge"
 
 # An arriving card folded into a contact the book already has
 # (docs/plans/2026-09-23-merging-on-import.md).
 class ImportMergeTest < Minitest::Test
+  include Hegel::Syntax::Methods
+
   Merge = ProTacts::Import::Merge
 
   STORED = <<~CARD.gsub("\n", "\r\n")
@@ -129,5 +133,53 @@ class ImportMergeTest < Minitest::Test
 
     assert_equal STORED, same.contact.stored.to_s
     assert_empty same.left
+  end
+
+  ## Which numbers the contact already has
+
+  def with_tel(value) = STORED.sub("TEL;type=CELL:555-010-0100", "TEL:#{value}")
+
+  def arriving_tel(value) = "BEGIN:VCARD\r\nVERSION:3.0\r\nTEL:#{value}\r\nEND:VCARD\r\n"
+
+  # Whether the arriving number came in beside the contact's own.
+  def came_in?(ours, theirs)
+    merge(jane(with_tel(ours)), arriving_tel(theirs)).contact.phones.length == 2
+  end
+
+  # One number in a spelling a card might carry it in: formatted any
+  # way, with its country code, behind a trunk zero, or bare.
+  def spelling(tc, country, national)
+    prefix = tc.draw(sampled_from(["+#{country} ", "00#{country} ", "0", ""]))
+    digits = national.chars.flat_map { [it, tc.draw(sampled_from(["", "", " ", "-"]))] }.join
+    "#{prefix}#{digits}"
+  end
+
+  # Two spellings of one number are one number — a country code or a
+  # trunk zero on one side and not the other included — and two
+  # countries' numbers that share their last ten digits are two: the
+  # one arriving is held exactly when no country code sets it apart
+  # from the contact's (docs/plans/2026-09-23-merging-on-import.md).
+  # A number held is a number dropped, so the reject direction is the
+  # one a loss turns on.
+  def test_a_number_is_held_exactly_when_no_country_sets_it_apart
+    Hegel.test(test_cases: 1_000) do |tc|
+      national = tc.draw(from_regex("[1-9][0-9]{9}", fullmatch: true))
+      ours = spelling(tc, tc.draw(sampled_from(%w[1 44 33])), national)
+      theirs = spelling(tc, tc.draw(sampled_from(%w[1 44 33])), national)
+      country = ->(spelt) { spelt[/\A(?:\+|00)(\d+) /, 1] }
+      apart = !country.(ours).nil? && !country.(theirs).nil? && country.(ours) != country.(theirs)
+
+      assert_equal apart, came_in?(ours, theirs), "#{ours.inspect} beside #{theirs.inspect}"
+    end
+  end
+
+  # A value with no digits is no number, and holds only its own text:
+  # `ask mom` is not `n/a`.
+  def test_a_value_without_digits_is_held_only_by_its_own_text
+    Hegel.test(test_cases: 1_000) do |tc|
+      ours, theirs = Array.new(2) { tc.draw(from_regex("[a-z/ ]{0,6}[a-z]", fullmatch: true)) }
+
+      assert_equal ours.casecmp?(theirs), !came_in?(ours, theirs)
+    end
   end
 end
