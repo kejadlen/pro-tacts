@@ -184,11 +184,17 @@ module ProTacts
     # untouched line is struck first, and only what is left is
     # attributed.
     #
-    # #substitute rather than #extract and #insert, which would move a
-    # member's own lines of the same name to the card's end: the lines
-    # this leaves keep their positions, so a submission that was the
-    # served card round-trips to the bytes it was composed from and the
-    # PUT can answer with a strong etag (RFC 6352 section 6.3.2.3).
+    # The taken lines leave by identity rather than through #extract
+    # and #insert, which would move a member's own lines of the same
+    # name to the card's end, or #substitute, which takes the first
+    # copy of identical bytes — the member's own, where its card
+    # carries what a group lends, since composition puts the lent copy
+    # last. Struck by identity, the lines this leaves keep their
+    # positions, so a submission that was the served card round-trips
+    # to the bytes it was composed from and the PUT can answer with a
+    # strong etag (RFC 6352 section 6.3.2.3). The pool is the
+    # submission's own lines (#unaccounted_lines), so each taken line
+    # is one of them.
     #: (VCard vcard) -> [VCard, Array[GroupEdit]]
     def subtract_inherited(vcard)
       lent = @before&.inherited || [] #: Array[Contact::Inherited]
@@ -229,7 +235,7 @@ module ProTacts
 
         report_ambiguous_inherited_lines(ambiguous)
         report_unshareable_lines(unshareable)
-        struck = taken.reduce(vcard) { |rest, line| rest.substitute(line.digest, []) }
+        struck = VCard.new(vcard.lines.reject { |line| taken.any? { it.equal?(line) } }.map(&:verbatim).join)
       end
 
       card, note_edits = subtract_notes(struck, note_rows)
@@ -276,6 +282,9 @@ module ProTacts
         return [members_own(vcard, notes), []]
       end
       value = values.join("\n\n")
+      own = stored_before&.lines&.select { it.names?("NOTE") } || [] #: Array[VCard::Parser::Line]
+      return [vcard.replace("NOTE", own.map { it.verbatim.chomp }), []] if own.length <= 1 && value == served_note
+
       split = NoteSections.split(value, labels)
       if split.sections.empty?
         # The two-line shape's truncation (see the method comment).
@@ -316,12 +325,35 @@ module ProTacts
           )
         end
       }
-      if split.member.empty?
-        member = [] #: Array[String]
-      else
-        member = ["NOTE:#{VCard.escape(split.member)}\r\n"]
-      end
-      [vcard.replace("NOTE", member), edits]
+      [vcard.replace("NOTE", member_note(split.member, own, labels)), edits]
+    end
+
+    # What a no-op PUT sent back: the NOTE text the contact before this
+    # write served, which is what composition made of the member's own
+    # note and its groups' (Contact#composed_note). Read off the
+    # composed card rather than composed again, so the two cannot
+    # drift. Nil for a contact being created, which served nothing.
+    #: () -> String?
+    def served_note
+      @before&.vcard&.lines&.find { it.names?("NOTE") }&.property&.text
+    end
+
+    # The member's half of a split NOTE as the line to store. Where it
+    # still reads as the stored note did, the stored line stays byte
+    # for byte — its parameters, its escapes, the line breaks the
+    # split trims off — since rewriting it would change bytes nobody
+    # edited and move the etag on a sync that changed nothing else.
+    # Otherwise the text is escaped the way the editors write it, and
+    # empty text is no line. No terminator, so the line takes its
+    # neighbour's and an LF card stays one.
+    #: (String text, Array[VCard::Parser::Line] own, Array[String] labels) -> Array[String]
+    def member_note(text, own, labels)
+      line = own.fetch(0) if own.length == 1
+      stored = line&.property&.text
+      return [line.verbatim.chomp] if line && stored && NoteSections.split(stored, labels).member == text
+      return [] if text.empty?
+
+      ["NOTE:#{VCard.escape(text)}"]
     end
 
     # The submission's NOTE lines kept as the member's own: their
@@ -352,7 +384,7 @@ module ProTacts
     #: (VCard vcard, Array[VCard::Parser::Line] notes) -> VCard
     def joined_notes(vcard, notes)
       texts = notes.map { it.property&.text || it.verbatim.chomp }
-      vcard.replace("NOTE", ["NOTE:#{VCard.escape(texts.join("\n\n"))}\r\n"])
+      vcard.replace("NOTE", ["NOTE:#{VCard.escape(texts.join("\n\n"))}"])
     end
 
     # What a lent line that came back changed asks of its group: the

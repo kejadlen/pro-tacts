@@ -1,5 +1,7 @@
 require_relative "../test_helper"
 
+require "hegel"
+
 require "pro_tacts/birthday"
 require "pro_tacts/contact"
 require "pro_tacts/edited_contact"
@@ -14,6 +16,7 @@ require "pro_tacts/vcard"
 class EditedContactTest < Minitest::Test
   include Sentry::TestHelper
   include SentryMessages
+  include Hegel::Syntax::Methods
 
   AIDEN = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
   APRIL_12 = ProTacts::Birthday.new(year: 1985, month: 4, day: 12)
@@ -311,5 +314,69 @@ class EditedContactTest < Minitest::Test
       [stored, nil, []],
       decompose(served, before: before(stored, inherited: [*LENT, *LENT_NOTE])),
     )
+  end
+
+  ## The round trip
+
+  # Raw NOTE values heavy in what the round trip has to carry back:
+  # escapes and the separators a client may leave bare, blank lines and
+  # trailing line breaks the section split trims, and a line that reads
+  # as a lent section's header.
+  NOTE_PIECES = [
+    "a", "b", " ", ",", "\\,", ";", "\\;", "\\\\", "\\n", "\\N",
+    "\\nShared · Neighbours:\\n", "Shared · Dog walkers:",
+  ].freeze #: Array[String]
+
+  # A stored card for the round trips: the member's lines in any order
+  # and either terminator, its own NOTE in any spelling the pieces
+  # make, and its own ADR possibly byte-equal to the one a group lends.
+  def stored_card(tc, pieces)
+    note = tc.draw(optional(tuples(
+      sampled_from(["NOTE", "NOTE;LANGUAGE=en", "note"]),
+      arrays(sampled_from(pieces), max_size: 6).map(&:join),
+    ).map { |name, value| "#{name}:#{value}" }))
+    own = tc.draw(arrays(sampled_from([OWN_ADDRESS, HOUSEHOLD_ADDRESS, "TEL:+1 555 0100"]), max_size: 3))
+    lines = [*own, *note].shuffle(random: Random.new(tc.draw(integers(min_value: 0, max_value: 1_000))))
+    eol = tc.draw(sampled_from(["\r\n", "\n"]))
+    ["BEGIN:VCARD", "VERSION:3.0", "FN:Aiden", *lines, "UID:aiden", "END:VCARD"].map { "#{it}#{eol}" }.join
+  end
+
+  # Whatever the member's card holds and whatever its groups lend, the
+  # card Contact#vcard composes, PUT back untouched, stores the bytes it
+  # was composed from and asks nothing of any group: the no-op a
+  # syncing client makes on every pass, which must not move the etag or
+  # log a change (RFC 6352 section 6.3.2.3).
+  def test_a_served_card_put_back_stores_what_was_stored
+    lendable = [*LENT, *LENT_NOTE,
+                ProTacts::Contact::Inherited.new(group: DOGWALKERS, position: 2, line: "NOTE:Sunday mornings.")]
+    Hegel.test(test_cases: 1_000) do |tc|
+      stored = stored_card(tc, NOTE_PIECES)
+      inherited = tc.draw(sets(sampled_from(lendable), max_size: 3)).to_a.sort_by(&:position)
+      birthday = tc.draw(optional(just(APRIL_12)))
+      contact = before(stored, birthday:, inherited:)
+
+      assert_equal [stored, birthday, []], decompose(contact.vcard.to_s, before: contact)
+      assert_empty sentry_messages
+    end
+  end
+
+  # An edit of one group's section asks that group for the new text
+  # and leaves the member's own NOTE as it was stored, byte for byte:
+  # nobody edited it, so rewriting it would change what the member
+  # holds on a write about the group. Member text here holds no line
+  # that reads as a header, which would be the mangle instead.
+  def test_an_edited_section_leaves_the_members_note_as_stored
+    pieces = NOTE_PIECES.reject { it.include?("Shared") }
+    Hegel.test(test_cases: 1_000) do |tc|
+      stored = stored_card(tc, pieces)
+      text = tc.draw(from_regex("[a-z ,;]{0,12}[a-z]", fullmatch: true))
+      tc.assume(text != NOTE_TEXT)
+      lent = [*LENT_NOTE, *tc.draw(optional(just(LENT.fetch(0))))]
+      contact = before(stored, inherited: lent)
+      edited = ProTacts::Contact::Inherited.new(group: NEIGHBOURS, position: 1, line: "NOTE:#{ProTacts::VCard.escape(text)}")
+      submitted = before(stored, inherited: [edited, *lent.drop(1)]).vcard.to_s
+
+      assert_equal [stored, nil, [neighbour_edit(edited.line)]], decompose(submitted, before: contact)
+    end
   end
 end

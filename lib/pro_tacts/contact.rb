@@ -460,7 +460,8 @@ module ProTacts
     # The one NOTE the served card carries, as a content line: the
     # member's own text and the lent notes as sections, written
     # through NoteSections and escaped the way the editors write a
-    # text value. Nil where nothing is lent — a member whose groups
+    # text value, with no terminator so it takes the one of the line it
+    # replaces and an LF card stays one (VCard#replace). Nil where nothing is lent — a member whose groups
     # hold no note serves its own NOTE's bytes as they lie, whatever
     # they say, the editor's whole safety.
     #
@@ -480,7 +481,7 @@ module ProTacts
       }
       member = @stored.lines.select { it.names?("NOTE") }
         .filter_map { it.property&.text }.join("\n\n")
-      "NOTE:#{VCard.escape(NoteSections.join(member, sections))}\r\n"
+      "NOTE:#{VCard.escape(NoteSections.join(member, sections))}"
     end
 
     # A property group to the `X-ABLabel` text anchoring it — the
