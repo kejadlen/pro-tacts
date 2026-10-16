@@ -21,8 +21,10 @@ module ProTacts
     # The line inserted lines go immediately before, so a property
     # lands inside the envelope however bare the card is. Matched at
     # the start of a physical line in the whole card, so #insert finds
-    # it without splitting a card's every line out to look.
-    END_LINE = /^END:VCARD/i #: Regexp
+    # it without splitting a card's every line out to look. Ended by a
+    # line break or the card's end, so `END:VCARDX` is a line of its own
+    # and no envelope.
+    END_LINE = /^END:VCARD(?=[\r\n]|\z)/i #: Regexp
 
     # A ";" after an even run of backslashes (#split_raw_components),
     # and a "," after one: the separator of a list of text values,

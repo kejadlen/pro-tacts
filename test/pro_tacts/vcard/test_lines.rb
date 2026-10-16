@@ -335,6 +335,21 @@ class VCardLinesTest < Minitest::Test
       VCARD.new(card).insert(["BDAY:1985-04"]).to_s
   end
 
+  # Inserted lines land just inside the envelope's end: before the last
+  # line that reads as END:VCARD, whatever lines only look like one, and
+  # after everything where no line does.
+  def test_insert_lands_before_the_end_the_parse_reads
+    Hegel.test(test_cases: 1_000) do |tc|
+      lines = tc.draw(arrays(sampled_from(["END:VCARDX", "end:vcard-2", "NOTE:END:VCARD", "END:VCARD", "end:vcard", "FN:Ada"]), max_size: 5))
+      card = VCARD.new(["BEGIN:VCARD", *lines].map { "#{it}\r\n" }.join)
+      ends = card.lines.rindex { it.property&.name&.casecmp?("END") && it.property&.value&.casecmp?("VCARD") }
+
+      walked = card.insert(["BDAY:1985-04"]).lines.map { it.verbatim.chomp }
+
+      assert_equal ends || card.lines.length, walked.index("BDAY:1985-04")
+    end
+  end
+
   def test_insert_with_nothing_leaves_the_card_alone
     assert_equal CARD, VCARD.new(CARD).insert([]).to_s
   end
