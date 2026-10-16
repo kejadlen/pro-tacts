@@ -195,7 +195,30 @@ class VCardTest < Minitest::Test
 
     error = assert_raises(ArgumentError) { ProTacts::VCard.new(invalid) }
 
-    assert_match "not valid UTF-8", error.message
+    assert_match "not text", error.message
+  end
+
+  # A NUL is no character a card is made of (RFC 2425's VALUE-CHAR),
+  # and the one the store cannot carry: wherever it falls, the bytes
+  # are not text, and the refusal's message carries none of them, so a
+  # report of it cannot leak the card into Sentry.
+  def test_a_nul_anywhere_makes_bytes_not_a_card
+    Hegel.test(test_cases: 1_000) do |tc|
+      text = tc.draw(text(max_size: 40, min_codepoint: 1))
+      at = tc.draw(integers(min_value: 0, max_value: text.length))
+      bytes = text.dup.insert(at, "\0")
+
+      error = assert_raises(ArgumentError) { ProTacts::VCard.new(bytes) }
+      assert_equal "not text: a card is UTF-8 with no NUL", error.message
+    end
+  end
+
+  # And everything else valid UTF-8 is text, controls and all: the
+  # refusal is the NUL's alone.
+  def test_utf_8_without_a_nul_is_text
+    Hegel.test(test_cases: 1_000) do |tc|
+      assert ProTacts::VCard.text?(tc.draw(text(max_size: 40, min_codepoint: 1)))
+    end
   end
 
   ## The envelope

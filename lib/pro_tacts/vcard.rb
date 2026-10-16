@@ -108,19 +108,34 @@ module ProTacts
       "#{prefix}#{property.name}#{parameters.join}:"
     end
 
-    # A card is made of UTF-8 text, and refuses to be made of anything
-    # else: bytes that are not valid UTF-8 raise here, at the boundary,
-    # rather than leaking an ArgumentError out of whatever regex first
-    # trips over them. Raising rather than answering, because no caller
-    # is meant to be asking — a card's bytes come from a column that can
-    # hold nothing else or from a body already decoded, and whether some
-    # bytes are text at all is that decode's question, settled before
-    # anything here sees them (ProTacts::Web's write_card). This is the
-    # assertion under those callers, not a check any of them makes; the
-    # store's bind holds the same line a third time below the card.
+    # Whether bytes are text a card can be made of: valid UTF-8, and no
+    # NUL. RFC 2425 section 5.8.3's VALUE-CHAR has no controls but
+    # whitespace in it, and the NUL is the one of them nothing here can
+    # carry: Sequel writes a card into its INSERT as a literal, SQLite's
+    # tokenizer stops at the NUL, and the error that raises carries the
+    # card's bytes in its message — to Sentry, which card content must
+    # never reach. The question the decodes ask (Web#write_card, the
+    # import's upload) before anything here sees the bytes.
+    #: (String bytes) -> bool
+    def self.text?(bytes)
+      bytes.valid_encoding? && !bytes.include?("\0")
+    end
+
+    # A card is made of text, and refuses to be made of anything else:
+    # bytes that are not (.text?) raise here, at the boundary, rather
+    # than leaking an ArgumentError out of whatever regex first trips
+    # over them or SQLite's out of the insert. Raising rather than
+    # answering, because no caller is meant to be asking — a card's
+    # bytes come from a column that can hold nothing else or from a body
+    # already decoded, and whether some bytes are text at all is that
+    # decode's question, settled before anything here sees them
+    # (ProTacts::Web's write_card). This is the assertion under those
+    # callers, not a check any of them makes; the store's bind holds the
+    # encoding a third time below the card. The message names neither
+    # the bytes nor where they went wrong, for Sentry's sake.
     #: (String bytes, ?lines: Array[Parser::Line]?) -> void
     def initialize(bytes, lines: nil)
-      raise ArgumentError, "not valid UTF-8: a card is text" unless bytes.valid_encoding?
+      raise ArgumentError, "not text: a card is UTF-8 with no NUL" unless VCard.text?(bytes)
 
       @bytes = bytes
       @lines = lines if lines

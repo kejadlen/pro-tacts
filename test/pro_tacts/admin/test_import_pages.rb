@@ -1165,6 +1165,17 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # A NUL is not text either (VCard.text?), and would leave nothing the
+  # store could write.
+  def test_a_file_holding_a_nul_stages_nothing
+    with_contacts({}) do |store|
+      upload(JANE.sub("Jane", "Ja\0ne"))
+
+      assert_includes last_response.body, "contacts.vcf is not UTF-8 text."
+      assert_empty store.changes
+    end
+  end
+
   # A Monica export is read as the cards it composes, and is a walk like
   # any other from there (Import::Monica).
   def test_a_monica_export_opens_the_walk_on_its_contacts

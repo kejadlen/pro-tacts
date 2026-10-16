@@ -53,7 +53,7 @@ class VCardLinesTest < Minitest::Test
 
     error = assert_raises(ArgumentError) { VCARD.new(invalid) }
 
-    assert_match "not valid UTF-8", error.message
+    assert_match "not text", error.message
   end
 
   # The envelope RFC 2426 section 4 requires, the one judgment a PUT
@@ -343,7 +343,7 @@ class VCardLinesTest < Minitest::Test
   def content_line
     composite { |dtc|
       terminator = dtc.draw(sampled_from(["\r\n", "\n"]))
-      value = dtc.draw(from_regex('[^\r\n]{0,12}', fullmatch: true))
+      value = dtc.draw(from_regex('[^\x00\r\n]{0,12}', fullmatch: true))
       fold = dtc.draw(integers(min_value: 0, max_value: value.length))
       folded = fold.zero? ? value : value.dup.insert(fold, "#{terminator} ")
       dtc.draw(booleans(p: 0.1)) ? "garbage#{terminator}" : "#{dtc.draw(sampled_from(NAMES))}:#{folded}#{terminator}"
@@ -352,7 +352,7 @@ class VCardLinesTest < Minitest::Test
 
   # Lines an edit hands in, bare or terminated, each naming `name`.
   def edit_lines(name)
-    line = tuples(from_regex('[^\r\n]{0,12}', fullmatch: true), sampled_from(["", "\r\n", "\n"]))
+    line = tuples(from_regex('[^\x00\r\n]{0,12}', fullmatch: true), sampled_from(["", "\r\n", "\n"]))
     arrays(line, max_size: 3).map { |lines| lines.map { |value, terminator| "#{name}:#{value}#{terminator}" } }
   end
 

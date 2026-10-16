@@ -399,7 +399,8 @@ module ProTacts
       # label is checked honest in the same breath, because a
       # force_encoding nobody validates is a lie every later reader
       # inherits. That the bytes are not the UTF-8 the media type
-      # promised is a fact about this body, not about any card, which is
+      # promised, or carry the NUL no card's text can (VCard.text?), is
+      # a fact about this body, not about any card, which is
       # why it is settled here and VCard is never handed the question
       # (CARDDAV:valid-address-data, RFC 6352 section 6.3.2.1). Left
       # unsettled it would surface as a 500 out of SQLite on the insert,
@@ -407,7 +408,7 @@ module ProTacts
       # Paths need no counterpart: Puma hands PATH_INFO over still
       # percent-encoded, so an id off the wire is ASCII.
       bytes = request.body.read.force_encoding(Encoding::UTF_8)
-      return precondition(:valid_address_data) unless bytes.valid_encoding?
+      return precondition(:valid_address_data) unless VCard.text?(bytes)
 
       # CARDDAV:valid-address-data again, on the card this time: the
       # envelope RFC 2426 section 4 requires. That is the whole test. A

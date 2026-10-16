@@ -362,7 +362,7 @@ class ImportVcfTest < Minitest::Test
   # section 2.4.2 has a text value escaped, read back as the tags they
   # were — blank ones and repeats aside, which name no group.
   def test_categories_read_back_as_the_tags_written
-    tag = one_of(text(max_size: 10), arrays(sampled_from([",", "\\", ";", " ", "a"]), max_size: 5).map(&:join))
+    tag = one_of(text(max_size: 10, min_codepoint: 1), arrays(sampled_from([",", "\\", ";", " ", "a"]), max_size: 5).map(&:join))
     Hegel.test(test_cases: 1_000) do |tc|
       tags = tc.draw(arrays(tag, min_size: 1, max_size: 5))
       line = "CATEGORIES:#{tags.map { ProTacts::VCard.escape(it) }.join(",")}"

@@ -2526,10 +2526,8 @@ class StoreTest < Minitest::Test
 
     # A card a write might carry: any name, and a TEL or two that may
     # repeat, which a diff counts rather than sets. Any name but one
-    # holding a NUL, which no write survives today: Sequel writes the
-    # card into its INSERT as a literal, SQLite's tokenizer stops at the
-    # NUL, and the write raises with the card's bytes in its message.
-    # That is the store's open question, not this machine's.
+    # holding a NUL, which is not text a card can be made of
+    # (VCard.text?).
     def card(tc, id)
       name = ProTacts::VCard.escape(tc.draw(text(max_size: 10, min_codepoint: 1)))
       phones = tc.draw(arrays(sampled_from(["TEL:+1 555 0100\r\n", "TEL:+1 555 0199\r\n"]), max_size: 3))

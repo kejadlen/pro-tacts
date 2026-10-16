@@ -95,7 +95,7 @@ module ProTacts
       # for the one other body this app reads: a multipart part arrives
       # as binary.
       bytes = upload.fetch(:tempfile).read.force_encoding(Encoding::UTF_8)
-      return import_screen(notice: "#{name} is not UTF-8 text.") unless bytes.valid_encoding?
+      return import_screen(notice: "#{name} is not UTF-8 text.") unless VCard.text?(bytes)
 
       begin
         # A Monica export is read as the cards it composes, and from

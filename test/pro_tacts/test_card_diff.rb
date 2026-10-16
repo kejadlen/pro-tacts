@@ -80,7 +80,7 @@ class CardDiffTest < Minitest::Test
   # carries some twice, beside lines drawn fresh.
   COMMON = ["FN:Ada", "NOTE:one two", "TEL:+1-555-0100", "item1.EMAIL:ada@example.com"].freeze #: Array[String]
 
-  def content = one_of(sampled_from(COMMON), from_regex('[A-Z]{1,4}:[^\r\n]{0,10}', fullmatch: true))
+  def content = one_of(sampled_from(COMMON), from_regex('[A-Z]{1,4}:[^\x00\r\n]{0,10}', fullmatch: true))
 
   def contents = arrays(content, max_size: 8)
 

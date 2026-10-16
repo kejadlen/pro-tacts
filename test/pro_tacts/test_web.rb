@@ -534,6 +534,18 @@ class WebTest < Minitest::Test
     end
   end
 
+  # A NUL is not text a card is made of (VCard.text?), and refused
+  # here rather than at the insert that cannot hold it.
+  def test_put_of_a_card_holding_a_nul_names_its_precondition
+    with_contacts({}) do |store|
+      put_request "new", card("new", "Ne\0w"), "CONTENT_TYPE" => VCARD
+
+      assert_equal 412, last_response.status
+      assert_includes last_response.body, "<card:valid-address-data/>"
+      assert_empty store.changes
+    end
+  end
+
   def test_put_of_something_that_is_not_a_card_names_its_precondition
     with_contacts({}) do
       put_request "new", "not a vCard at all", "CONTENT_TYPE" => VCARD
