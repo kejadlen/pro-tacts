@@ -3,6 +3,7 @@ require_relative "../../test_helper"
 require "hegel"
 
 require "pro_tacts/admin/card_form"
+require "pro_tacts/birthday_line"
 require "pro_tacts/contact"
 require "pro_tacts/vcard"
 
@@ -90,6 +91,34 @@ class CardFormTest < Minitest::Test
       )
 
       assert_equal stored, saved.to_s
+    end
+  end
+
+  ## The birthday row
+
+  # Whatever the birthday row saves, a served birthday reads back from
+  # its line as itself: the next sync cannot change what the editor
+  # wrote. The year range is drawn around 1604, the sentinel a served
+  # full date would lose its year to (Birthday::NO_YEAR).
+  def test_a_saved_birthday_reads_back_from_the_line_it_serves
+    field = ->(range) { optional(integers(min_value: range.min, max_value: range.max).map(&:to_s)) }
+    Hegel.test(test_cases: 1_000) do |tc|
+      fields = {
+        "year" => tc.draw(one_of(field.(1600..1610), field.(0..9999))),
+        "month" => tc.draw(field.(1..12)),
+        "day" => tc.draw(field.(1..31)),
+      }
+      # A shape the grammar refuses is the row's refusal, no save at all.
+      birthday = begin
+        ProTacts::Admin::CardForm.birthday(fields)
+      rescue ArgumentError
+        nil
+      end
+      line = birthday&.to_line
+      tc.assume(!line.nil?)
+
+      read = ProTacts::BirthdayLine.read(ProTacts::VCard.new("#{line}\r\n").lines.fetch(0))
+      assert_equal birthday, read.birthday
     end
   end
 end

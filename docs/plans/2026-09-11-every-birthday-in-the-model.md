@@ -51,9 +51,9 @@ into a 1604 one after an iOS save. A family address book has nobody
 born in 1604, so a full date in that year now reads as a month and day,
 parameter or not.
 
-The model can still hold a year of 1604 from the admin editor, and it
-goes out as a bare 1604 date that reads back as a month and day. That
-is the one shape this gives up.
+The admin editor reads a full date in 1604 the same way, as a month
+and day (`Admin::CardForm.birthday`), so the model never holds a year
+that would come back without one.
 
 ## One line, three outcomes
 

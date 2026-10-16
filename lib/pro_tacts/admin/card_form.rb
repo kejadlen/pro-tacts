@@ -111,12 +111,21 @@ module ProTacts
       # class, for the save to catch and re-render — nothing here
       # reaches Sentry, bad input being ordinary and the toast the
       # fallback.
+      #
+      # A full date in 1604 is a month and day, the sentinel read here as
+      # every client's line reads it (Birthday::NO_YEAR): the model would
+      # otherwise hold a year that serves as a bare 1604 date and reads
+      # back without one at the next sync
+      # (docs/plans/2026-09-11-every-birthday-in-the-model.md, "1604 means
+      # no year").
       #: (untyped fields) -> Birthday?
       def self.birthday(fields)
         year = birthday_component(fields["year"])
         month = birthday_component(fields["month"])
         day = birthday_component(fields["day"])
         return if year.nil? && month.nil? && day.nil?
+
+        year = nil if year == Birthday::NO_YEAR && month && day
 
         Birthday.new(year:, month:, day:)
       end
