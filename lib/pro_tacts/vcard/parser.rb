@@ -139,14 +139,23 @@ module ProTacts
         # listing of contacts allocated.
         NAME_PATTERNS = {} #: Hash[String, Regexp]
 
+        # A fold before the line's first `;` or `:`, inside its group or
+        # name, where the bytes alone would hide the name the parser reads.
+        HEAD_FOLD = /\A[^;:]*?(?:\r\n|[\r\n])[ \t]/ #: Regexp
+
         # Whether this line names the property, a group prefix
         # (`item1.BDAY`) counting as naming it. Asked of the line rather
         # than the property because a line that will not parse still has
-        # a name in it.
+        # a name in it. A fold is no part of the name (RFC 2426 section
+        # 2.6), so a line folded inside it is read unfolded — only that
+        # line, the rest matching on their bytes without allocating, a
+        # folded PHOTO's base64 included.
         #: (String name) -> bool
         def names?(name)
           pattern = NAME_PATTERNS[name] ||= /\A(?:[A-Za-z0-9-]+\.)?#{Regexp.escape(name)}[;:]/i
-          verbatim.match?(pattern)
+          return true if verbatim.match?(pattern)
+
+          verbatim.match?(HEAD_FOLD) && Parser.unfold(verbatim).match?(pattern)
         end
 
         # Whether this line broke one of the parser's assumptions rather

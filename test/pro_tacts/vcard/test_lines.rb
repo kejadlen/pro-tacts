@@ -142,6 +142,27 @@ class VCardLinesTest < Minitest::Test
     assert_equal "BDAY;=;:\r\n", unparsed.verbatim
   end
 
+  # Whether a line names a property is whether the parser reads it as
+  # that property, wherever a fold falls — inside the group or the name
+  # included, which the line's bytes alone would hide (RFC 2426
+  # section 2.6).
+  def test_names_agrees_with_the_parse_wherever_a_fold_falls
+    token = from_regex("[A-Za-z0-9-]{1,6}", fullmatch: true)
+    Hegel.test(test_cases: 1_000) do |tc|
+      group = tc.draw(optional(token))
+      name = tc.draw(one_of(token, sampled_from(%w[NOTE ADR BDAY TEL])))
+      text = "#{"#{group}." if group}#{name}#{tc.draw(sampled_from([":", ";TYPE=home:"]))}#{tc.draw(from_regex("[a-z;:,]{0,8}", fullmatch: true))}"
+      folds = tc.draw(sets(integers(min_value: 1, max_value: text.length - 1), max_size: 3)).sort.reverse
+      eol = tc.draw(sampled_from(["\r\n", "\n"]))
+      folded = folds.reduce(text) { |line, at| line.dup.insert(at, "#{eol}#{tc.draw(sampled_from([" ", "\t"]))}") }
+      line = VCARD.new("#{folded}#{eol}").lines.fetch(0)
+      asked = tc.draw(one_of(just(name), sampled_from(%w[NOTE ADR BDAY TEL]), token))
+
+      assert_equal name.casecmp?(asked), line.names?(asked)
+      assert_equal name, line.property&.name
+    end
+  end
+
   # A broken assumption and an ordinary unreadable line are both
   # errors on a line, and telling them apart belongs here rather than
   # in whoever reports it: news about this server and ordinary bad
