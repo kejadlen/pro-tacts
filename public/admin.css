@@ -1119,44 +1119,39 @@ span.avatar[data-size="lg"] {
    Baseline-aligned: a grid item blockifies, so the tag's inline-flex
    becomes a flex container, which takes its baseline from its first
    item — the tag's text — and so shares the value's. A contact
-   card's "edit" button takes the same place, a flex container like
-   the tag, and its "new" the column after it — or, on a phone, the
-   row under it, where side by side the two would take the tags'
-   column down to a word and push a long tag under the buttons. */
+   card's "edit" and "new" take the same place as Gloss' button group,
+   a flex container like the tag. */
 .detail-grid dd:has(> .tag),
-.detail-grid dd:has(> button) {
+.detail-grid dd:has(> button),
+.detail-grid dd:has(> [role="group"]) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   column-gap: var(--gl-space-s);
 }
 .detail-grid dd > .tag,
-.detail-grid dd > button {
+.detail-grid dd > button,
+.detail-grid dd > [role="group"] {
   grid-column: 2;
   grid-row: 1;
 }
 .detail-grid dd:has(> .tag) > div,
-.detail-grid dd:has(> button) > div {
+.detail-grid dd:has(> button) > div,
+.detail-grid dd:has(> [role="group"]) > div:not([role="group"]) {
   grid-column: 1;
 }
-.detail-grid dd:has(> button + button) {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-}
-.detail-grid dd > button + button {
-  grid-column: 3;
-}
+/* On a phone the group stacks, the line break standing in for the
+   divider: side by side the two take the tags' column down to a word. */
 @media (max-width: 48rem) {
-  .detail-grid dd:has(> button + button) {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto 1fr;
+  .detail-grid dd > [role="group"] {
+    flex-direction: column;
+    align-items: flex-end;
   }
-  .detail-grid dd:has(> button + button) > div {
-    grid-row: span 2;
-  }
-  .detail-grid dd > button + button {
-    grid-column: 2;
-    grid-row: 2;
-    justify-self: end;
+  /* The two pads between the labels drawn together to one, so the
+     pair reads as one control rather than two rows of the grid. */
+  .detail-grid dd > [role="group"] > button + button {
+    border-inline-start: none;
+    margin-block-start: calc(-1 * var(--gl-space-3xs));
   }
 }
 /* A nameless group shown by its id (Admin::GroupLabel): set in mono,

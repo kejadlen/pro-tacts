@@ -161,11 +161,24 @@ module ProTacts
               @groups.each { render GroupTag.new(group: it) }
             end
           end
-          button(type: "button", data_size: "sm", popovertarget: GroupDialog::ID) { "edit" } if @dialog
-          button(type: "submit", form: NEW, data_size: "sm") { "new" } if @new
+          if @new
+            # Gloss' button group, whose divider tells the two apart
+            # where they sit side by side (admin.css stacks them on a
+            # phone).
+            div(role: "group", aria_label: "Groups") do
+              edit_button
+              button(type: "submit", form: NEW, data_size: "sm") { "new" }
+            end
+          elsif @dialog
+            edit_button
+          end
         end
       end
 
+      #: () -> void
+      def edit_button
+        button(type: "button", data_size: "sm", popovertarget: GroupDialog::ID) { "edit" }
+      end
 
       # The type in one column and the value in the other, with the
       # group that lends the row named under the value when one does.
