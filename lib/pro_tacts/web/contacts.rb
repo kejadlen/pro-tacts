@@ -134,7 +134,7 @@ module ProTacts
     def dashboard(notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
       Admin::Dashboard.call(
-        recent: store.contacts_by_recency,
+        recent: store.contacts_by_recency(limit: Admin::Dashboard::RECENT_LIMIT),
         upcoming: store.upcoming_birthdays(Admin::UpcomingBirthdays::LIMIT),
         login: @login,
         notice:,
