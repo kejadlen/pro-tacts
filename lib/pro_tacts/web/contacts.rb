@@ -97,6 +97,13 @@ module ProTacts
           apply_groups(r, id)
         end
 
+        # The groups row's "new" (Admin::ContactCard): a nameless group
+        # holding this contact, landing on its members screen, where
+        # the rest of the household is picked.
+        r.post "groups", "new" do
+          r.redirect "/groups/#{store.create_group(members: [id])}/members", 303 if store.contact(id)
+        end
+
         r.post do
           apply_edit(r, id)
         end

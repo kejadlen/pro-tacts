@@ -901,6 +901,45 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # The groups row's two ways in: "edit" opens the dialog over the
+  # groups that exist, and "new" submits the form that makes one.
+  def test_show_offers_to_edit_the_groups_or_start_a_new_one
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/ada"
+
+      assert_includes last_response.body, %(popovertarget="edit-groups">edit</button>)
+      assert_includes last_response.body, %(<button type="submit" form="new-group" data-size="sm">new</button>)
+      assert_includes last_response.body, %(<form id="new-group" action="/contacts/ada/groups/new" method="post">)
+    end
+  end
+
+  # A family needs no name: the new group is nameless, holds the
+  # contact it was made from, and the save lands on its members screen
+  # for the rest of the household.
+  def test_a_new_group_from_the_card_is_nameless_and_holds_the_contact
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada/groups/new"
+
+      groups = store.all_groups
+      group = groups.fetch(0)
+      assert_equal 1, groups.length
+      assert_equal 303, last_response.status
+      assert_equal "/groups/#{group.id}/members", last_response["Location"]
+      assert_nil group.name
+      assert_equal ["ada"], group.members
+      assert_equal %w[create join], store.group_changes_of(group.id).map(&:action).reverse
+    end
+  end
+
+  def test_a_new_group_for_an_unknown_contact_is_a_404
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/nobody/groups/new"
+
+      assert_equal 404, last_response.status
+      assert_empty store.all_groups
+    end
+  end
+
   def test_show_labels_untyped_values_with_the_property_name
     untyped = ADA.sub("TEL;TYPE=mobile:", "TEL:").sub("EMAIL;TYPE=home:", "EMAIL:")
 

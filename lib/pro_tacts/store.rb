@@ -632,14 +632,20 @@ module ProTacts
     # drawing at once would both find the same id free, so a duplicate
     # comes back as the primary key's own violation and the next
     # attempt draws again.
-    #: (?name: String?) -> String
-    def create_group(name: nil)
+    #
+    # `members` join in the same transaction, for a group made from a
+    # contact's card (Web's add): a group that exists only once its
+    # first member is in it, rather than one left empty and nameless
+    # when the join fails.
+    #: (?name: String?, ?members: Array[String]) -> String
+    def create_group(name: nil, members: [])
       GROUP_ID_ATTEMPTS.times do
         id = ChangeId.mint(4)
         begin
           @database.transaction do
             groups.insert(id:, name:)
             record_group_change(id, action: GroupAction::CREATE, detail: {"name" => name})
+            members.each { add_member(id, it) }
           end
           return id
         rescue Sequel::UniqueConstraintViolation

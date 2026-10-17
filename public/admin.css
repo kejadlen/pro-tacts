@@ -1119,8 +1119,10 @@ span.avatar[data-size="lg"] {
    Baseline-aligned: a grid item blockifies, so the tag's inline-flex
    becomes a flex container, which takes its baseline from its first
    item — the tag's text — and so shares the value's. A contact
-   card's "edit groups" button takes the same place, a flex container
-   like the tag. */
+   card's "edit" button takes the same place, a flex container like
+   the tag, and its "new" the column after it — or, on a phone, the
+   row under it, where side by side the two would take the tags'
+   column down to a word and push a long tag under the buttons. */
 .detail-grid dd:has(> .tag),
 .detail-grid dd:has(> button) {
   display: grid;
@@ -1136,6 +1138,26 @@ span.avatar[data-size="lg"] {
 .detail-grid dd:has(> .tag) > div,
 .detail-grid dd:has(> button) > div {
   grid-column: 1;
+}
+.detail-grid dd:has(> button + button) {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.detail-grid dd > button + button {
+  grid-column: 3;
+}
+@media (max-width: 48rem) {
+  .detail-grid dd:has(> button + button) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto 1fr;
+  }
+  .detail-grid dd:has(> button + button) > div {
+    grid-row: span 2;
+  }
+  .detail-grid dd > button + button {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
 }
 /* A nameless group shown by its id (Admin::GroupLabel): set in mono,
    a step quieter, and at regular weight even inside a bold heading or

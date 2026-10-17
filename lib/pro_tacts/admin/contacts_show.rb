@@ -43,7 +43,7 @@ module ProTacts
               a(href: "/", class: "type-label") { "‹ contacts" }
               a(href: "/contacts/#{@contact.id}/edit", class: "btn", data_size: "sm") { "edit" }
             end
-            render ContactCard.new(contact: @contact, groups: @groups, dialog: true)
+            render ContactCard.new(contact: @contact, groups: @groups, dialog: true, new: true)
           end
           # The stored card in its own card under the record, collapsed
           # (docs/DESIGN.md, "The stored card is reachable"). Native
@@ -78,6 +78,7 @@ module ProTacts
           # so the dialog is told which boxes to check rather than
           # reading every group's members to work it out.
           render GroupDialog.new(contact: @contact, groups: @all_groups, joined: @groups.map(&:id))
+          form(id: ContactCard::NEW, action: "/contacts/#{@contact.id}/groups/new", method: "post")
         end
       end
 
