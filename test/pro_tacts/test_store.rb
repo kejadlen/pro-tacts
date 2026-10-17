@@ -339,6 +339,18 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # The newest few, and the ones a search found, each still newest
+  # first: the two narrowings the search and the dashboard read.
+  def test_contacts_by_recency_narrows_to_a_limit_or_to_ids
+    with_store({"aiden" => AIDEN}) do |store|
+      sleep 0.002
+      store.put("znorth", vcard(ZED))
+
+      assert_equal %w[znorth], store.contacts_by_recency(limit: 1).map { it.contact.id }
+      assert_equal %w[aiden], store.contacts_by_recency(["aiden"]).map { it.contact.id }
+    end
+  end
+
   def test_contacts_by_recency_carries_the_stamp
     with_store({"aiden" => AIDEN}) do |store|
       recent = store.contacts_by_recency.fetch(0)
@@ -524,6 +536,7 @@ class StoreTest < Minitest::Test
       assert_equal [new_id], store.group(group).members
       assert_equal new_id, store.card_id_with_uid(new_id)
       assert database(store)[:card_properties].where(card_id: UUID).empty?
+      assert_equal [new_id], store.keyed_by_recency.map(&:id)
     end
   end
 
@@ -689,6 +702,31 @@ class StoreTest < Minitest::Test
   def test_parameters_are_indexed_with_their_property
     with_store({"aiden" => AIDEN.sub("FN:Aiden", "TEL;TYPE=work,voice:+1-555-1234\r\nFN:Aiden")}) do |store|
       assert_equal [%w[TYPE work], %w[TYPE voice]], indexed_parameters(store, "aiden", "TEL")
+    end
+  end
+
+  # A card's own values, folded, and nothing its groups lend: a lent
+  # address is matched as the group's (Admin::Search::Key).
+  def test_a_card_is_keyed_for_the_search_off_its_own_lines
+    card = AIDEN.sub("FN:Aiden\r\n", "FN:Áiden\r\nNICKNAME:Ade\r\nTEL:+1 (555) 123-4567\r\nNOTE:Plays chess\r\n")
+    with_store({"aiden" => card}) do |store|
+      group = store.create_group(name: "Booles")
+      store.add_member(group, "aiden")
+      store.set_group_lines(group, [HOUSEHOLD_ADDRESS])
+
+      key = store.keyed_by_recency.fetch(0).key
+      assert_equal "aiden\nade\nplays chess", key.text
+      assert_equal "15551234567", key.phones
+      assert_equal "aiden ade", key.names
+    end
+  end
+
+  def test_keys_are_listed_newest_first
+    with_store({"aiden" => AIDEN}) do |store|
+      sleep 0.002
+      store.put("znorth", vcard(ZED))
+
+      assert_equal %w[znorth aiden], store.keyed_by_recency.map(&:id)
     end
   end
 
@@ -2457,6 +2495,23 @@ class StoreTest < Minitest::Test
   # serves the group's joined note as one section, the shape every
   # write composes from here
   # (docs/plans/2026-09-25-one-note-per-contact.md).
+  # The cards already stored are keyed as the table lands, so a search
+  # finds them before any is written again.
+  def test_the_migration_keys_the_cards_already_stored
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 13)
+        db[:cards].insert(id: "aiden", vcard: AIDEN)
+        db[:cards].insert(id: "znorth", vcard: ZED)
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        assert_equal({"aiden" => "aiden", "znorth" => "zed"}, store.keyed_by_recency.to_h { [it.id, it.key.names] })
+      end
+    end
+  end
+
   def test_the_migration_joins_several_notes_into_one
     two_notes = AIDEN.sub("END:VCARD\r\n", "NOTE:First.\r\nNOTE:Second.\r\nEND:VCARD\r\n")
     Dir.mktmpdir do |dir|
@@ -2649,6 +2704,7 @@ class StoreTest < Minitest::Test
     [
       database(store)[:card_properties].order(:card_id, :position).all,
       database(store)[:card_parameters].order(:card_id, :position, :name, :value).all,
+      database(store)[:search_keys].order(:card_id).all,
     ]
   end
 
@@ -2662,5 +2718,6 @@ class StoreTest < Minitest::Test
   def wreck_the_index(store)
     database(store)[:card_parameters].delete
     database(store)[:card_properties].update(value: "wrong")
+    database(store)[:search_keys].delete
   end
 end

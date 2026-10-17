@@ -1,0 +1,18 @@
+# Admin::Search::Key is a Data class, whose members the inline parser
+# cannot read (see sig/pro_tacts/contact.rbs). Search itself is a plain
+# module and carries its signatures inline.
+module ProTacts
+  module Admin
+    module Search
+      class Key
+        attr_reader text: String
+        attr_reader phones: String
+        attr_reader names: String
+
+        def self.new: (text: String, phones: String, names: String) -> instance
+        def with: (?text: String, ?phones: String, ?names: String) -> instance
+        def to_h: () -> { text: String, phones: String, names: String }
+      end
+    end
+  end
+end

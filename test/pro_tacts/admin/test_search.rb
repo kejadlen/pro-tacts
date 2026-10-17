@@ -7,17 +7,17 @@ require "pro_tacts/store"
 require "pro_tacts/vcard"
 
 class SearchTest < Minitest::Test
-  # A card from its extra lines, and its row in recency order: the
-  # rows arrive most recent first, the way Store#contacts_by_recency
-  # hands them over.
+  # A card from its extra lines, keyed as the store keys it: the rows
+  # arrive most recent first, the way Store#keyed_by_recency hands them
+  # over.
   def row(id, name, *lines)
     bytes = ["BEGIN:VCARD", "VERSION:3.0", "FN:#{name}", "UID:#{id}", *lines, "END:VCARD", ""].join("\r\n")
     contact = ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(bytes), birthday: nil, inherited: [])
-    ProTacts::Store::RecentContact.new(contact:, updated_at: Time.now)
+    ProTacts::Store::KeyedContact.new(id:, key: ProTacts::Admin::Search.key(contact))
   end
 
   def search(rows, query, groups: [])
-    ProTacts::Admin::Search.contacts(rows, query:, groups:).map { it.contact.id }
+    ProTacts::Admin::Search.contacts(rows, query:, groups:)
   end
 
   # Each word finds its own field: neither "ada" nor "london" is
@@ -60,6 +60,29 @@ class SearchTest < Minitest::Test
     math = ProTacts::Group.new(id: "math", name: "Mathematicians", label: "Mathematicians", lines: [], members: ["ada"])
 
     assert_equal ["ada"], search([ada], "mathematicians", groups: [math])
+  end
+
+  # What a group lends is matched as the group's, not keyed into the
+  # member: a lent address and a lent note find every member, and
+  # nobody outside the group.
+  def test_what_a_group_lends_finds_its_members
+    ada = row("ada", "Ada Lovelace")
+    grace = row("grace", "Grace Hopper")
+    home = ProTacts::Group.new(id: "home", name: "Home", label: "Home",
+                               lines: ["ADR:;;12 St James Sq;London;;;UK", "NOTE:Gate code 7946"], members: ["ada"])
+
+    assert_equal ["ada"], search([ada, grace], "james sq", groups: [home])
+    assert_equal ["ada"], search([ada, grace], "gate code", groups: [home])
+  end
+
+  # A group lends no name, so its label finds a member without making
+  # the find a name hit: Grace's own name still leads.
+  def test_a_group_label_is_not_a_name_hit
+    ada = row("ada", "Ada Lovelace")
+    grace = row("grace", "Grace Hopper")
+    graces = ProTacts::Group.new(id: "graces", name: "Graces", label: "Graces", lines: [], members: ["ada"])
+
+    assert_equal ["grace", "ada"], search([ada, grace], "grace", groups: [graces])
   end
 
   # Charles is the more recent, and only his note says "ada"; Ada's

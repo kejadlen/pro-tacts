@@ -36,23 +36,33 @@ module ProTacts
 
     # A blank query answers the most recently updated contacts, the
     # dashboard's own list, so the search page is never empty before a
-    # word is typed.
+    # word is typed. A query walks every contact's search key and builds
+    # only the contacts it finds (docs/plans/2026-10-17-search-keys.md).
     #: (String query) -> Admin::SearchResults
     def search_results(query)
-      recent = span("search.contacts_by_recency") { |step|
-        store.contacts_by_recency.tap { step.set_attribute("rows", it.length) }
-      }
       if query.empty?
-        return Admin::SearchResults.new(contacts: recent.first(Admin::Dashboard::RECENT_LIMIT), groups: [], recent: true)
+        recent = span("search.contacts_by_recency") { |step|
+          store.contacts_by_recency(limit: Admin::Dashboard::RECENT_LIMIT).tap { step.set_attribute("rows", it.length) }
+        }
+        return Admin::SearchResults.new(contacts: recent, groups: [], recent: true)
       end
 
+      keyed = span("search.keyed_by_recency") { |step| store.keyed_by_recency.tap { step.set_attribute("rows", it.length) } }
       groups = span("search.all_groups") { |step| store.all_groups.tap { step.set_attribute("rows", it.length) } }
-      span("search.match") { |step|
-        contacts = Admin::Search.contacts(recent, query:, groups:)
-        step.set_attribute("words", query.split.length)
-        step.set_attribute("contacts", contacts.length)
-        Admin::SearchResults.new(contacts:, groups: Admin::Search.groups(groups, query:))
+      ids = span("search.match") { |step|
+        Admin::Search.contacts(keyed, query:, groups:).tap {
+          step.set_attribute("words", query.split.length)
+          step.set_attribute("contacts", it.length)
+        }
       }
+      contacts = span("search.contacts_by_recency") { |step|
+        found = store.contacts_by_recency(ids).to_h {
+          [it.contact.id, it] #: [String, Store::RecentContact]
+        }
+        step.set_attribute("rows", found.length)
+        ids.map { found.fetch(it) }
+      }
+      Admin::SearchResults.new(contacts:, groups: Admin::Search.groups(groups, query:))
     end
   end
 end
