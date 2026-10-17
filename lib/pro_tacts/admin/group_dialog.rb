@@ -6,7 +6,7 @@ require "pro_tacts/admin/group_label"
 module ProTacts
   module Admin
     # The groups dialog on a contact's card, opened by the groups row's
-    # "edit groups": ContactDialog's popover, over every group as a
+    # "edit": ContactDialog's popover, over every group as a
     # checkbox, the contact's own checked. The save sends what the page
     # loaded with beside what it sends back (`was[]`), so the route can
     # move only what was toggled (Web#apply_groups).

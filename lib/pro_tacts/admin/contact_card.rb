@@ -22,23 +22,32 @@ module ProTacts
     #
     # `groups` is the contact's membership (Store#groups_of), the row
     # framing the values under it. `dialog` names whether that row
-    # carries its "edit groups" button, which needs GroupDialog on the
+    # carries its "edit" button, which needs GroupDialog on the
     # page: the contact's page and a walk's saved row both render it,
-    # each telling the save where to land. `card` names
+    # each telling the save where to land. `new` names whether it also
+    # carries "new", which needs the NEW form on the page: the
+    # contact's page alone, its save landing on the group it made
+    # rather than back on a walk. `card` names
     # whether this renders the card around its own body or the body
     # alone for a card someone else supplies — the walk's read screen
     # (ImportSaved), whose trunk RecordCard owns.
     class ContactCard < Phlex::HTML
+      # The form "new" submits, outside the grid for the dialog's
+      # reason (ContactsShow).
+      NEW = "new-group" #: String
+
       # @rbs @contact: Contact
       # @rbs @groups: Array[Group]
       # @rbs @dialog: bool
+      # @rbs @new: bool
       # @rbs @card: bool
 
-      #: (contact: Contact, groups: Array[Group], ?dialog: bool, ?card: bool) -> void
-      def initialize(contact:, groups:, dialog: false, card: true)
+      #: (contact: Contact, groups: Array[Group], ?dialog: bool, ?new: bool, ?card: bool) -> void
+      def initialize(contact:, groups:, dialog: false, new: false, card: true)
         @contact = contact
         @groups = groups
         @dialog = dialog
+        @new = new
         @card = card
         @birthday = Format.birthday(contact)
       end
@@ -140,6 +149,11 @@ module ProTacts
       # exists, because the row holds the way to join or start one.
       # Without the dialog the row stands only when there is a member
       # to name: an empty row with nothing to press is nothing at all.
+      #
+      # "edit" opens the dialog over the groups that exist; "new" makes
+      # a new nameless one holding this contact and opens its members
+      # screen, the household's start — a family needs no name to be
+      # one, and the dialog's offer to make a group is a name typed.
       #: () -> void
       def groups_row
         dt(class: "type-label") { "groups" }
@@ -149,10 +163,24 @@ module ProTacts
               @groups.each { render GroupTag.new(group: it) }
             end
           end
-          button(type: "button", data_size: "sm", popovertarget: GroupDialog::ID) { "edit groups" } if @dialog
+          if @new
+            # Gloss' button group, whose divider tells the two apart
+            # where they sit side by side (admin.css stacks them on a
+            # phone).
+            div(role: "group", aria_label: "Groups") do
+              edit_button
+              button(type: "submit", form: NEW, data_size: "sm") { "new" }
+            end
+          elsif @dialog
+            edit_button
+          end
         end
       end
 
+      #: () -> void
+      def edit_button
+        button(type: "button", data_size: "sm", popovertarget: GroupDialog::ID) { "edit" }
+      end
 
       # The type in one column and the value in the other, with the
       # group that lends the row named under the value when one does.
