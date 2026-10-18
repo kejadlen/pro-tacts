@@ -22,17 +22,14 @@ module ProTacts
       # them but the screens of the import that wrote them.
       DIRECTORY = "imports" #: String
 
-      ORIGINAL = "original" #: String
-      REVISED = "revised" #: String
-      SAVED = "saved" #: String
-      ROWS = "rows" #: String
-      # The walk's notes, a JSON file each.
-      SLOTS = [SAVED, ROWS].freeze #: Array[String]
-
       # The cards' two slots, each a directory holding a file per card
       # named by its place in the file, so a screen reads the one card
       # it shows rather than every card the upload held.
-      CARDS = [ORIGINAL, REVISED].freeze #: Array[String]
+      ORIGINAL = "original" #: String
+      REVISED = "revised" #: String
+      # The walk's notes, a JSON file each.
+      SAVED = "saved" #: String
+      ROWS = "rows" #: String
 
       # One row of the walk's list as it was last read: what the row is
       # called and sorted by, off the card as it will be written, and
@@ -201,24 +198,20 @@ module ProTacts
         root / id
       end
 
-      # One slot's file. The slot is checked as narrowly as the id,
-      # for the reason the id is.
+      # One slot's file, or none for an id this never wrote. The id is
+      # the check; a slot is always one of the constants above.
       #: (String id, String slot) -> Pathname?
       def self.path(id, slot)
         directory = import_root(id)
-        return nil if directory.nil? || !SLOTS.include?(slot)
-
-        directory / file_name(slot)
+        directory / file_name(slot) if directory
       end
 
-      # One card's file in a cards slot, checked as #path checks: the
-      # place is an Integer the route matched, and never below zero.
+      # One card's file in a cards slot, #path's check: the place is
+      # the digits Roda's Integer matcher took, so never below zero.
       #: (String id, String slot, Integer index) -> Pathname?
       def self.card_path(id, slot, index)
         directory = import_root(id)
-        return nil if directory.nil? || !CARDS.include?(slot) || index.negative?
-
-        directory / slot / "#{index}.vcf"
+        directory / slot / "#{index}.vcf" if directory
       end
 
       # One slot, rewritten. Both refusals name which of the two

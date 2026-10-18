@@ -319,7 +319,7 @@ module ProTacts
     #: (String group, Array[String]? joined, Array[String]? named, ?member: Contact?, ?tags: Array[String]) -> Admin::ImportGroups
     def import_picker(group, joined, named, member: nil, tags: [])
       choices = store.group_choices
-      lot = group.empty? ? nil : choices.find { it.name == group }
+      lot = choices.find { it.name == group }
       everyone = choices.find { it.name == Group::EVERYONE }
       none = [] #: Array[String]
       was = member ? store.groups_of(member.id).map(&:id) : none
@@ -426,7 +426,7 @@ module ProTacts
                                           joined: ticked, named: wanted)
       end
 
-      edited = Admin::CardForm.contact_card(contact, first, middle, last, r.params)
+      edited = Admin::CardForm.contact_card(contact, first, middle, last, card_form_params)
       if target
         # A stored contact, whose birthday the model holds: the contact
         # editor's own save (#apply_edit), down to its one refusal.
@@ -506,7 +506,8 @@ module ProTacts
       # render.
       order = walk_order(rows)
       remaining = order.reject { |i| saved.key?(i.to_s) || i == index }
-      below = order.drop(order.index(index).to_i + 1)
+      at = order.index(index) or raise "row #{index} is not in its own walk"
+      below = order.drop(at + 1)
       r.redirect "/import/#{upload}/#{below.find { remaining.include?(it) } || remaining.fetch(0)}", 303
     end
 
