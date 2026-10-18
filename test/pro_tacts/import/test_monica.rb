@@ -214,6 +214,41 @@ class ImportMonicaTest < Minitest::Test
     assert_equal "about 1980", card.property("X-MONICA-AGE-BASED-BIRTHDAY").text
   end
 
+  # A date no month and day reads as: left behind as it came, the
+  # module's answer to any part with nowhere to go, rather than gone.
+  def test_a_birthday_that_will_not_read_is_left_behind
+    ["1980-00-12T00:00:00Z", "12/03/1980"].each do |date|
+      card = card_for(export(jane("birthdate" => {"date" => date})), "Jane Booles")
+
+      assert_nil card.property("BDAY")
+      assert_equal date, card.property("X-MONICA-BIRTHDATE").text
+    end
+  end
+
+  def test_a_field_whose_type_the_export_does_not_hold_is_left_behind
+    contact = jane
+    contact.fetch("data").fetch(0)["values"] = [{"uuid" => "f9", "properties" => {"data" => "+1 555 0199", "type" => "gone"}}]
+    card = card_for(export(contact), "Jane Booles")
+
+    assert_nil card.property("X-SOCIALPROFILE")
+    assert_equal "+1 555 0199", card.property("X-MONICA-CONTACT-FIELD").text
+  end
+
+  def test_a_relationship_to_someone_the_export_does_not_name_is_left_behind
+    card = card_for(export(jane, relationships: [relationship("jane-uuid", "partner", "nobody-uuid")]), "Jane Booles")
+
+    refute_includes card.property("NOTE").text, "Significant other"
+    assert_equal "Significant other", card.property("X-MONICA-RELATIONSHIP").text
+  end
+
+  def test_an_avatar_naming_a_photo_the_export_does_not_hold_is_left_behind
+    card = card_for(export(jane("avatar" => {"avatar_source" => "photo", "avatar_photo" => "gone-uuid"})),
+                    "Jane Booles")
+
+    assert_nil card.property("PHOTO")
+    assert_equal "not in the export", card.property("X-MONICA-PHOTO").text
+  end
+
   def test_json_that_is_not_a_monica_export_is_refused
     error = assert_raises(Vcf::Invalid) { Monica.vcf("{\"contacts\": []}") }
 

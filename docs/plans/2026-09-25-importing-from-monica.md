@@ -75,6 +75,10 @@ activities are the account's, and name contacts by uuid.
   property that already says it) struck on the card as exported. They
   are things to do or things that happened rather than things about
   the person, and the one worth keeping is a copy into the note away.
+  So is any part the export names but cannot complete: a birthday
+  that is no date, a field of a type the export does not hold, a
+  relationship to someone it gives no name, and an avatar naming a
+  photo it does not carry. Each is struck in view rather than gone.
 
 A contact Monica only knows by name — `is_partial`, a relative added
 from someone else's page — is not a card of its own. It is a name in
