@@ -103,6 +103,17 @@ class ExchangeLogTest < Minitest::Test
     assert_includes logged, "!! RuntimeError: boom"
   end
 
+  # A log that cannot be written raises, where Logger's own default
+  # would print a warning and carry on with the record lost. The file
+  # is closed under the Logger holding it: a write to it raises
+  # IOError, as one to a full disk raises Errno::ENOSPC.
+  def test_a_log_that_will_not_write_raises
+    @everything = true
+    app.instance_variable_get(:@logger).instance_variable_get(:@logdev).dev.close
+
+    assert_raises(IOError) { request "/dav/addressbook/", method: "PROPFIND" }
+  end
+
   def test_the_request_is_logged_whole
     @stub.status = 404
 

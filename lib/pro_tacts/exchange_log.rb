@@ -44,7 +44,10 @@ module ProTacts
 
     # Builds the Logger the middleware writes to: appended, unbuffered
     # (Logger syncs its own device), and rotated by size. path "stderr"
-    # writes to the process's stderr instead.
+    # writes to the process's stderr instead. A write or rotation that
+    # fails raises rather than taking Logger's default, a warning on
+    # stderr: the log is the record a refusal alert sends someone to,
+    # and one lost quietly would leave that alert pointing at nothing.
     #: (String | Pathname path) -> Logger
     def self.open_log(path)
       target = if path.to_s == "stderr"
@@ -54,7 +57,7 @@ module ProTacts
                  path.to_s
                end
 
-      Logger.new(target, ROTATIONS, ROTATE_AT).tap do |logger|
+      Logger.new(target, ROTATIONS, ROTATE_AT, reraise_write_errors: [StandardError]).tap do |logger|
         logger.level = :info
         logger.formatter = proc do |_severity, datetime, _progname, msg|
           stamp = datetime.strftime("%Y-%m-%dT%H:%M:%S.%3N")
