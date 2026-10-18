@@ -235,23 +235,22 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
-  # The whole save: the name, a line, and the membership in one POST,
-  # and every card whose served bytes moved told so in the change log.
-  def test_a_save_writes_the_name_the_lines_and_the_members
+  # The whole save: the name and a line in one POST, and every card
+  # whose served bytes moved told so in the change log. Membership is
+  # the members screen's, so a list sent here moves nobody.
+  def test_a_save_writes_the_name_and_the_lines_but_not_the_members
     with_contacts(BOOLES) do |store|
       id = household(store)
       group = store.group(id)
 
       post "/groups/#{id}", version: group.version, name: "The Booles", note: "Gate code 1912.",
-                            members: ["", "george", "ada"]
+                            members: ["", "ada"]
 
       assert_equal 303, last_response.status
       saved = store.group(id)
       assert_equal "The Booles", saved.name
       assert_equal [ADDRESS, "NOTE:Gate code 1912."], saved.lines
-      assert_equal %w[ada george], saved.members
-      assert_includes store.contact("ada").vcard.to_s, ADDRESS
-      refute_includes store.contact("mary").vcard.to_s, ADDRESS
+      assert_equal %w[george mary], saved.members
       assert_equal "group", store.changes_of("mary").first.action
     end
   end
@@ -262,7 +261,7 @@ class AdminGroupsPagesTest < Minitest::Test
       group = store.group(id)
       digest = group.reading.addresses.fetch(0).line.digest
 
-      post "/groups/#{id}", version: group.version, note: "Gate code 1854.", members: ["", "george", "mary"],
+      post "/groups/#{id}", version: group.version, note: "Gate code 1854.",
                             address: {digest => {street: "8 Calculus Close", locality: "London",
                                                  region: "England", postal_code: "NW1 1AB",
                                                  country: "United Kingdom"}},
@@ -281,7 +280,7 @@ class AdminGroupsPagesTest < Minitest::Test
       stale = store.group(id).version
       store.rename_group(id, name: "The Booles")
 
-      post "/groups/#{id}", version: stale, name: "Booles", members: [""]
+      post "/groups/#{id}", version: stale, name: "Booles"
 
       assert_equal 200, last_response.status
       assert_includes last_response.body, "This group changed since the page loaded; nothing was saved."
@@ -295,8 +294,7 @@ class AdminGroupsPagesTest < Minitest::Test
       store.create_group(name: "Clarks")
       id = household(store)
 
-      post "/groups/#{id}", version: store.group(id).version, name: "Clarks", note: "Gate code 1854.",
-                            members: ["", "ada"]
+      post "/groups/#{id}", version: store.group(id).version, name: "Clarks", note: "Gate code 1854."
 
       assert_equal 200, last_response.status
       assert_includes last_response.body, "Another group is already named Clarks; nothing was saved."
@@ -311,7 +309,7 @@ class AdminGroupsPagesTest < Minitest::Test
     with_contacts(BOOLES) do |store|
       id = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[george])
 
-      post "/groups/#{id}", version: store.group(id).version, name: "Everyone", members: ["", "george", "mary"]
+      post "/groups/#{id}", version: store.group(id).version, name: "Everyone"
 
       assert_equal 200, last_response.status
       assert_includes last_response.body, "The sync:* group names a book and keeps its name; nothing was saved."
@@ -337,27 +335,11 @@ class AdminGroupsPagesTest < Minitest::Test
     with_contacts(BOOLES) do |store|
       id = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[george])
 
-      post "/groups/#{id}", version: store.group(id).version, note: "Gate code 1854.", members: ["", "george"]
+      post "/groups/#{id}", version: store.group(id).version, note: "Gate code 1854."
 
       assert_equal 303, last_response.status
       assert_equal ProTacts::Group::EVERYONE, store.group(id).name
       assert_equal ["NOTE:Gate code 1854."], store.group(id).lines
-    end
-  end
-
-  # No list at all is a POST that says nothing about membership; a
-  # doctored id names no card and is dropped rather than a 500.
-  def test_membership_moves_only_for_a_list_of_real_cards
-    with_contacts(BOOLES) do |store|
-      id = household(store)
-
-      post "/groups/#{id}", version: store.group(id).version, note: "Gate code 1854."
-      assert_equal %w[george mary], store.group(id).members
-
-      post "/groups/#{id}", version: store.group(id).version, note: "Gate code 1854.",
-                            members: ["", "george", "nobody"]
-      assert_equal 303, last_response.status
-      assert_equal %w[george], store.group(id).members
     end
   end
 

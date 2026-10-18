@@ -1712,7 +1712,8 @@ class StoreTest < Minitest::Test
       store.set_group_lines(id, [HOUSEHOLD_ADDRESS])
       store.add_member(id, "aiden")
       store.remove_member(id, "znorth")
-      store.edit_group(id, name: "Booles", lines: [HOUSEHOLD_ADDRESS], members: ["aiden"])
+      store.edit_group(id, name: "Booles", lines: [HOUSEHOLD_ADDRESS])
+      store.edit_members(id, join: [], leave: ["znorth"])
 
       assert_equal logged, store.group_changes_of(id).length
     end
@@ -1741,9 +1742,10 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       id = FixtureData.seed_group(store, name: "Booles", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
-      store.edit_group(id, name: "The Booles", lines: [HOUSEHOLD_NOTE], members: ["znorth"])
+      store.edit_group(id, name: "The Booles", lines: [HOUSEHOLD_NOTE])
+      store.edit_members(id, join: ["znorth"], leave: ["aiden"])
 
-      assert_equal %w[join lines rename leave create], store.group_changes_of(id).map(&:action)
+      assert_equal %w[join leave lines rename create], store.group_changes_of(id).map(&:action)
     end
   end
 
@@ -1919,7 +1921,7 @@ class StoreTest < Minitest::Test
       assert_raises(ProTacts::Store::SyncGroupRename) { store.rename_group(everyone, name: " ") }
       assert_raises(ProTacts::Store::SyncGroupRename) { store.rename_group(alpha, name: "sync:Zoë Chen") }
       assert_raises(ProTacts::Store::SyncGroupRename) do
-        store.edit_group(everyone, name: "Everyone", lines: [], members: %w[aiden])
+        store.edit_group(everyone, name: "Everyone", lines: [])
       end
 
       assert_equal ProTacts::Group::EVERYONE, store.group(everyone).name
@@ -1933,9 +1935,10 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN}) do |store|
       everyone = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[aiden])
 
-      store.edit_group(everyone, name: ProTacts::Group::EVERYONE, lines: [], members: [])
+      store.edit_group(everyone, name: ProTacts::Group::EVERYONE, lines: [HOUSEHOLD_NOTE])
 
-      assert_empty store.group(everyone).members
+      assert_equal ProTacts::Group::EVERYONE, store.group(everyone).name
+      assert_equal [HOUSEHOLD_NOTE], store.group(everyone).lines
     end
   end
 

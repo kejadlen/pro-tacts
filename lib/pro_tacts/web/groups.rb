@@ -113,26 +113,14 @@ module ProTacts
         return group_edit_screen(group, notice: "This group changed since the page loaded; nothing was saved.")
       end
 
-      # Only ids that name a card: a membership row is a foreign key,
-      # and a doctored id is ordinary bad input rather than a 500. A
-      # POST carrying no list keeps the membership it found, as an
-      # absent field keeps a card's lines (Admin::CardForm.edited_values);
-      # the editor's own form never carries one (Admin::GroupsEdit).
-      submitted = r.params["members"]
-      members =
-        if submitted.is_a?(Array)
-          submitted.map(&:to_s) & store.contact_ids
-        else
-          group.members
-        end #: Array[String]
-
-      # No name at all keeps the one it has, the members' posture
-      # above: a book's group shows its name as text (Admin::GroupsEdit),
-      # where a blank one is a request to go nameless.
+      # No name at all keeps the one it has: a book's group shows its
+      # name as text (Admin::GroupsEdit), where a blank one is a
+      # request to go nameless. Membership is the members screen's
+      # (#apply_members); the editor's form carries none.
       name = r.params.key?("name") ? r.params["name"].to_s : group.name
 
       begin
-        store.edit_group(id, name:, lines: Admin::CardForm.group_lines(group, r.params), members:)
+        store.edit_group(id, name:, lines: Admin::CardForm.group_lines(group, card_form_params))
       rescue Sequel::UniqueConstraintViolation
         # A taken name (db/migrations/008_group_names.rb). The save is
         # one transaction, so nothing of it landed.
@@ -149,8 +137,8 @@ module ProTacts
     # the diff of what came back against what the page loaded, so a
     # membership moved elsewhere since stays as it is, and a stale
     # page has nothing to revert and no snapshot to refuse. Only ids
-    # that name a card — a membership row is a foreign key
-    # (#apply_group_edit's reason).
+    # that name a card: a membership row is a foreign key, and a
+    # doctored id is ordinary bad input rather than a 500.
     #: (untyped r, String id) -> String?
     def apply_members(r, id)
       group = store.group(id)
