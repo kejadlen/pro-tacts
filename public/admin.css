@@ -1119,7 +1119,7 @@ span.avatar[data-size="lg"] {
    Baseline-aligned: a grid item blockifies, so the tag's inline-flex
    becomes a flex container, which takes its baseline from its first
    item — the tag's text — and so shares the value's. A contact
-   card's "edit" and "new" take the same place as Gloss' button group,
+   card's "edit / new" take the same place as Gloss' button group,
    a flex container like the tag. */
 .detail-grid dd:has(> .tag),
 .detail-grid dd:has(> button),
@@ -1140,17 +1140,27 @@ span.avatar[data-size="lg"] {
 .detail-grid dd:has(> [role="group"]) > div:not([role="group"]) {
   grid-column: 1;
 }
-/* On a phone the group stacks, the line break standing in for the
-   divider: side by side the two take the tags' column down to a word. */
+/* The slash between the pair, set on the buttons' line and close to
+   both, their own padding being the space either side of it. */
+.detail-grid dd > [role="group"] {
+  align-items: baseline;
+}
+.detail-grid dd > [role="group"] > span {
+  font-family: var(--gl-font-mono);
+}
+/* On a phone the group stacks and the slash goes, the line break
+   saying what it said: side by side the two take the tags' column
+   down to a word. The two pads between the labels are drawn together
+   to one, so the pair reads as one control rather than two rows. */
 @media (max-width: 48rem) {
   .detail-grid dd > [role="group"] {
     flex-direction: column;
     align-items: flex-end;
   }
-  /* The two pads between the labels drawn together to one, so the
-     pair reads as one control rather than two rows of the grid. */
-  .detail-grid dd > [role="group"] > button + button {
-    border-inline-start: none;
+  .detail-grid dd > [role="group"] > span {
+    display: none;
+  }
+  .detail-grid dd > [role="group"] > span + button {
     margin-block-start: calc(-1 * var(--gl-space-3xs));
   }
 }

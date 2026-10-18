@@ -162,11 +162,12 @@ module ProTacts
             end
           end
           if @new
-            # Gloss' button group, whose divider tells the two apart
-            # where they sit side by side (admin.css stacks them on a
-            # phone).
+            # A slash tells the two apart where they sit side by side,
+            # the way the pair is said aloud; admin.css stacks them on
+            # a phone and drops it there, the line break saying it.
             div(role: "group", aria_label: "Groups") do
               edit_button
+              span(class: "gl-muted", aria_hidden: true) { "/" }
               button(type: "submit", form: NEW, data_size: "sm") { "new" }
             end
           elsif @dialog
