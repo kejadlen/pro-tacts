@@ -22,9 +22,13 @@ with requests sent in process:
 | blank (10 recent) | 168 ms | 17 ms |
 
 The browser was never the cause, because the results always came from
-the server (`2026-09-30-live-search.md`). A query that matches every
-card still builds and renders every card. That is what an uncapped
-list costs, and a cap would be a separate decision.
+the server (`2026-09-30-live-search.md`).
+
+A query that matches every card still had to build and render every
+card, at 364 ms for "a". So the contacts now stop at 50, followed by a
+line counting the rest and asking for a longer query. This reverses
+the live-search plan's "uncapped, with no see all": a list of hundreds
+was never read, and the next letter typed narrows it anyway.
 
 ## Shape
 

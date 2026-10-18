@@ -23,7 +23,8 @@ module ProTacts
     end
 
     class SearchResults
-      def self.new: (contacts: Array[Store::RecentContact], groups: Array[Group], ?recent: bool) -> instance
+      LIMIT: Integer
+      def self.new: (contacts: Array[Store::RecentContact], groups: Array[Group], ?recent: bool, ?more: Integer) -> instance
       def call: () -> String
     end
 

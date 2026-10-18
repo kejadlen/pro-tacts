@@ -11,21 +11,27 @@ module ProTacts
     # in: the contacts a query matches in the order Search ranks them
     # and then the groups — a group is a record the search reaches as
     # surely as a contact is (docs/DESIGN.md, "When adding something
-    # new"). Uncapped, with no "see all" to send a long list to
-    # (docs/plans/2026-09-30-live-search.md).
+    # new"). The contacts stop at LIMIT, and the rest are counted
+    # rather than listed: the answer to a query that long is a longer
+    # query (docs/plans/2026-10-17-search-keys.md).
     class SearchResults < Phlex::HTML
+      LIMIT = 50 #: Integer
+
       # @rbs @contacts: Array[Store::RecentContact]
       # @rbs @groups: Array[Group]
       # @rbs @recent: bool
+      # @rbs @more: Integer
 
       # `recent` is the list standing in for results before there is a
       # query — the most recently updated contacts, labeled as the
       # dashboard labels them (Web#search_results).
-      #: (contacts: Array[Store::RecentContact], groups: Array[Group], ?recent: bool) -> void
-      def initialize(contacts:, groups:, recent: false)
+      # `more` is how many matched past LIMIT.
+      #: (contacts: Array[Store::RecentContact], groups: Array[Group], ?recent: bool, ?more: Integer) -> void
+      def initialize(contacts:, groups:, recent: false, more: 0)
         @contacts = contacts
         @groups = groups
         @recent = recent
+        @more = more
       end
 
       def view_template
@@ -37,6 +43,7 @@ module ProTacts
         if @contacts.any?
           h2(class: "type-label") { @recent ? "recently updated" : "contacts" }
           ul(class: "card") { @contacts.each { render RecentRow.new(row: it) } }
+          p(class: "type-body-sm") { "#{@more} more. Keep typing to narrow them down." } if @more.positive?
         end
         return if @groups.empty?
 

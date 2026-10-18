@@ -540,6 +540,18 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # Past the cap, the rest are counted rather than listed.
+  def test_search_lists_up_to_its_limit_and_counts_the_rest
+    limit = ProTacts::Admin::SearchResults::LIMIT
+    cards = (limit + 2).times.to_h { ["ada#{it}", ADA.sub("Ada Lovelace", "Ada #{it}").sub("UID:ada", "UID:ada#{it}")] }
+    with_contacts(cards) do
+      get "/search/results", q: "ada"
+
+      assert_equal limit, last_response.body.scan("<li").length
+      assert_includes last_response.body, "2 more. Keep typing to narrow them down."
+    end
+  end
+
   def test_search_with_no_matches_says_so
     with_contacts({"ada" => ADA}) do
       get "/search/results", q: "nobody"
