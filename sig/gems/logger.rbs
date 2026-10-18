@@ -1,0 +1,9 @@
+# RBS's stdlib signature for Logger predates the reraise_write_errors
+# keyword (logger 1.6.2), so this adds the constructor ExchangeLog
+# calls as an overload of the one it declares.
+#
+# Written against logger 1.7.0 (lib/logger.rb).
+class Logger
+  def initialize: (logdev? logdev, ?Numeric | String shift_age, ?Integer shift_size, ?shift_period_suffix: String, ?binmode: boolish, ?datetime_format: String, ?formatter: _Formatter, ?progname: String, ?level: Integer | interned, ?reraise_write_errors: Array[Module], ?skip_header: boolish) -> void
+                | ...
+end

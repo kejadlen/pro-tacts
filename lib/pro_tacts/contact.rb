@@ -63,14 +63,17 @@ module ProTacts
     # (docs/plans/2026-09-18-phone-labels.md, "Reading"), every
     # shape's `line` is the parsed line it was read from, the address
     # a save names that row by
-    # (docs/plans/2026-09-05-web-card-editor.md), and `lent_by` the
+    # (docs/plans/2026-09-05-web-card-editor.md), a repeatable row's
+    # `property` that line's reading, which #rows only builds a row
+    # from, so a save splicing it never meets a line that would not
+    # read, and `lent_by` the
     # group lending the row, nil where the card's own (#lent_at).
     # Data classes, whose members the inline syntax cannot read; the
     # signatures live in sig/pro_tacts/contact.rbs.
     # @rbs skip
-    Phone = Data.define(:value, :label, :types, :line, :lent_by)
+    Phone = Data.define(:value, :label, :types, :line, :property, :lent_by)
     # @rbs skip
-    Email = Data.define(:value, :types, :line, :lent_by)
+    Email = Data.define(:value, :types, :line, :property, :lent_by)
     # @rbs skip
     Note = Data.define(:value, :line)
     # @rbs skip
@@ -95,6 +98,7 @@ module ProTacts
       :country,
       :types,
       :line,
+      :property,
       :lent_by,
     )
 
@@ -371,6 +375,7 @@ module ProTacts
           label: group && labels[group.downcase],
           types: property.types - %w[voice],
           line:,
+          property:,
           lent_by:,
         ) if value
       }
@@ -382,7 +387,7 @@ module ProTacts
         value = text_of(property)
         # RFC 2426 section 3.3.2: `internet` is the format every address
         # has by default, so it names none.
-        Email.new(value:, types: property.types - %w[internet], line:, lent_by:) if value
+        Email.new(value:, types: property.types - %w[internet], line:, property:, lent_by:) if value
       }
     end
 
@@ -449,6 +454,17 @@ module ProTacts
       @lent_at
     end
 
+    # A lent line's text. Every write that stores one reads it first
+    # (#composed_note's reason), so one that will not read raises
+    # rather than being skipped as though the group lent nothing.
+    #: (Inherited row) -> String
+    def self.lent_text(row)
+      property = VCard.new(row.line).lines.fetch(0).property
+      raise "group #{row.group.id} lends a line that will not read" if property.nil?
+
+      property.text
+    end
+
     # Whether a lent line is a NOTE, read off its bytes the way
     # EditedContact reads a property name off them: the group schema
     # admits no `item1.` prefix to strip (db/migrations/004_groups.rb).
@@ -465,22 +481,17 @@ module ProTacts
     # hold no note serves its own NOTE's bytes as they lie, whatever
     # they say, the editor's whole safety.
     #
-    # A member's own two NOTE lines — a card older than the one-note
-    # migration, or a bug — join as the member's text, which serves
-    # the card this shape means to serve and converges on it at the
-    # next write. A lent line that will not read has no text to
-    # become and is skipped, unreachable through every write the
-    # schema and #shareable? gate.
+    # A member holds at most one NOTE: migration 012 joined the
+    # stored ones and Store#assert_one_note refuses a write of two. A
+    # lent line that will not read is a broken assumption too, every
+    # write the schema and EditedContact#shareable? gate reading it
+    # first, so it raises (Contact.lent_text).
     #: (Array[Inherited] rows) -> String?
     def composed_note(rows)
       return if rows.empty?
 
-      sections = rows.filter_map { |row|
-        text = VCard.new(row.line).lines.fetch(0).property&.text
-        NoteSections::Section.new(label: row.group.label, text:) if text
-      }
-      member = @stored.lines.select { it.names?("NOTE") }
-        .filter_map { it.property&.text }.join("\n\n")
+      sections = rows.map { NoteSections::Section.new(label: it.group.label, text: Contact.lent_text(it)) }
+      member = @stored.property("NOTE")&.text.to_s
       "NOTE:#{VCard.escape(NoteSections.join(member, sections))}"
     end
 
@@ -542,15 +553,16 @@ module ProTacts
     end
 
     # ADR's components, with a value that is blank throughout reading
-    # as no address at all. Carries the line it was read from, the
-    # other provenance-carrying shapes' own address for a save.
+    # as no address at all. Carries the line it was read from and its
+    # reading, the other provenance-carrying shapes' own address for a
+    # save.
     #: (VCard::Parser::Property property, line: VCard::Parser::Line, lent_by: Group?) -> Address?
     def address_of(property, line:, lent_by:)
       components = components_of(property)
       return if components.none?
 
       po_box, extended, street, locality, region, postal_code, country = components
-      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: property.types, line:, lent_by:)
+      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: property.types, line:, property:, lent_by:)
     end
 
   end

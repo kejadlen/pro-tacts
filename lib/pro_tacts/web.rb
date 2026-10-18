@@ -83,12 +83,32 @@ module ProTacts
     # DAV client and curl, and no page a current browser sends.
     plugin :sec_fetch_site_csrf, allow_missing: true, csrf_failure: :empty_403
 
-    # The identity gate's refusal, as an exception mapped to a
-    # response: ProxyAuth.login raises MissingLogin for a request that
-    # names nobody, and this answers it with the 401. `classes:` keeps
-    # the plugin from touching any other raise — an unexpected failure
-    # still propagates to Sentry::Rack::CaptureExceptions outside the
-    # app, where it is reported, so this handler must not widen.
+    # The shape checks a form's own fields are held to (#card_form_params),
+    # raising TypecastParams::Error for a POST no page here sends, which
+    # the error handler below answers as a 400. A walk row's path
+    # (`/import/:upload/:index`) is the groups dialog's `land`, read
+    # back into its parts: the redirect is not a form field's to
+    # choose, so any other shape — which no page here renders — is
+    # refused rather than followed.
+    plugin :typecast_params do
+      handle_type(:walk_row) do |v|
+        row = (v if v.is_a?(String))&.match(%r{\A/import/([a-z]+)/(\d+)\z})
+        raise Roda::RodaPlugins::TypecastParams::Error, "not a walk row: #{v.inspect}" if row.nil?
+
+        # Kernel's, the block running as a TypecastParams instance
+        # whose own #Integer reads a param by that name.
+        [row[1].to_s, ::Kernel::Integer(row[2], 10)]
+      end
+    end
+
+    # The two refusals raised as exceptions and mapped to a response.
+    # ProxyAuth.login raises MissingLogin for a request that names
+    # nobody, and this answers it with the 401; typecast_params raises
+    # its Error for a form field in a shape no page here posts, and
+    # this answers it with the 400. `classes:` keeps the plugin from
+    # touching any other raise — an unexpected failure still
+    # propagates to Sentry::Rack::CaptureExceptions outside the app,
+    # where it is reported, so this handler must not widen.
     #
     # A 401 must carry a challenge (RFC 9110 section 15.5.2), and
     # `Proxy-Identity` is no registered scheme: it tells the client
@@ -100,12 +120,18 @@ module ProTacts
     # it hands an attacker nothing: the proxy overwrites the header on
     # every request, so knowing which one it is buys no way to forge
     # it.
-    plugin :error_handler, classes: [ProxyAuth::MissingLogin] do |_e|
-      response.status = 401
-      response["WWW-Authenticate"] = "Proxy-Identity"
+    plugin :error_handler, classes: [ProxyAuth::MissingLogin, Roda::RodaPlugins::TypecastParams::Error] do |e|
       response["Content-Type"] = "text/plain"
-      "Unauthorized: no login on the #{ProxyAuth::HEADER} header.\n" \
-      "The proxy in front of this app writes that header.\n"
+      case e
+      when ProxyAuth::MissingLogin
+        response.status = 401
+        response["WWW-Authenticate"] = "Proxy-Identity"
+        "Unauthorized: no login on the #{ProxyAuth::HEADER} header.\n" \
+        "The proxy in front of this app writes that header.\n"
+      else
+        response.status = 400
+        "Bad Request: #{e.param_name} is not the shape this app's forms send.\n"
+      end
     end
 
     # The router's trunk: the identity gate, the static files, and the
@@ -146,6 +172,45 @@ module ProTacts
     #: () -> Store
     def store
       self.class.store
+    end
+
+    # The params Admin::CardForm reads, held to the shapes the contact
+    # and group editors post: each text field a string, each phone and
+    # email field a hash of strings keyed by its row's digest, each
+    # added phone or email a list of strings, and every address row,
+    # added address and the birthday row a hash of component strings.
+    # Any other shape is a POST made by hand, refused here as a 400
+    # (the error handler) rather than read around in CardForm. An
+    # absent field is a form that rendered no such rows — or a name
+    # input a company disables — and passes.
+    #: () -> Hash[String, untyped]
+    def card_form_params
+      typecast_params.str(%w[first middle last organization nickname note])
+      typecast_params.array(:str, %w[new_phone new_email])
+      %w[phone email].each do |key|
+        rows = typecast_params.Hash(key)
+        rows&.each_key { typecast_params[key].str!(it) }
+      end
+      %w[address new_address].each do |key|
+        rows = typecast_params.Hash(key)
+        rows&.each_key { typecast_params[key][it].str(Contact::ADDRESS_COMPONENTS) }
+      end
+      typecast_params["birthday"].str(%w[year month day]) if typecast_params.Hash("birthday")
+      request.params
+    end
+
+    # A form's list of ids: none for a field absent — no box ticked —
+    # and a 400 for one that is not a list of strings.
+    #: (String key) -> Array[String]
+    def ids_in(key)
+      typecast_params.array(:str, key) || []
+    end
+
+    # The file part the form sent: none for a POST carrying no file,
+    # and a 400 for a field that is not one.
+    #: (String key) -> Hash[Symbol, untyped]?
+    def file_in(key)
+      typecast_params.file(key)
     end
 
     # One step of a request, timed as a span inside its request's span

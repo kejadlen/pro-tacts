@@ -741,25 +741,22 @@ module ProTacts
     end
 
     # The editor's whole save, as one transaction: a failure part-way
-    # leaves the group as it was rather than half renamed. Leavers go
-    # first and joiners last, so no card is logged for lines it was
-    # about to stop or had yet to start serving.
-    #: (String id, name: String?, lines: Array[String], members: Array[String]) -> void
-    def edit_group(id, name:, lines:, members:)
+    # leaves the group as it was rather than half renamed. Membership
+    # is #edit_members', the members screen's own save.
+    #: (String id, name: String?, lines: Array[String]) -> void
+    def edit_group(id, name:, lines:)
       refuse_sync_rename(id, name)
       @database.transaction do
-        current = member_ids([id])
-        (current - members).each { remove_member(id, it) }
         rename(id, name)
         set_group_lines(id, lines)
-        (members - current).each { add_member(id, it) }
       end
     end
 
     # The members screen's save, #regroup's shape over a group: what
     # it toggled rather than the set it shows, one transaction so a
-    # failure part-way leaves the membership as it was. Leavers first
-    # and joiners last, #edit_group's reason.
+    # failure part-way leaves the membership as it was. Leavers go
+    # first and joiners last, so no card is logged for lines it was
+    # about to stop or had yet to start serving.
     #: (String id, join: Array[String], leave: Array[String]) -> void
     def edit_members(id, join:, leave:)
       @database.transaction do
@@ -870,7 +867,7 @@ module ProTacts
       end
     end
 
-    # A card's side of #edit_group: one transaction, leavers first and
+    # A card's side of #edit_members: one transaction, leavers first and
     # joiners last for that method's reason. A named create makes its
     # group to join inside the same transaction, so a taken name
     # (#create_group) moves nothing.

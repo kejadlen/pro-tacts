@@ -22,17 +22,14 @@ module ProTacts
       # them but the screens of the import that wrote them.
       DIRECTORY = "imports" #: String
 
-      ORIGINAL = "original" #: String
-      REVISED = "revised" #: String
-      SAVED = "saved" #: String
-      ROWS = "rows" #: String
-      # The walk's notes, a JSON file each.
-      SLOTS = [SAVED, ROWS].freeze #: Array[String]
-
       # The cards' two slots, each a directory holding a file per card
       # named by its place in the file, so a screen reads the one card
       # it shows rather than every card the upload held.
-      CARDS = [ORIGINAL, REVISED].freeze #: Array[String]
+      ORIGINAL = "original" #: String
+      REVISED = "revised" #: String
+      # The walk's notes, a JSON file each.
+      SAVED = "saved" #: String
+      ROWS = "rows" #: String
 
       # One row of the walk's list as it was last read: what the row is
       # called and sorted by, off the card as it will be written, and
@@ -137,20 +134,20 @@ module ProTacts
       # What this import has done: the group it files under, and the
       # contact each saved card became, by the card's place in the
       # file — the name every screen of the walk calls a contact by
-      # until there is a minted id to call it by instead. Two empty
-      # answers for an import that is gone or a slot that will not
-      # parse: this is a file on disk, and one that will not read back
-      # in the shape it was written in is a broken assumption JSON
-      # says so about.
+      # until there is a minted id to call it by instead. Empty for an
+      # import that is gone, #read's ordinary case. A slot that will
+      # not read back in the shape #open wrote it in raises, #rows'
+      # posture: answering "nothing saved" would send every row back
+      # through a Save that writes its contact a second time.
       #: (String id) -> [String, Hash[String, String]]
       def self.saved(id)
         raw = read(id, SAVED)
-        return ["", ids(nil)] if raw.nil?
+        return ["", ids({})] if raw.nil?
 
         parsed = JSON.parse(raw)
-        return ["", ids(nil)] unless parsed.is_a?(Hash)
+        raise ArgumentError, "#{id}'s saved slot is not an object" unless parsed.is_a?(Hash)
 
-        [parsed[GROUP].to_s, ids(parsed[CONTACTS])]
+        [parsed.fetch(GROUP).to_s, ids(parsed.fetch(CONTACTS))]
       end
 
       # One card, written: its place in the file against the id the
@@ -201,24 +198,20 @@ module ProTacts
         root / id
       end
 
-      # One slot's file. The slot is checked as narrowly as the id,
-      # for the reason the id is.
+      # One slot's file, or none for an id this never wrote. The id is
+      # the check; a slot is always one of the constants above.
       #: (String id, String slot) -> Pathname?
       def self.path(id, slot)
         directory = import_root(id)
-        return nil if directory.nil? || !SLOTS.include?(slot)
-
-        directory / file_name(slot)
+        directory / file_name(slot) if directory
       end
 
-      # One card's file in a cards slot, checked as #path checks: the
-      # place is an Integer the route matched, and never below zero.
+      # One card's file in a cards slot, #path's check: the place is
+      # the digits Roda's Integer matcher took, so never below zero.
       #: (String id, String slot, Integer index) -> Pathname?
       def self.card_path(id, slot, index)
         directory = import_root(id)
-        return nil if directory.nil? || !CARDS.include?(slot) || index.negative?
-
-        directory / slot / "#{index}.vcf"
+        directory / slot / "#{index}.vcf" if directory
       end
 
       # One slot, rewritten. Both refusals name which of the two
@@ -233,12 +226,13 @@ module ProTacts
       end
 
       # One map of a contact's place in the file to the id it was
-      # stored under, out of whatever the file actually holds.
+      # stored under, refused where the slot holds anything else
+      # (#saved's reason).
       #: (untyped raw) -> Hash[String, String]
       def self.ids(raw)
-        ids = {} #: Hash[String, String]
-        return ids unless raw.is_a?(Hash)
+        raise ArgumentError, "the saved slot's contacts are not an object" unless raw.is_a?(Hash)
 
+        ids = {} #: Hash[String, String]
         raw.each { |index, contact| ids[index.to_s] = contact.to_s }
         ids
       end

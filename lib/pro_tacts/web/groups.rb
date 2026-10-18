@@ -29,7 +29,7 @@ module ProTacts
         end
 
         r.post do
-          name = r.params["name"].to_s.strip
+          name = typecast_params.str("name", "").strip
           id = store.create_group(name: name.empty? ? nil : name)
           r.redirect "/groups/#{id}/edit", 303
         rescue Sequel::UniqueConstraintViolation
@@ -109,38 +109,22 @@ module ProTacts
       group = store.group(id)
       return if group.nil?
 
-      if r.params["version"].to_s != group.version
+      if typecast_params.str!("version") != group.version
         return group_edit_screen(group, notice: "This group changed since the page loaded; nothing was saved.")
       end
 
-      # Only ids that name a card: a membership row is a foreign key,
-      # and a doctored id is ordinary bad input rather than a 500. A
-      # POST carrying no list keeps the membership it found, as an
-      # absent field keeps a card's lines (Admin::CardForm.edited_values);
-      # the editor's own form never carries one (Admin::GroupsEdit).
-      submitted = r.params["members"]
-      members =
-        if submitted.is_a?(Array)
-          submitted.map(&:to_s) & store.contact_ids
-        else
-          group.members
-        end #: Array[String]
-
-      # No name at all keeps the one it has, the members' posture
-      # above: a book's group shows its name as text (Admin::GroupsEdit),
-      # where a blank one is a request to go nameless.
-      name = r.params.key?("name") ? r.params["name"].to_s : group.name
+      # No name at all keeps the one it has: a book's group shows its
+      # name as text (Admin::GroupsEdit), where a blank one is a
+      # request to go nameless. Membership is the members screen's
+      # (#apply_members); the editor's form carries none.
+      name = typecast_params.str("name", group.name)
 
       begin
-        store.edit_group(id, name:, lines: Admin::CardForm.group_lines(group, r.params), members:)
+        store.edit_group(id, name:, lines: Admin::CardForm.group_lines(group, card_form_params))
       rescue Sequel::UniqueConstraintViolation
         # A taken name (db/migrations/008_group_names.rb). The save is
         # one transaction, so nothing of it landed.
-        return group_edit_screen(group, notice: "Another group is already named #{r.params['name']}; nothing was saved.")
-      rescue Store::SyncGroupRename
-        # A book's group keeps its name (Store#rename_group); the
-        # editor offers no field for it, so this is a doctored save.
-        return group_edit_screen(group, notice: "The #{group.name} group names a book and keeps its name; nothing was saved.")
+        return group_edit_screen(group, notice: "Another group is already named #{name}; nothing was saved.")
       end
       r.redirect "/groups/#{id}", 303
     end
@@ -149,16 +133,16 @@ module ProTacts
     # the diff of what came back against what the page loaded, so a
     # membership moved elsewhere since stays as it is, and a stale
     # page has nothing to revert and no snapshot to refuse. Only ids
-    # that name a card — a membership row is a foreign key
-    # (#apply_group_edit's reason).
+    # that name a card: a membership row is a foreign key, and a
+    # doctored id is ordinary bad input rather than a 500.
     #: (untyped r, String id) -> String?
     def apply_members(r, id)
       group = store.group(id)
       return if group.nil?
 
       known = store.contact_ids
-      checked = ids_in(r.params["members"]) & known
-      was = ids_in(r.params["was"]) & known
+      checked = ids_in("members") & known
+      was = ids_in("was") & known
       store.edit_members(id, join: checked - was, leave: was - checked)
       r.redirect "/groups/#{id}", 303
     end
@@ -175,7 +159,7 @@ module ProTacts
         return r.redirect("/groups/#{id}", 303)
       end
 
-      upload = file_in(r.params["photo"])
+      upload = file_in("photo")
       return group_edit_screen(group, notice: "Choose a photo to upload.") if upload.nil?
 
       tempfile = upload.fetch(:tempfile)

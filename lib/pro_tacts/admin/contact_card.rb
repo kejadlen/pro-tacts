@@ -119,9 +119,7 @@ module ProTacts
         @contact.inherited.each do |lent|
           next unless lent.line[/\A[^;:]*/].to_s.casecmp?("NOTE") == true
 
-          text = VCard.new(lent.line).lines.fetch(0).property&.text
-          next if text.nil?
-
+          text = Contact.lent_text(lent)
           dt(class: "type-label") { "notes" }
           dd(class: "type-body-sm") do
             div(style: "white-space: pre-wrap;") { text }

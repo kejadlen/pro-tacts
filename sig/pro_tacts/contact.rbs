@@ -10,18 +10,20 @@ module ProTacts
       attr_reader label: String?
       attr_reader types: Array[String]
       attr_reader line: VCard::Parser::Line
+      attr_reader property: VCard::Parser::Property
       attr_reader lent_by: Group?
 
-      def self.new: (value: String, label: String?, types: Array[String], line: VCard::Parser::Line, lent_by: Group?) -> instance
+      def self.new: (value: String, label: String?, types: Array[String], line: VCard::Parser::Line, property: VCard::Parser::Property, lent_by: Group?) -> instance
     end
 
     class Email
       attr_reader value: String
       attr_reader types: Array[String]
       attr_reader line: VCard::Parser::Line
+      attr_reader property: VCard::Parser::Property
       attr_reader lent_by: Group?
 
-      def self.new: (value: String, types: Array[String], line: VCard::Parser::Line, lent_by: Group?) -> instance
+      def self.new: (value: String, types: Array[String], line: VCard::Parser::Line, property: VCard::Parser::Property, lent_by: Group?) -> instance
     end
 
     class Note
@@ -56,6 +58,7 @@ module ProTacts
       attr_reader country: String?
       attr_reader types: Array[String]
       attr_reader line: VCard::Parser::Line
+      attr_reader property: VCard::Parser::Property
       attr_reader lent_by: Group?
 
       def self.new: (
@@ -68,6 +71,7 @@ module ProTacts
         country: String?,
         types: Array[String],
         line: VCard::Parser::Line,
+        property: VCard::Parser::Property,
         lent_by: Group?
       ) -> instance
     end

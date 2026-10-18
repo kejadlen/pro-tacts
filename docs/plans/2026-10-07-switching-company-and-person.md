@@ -29,8 +29,9 @@ the client, so it goes.
 
 ## The save
 
-`CardForm.contact_card` asks `CardForm.company?` which kind the save
-writes, and writes the name that kind keeps:
+`CardForm.contact_card` is told which kind the save writes, the
+Company box's answer that every save of the editor posts (a POST
+without one is a 400), and writes the name that kind keeps:
 
 - **A company** (`company_name`): the Organization field into `ORG`'s
   first component, the units after it rejoined byte for byte as

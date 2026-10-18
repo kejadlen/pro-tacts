@@ -887,14 +887,17 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # `land` is a form field, and the redirect is not its to choose: a
-  # path not shaped like a walk row lands on the contact's own page
-  # as though none was sent (Web#walk_row).
-  def test_a_groups_save_ignores_a_land_that_is_not_a_walk_row
-    with_contacts({"ada" => ADA}) do
-      post "/contacts/ada/groups", "land" => "//evil.example"
+  # path not shaped like a walk row is refused rather than followed,
+  # and the save with it (Web's walk_row type).
+  def test_a_groups_save_refuses_a_land_that_is_not_a_walk_row
+    with_contacts({"ada" => ADA}) do |store|
+      id = FixtureData.seed_group(store, name: "Family")
 
-      assert_equal 303, last_response.status
-      assert_equal "/contacts/ada", last_response.headers["location"]
+      post "/contacts/ada/groups", "land" => "//evil.example", "groups" => [id]
+
+      assert_equal 400, last_response.status
+      assert_nil last_response.headers["location"]
+      assert_empty store.groups_of("ada")
     end
   end
 
@@ -1418,7 +1421,7 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes body, '<input type="text" name="last" value="Prince" required ' \
                             ':required="firstBlank" @input="lastBlank = !$el.value.trim()" :disabled="company">'
 
-      post "/contacts/prince", first: "", last: "Prince", etag: store.contact("prince").etag
+      post "/contacts/prince", first: "", last: "Prince", company: "0", etag: store.contact("prince").etag
 
       assert_equal 303, last_response.status
       assert_includes store.contact("prince").vcard.to_s, "N:Prince;;;;\r\n"
@@ -1495,13 +1498,13 @@ class AdminContactsPagesTest < Minitest::Test
   # without the field leaves it be.
   def test_saving_a_persons_organization
     with_contacts({"company" => SWITCHED_PERSON.sub("ORG:Arbitrary Definitions;", "ORG:Arbitrary Definitions;Ops")}) do |store|
-      post "/contacts/company", first: "A", last: "B", organization: "Gloss", etag: store.contact("company").etag
+      post "/contacts/company", first: "A", last: "B", organization: "Gloss", company: "0", etag: store.contact("company").etag
       assert_includes store.contact("company").vcard.to_s, "ORG:Gloss;Ops\r\n"
 
-      post "/contacts/company", first: "A", last: "B", etag: store.contact("company").etag
+      post "/contacts/company", first: "A", last: "B", company: "0", etag: store.contact("company").etag
       assert_includes store.contact("company").vcard.to_s, "ORG:Gloss;Ops\r\n"
 
-      post "/contacts/company", first: "A", last: "B", organization: "", etag: store.contact("company").etag
+      post "/contacts/company", first: "A", last: "B", organization: "", company: "0", etag: store.contact("company").etag
       refute_includes store.contact("company").vcard.to_s, "ORG"
       refute store.contact("company").company?
     end
@@ -1656,7 +1659,7 @@ class AdminContactsPagesTest < Minitest::Test
       lent = contact.addresses.find { it.lent_by }
 
       post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
-                               etag: contact.etag,
+                               company: "0", etag: contact.etag,
                                address: {lent.line.digest => {"street" => "9 Elsewhere Lane"}}
 
       assert_equal 303, last_response.status
@@ -1739,7 +1742,7 @@ class AdminContactsPagesTest < Minitest::Test
   def test_saving_the_edit_replaces_only_the_addressed_properties
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "King", nickname: "Countess",
-                               note: "First programmer.", etag: store.contact("ada").etag
+                               note: "First programmer.", company: "0", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       assert_equal "/contacts/ada", last_response["Location"]
@@ -1772,7 +1775,7 @@ class AdminContactsPagesTest < Minitest::Test
       digest = store.contact("ada").phones.first.line.digest
       post "/contacts/ada", first: "Ada", middle: "B.", last: "Lovelace",
                                note: "Countess of Lovelace.",
-                               etag: store.contact("ada").etag, phone: {digest => "+1-555-0199"}
+                               company: "0", etag: store.contact("ada").etag, phone: {digest => "+1-555-0199"}
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -1791,7 +1794,7 @@ class AdminContactsPagesTest < Minitest::Test
                 .sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;B.;Dr.;Jr.")
 
     with_contacts({"ada" => formal}) do |store|
-      post "/contacts/ada", first: "Ada", middle: "B.", last: "King", etag: store.contact("ada").etag
+      post "/contacts/ada", first: "Ada", middle: "B.", last: "King", company: "0", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -1805,7 +1808,7 @@ class AdminContactsPagesTest < Minitest::Test
   def test_a_moved_middle_name_rewrites_the_display_name
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", middle: "Byron", last: "Lovelace",
-                               etag: store.contact("ada").etag
+                               company: "0", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -1823,7 +1826,7 @@ class AdminContactsPagesTest < Minitest::Test
                .sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;Byron;;")
 
     with_contacts({"ada" => byron}) do |store|
-      post "/contacts/ada", first: "Ada", middle: "", last: "Lovelace", etag: store.contact("ada").etag
+      post "/contacts/ada", first: "Ada", middle: "", last: "Lovelace", company: "0", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -1839,7 +1842,7 @@ class AdminContactsPagesTest < Minitest::Test
     nameless = "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Lovelace;Ada;;;\r\nUID:ada\r\nEND:VCARD\r\n"
 
     with_contacts({"ada" => nameless}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s, "FN:Ada Lovelace\r\n"
@@ -1852,7 +1855,7 @@ class AdminContactsPagesTest < Minitest::Test
   # carried none.
   def test_a_blank_nickname_or_note_removes_the_property
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", nickname: "", note: "", etag: store.contact("ada").etag
+      post "/contacts/ada", first: "Ada", last: "Lovelace", nickname: "", note: "", company: "0", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -1870,7 +1873,7 @@ class AdminContactsPagesTest < Minitest::Test
     honorific = ADA.sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;;Countess\\; Dr.")
 
     with_contacts({"ada" => honorific}) do |store|
-      post "/contacts/ada", first: "Ada", middle: "", last: "King", etag: store.contact("ada").etag
+      post "/contacts/ada", first: "Ada", middle: "", last: "King", company: "0", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s, "N:King;Ada;;Countess\\; Dr.;\r\n"
@@ -1888,7 +1891,7 @@ class AdminContactsPagesTest < Minitest::Test
 
     with_contacts({"ada" => odd}) do |store|
       post "/contacts/ada", first: "Ada", middle: "Byron\\x", last: "King",
-                               etag: store.contact("ada").etag
+                               company: "0", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s, "N:King;Ada;Byron\\x;;\r\n"
@@ -1901,7 +1904,7 @@ class AdminContactsPagesTest < Minitest::Test
     short = ADA.sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada")
 
     with_contacts({"ada" => short}) do |store|
-      post "/contacts/ada", first: "Ada", last: "King", etag: store.contact("ada").etag
+      post "/contacts/ada", first: "Ada", last: "King", company: "0", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s, "N:King;Ada;;;\r\n"
@@ -1915,7 +1918,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "King",
                                nickname: "Countess, of mathematics", note: "line one\nline two",
-                               etag: store.contact("ada").etag
+                               company: "0", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -1934,7 +1937,7 @@ class AdminContactsPagesTest < Minitest::Test
     folded = ADA.sub("TEL;TYPE=mobile:+1-555-0100\r\n", "TEL;TYPE=mobile:+1-555-\r\n 0100\r\n")
 
     with_contacts({"ada" => folded}) do |store|
-      post "/contacts/ada", first: "Ada", last: "King", etag: store.contact("ada").etag
+      post "/contacts/ada", first: "Ada", last: "King", company: "0", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s, "TEL;TYPE=mobile:+1-555-\r\n 0100\r\n"
@@ -2002,7 +2005,7 @@ class AdminContactsPagesTest < Minitest::Test
 
     with_contacts({"ada" => two}) do |store|
       digest = store.contact("ada").emails.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                email: {digest => "lovelace@example.com"}
 
       assert_equal 303, last_response.status
@@ -2020,7 +2023,7 @@ class AdminContactsPagesTest < Minitest::Test
 
     with_contacts({"ada" => apple}) do |store|
       digest = store.contact("ada").emails.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                email: {digest => "lovelace@example.com"}
 
       assert_equal 303, last_response.status
@@ -2034,7 +2037,7 @@ class AdminContactsPagesTest < Minitest::Test
   def test_a_blank_email_row_removes_the_line
     with_contacts({"ada" => ADA}) do |store|
       digest = store.contact("ada").emails.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                email: {digest => " "}
 
       assert_equal 303, last_response.status
@@ -2050,7 +2053,7 @@ class AdminContactsPagesTest < Minitest::Test
       email_digest = store.contact("ada").emails.first.line.digest
       address_digest = store.contact("ada").addresses.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
-                               etag: store.contact("ada").etag, new_email: "",
+                               company: "0", etag: store.contact("ada").etag, new_email: [""],
                                email: {email_digest => "ada@example.com"},
                                address: {address_digest => {
                                  "street" => "12 Analytical Way", "locality" => "London",
@@ -2067,7 +2070,7 @@ class AdminContactsPagesTest < Minitest::Test
   # and a blank one inserts nothing — the phones' own rules.
   def test_an_added_email_lands_as_a_bare_email_before_the_end
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                new_email: ["lovelace@example.com", "", "countess@example.com"]
 
       assert_equal 303, last_response.status
@@ -2109,7 +2112,7 @@ class AdminContactsPagesTest < Minitest::Test
   def test_saving_a_changed_address_replaces_only_its_line
     with_contacts({"ada" => ADA}) do |store|
       digest = store.contact("ada").addresses.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                address: {digest => {
                                  "street" => "5 Analytical Way", "locality" => "London",
                                  "region" => "England", "postal_code" => "NW1 1AA",
@@ -2127,6 +2130,64 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # The editor posts every address field as a hash of components; any
+  # other shape is a POST made by hand, refused as a 400 before the
+  # save reads it (Web#card_form_params), the card untouched.
+  def test_an_address_field_in_a_shape_the_form_never_sends_is_a_400
+    with_contacts({"ada" => ADA}) do |store|
+      contact = store.contact("ada")
+      digest = contact.addresses.first.line.digest
+      [{address: {digest => "5 Analytical Way"}},
+       {address: "5 Analytical Way"},
+       {new_address: ["5 Analytical Way"]},
+       {phone: "+1-555-0199"}].each do |field|
+        post "/contacts/ada", {first: "Ada", last: "Lovelace", company: "0", etag: contact.etag}.merge(field)
+
+        assert_equal 400, last_response.status, field
+        assert_equal contact.etag, store.contact("ada").etag
+      end
+    end
+  end
+
+  # The name, note and Company fields, the birthday row and the
+  # snapshot etag are on every save the editor posts, each in one
+  # shape; a save missing the etag or the Company box's answer, or
+  # carrying a field in another shape, is a POST made by hand and a
+  # 400, the card untouched.
+  def test_a_save_missing_a_field_or_in_another_shape_is_a_400
+    with_contacts({"ada" => ADA}) do |store|
+      contact = store.contact("ada")
+      good = {"first" => "Ada", "last" => "Lovelace", "company" => "0", "etag" => contact.etag}
+      [good.except("etag"),
+       good.except("company"),
+       good.merge("company" => "maybe"),
+       good.merge("first" => {"x" => "Ada"}),
+       good.merge("note" => ["two", "notes"]),
+       good.merge("new_phone" => "+1-555-0199"),
+       good.merge("birthday" => "1815-12-10"),
+       good.merge("birthday" => {"year" => {"x" => "1815"}})].each do |params|
+        post "/contacts/ada", params
+
+        assert_equal 400, last_response.status, params
+        assert_equal contact.etag, store.contact("ada").etag
+      end
+    end
+  end
+
+  # The groups dialog posts its boxes as lists; a `groups` in another
+  # shape is a 400, so it cannot read as every box unticked against a
+  # `was` that still lists them.
+  def test_a_groups_save_with_a_groups_field_that_is_not_a_list_is_a_400
+    with_contacts({"ada" => ADA}) do |store|
+      id = FixtureData.seed_group(store, name: "Family", members: %w[ada])
+
+      post "/contacts/ada/groups", "groups" => id, "was" => [id]
+
+      assert_equal 400, last_response.status
+      assert_equal [id], store.groups_of("ada").map(&:id)
+    end
+  end
+
   # The header is the line's own, kept byte for byte — the phones'
   # own rule, over the parameters an ADR line can carry.
   def test_a_saved_address_keeps_its_lines_own_parameters
@@ -2137,7 +2198,7 @@ class AdminContactsPagesTest < Minitest::Test
 
     with_contacts({"ada" => apple}) do |store|
       digest = store.contact("ada").addresses.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                address: {digest => {
                                    "street" => "5 Analytical Way", "locality" => "London",
                                    "region" => "England", "postal_code" => "NW1 1AA",
@@ -2155,7 +2216,7 @@ class AdminContactsPagesTest < Minitest::Test
   def test_an_address_row_blank_throughout_removes_the_line
     with_contacts({"ada" => ADA}) do |store|
       digest = store.contact("ada").addresses.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                address: {digest => {
                                    "street" => " ", "extended" => "", "locality" => "",
                                    "region" => "", "postal_code" => "", "country" => "",
@@ -2171,7 +2232,7 @@ class AdminContactsPagesTest < Minitest::Test
   def test_a_partially_blanked_address_keeps_the_line
     with_contacts({"ada" => ADA}) do |store|
       digest = store.contact("ada").addresses.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                address: {digest => {
                                    "street" => "12 Analytical Way", "locality" => "London",
                                    "region" => "", "postal_code" => "", "country" => "",
@@ -2195,7 +2256,7 @@ class AdminContactsPagesTest < Minitest::Test
 
     with_contacts({"ada" => po_box}) do |store|
       digest = store.contact("ada").addresses.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                address: {digest => {
                                    "street" => "12 Way, West", "extended" => "Apt \\q",
                                    "locality" => "Manchester", "region" => "England",
@@ -2213,7 +2274,7 @@ class AdminContactsPagesTest < Minitest::Test
   def test_address_punctuation_escapes_in_the_written_line
     with_contacts({"ada" => ADA}) do |store|
       digest = store.contact("ada").addresses.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                address: {digest => {
                                    "street" => "12 Way, East; Annexe", "locality" => "London",
                                    "region" => "England", "postal_code" => "NW1 1AA",
@@ -2232,7 +2293,7 @@ class AdminContactsPagesTest < Minitest::Test
   # throughout inserts nothing, the new-row rule.
   def test_an_added_address_lands_in_component_order_before_the_end
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                new_address: {"1" => {
                                    "street" => "5 Analytical Way", "extended" => "Apt 9",
                                    "locality" => "London", "country" => "United Kingdom",
@@ -2247,7 +2308,7 @@ class AdminContactsPagesTest < Minitest::Test
 
   def test_a_blank_address_add_row_inserts_nothing
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                new_address: {"0" => {"street" => " ", "country" => ""}}
 
       assert_equal 303, last_response.status
@@ -2298,7 +2359,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => ADA}) do |store|
       before = store.contact("ada").stored.to_s
       post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
-                               etag: store.contact("ada").etag,
+                               company: "0", etag: store.contact("ada").etag,
                                birthday: {"month" => "4", "day" => "12", "year" => "1990"}
 
       assert_equal 303, last_response.status
@@ -2317,7 +2378,7 @@ class AdminContactsPagesTest < Minitest::Test
   # verified to accept (docs/plans/2026-08-31-partial-birthdays.md).
   def test_a_birthday_without_a_year_is_saved_and_served_apples_way
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                birthday: {"month" => "12", "day" => "10", "year" => ""}
 
       assert_equal 303, last_response.status
@@ -2331,7 +2392,7 @@ class AdminContactsPagesTest < Minitest::Test
   # behalf: their documented fate.
   def test_a_month_alone_is_saved_and_serves_nothing
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                birthday: {"month" => "4", "day" => "", "year" => ""}
 
       assert_equal 303, last_response.status
@@ -2348,7 +2409,7 @@ class AdminContactsPagesTest < Minitest::Test
   # the model row goes and the composed card with it.
   def test_a_blank_birthday_removes_it
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                birthday: {"month" => "", "day" => "", "year" => ""}
 
       assert_equal 303, last_response.status
@@ -2368,7 +2429,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => bare}) do |store|
       assert_nil store.contact("ada").birthday
 
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                birthday: {"month" => "3", "day" => "14", "year" => "1879"}
 
       assert_equal 303, last_response.status
@@ -2381,12 +2442,12 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # A POST that carries no birthday group keeps the model, the
-  # phones' is-a-Hash posture — a group the request never carried
-  # touches nothing, this form's own no-row save included.
+  # A POST that carries no birthday group keeps the model — a group
+  # the request never carried touches nothing, this form's own no-row
+  # save included.
   def test_a_save_without_birthday_fields_leaves_the_model_alone
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag
 
       assert_equal 303, last_response.status
       assert_equal ProTacts::Birthday.new(year: 1985, month: 12, day: 10),
@@ -2401,7 +2462,7 @@ class AdminContactsPagesTest < Minitest::Test
   # POST's own, the name toast's backstop sibling.
   def test_a_year_and_day_without_a_month_is_refused
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                birthday: {"month" => "", "day" => "12", "year" => "1985"}
 
       assert_equal 200, last_response.status
@@ -2414,7 +2475,7 @@ class AdminContactsPagesTest < Minitest::Test
 
   def test_nonsense_in_a_birthday_field_is_refused
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                birthday: {"month" => "4", "day" => "12", "year" => "19x5"}
 
       assert_equal 200, last_response.status
@@ -2434,7 +2495,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => resident}) do |store|
       assert_nil store.contact("ada").birthday
 
-      post "/contacts/ada", first: "Grace", last: "Hopper", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Grace", last: "Hopper", company: "0", etag: store.contact("ada").etag,
                                birthday: {"month" => "4", "day" => "", "year" => "1985"}
 
       assert_equal 200, last_response.status
@@ -2542,7 +2603,7 @@ class AdminContactsPagesTest < Minitest::Test
   # among them are rows nobody typed in, and they cost nothing.
   def test_a_single_save_adds_every_phone_that_was_typed
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                new_phone: ["+1-555-0177", "+1-555-0188", "", ""]
 
       assert_equal 303, last_response.status
@@ -2560,7 +2621,7 @@ class AdminContactsPagesTest < Minitest::Test
 
     with_contacts({"ada" => two}) do |store|
       digest = store.contact("ada").phones.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                phone: {digest => "+1-555-0150"}
 
       assert_equal 303, last_response.status
@@ -2585,7 +2646,7 @@ class AdminContactsPagesTest < Minitest::Test
 
     with_contacts({"ada" => labeled}) do |store|
       digest = store.contact("ada").phones.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                phone: {digest => "+1-555-0150"}
 
       assert_equal 303, last_response.status
@@ -2604,7 +2665,7 @@ class AdminContactsPagesTest < Minitest::Test
 
     with_contacts({"ada" => apple}) do |store|
       digest = store.contact("ada").phones.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                phone: {digest => "+1-555-0150"}
 
       assert_equal 303, last_response.status
@@ -2619,7 +2680,7 @@ class AdminContactsPagesTest < Minitest::Test
   def test_a_blank_phone_row_removes_the_line
     with_contacts({"ada" => ADA}) do |store|
       digest = store.contact("ada").phones.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                phone: {digest => " "}
 
       assert_equal 303, last_response.status
@@ -2637,7 +2698,7 @@ class AdminContactsPagesTest < Minitest::Test
       before = store.contact("ada").stored.to_s
       digest = store.contact("ada").phones.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
-                               etag: store.contact("ada").etag, new_phone: "",
+                               company: "0", etag: store.contact("ada").etag, new_phone: [""],
                                phone: {digest => " +1-555-0100 "}
 
       assert_equal 303, last_response.status
@@ -2650,8 +2711,8 @@ class AdminContactsPagesTest < Minitest::Test
   # blank one inserts nothing, inserting absence being a no-op.
   def test_an_added_phone_lands_as_a_bare_tel_before_the_end
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
-                               new_phone: "+1 (555) 020-0700, x9"
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
+                               new_phone: ["+1 (555) 020-0700, x9"]
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -2662,8 +2723,8 @@ class AdminContactsPagesTest < Minitest::Test
 
   def test_a_blank_add_row_inserts_nothing
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
-                               new_phone: " "
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
+                               new_phone: [" "]
 
       assert_equal 303, last_response.status
       assert_equal 1, store.contact("ada").phones.length
@@ -2675,7 +2736,7 @@ class AdminContactsPagesTest < Minitest::Test
   # a doctored index into a list would have rewritten some other line.
   def test_a_digest_the_card_never_had_is_ignored
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "Lovelace", etag: store.contact("ada").etag,
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                phone: {"0" * 64 => "+1-555-9999"},
                                email: {"1" * 64 => "x@example.com"},
                                address: {"2" * 64 => {"street" => "nowhere"}}
@@ -2694,7 +2755,7 @@ class AdminContactsPagesTest < Minitest::Test
   # the save would have reverted it.
   def test_a_save_over_a_stale_snapshot_is_refused
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: "Ada", last: "King", etag: '"stale"'
+      post "/contacts/ada", first: "Ada", last: "King", company: "0", etag: '"stale"'
 
       assert_equal 200, last_response.status
       assert_includes last_response.body,
@@ -2710,7 +2771,7 @@ class AdminContactsPagesTest < Minitest::Test
   # mandatory, so a name blank throughout cannot be saved.
   def test_a_nameless_edit_is_refused_with_a_toast
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada", first: " ", last: "", etag: store.contact("ada").etag
+      post "/contacts/ada", first: " ", last: "", company: "0", etag: store.contact("ada").etag
 
       assert_equal 200, last_response.status
       assert_includes last_response.body, '<div role="status" data-fixed><span>A contact needs a name.</span></div>'
@@ -2719,7 +2780,7 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   def test_saving_an_unknown_contact_is_404
-    with_contacts({}) { post "/contacts/nope", first: "No", etag: '"x"' }
+    with_contacts({}) { post "/contacts/nope", first: "No", company: "0", etag: '"x"' }
 
     assert_equal 404, last_response.status
   end

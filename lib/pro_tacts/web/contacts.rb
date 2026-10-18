@@ -39,9 +39,9 @@ module ProTacts
         # the refusal the
         # re-rendered page can actually show.
         r.post do
-          first = r.params["first"].to_s.strip
-          middle = r.params["middle"].to_s.strip
-          last = r.params["last"].to_s.strip
+          first = typecast_params.str("first", "").strip
+          middle = typecast_params.str("middle", "").strip
+          last = typecast_params.str("last", "").strip
           # A middle name is not one of the halves that make a name: the
           # form asks for it beside a pair it stands outside of
           # (Admin::NamePair), and nobody is known by their middle name
@@ -160,19 +160,21 @@ module ProTacts
       # name pair (Admin::NamePair) being the browser's own refusal of
       # the same, and a company's organization field the one name it
       # has (Admin::CardForm.nameless?).
-      first = r.params["first"].to_s.strip
-      middle = r.params["middle"].to_s.strip
-      last = r.params["last"].to_s.strip
-      return refuse.call(contact, notice: "A contact needs a name.") if Admin::CardForm.nameless?(contact, r.params)
+      params = card_form_params
+      company = typecast_params.bool!("company")
+      first = params["first"].to_s.strip
+      middle = params["middle"].to_s.strip
+      last = params["last"].to_s.strip
+      return refuse.call(contact, notice: "A contact needs a name.") if Admin::CardForm.nameless?(company, params)
 
       # Request validity, standing with the name check rather than the
       # stored-state conditionals below (write_card's ordering rule). A
-      # POST that carries no birthday group keeps the model, the phones'
-      # is-a-Hash posture — this form's own save does when it rendered
-      # no birthday row, and anything else never carried one; a group of
-      # three blanks is the row's blank-equals-absent, a removal.
+      # POST that carries no birthday group keeps the model — this
+      # form's own save does when it rendered no birthday row, and
+      # anything else never carried one; a group of three blanks is the
+      # row's blank-equals-absent, a removal.
       birthday =
-        if (fields = r.params["birthday"]).is_a?(Hash)
+        if (fields = params["birthday"])
           begin
             Admin::CardForm.birthday(fields)
           rescue ArgumentError
@@ -190,7 +192,7 @@ module ProTacts
       # it. The refusal re-renders from the current card, so the screen
       # shows what changed. Like write_card's, the check is not atomic
       # with the write.
-      return refuse.call(contact, notice: "This contact changed since the page loaded; nothing was saved.") if r.params["etag"].to_s != contact.etag
+      return refuse.call(contact, notice: "This contact changed since the page loaded; nothing was saved.") if typecast_params.str!("etag") != contact.etag
 
       # The one state the birthday row cannot write, refused whole:
       # docs/plans/2026-09-07-web-birthday-editor.md, "The one hazard:
@@ -200,7 +202,7 @@ module ProTacts
         return refuse.call(contact, notice: "This contact's card carries its own birthday spelling; nothing was saved.")
       end
 
-      store.save_edit(id, Admin::CardForm.contact_card(contact, first, middle, last, r.params), birthday:)
+      store.save_edit(id, Admin::CardForm.contact_card(contact, company, first, middle, last, params), birthday:)
       r.redirect land || "/contacts/#{id}", 303
     end
 
@@ -216,17 +218,17 @@ module ProTacts
       return if contact.nil?
 
       known = store.group_choices.map(&:id)
-      checked = ids_in(r.params["groups"]) & known
-      was = ids_in(r.params["was"]) & known
+      checked = ids_in("groups") & known
+      was = ids_in("was") & known
       # The names the picker's offer committed by their ticks, each
       # made with this save (Admin::GroupFilter::Named); a blank one is
       # none.
-      names = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
+      names = ids_in("named").map(&:strip).reject(&:empty?)
       # The walk's row, when the dialog was opened from one
       # (Admin::ImportSaved's `land`): where a save returns to and a
       # refusal renders, so a look back is not a navigation away from
       # the walk.
-      row = walk_row(r.params["land"].to_s)
+      row = typecast_params.walk_row("land")
       begin
         store.regroup(id, join: checked - was, leave: was - checked, create: names)
       rescue Sequel::UniqueConstraintViolation
@@ -248,24 +250,7 @@ module ProTacts
         end
         return contact_screen(contact, notice:)
       end
-      r.redirect(row ? r.params["land"].to_s : "/contacts/#{id}", 303)
-    end
-
-    # A walk row's path (`/import/:upload/:index`), read back into its
-    # parts when the groups dialog's save came from one. Only the
-    # shape this server renders is honored: `land` is a form field,
-    # and the redirect is not its to choose — a path aimed elsewhere
-    # lands on the contact's own page as though none was sent.
-    #: (String land) -> [String, Integer]?
-    def walk_row(land)
-      row = land.match(%r{\A/import/([a-z]+)/(\d+)\z})
-      [row[1], Integer(row[2])] if row
-    end
-
-    # A form's list of ids, and none for a param absent or not a list.
-    #: (untyped param) -> Array[String]
-    def ids_in(param)
-      param.is_a?(Array) ? param.map(&:to_s) : []
+      r.redirect(row ? "/import/#{row.fetch(0)}/#{row.fetch(1)}" : "/contacts/#{id}", 303)
     end
 
     #: (Contact contact, ?notice: String) -> String

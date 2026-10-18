@@ -288,7 +288,7 @@ module ProTacts
       split = NoteSections.split(value, labels)
       if split.sections.empty?
         # The two-line shape's truncation (see the method comment).
-        kept = rows.find { |row| lent_text(row) == value }
+        kept = rows.find { |row| Contact.lent_text(row) == value }
         unless kept.nil?
           return [
             vcard.replace("NOTE", []),
@@ -315,7 +315,7 @@ module ProTacts
         case text
         when nil
           GroupEdit.new(group_id: row.group.id, position: row.position, line: nil)
-        when lent_text(row)
+        when Contact.lent_text(row)
           nil
         else
           GroupEdit.new(
@@ -366,14 +366,6 @@ module ProTacts
 
       report_many_note_lines(notes.length)
       joined_notes(vcard, notes)
-    end
-
-    # What a lent NOTE row says, as text: the unescaped value of its
-    # line, or nil for one that will not read and so cannot be compared
-    # with anything a client sent.
-    #: (Contact::Inherited row) -> String?
-    def lent_text(row)
-      parsed_line(row.line).property&.text
     end
 
     # The submission's NOTE lines joined into the one the invariant

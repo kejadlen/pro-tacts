@@ -33,26 +33,15 @@ module ProTacts
         )
       end
 
-      # Whether the save writes a company card: the editor's Company
-      # box, which submits "1" checked and the hidden "0" before it
-      # otherwise. A POST carrying neither keeps what the card is
-      # (Contact#company?), so no other form's save can switch one.
-      #: (Contact contact, Hash[String, untyped] params) -> bool
-      def self.company?(contact, params)
-        case params["company"]
-        when "1" then true
-        when "0" then false
-        else contact.company?
-        end
-      end
-
       # Whether the save is refused for want of a name, each kind
       # asking its own: a company its organization field, a person
       # either half of the pair (Admin::NamePair). The server's half
-      # of the browser's `required`.
-      #: (Contact contact, Hash[String, untyped] params) -> bool
-      def self.nameless?(contact, params)
-        if company?(contact, params)
+      # of the browser's `required`. `company` is the editor's Company
+      # box, which posts "1" checked and the hidden "0" before it
+      # otherwise, so every save names the kind it writes.
+      #: (bool company, Hash[String, untyped] params) -> bool
+      def self.nameless?(company, params)
+        if company
           params["organization"].to_s.strip.empty?
         else
           params["first"].to_s.strip.empty? && params["last"].to_s.strip.empty?
@@ -62,8 +51,8 @@ module ProTacts
       # The contact editor's save, spliced into the stored card. Where
       # each kind keeps its name, and the switch between the two, is
       # docs/plans/2026-10-07-switching-company-and-person.md.
-      #: (Contact contact, String first, String middle, String last, Hash[String, untyped] params) -> VCard
-      def self.contact_card(contact, first, middle, last, params)
+      #: (Contact contact, bool company, String first, String middle, String last, Hash[String, untyped] params) -> VCard
+      def self.contact_card(contact, company, first, middle, last, params)
         # The rows are read off the contact's own card, the one the form
         # rendered (Admin::ContactsEdit) and the one this save splices:
         # a line a group lends is on neither, so no digest here can name
@@ -73,10 +62,10 @@ module ProTacts
 
         vcard = contact.stored
         vcard =
-          if company?(contact, params)
+          if company
             company_name(vcard, params["organization"].to_s.strip)
           else
-            person_name(contact, vcard, first, middle, last, params["organization"]&.to_s&.strip)
+            person_name(contact, vcard, first, middle, last, params["organization"]&.strip)
           end
         vcard = edited_text(vcard, "NICKNAME", params["nickname"], own.nickname)
         vcard = edited_text(vcard, "NOTE", params["note"], note_of(own))
@@ -173,34 +162,25 @@ module ProTacts
       # (Admin::ContactsEdit) land as bare lines before END:VCARD, and a
       # blank one inserts nothing — inserting absence is a no-op, the
       # plan's rule for new rows, and the reason the rows nobody typed
-      # in cost nothing whether they were on screen or not. Array()
-      # because the field is a list and a request carrying one value
-      # is still a list of one.
+      # in cost nothing whether they were on screen or not.
       #: (Array[Contact::Phone | Contact::Email] rows, String field, String name, VCard vcard, Hash[String, untyped] params) -> VCard
       def self.edited_values(rows, field, name, vcard, params)
-        edits = params[field]
-        if edits.is_a?(Hash)
-          rows.each do |row|
-            # The property is nil only for a line that would not read,
-            # and these rows read from lines that did; the guard is the
-            # type's honesty, not a reachable case (n_line's own shape).
-            property = row.line.property
-            next if property.nil?
+        edits = hash_field(params, field)
+        rows.each do |row|
+          submitted = edits[row.line.digest]
+          next if submitted.nil? || submitted.strip == row.value.strip
 
-            submitted = edits[row.line.digest]
-            next if submitted.nil? || submitted.to_s.strip == row.value.strip
-
-            value = submitted.to_s.strip
-            vcard = vcard.substitute(
-              row.line.digest,
-              value.empty? ? [] : ["#{VCard.header_of(property)}#{VCard.escape(value)}"],
-            )
-          end
+          value = submitted.strip
+          vcard = vcard.substitute(
+            row.line.digest,
+            value.empty? ? [] : ["#{VCard.header_of(row.property)}#{VCard.escape(value)}"],
+          )
         end
 
-        submitted = Array(params["new_#{field}"]) #: Array[untyped]
+        none = [] #: Array[String]
+        submitted = params.fetch("new_#{field}", none) #: Array[String]
         added = submitted.filter_map {
-          value = it.to_s.strip
+          value = it.strip
           "#{name}:#{VCard.escape(value)}" unless value.empty?
         } #: Array[String]
         vcard.insert(added)
@@ -213,18 +193,13 @@ module ProTacts
       # partial blanks are legal empty components.
       #: (Contact contact, VCard vcard, Hash[String, untyped] params) -> VCard
       def self.edited_addresses(contact, vcard, params)
-        rows = params["address"]
-        if rows.is_a?(Hash)
-          contact.addresses.each do |address|
-            property = address.line.property
-            next if property.nil?
+        rows = hash_field(params, "address")
+        contact.addresses.each do |address|
+          submitted = rows[address.line.digest]
+          next if submitted.nil? || address_unchanged?(address, submitted)
 
-            submitted = rows[address.line.digest]
-            next if !submitted.is_a?(Hash) || address_unchanged?(address, submitted)
-
-            line = address_line(address, submitted)
-            vcard = vcard.substitute(address.line.digest, line ? [line] : [])
-          end
+          line = address_line(address, submitted)
+          vcard = vcard.substitute(address.line.digest, line ? [line] : [])
         end
 
         # The add dialog names an added address by its add index
@@ -233,12 +208,24 @@ module ProTacts
         # after an empty one — so the rows arrive as a hash of hashes
         # and read out by their values, several adds in one pass
         # included.
-        submitted = params["new_address"]
-        added = submitted.is_a?(Hash) ? submitted.values : Array(submitted) #: Array[untyped]
+        added = hash_field(params, "new_address").values #: Array[Hash[String, untyped]]
         vcard.insert(added.filter_map { address_line(nil, it) })
       end
 
-      #: (Contact::Address address, untyped submitted) -> bool
+      # A field the editors post as a hash keyed by row: none where the
+      # form rendered no such rows, and a raise for any other shape.
+      # Web#card_form_params answers that shape as a 400 before a save
+      # gets here, so the raise is the assertion that it did.
+      #: (Hash[String, untyped] params, String key) -> Hash[String, untyped]
+      def self.hash_field(params, key)
+        none = {} #: Hash[String, untyped]
+        value = params.fetch(key, none)
+        raise ArgumentError, "the form's #{key} field is not a hash" unless value.is_a?(Hash)
+
+        value
+      end
+
+      #: (Contact::Address address, Hash[String, untyped] submitted) -> bool
       def self.address_unchanged?(address, submitted)
         Contact::ADDRESS_COMPONENTS.all? { |name|
           submitted[name].to_s.strip == address.public_send(name).to_s.strip
@@ -256,11 +243,9 @@ module ProTacts
       # unescape-then-re-escape not being byte-stable. A nil address is
       # an added row: seven fresh positions, po box empty, a bare ADR
       # header.
-      #: (Contact::Address? address, untyped submitted) -> String?
+      #: (Contact::Address? address, Hash[String, untyped] submitted) -> String?
       def self.address_line(address, submitted)
-        return unless submitted.is_a?(Hash)
-
-        property = address && address.line.property
+        property = address&.property
         if property.nil?
           components = [""]
         else
@@ -426,7 +411,7 @@ module ProTacts
         "N:#{components.join(";")}"
       end
 
-      private_class_method :edited_values, :edited_addresses, :address_unchanged?,
+      private_class_method :edited_values, :edited_addresses, :hash_field, :address_unchanged?,
                            :address_line, :birthday_component, :text_lines, :edited_text, :edited_fn, :display_name,
                            :n_line, :company_name, :person_name, :edited_organization
     end

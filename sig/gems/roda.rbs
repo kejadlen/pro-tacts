@@ -8,8 +8,11 @@
 class Roda
   # The configure blocks vary by plugin — error_handler passes the
   # exception, not_found and the routes pass nothing — so the block
-  # takes anything, like the matchers below.
-  def self.plugin: (Symbol | Module plugin, *untyped args, **untyped options) ?{ (*untyped) [self: instance] -> untyped } -> void
+  # takes anything, like the matchers below. typecast_params' block
+  # is the one run elsewhere: class_eval'd on the app's Params class,
+  # where it registers conversion types.
+  def self.plugin: (:typecast_params plugin) { () [self: singleton(RodaPlugins::TypecastParams::Params)] -> void } -> void
+                 | (Symbol | Module plugin, *untyped args, **untyped options) ?{ (*untyped) [self: instance] -> untyped } -> void
 
   def self.use: (untyped middleware, **untyped options) -> void
 
@@ -29,6 +32,12 @@ class Roda
   # The sec_fetch_site_csrf plugin's: halts a write whose
   # Sec-Fetch-Site the plugin was not configured to allow.
   def check_sec_fetch_site!: () -> void
+
+  # The typecast_params plugin's: the request's params behind
+  # conversion methods that raise TypecastParams::Error for a value of
+  # the wrong shape. Untyped like the params themselves: a conversion
+  # method's answer depends on the type it names.
+  def typecast_params: () -> untyped
 
   def request: () -> RodaRequest
   def response: () -> RodaResponse
@@ -82,7 +91,24 @@ class Roda
     def write: (String body) -> void
   end
 
+  class RodaError < StandardError
+  end
+
   module RodaPlugins
     def self.register_plugin: (Symbol name, Module plugin) -> void
+
+    module TypecastParams
+      # A submitted value in a shape the conversion refuses; the
+      # error handler answers it as a 400.
+      class Error < RodaError
+        def param_name: () -> String?
+      end
+
+      class Params
+        # A conversion type: `name` and `name!` methods that run the
+        # block over a submitted value, a raise in it being an Error.
+        def self.handle_type: (Symbol type) { (untyped value) -> untyped } -> void
+      end
+    end
   end
 end

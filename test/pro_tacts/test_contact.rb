@@ -437,6 +437,15 @@ class ContactTest < Minitest::Test
     )
   end
 
+  # Every write that stores a lent line reads it first, so one that
+  # will not read is a broken assumption to raise on rather than a
+  # section to skip as though the group lent nothing.
+  def test_a_lent_note_that_will_not_read_raises
+    error = assert_raises(RuntimeError) { contact(STRUCTURED, inherited: ["NOTE;=;:"]).vcard }
+
+    assert_equal "group nous lends a line that will not read", error.message
+  end
+
   # A member with no note of its own serves the section alone, the
   # one NOTE inserted before END:VCARD the way a lent line is.
   def test_a_member_with_no_note_of_its_own_serves_the_section_alone

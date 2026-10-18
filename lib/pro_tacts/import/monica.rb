@@ -143,7 +143,7 @@ module ProTacts
         lines << birthday(properties["birthdate"])
 
         records(contact, "contact_field").each do |field|
-          lines << contact_field(props(field), field_types[props(field)["type"].to_s] || {})
+          lines << contact_field(props(field), field_types[props(field)["type"].to_s])
         end
         records(contact, "address").each_with_index do |address, index|
           lines.concat(address(props(address), index + 1))
@@ -154,7 +154,7 @@ module ProTacts
         lines << "CATEGORIES:#{tags.join(",")}" unless tags.empty?
 
         lines << text("NOTE", note(contact, names:, relationships:))
-        lines.concat(left_behind(contact, activities))
+        lines.concat(left_behind(contact, activities, names:, relationships:))
         lines << "UID:#{contact["uuid"]}"
         lines << "END:VCARD"
         lines.compact.map { "#{it}\r\n" }.join
@@ -169,30 +169,36 @@ module ProTacts
 
       # A SpecialDate (Monica's own date model) as BDAY, where a card can
       # spell it, and an age-based one as a line of its own left behind
-      # (the plan's "Where each part goes").
+      # (the plan's "Where each part goes"). A date that is no month and
+      # day Birthday admits is left behind as it came, the rest of the
+      # module's answer to a part with nowhere to go.
       #: (untyped date) -> String?
       def self.birthday(date)
         return nil unless date.is_a?(Hash)
 
-        match = date["date"].to_s.match(/\A(\d{4})-(\d{2})-(\d{2})/)
-        return nil if match.nil?
+        value = date["date"].to_s.strip
+        return nil if value.empty?
+
+        match = value.match(/\A(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])/)
+        return "X-MONICA-BIRTHDATE:#{VCard.escape(value)}" if match.nil?
 
         year, month, day = match.captures.map(&:to_i)
         return "X-MONICA-AGE-BASED-BIRTHDAY:about #{year}" if date["is_age_based"]
 
         Birthday.new(year: date["is_year_unknown"] ? nil : year, month:, day:).to_line
-      rescue ArgumentError
-        nil
       end
 
       # A contact field: a phone or an email by the type Monica filed it
       # under, and anything else — Facebook, Twitter, a type the account
       # made up — as a social profile named for that type, which no
-      # screen here shows.
-      #: (Hash[String, untyped] field, Hash[String, untyped] type) -> String?
+      # screen here shows. A field naming a type the export does not
+      # hold is left behind, its value with it: guessing a kind for it
+      # would file a phone as a profile nobody sees.
+      #: (Hash[String, untyped] field, Hash[String, untyped]? type) -> String?
       def self.contact_field(field, type)
         value = field["data"].to_s.strip
         return nil if value.empty?
+        return "X-MONICA-CONTACT-FIELD:#{VCard.escape(value)}" if type.nil?
 
         case type["type"]
         when "phone" then "TEL:#{VCard.escape(value)}"
@@ -218,12 +224,18 @@ module ProTacts
       end
 
       # The avatar Monica stored, out of the account's photos, where it
-      # is a data URL. A Gravatar or a link to someone else's server is
-      # not a picture this export holds.
+      # is a data URL. A Gravatar names no stored photo, so there is
+      # none to take. One that names a photo the export does not hold,
+      # or a link to someone else's server, is left behind saying which.
       #: (untyped uuid, Hash[String, String] photos) -> String?
       def self.photo(uuid, photos)
-        match = photos.fetch(uuid.to_s, "").match(%r{\Adata:image/(\w+);base64,(.+)\z}m)
-        return nil if match.nil?
+        return nil if uuid.to_s.empty?
+
+        stored = photos[uuid.to_s]
+        return "X-MONICA-PHOTO:not in the export" if stored.nil? || stored.empty?
+
+        match = stored.match(%r{\Adata:image/(\w+);base64,(.+)\z}m)
+        return "X-MONICA-PHOTO:#{VCard.escape(stored)}" if match.nil?
 
         type, payload = match.captures
         "PHOTO;ENCODING=b;TYPE=#{type.to_s.upcase}:#{payload.to_s.delete("\r\n")}"
@@ -271,13 +283,23 @@ module ProTacts
       # nor prose worth a note: things to do, things that happened,
       # money and gifts. Each a line on the card as exported, struck
       # there with the rest of what is not coming in, so the importer
-      # can copy the one worth keeping into the note by hand.
-      #: (Hash[String, untyped] contact, Hash[String, Hash[String, untyped]] activities) -> Array[String]
-      def self.left_behind(contact, activities)
+      # can copy the one worth keeping into the note by hand. A
+      # relationship to someone the export gives no name is here too,
+      # there being no one for the note's line to name.
+      #: (Hash[String, untyped] contact, Hash[String, Hash[String, untyped]] activities, names: Hash[String, String], relationships: Array[untyped]) -> Array[String]
+      def self.left_behind(contact, activities, names:, relationships:)
         properties = props(contact)
         lines = [] #: Array[String?]
         deceased = date_of(properties["deceased_date"])
         lines << "X-MONICA-DECEASED:#{deceased || "yes"}" if properties["is_dead"]
+
+        relationships.each do |relationship|
+          related = props(relationship)
+          next unless names[related["of_contact"].to_s].to_s.empty?
+
+          type = related["type"].to_s
+          lines << "X-MONICA-RELATIONSHIP:#{VCard.escape(RELATIONSHIPS.fetch(type, type).capitalize)}"
+        end
 
         {
           "reminder" => %w[initial_date title],
