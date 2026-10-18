@@ -449,6 +449,17 @@ module ProTacts
       @lent_at
     end
 
+    # A lent line's text. Every write that stores one reads it first
+    # (#composed_note's reason), so one that will not read raises
+    # rather than being skipped as though the group lent nothing.
+    #: (Inherited row) -> String
+    def self.lent_text(row)
+      property = VCard.new(row.line).lines.fetch(0).property
+      raise "group #{row.group.id} lends a line that will not read" if property.nil?
+
+      property.text
+    end
+
     # Whether a lent line is a NOTE, read off its bytes the way
     # EditedContact reads a property name off them: the group schema
     # admits no `item1.` prefix to strip (db/migrations/004_groups.rb).
@@ -465,22 +476,17 @@ module ProTacts
     # hold no note serves its own NOTE's bytes as they lie, whatever
     # they say, the editor's whole safety.
     #
-    # A member's own two NOTE lines — a card older than the one-note
-    # migration, or a bug — join as the member's text, which serves
-    # the card this shape means to serve and converges on it at the
-    # next write. A lent line that will not read has no text to
-    # become and is skipped, unreachable through every write the
-    # schema and #shareable? gate.
+    # A member holds at most one NOTE: migration 012 joined the
+    # stored ones and Store#assert_one_note refuses a write of two. A
+    # lent line that will not read is a broken assumption too, every
+    # write the schema and EditedContact#shareable? gate reading it
+    # first, so it raises (Contact.lent_text).
     #: (Array[Inherited] rows) -> String?
     def composed_note(rows)
       return if rows.empty?
 
-      sections = rows.filter_map { |row|
-        text = VCard.new(row.line).lines.fetch(0).property&.text
-        NoteSections::Section.new(label: row.group.label, text:) if text
-      }
-      member = @stored.lines.select { it.names?("NOTE") }
-        .filter_map { it.property&.text }.join("\n\n")
+      sections = rows.map { NoteSections::Section.new(label: it.group.label, text: Contact.lent_text(it)) }
+      member = @stored.property("NOTE")&.text.to_s
       "NOTE:#{VCard.escape(NoteSections.join(member, sections))}"
     end
 
