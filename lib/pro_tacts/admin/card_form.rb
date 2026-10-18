@@ -178,18 +178,16 @@ module ProTacts
       # is still a list of one.
       #: (Array[Contact::Phone | Contact::Email] rows, String field, String name, VCard vcard, Hash[String, untyped] params) -> VCard
       def self.edited_values(rows, field, name, vcard, params)
-        edits = params[field]
-        if edits
-          rows.each do |row|
-            submitted = edits[row.line.digest]
-            next if submitted.nil? || submitted.to_s.strip == row.value.strip
+        edits = hash_field(params, field)
+        rows.each do |row|
+          submitted = edits[row.line.digest]
+          next if submitted.nil? || submitted.to_s.strip == row.value.strip
 
-            value = submitted.to_s.strip
-            vcard = vcard.substitute(
-              row.line.digest,
-              value.empty? ? [] : ["#{VCard.header_of(row.property)}#{VCard.escape(value)}"],
-            )
-          end
+          value = submitted.to_s.strip
+          vcard = vcard.substitute(
+            row.line.digest,
+            value.empty? ? [] : ["#{VCard.header_of(row.property)}#{VCard.escape(value)}"],
+          )
         end
 
         submitted = Array(params["new_#{field}"]) #: Array[untyped]
@@ -204,20 +202,16 @@ module ProTacts
       # one (Admin::ContactsEdit). Removal is the reader's own rule
       # (Contact#address_of): a row blank throughout, po box included,
       # removes the line, where a partially blanked one keeps it —
-      # partial blanks are legal empty components. Every row is a hash,
-      # the shape the form posts and Web#card_form_params holds a
-      # request to.
+      # partial blanks are legal empty components.
       #: (Contact contact, VCard vcard, Hash[String, untyped] params) -> VCard
       def self.edited_addresses(contact, vcard, params)
-        rows = params["address"]
-        if rows
-          contact.addresses.each do |address|
-            submitted = rows[address.line.digest]
-            next if submitted.nil? || address_unchanged?(address, submitted)
+        rows = hash_field(params, "address")
+        contact.addresses.each do |address|
+          submitted = rows[address.line.digest]
+          next if submitted.nil? || address_unchanged?(address, submitted)
 
-            line = address_line(address, submitted)
-            vcard = vcard.substitute(address.line.digest, line ? [line] : [])
-          end
+          line = address_line(address, submitted)
+          vcard = vcard.substitute(address.line.digest, line ? [line] : [])
         end
 
         # The add dialog names an added address by its add index
@@ -226,10 +220,21 @@ module ProTacts
         # after an empty one — so the rows arrive as a hash of hashes
         # and read out by their values, several adds in one pass
         # included.
-        added = params["new_address"] #: Hash[String, Hash[String, untyped]]?
-        return vcard if added.nil?
+        added = hash_field(params, "new_address").values #: Array[Hash[String, untyped]]
+        vcard.insert(added.filter_map { address_line(nil, it) })
+      end
 
-        vcard.insert(added.values.filter_map { address_line(nil, it) })
+      # A field the editors post as a hash keyed by row: none where the
+      # form rendered no such rows, and a raise for any other shape.
+      # Web#card_form_params answers that shape as a 400 before a save
+      # gets here, so the raise is the assertion that it did.
+      #: (Hash[String, untyped] params, String key) -> Hash[String, untyped]
+      def self.hash_field(params, key)
+        none = {} #: Hash[String, untyped]
+        value = params.fetch(key, none)
+        raise ArgumentError, "the form's #{key} field is not a hash" unless value.is_a?(Hash)
+
+        value
       end
 
       #: (Contact::Address address, Hash[String, untyped] submitted) -> bool
@@ -418,7 +423,7 @@ module ProTacts
         "N:#{components.join(";")}"
       end
 
-      private_class_method :edited_values, :edited_addresses, :address_unchanged?,
+      private_class_method :edited_values, :edited_addresses, :hash_field, :address_unchanged?,
                            :address_line, :birthday_component, :text_lines, :edited_text, :edited_fn, :display_name,
                            :n_line, :company_name, :person_name, :edited_organization
     end
