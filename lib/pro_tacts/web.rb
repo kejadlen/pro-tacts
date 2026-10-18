@@ -83,12 +83,19 @@ module ProTacts
     # DAV client and curl, and no page a current browser sends.
     plugin :sec_fetch_site_csrf, allow_missing: true, csrf_failure: :empty_403
 
-    # The identity gate's refusal, as an exception mapped to a
-    # response: ProxyAuth.login raises MissingLogin for a request that
-    # names nobody, and this answers it with the 401. `classes:` keeps
-    # the plugin from touching any other raise — an unexpected failure
-    # still propagates to Sentry::Rack::CaptureExceptions outside the
-    # app, where it is reported, so this handler must not widen.
+    # The shape checks a form's own fields are held to (#card_form_params),
+    # raising TypecastParams::Error for a POST no page here sends, which
+    # the error handler below answers as a 400.
+    plugin :typecast_params
+
+    # The two refusals raised as exceptions and mapped to a response.
+    # ProxyAuth.login raises MissingLogin for a request that names
+    # nobody, and this answers it with the 401; typecast_params raises
+    # its Error for a form field in a shape no page here posts, and
+    # this answers it with the 400. `classes:` keeps the plugin from
+    # touching any other raise — an unexpected failure still
+    # propagates to Sentry::Rack::CaptureExceptions outside the app,
+    # where it is reported, so this handler must not widen.
     #
     # A 401 must carry a challenge (RFC 9110 section 15.5.2), and
     # `Proxy-Identity` is no registered scheme: it tells the client
@@ -100,12 +107,18 @@ module ProTacts
     # it hands an attacker nothing: the proxy overwrites the header on
     # every request, so knowing which one it is buys no way to forge
     # it.
-    plugin :error_handler, classes: [ProxyAuth::MissingLogin] do |_e|
-      response.status = 401
-      response["WWW-Authenticate"] = "Proxy-Identity"
+    plugin :error_handler, classes: [ProxyAuth::MissingLogin, Roda::RodaPlugins::TypecastParams::Error] do |e|
       response["Content-Type"] = "text/plain"
-      "Unauthorized: no login on the #{ProxyAuth::HEADER} header.\n" \
-      "The proxy in front of this app writes that header.\n"
+      case e
+      when ProxyAuth::MissingLogin
+        response.status = 401
+        response["WWW-Authenticate"] = "Proxy-Identity"
+        "Unauthorized: no login on the #{ProxyAuth::HEADER} header.\n" \
+        "The proxy in front of this app writes that header.\n"
+      else
+        response.status = 400
+        "Bad Request: #{e.param_name} is not the shape this app's forms send.\n"
+      end
     end
 
     # The router's trunk: the identity gate, the static files, and the
@@ -146,6 +159,23 @@ module ProTacts
     #: () -> Store
     def store
       self.class.store
+    end
+
+    # The params Admin::CardForm reads, held to the shapes the contact
+    # and group editors post: each phone, email and address field a
+    # hash keyed by its row's digest, every address row and added
+    # address a hash of components. Any other shape is a POST made by
+    # hand, refused here as a 400 (the error handler) rather than read
+    # around in CardForm. An absent field is a form that rendered no
+    # such rows, and passes.
+    #: () -> Hash[String, untyped]
+    def card_form_params
+      typecast_params.Hash(%w[phone email])
+      %w[address new_address].each do |key|
+        rows = typecast_params.Hash(key)
+        rows&.each_key { typecast_params[key].Hash!(it) }
+      end
+      request.params
     end
 
     # One step of a request, timed as a span inside its request's span

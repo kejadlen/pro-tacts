@@ -179,13 +179,11 @@ module ProTacts
       #: (Array[Contact::Phone | Contact::Email] rows, String field, String name, VCard vcard, Hash[String, untyped] params) -> VCard
       def self.edited_values(rows, field, name, vcard, params)
         edits = params[field]
-        if edits.is_a?(Hash)
+        if edits
           rows.each do |row|
-            # The property is nil only for a line that would not read,
-            # and these rows read from lines that did; the guard is the
-            # type's honesty, not a reachable case (n_line's own shape).
-            property = row.line.property
-            next if property.nil?
+            # These rows read from lines that did (Contact#phones), so
+            # a nil is a broken assumption.
+            property = row.line.property or raise "a #{field} row read from a line that will not read"
 
             submitted = edits[row.line.digest]
             next if submitted.nil? || submitted.to_s.strip == row.value.strip
@@ -210,17 +208,16 @@ module ProTacts
       # one (Admin::ContactsEdit). Removal is the reader's own rule
       # (Contact#address_of): a row blank throughout, po box included,
       # removes the line, where a partially blanked one keeps it —
-      # partial blanks are legal empty components.
+      # partial blanks are legal empty components. Every row is a hash,
+      # the shape the form posts and Web#card_form_params holds a
+      # request to.
       #: (Contact contact, VCard vcard, Hash[String, untyped] params) -> VCard
       def self.edited_addresses(contact, vcard, params)
         rows = params["address"]
-        if rows.is_a?(Hash)
+        if rows
           contact.addresses.each do |address|
-            property = address.line.property
-            next if property.nil?
-
             submitted = rows[address.line.digest]
-            next if !submitted.is_a?(Hash) || address_unchanged?(address, submitted)
+            next if submitted.nil? || address_unchanged?(address, submitted)
 
             line = address_line(address, submitted)
             vcard = vcard.substitute(address.line.digest, line ? [line] : [])
@@ -233,12 +230,13 @@ module ProTacts
         # after an empty one — so the rows arrive as a hash of hashes
         # and read out by their values, several adds in one pass
         # included.
-        submitted = params["new_address"]
-        added = submitted.is_a?(Hash) ? submitted.values : Array(submitted) #: Array[untyped]
-        vcard.insert(added.filter_map { address_line(nil, it) })
+        added = params["new_address"] #: Hash[String, Hash[String, untyped]]?
+        return vcard if added.nil?
+
+        vcard.insert(added.values.filter_map { address_line(nil, it) })
       end
 
-      #: (Contact::Address address, untyped submitted) -> bool
+      #: (Contact::Address address, Hash[String, untyped] submitted) -> bool
       def self.address_unchanged?(address, submitted)
         Contact::ADDRESS_COMPONENTS.all? { |name|
           submitted[name].to_s.strip == address.public_send(name).to_s.strip
@@ -256,10 +254,8 @@ module ProTacts
       # unescape-then-re-escape not being byte-stable. A nil address is
       # an added row: seven fresh positions, po box empty, a bare ADR
       # header.
-      #: (Contact::Address? address, untyped submitted) -> String?
+      #: (Contact::Address? address, Hash[String, untyped] submitted) -> String?
       def self.address_line(address, submitted)
-        return unless submitted.is_a?(Hash)
-
         property = address && address.line.property
         if property.nil?
           components = [""]

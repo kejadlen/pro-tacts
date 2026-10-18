@@ -2115,6 +2115,25 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # The editor posts every address field as a hash of components; any
+  # other shape is a POST made by hand, refused as a 400 before the
+  # save reads it (Web#card_form_params), the card untouched.
+  def test_an_address_field_in_a_shape_the_form_never_sends_is_a_400
+    with_contacts({"ada" => ADA}) do |store|
+      contact = store.contact("ada")
+      digest = contact.addresses.first.line.digest
+      [{address: {digest => "5 Analytical Way"}},
+       {address: "5 Analytical Way"},
+       {new_address: ["5 Analytical Way"]},
+       {phone: "+1-555-0199"}].each do |field|
+        post "/contacts/ada", {first: "Ada", last: "Lovelace", etag: contact.etag}.merge(field)
+
+        assert_equal 400, last_response.status, field
+        assert_equal contact.etag, store.contact("ada").etag
+      end
+    end
+  end
+
   # The header is the line's own, kept byte for byte — the phones'
   # own rule, over the parameters an ADR line can carry.
   def test_a_saved_address_keeps_its_lines_own_parameters

@@ -30,6 +30,12 @@ class Roda
   # Sec-Fetch-Site the plugin was not configured to allow.
   def check_sec_fetch_site!: () -> void
 
+  # The typecast_params plugin's: the request's params behind
+  # conversion methods that raise TypecastParams::Error for a value of
+  # the wrong shape. Untyped like the params themselves: a conversion
+  # method's answer depends on the type it names.
+  def typecast_params: () -> untyped
+
   def request: () -> RodaRequest
   def response: () -> RodaResponse
 
@@ -82,7 +88,18 @@ class Roda
     def write: (String body) -> void
   end
 
+  class RodaError < StandardError
+  end
+
   module RodaPlugins
     def self.register_plugin: (Symbol name, Module plugin) -> void
+
+    module TypecastParams
+      # A submitted value in a shape the conversion refuses; the
+      # error handler answers it as a 400.
+      class Error < RodaError
+        def param_name: () -> String?
+      end
+    end
   end
 end

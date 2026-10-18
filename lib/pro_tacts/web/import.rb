@@ -329,7 +329,7 @@ module ProTacts
       Admin::ImportGroups.new(
         groups: choices,
         joined: joined || [*ticked, lot&.id, *tagged.map(&:id)].compact.uniq,
-        named: named || [(group unless lot || group.empty?), *(tags - tagged.map(&:name))].compact.uniq,
+        named: named || [(group unless lot), *(tags - tagged.map(&:name))].compact.uniq,
         was:,
       )
     end
