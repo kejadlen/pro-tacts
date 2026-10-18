@@ -1142,8 +1142,9 @@ span.avatar[data-size="lg"] {
 }
 /* The slash between the pair, in the buttons' own type so it sits on
    their baseline rather than a step larger beside it. The buttons give
-   up their inner padding toward it, the slash being the space between
-   them; the outer padding stays, so a hover still fills a box. */
+   up their inner padding toward it, the mono glyph's own bearings
+   being the space between them; the outer padding stays, so a hover
+   still fills a box. */
 .detail-grid dd > [role="group"] {
   align-items: baseline;
 }
@@ -1151,7 +1152,6 @@ span.avatar[data-size="lg"] {
   font-family: var(--gl-font-mono);
   font-size: 0.8125rem;
   line-height: 1.15;
-  padding-inline: var(--gl-space-3xs);
 }
 .detail-grid dd > [role="group"] > button:first-child {
   padding-inline-end: 0;
@@ -1161,8 +1161,8 @@ span.avatar[data-size="lg"] {
 }
 /* On a phone the group stacks and the slash goes, the line break
    saying what it said: side by side the two take the tags' column
-   down to a word. The two pads between the labels are drawn together
-   to one, so the pair reads as one control rather than two rows. */
+   down to a word. The two pads between the labels are drawn out
+   entirely, so the pair reads as one control rather than two rows. */
 @media (max-width: 48rem) {
   .detail-grid dd > [role="group"] {
     flex-direction: column;
@@ -1178,7 +1178,7 @@ span.avatar[data-size="lg"] {
     padding-inline: var(--_pad-x);
   }
   .detail-grid dd > [role="group"] > span + button {
-    margin-block-start: calc(-1 * var(--gl-space-3xs));
+    margin-block-start: calc(-2 * var(--gl-space-3xs));
   }
 }
 /* A nameless group shown by its id (Admin::GroupLabel): set in mono,
