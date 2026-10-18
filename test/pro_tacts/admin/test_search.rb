@@ -7,17 +7,17 @@ require "pro_tacts/store"
 require "pro_tacts/vcard"
 
 class SearchTest < Minitest::Test
-  # A card from its extra lines, keyed as the store keys it: the rows
-  # arrive most recent first, the way Store#keyed_by_recency hands them
-  # over.
+  # A card from its extra lines, keyed as the store keys it, beside its
+  # id. The rows are listed most recent first, the way
+  # Store#search_keys_by_recency hands them over.
   def row(id, name, *lines)
     bytes = ["BEGIN:VCARD", "VERSION:3.0", "FN:#{name}", "UID:#{id}", *lines, "END:VCARD", ""].join("\r\n")
     contact = ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(bytes), birthday: nil, inherited: [])
-    ProTacts::Store::KeyedContact.new(id:, key: ProTacts::Admin::Search.key(contact))
+    [id, ProTacts::Admin::Search.key(contact)]
   end
 
   def search(rows, query, groups: [])
-    ProTacts::Admin::Search.contacts(rows, query:, groups:)
+    ProTacts::Admin::Search.contacts(rows.to_h, query:, groups:)
   end
 
   # Each word finds its own field: neither "ada" nor "london" is

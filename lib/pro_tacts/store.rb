@@ -91,12 +91,6 @@ module ProTacts
     # @rbs skip
     RecentContact = Data.define(:contact, :updated_at)
 
-    # A contact's id beside the key a search matches it by
-    # (Admin::Search::Key), with no contact built: what a search walks
-    # the whole book as, building only the contacts it finds.
-    # @rbs skip
-    KeyedContact = Data.define(:id, :key)
-
     # A contact paired with the calendar day its birthday next lands
     # on — the read behind the admin's upcoming-birthdays list, where
     # the order is the coming year's, not the stored components'.
@@ -272,8 +266,8 @@ module ProTacts
     # Every contact as a list shows it, paired with its card's
     # updated_at, newest first — the read behind any "recently updated"
     # surface, ordered by the column SQLite already stamps rather than
-    # by id. The ids narrow it to the contacts a search found, and the
-    # limit to the newest few, and either way only those are built.
+    # by id. Only the contacts of these ids, or the newest few, are
+    # built.
     #: (?Array[String]? ids, ?limit: Integer?) -> Array[RecentContact]
     def contacts_by_recency(ids = nil, limit: nil)
       rows = (ids ? cards.where(id: ids) : cards).order(Sequel.desc(:updated_at)).select(:id, :updated_at)
@@ -284,15 +278,13 @@ module ProTacts
       }
     end
 
-    # Every contact's search key, newest first like
-    # #contacts_by_recency, which a search hands the ids it finds back
-    # to (Web#search_results).
-    #: () -> Array[KeyedContact]
-    def keyed_by_recency
+    # Every card's search key by its id, newest first like
+    # #contacts_by_recency.
+    #: () -> Hash[String, Admin::Search::Key]
+    def search_keys_by_recency
       search_keys.join(:cards, id: :card_id).order(Sequel.desc(Sequel[:cards][:updated_at]))
-        .select(Sequel[:search_keys][:card_id], :text, :phones, :names).map {
-          key = Admin::Search::Key.new(text: it.fetch(:text).to_s, phones: it.fetch(:phones).to_s, names: it.fetch(:names).to_s)
-          KeyedContact.new(id: it.fetch(:card_id).to_s, key:)
+        .select_map([Sequel[:search_keys][:card_id], :key]).to_h { |id, key|
+          [id.to_s, Admin::Search::Key.parse(key.to_s)] #: [String, Admin::Search::Key]
         }
     end
 
@@ -1206,8 +1198,7 @@ module ProTacts
     # way, and there is no version of this write that fixes a line the
     # parser cannot read. Takes the stored card — with the birthday
     # already subtracted — so the index never sees a BDAY no stored
-    # card carries. The card's search key goes with its rows, read off
-    # the stored card alone for the reason Admin::Search::Key gives.
+    # card carries.
     #: (String id, VCard vcard) -> void
     def reindex(id, vcard)
       # Before the parse, so that a card which has stopped parsing does
@@ -1227,7 +1218,8 @@ module ProTacts
           card_parameters.insert(card_id: id, position:, name:, value:)
         end
       end
-      search_keys.insert(card_id: id, **Admin::Search.key(Contact.new(id:, stored: vcard, birthday: nil, inherited: [])).to_h)
+      key = Admin::Search.key(Contact.new(id:, stored: vcard, birthday: nil, inherited: []))
+      search_keys.insert(card_id: id, key: key.to_json)
     end
 
     # Applies whatever migrations the database has not seen. On one it is

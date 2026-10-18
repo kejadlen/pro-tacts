@@ -36,8 +36,7 @@ module ProTacts
 
     # A blank query answers the most recently updated contacts, the
     # dashboard's own list, so the search page is never empty before a
-    # word is typed. A query walks every contact's search key and builds
-    # only the contacts it finds (docs/plans/2026-10-17-search-keys.md).
+    # word is typed. A query builds only the contacts it finds.
     #: (String query) -> Admin::SearchResults
     def search_results(query)
       if query.empty?
@@ -47,10 +46,10 @@ module ProTacts
         return Admin::SearchResults.new(contacts: recent, groups: [], recent: true)
       end
 
-      keyed = span("search.keyed_by_recency") { |step| store.keyed_by_recency.tap { step.set_attribute("rows", it.length) } }
+      keys = span("search.search_keys_by_recency") { |step| store.search_keys_by_recency.tap { step.set_attribute("rows", it.length) } }
       groups = span("search.all_groups") { |step| store.all_groups.tap { step.set_attribute("rows", it.length) } }
       ids = span("search.match") { |step|
-        Admin::Search.contacts(keyed, query:, groups:).tap {
+        Admin::Search.contacts(keys, query:, groups:).tap {
           step.set_attribute("words", query.split.length)
           step.set_attribute("contacts", it.length)
         }

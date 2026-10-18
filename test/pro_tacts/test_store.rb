@@ -536,7 +536,7 @@ class StoreTest < Minitest::Test
       assert_equal [new_id], store.group(group).members
       assert_equal new_id, store.card_id_with_uid(new_id)
       assert database(store)[:card_properties].where(card_id: UUID).empty?
-      assert_equal [new_id], store.keyed_by_recency.map(&:id)
+      assert_equal [new_id], store.search_keys_by_recency.keys
     end
   end
 
@@ -714,10 +714,10 @@ class StoreTest < Minitest::Test
       store.add_member(group, "aiden")
       store.set_group_lines(group, [HOUSEHOLD_ADDRESS])
 
-      key = store.keyed_by_recency.fetch(0).key
-      assert_equal "aiden\nade\nplays chess", key.text
-      assert_equal "15551234567", key.phones
-      assert_equal "aiden ade", key.names
+      key = store.search_keys_by_recency.fetch("aiden")
+      assert_equal ["aiden", "ade", "plays chess"], key.texts
+      assert_equal ["15551234567"], key.phones
+      assert_equal ["aiden", "ade"], key.names
     end
   end
 
@@ -726,7 +726,7 @@ class StoreTest < Minitest::Test
       sleep 0.002
       store.put("znorth", vcard(ZED))
 
-      assert_equal %w[znorth aiden], store.keyed_by_recency.map(&:id)
+      assert_equal %w[znorth aiden], store.search_keys_by_recency.keys
     end
   end
 
@@ -2507,7 +2507,7 @@ class StoreTest < Minitest::Test
       end
 
       ProTacts::Store.connect(path) do |store|
-        assert_equal({"aiden" => "aiden", "znorth" => "zed"}, store.keyed_by_recency.to_h { [it.id, it.key.names] })
+        assert_equal({"aiden" => ["aiden"], "znorth" => ["zed"]}, store.search_keys_by_recency.transform_values(&:names))
       end
     end
   end

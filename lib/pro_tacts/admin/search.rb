@@ -1,3 +1,5 @@
+require "json"
+
 require "pro_tacts/admin/format"
 
 module ProTacts
@@ -11,43 +13,46 @@ module ProTacts
     # compares digits alone, since a number is spelled with whatever
     # punctuation its writer liked.
     #
-    # Matching stays substring-generous rather than typo-tolerant: a
-    # family's book is small enough to walk whole, and SQLite FTS5 was
-    # weighed and set aside for it, twice (ranger pnrqpyvk, and
-    # docs/plans/2026-10-17-search-keys.md). What is walked is each
-    # contact's Key, folded when its card is written, rather than the
-    # contacts themselves.
+    # Matching stays substring-generous rather than typo-tolerant or
+    # indexed: a family's book is small enough to walk whole, as Keys
+    # folded when each card is written
+    # (docs/plans/2026-10-17-search-keys.md).
     module Search
       # The punctuation a phone number is written with, which a word made
       # of nothing else (and at least one digit) is a number spelled.
       PHONE_WORD = /\A[\d().+-]*\d[\d().+-]*\z/ #: Regexp
       private_constant :PHONE_WORD
 
-      # A contact's values folded for matching, worked out once when its
-      # card is written (Store#reindex) rather than on every search, so
-      # a search reads three short columns and builds only the contacts
-      # it finds. `text` is every text field (#text_fields) folded and
-      # one to a line, `phones` each number's digits, a space between,
-      # and `names` the name and nickname a name hit is read off. A word
-      # is split on whitespace, so it cannot span the separator between
-      # two values: a word found in the joined string is a word found in
-      # one of them.
-      #
-      # A group's values are keyed the same way, at search time, from
-      # what it lends (Group#reading) and its label: a contact is found
-      # by those too, and keying them into each member would leave every
-      # member's key to rewrite on a rename or a change to a lent line.
+      # What a word is matched against, already folded: the text fields,
+      # each number's digits, and the words of the name and nickname a
+      # name hit is read off. Stored per card (Store#reindex); a group's
+      # is made at search time, and added to each member's.
       # @rbs skip
-      Key = Data.define(:text, :phones, :names)
+      Key = Data.define(:texts, :phones, :names)
 
-      # A contact's key, read off its own card alone: what its groups
-      # lend is matched as the group's (Key).
+      # Reopened rather than defined in the block above, for the reason
+      # CardDiff is.
+      class Key
+        #: (String json) -> Key
+        def self.parse(json)
+          fields = JSON.parse(json)
+          new(texts: fields.fetch("texts"), phones: fields.fetch("phones"), names: fields.fetch("names"))
+        end
+
+        #: (*untyped) -> String
+        def to_json(*) = JSON.generate({texts:, phones:, names:})
+
+        #: (Key other) -> Key
+        def +(other) = with(texts: texts + other.texts, phones: phones + other.phones)
+      end
+
+      # A contact's key, off its own card alone.
       #: (Contact | ListedContact contact) -> Key
       def self.key(contact)
         Key.new(
-          text: text_fields(contact).map { Format.search_key(it) }.join("\n"),
-          phones: contact.phones.map { digits(it.value) }.join(" "),
-          names: [contact.name, contact.nickname].compact.map { Format.search_key(it) }.join(" "),
+          texts: text_fields(contact).map { Format.search_key(it) },
+          phones: contact.phones.map { digits(it.value) },
+          names: [contact.name, contact.nickname].compact.flat_map { Format.search_key(it).split },
         )
       end
 
@@ -55,20 +60,18 @@ module ProTacts
       # is read: a hit on the name first — every word the start of a
       # word of the name or nickname, "ada" or "love" for Ada Lovelace —
       # then the hits anywhere else, recency keeping its order within
-      # each. The rows arrive in recency order, and partition keeps it.
-      # The groups arrive whole because a contact is found by the names
-      # of the groups it is in and by what they lend it.
-      #: (Array[Store::KeyedContact] rows, query: String, groups: Array[Group]) -> Array[String]
-      def self.contacts(rows, query:, groups:)
+      # each. The keys arrive newest first, and partition keeps it.
+      #: (Hash[String, Key] keys, query: String, groups: Array[Group]) -> Array[String]
+      def self.contacts(keys, query:, groups:)
         words = words(query)
         lent = {} #: Hash[String, Array[Key]]
         groups.each { |group|
           key = group_key(group)
           group.members.each { (lent[it] ||= []) << key }
         }
-        matched = rows.select { |row| matches?([row.key, *lent.fetch(row.id, [])], words) }
-        names, rest = matched.partition { name_hit?(it.key, words) }
-        (names + rest).map(&:id)
+        matched = keys.select { |id, key| matches?(lent.fetch(id, []).reduce(key) { |all, more| all + more }, words) }
+        names, rest = matched.keys.partition { name_hit?(keys.fetch(it), words) }
+        names + rest
       end
 
       # The groups whose names the query matches, every word somewhere
@@ -88,21 +91,20 @@ module ProTacts
       end
       private_class_method :words
 
-      # What a group adds to each member's key: the lines it lends, read
-      # as a card, and its label. A name it does not lend, so its key's
-      # names stay its own and no member's name hit comes from a group.
+      # The lines a group lends, read as a card, and its label. Lent
+      # lines hold no name, so a name hit is always the contact's own.
       #: (Group group) -> Key
       def self.group_key(group)
         lent = key(group.reading)
-        lent.with(text: [lent.text, Format.search_key(group.label)].join("\n"))
+        lent.with(texts: [*lent.texts, Format.search_key(group.label)])
       end
       private_class_method :group_key
 
-      #: (Array[Key] keys, Array[String] words) -> bool
-      def self.matches?(keys, words)
+      #: (Key key, Array[String] words) -> bool
+      def self.matches?(key, words)
         words.all? { |word|
-          keys.any? { it.text.include?(word) } ||
-            (word.match?(PHONE_WORD) && keys.any? { it.phones.include?(digits(word)) })
+          key.texts.any? { it.include?(word) } ||
+            (word.match?(PHONE_WORD) && key.phones.any? { it.include?(digits(word)) })
         }
       end
       private_class_method :matches?
@@ -126,8 +128,7 @@ module ProTacts
 
       #: (Key key, Array[String] words) -> bool
       def self.name_hit?(key, words)
-        name_words = key.names.split
-        words.all? { |word| name_words.any? { it.start_with?(word) } }
+        words.all? { |word| key.names.any? { it.start_with?(word) } }
       end
       private_class_method :name_hit?
 

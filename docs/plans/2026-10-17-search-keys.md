@@ -28,11 +28,14 @@ list costs, and a cap would be a separate decision.
 
 ## Shape
 
-- `search_keys` holds one row per card: `text` (each text field
-  folded, one per line), `phones` (each number's digits) and `names`
-  (the name and nickname, for ranking). `Store#reindex` writes the row
+- `search_keys` holds one row per card, an `Admin::Search::Key` as
+  JSON: the folded text fields, each number's digits, and the words of
+  the name and nickname, for ranking. `Store#reindex` writes the row
   next to the card's other index rows, and `#rebuild_index` derives it
   again. Migration 014 fills it for the cards that are already stored.
+  The migration uses the app's own `Search.key`, unlike 012, which
+  spells its rule out so it cannot drift. This table is index, not
+  data, so what it has to agree with is the search that reads it today.
 - `Admin::Search` is still the one place that decides a match. It
   builds the key (`Search.key`) and reads it. The matching rules have
   not changed.

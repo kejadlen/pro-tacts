@@ -403,7 +403,7 @@ class AdminContactsPagesTest < Minitest::Test
       assert_equal 1, transactions.length
       transaction = transactions.first
       spans = transaction.spans.select { it[:op].start_with?("search.") }
-      assert_equal %w[search.keyed_by_recency search.all_groups search.match search.contacts_by_recency search.render], spans.map { it[:op] }
+      assert_equal %w[search.search_keys_by_recency search.all_groups search.match search.contacts_by_recency search.render], spans.map { it[:op] }
       assert_equal({"otel.kind" => :internal, "words" => 1, "contacts" => 1}, spans.find { it[:op] == "search.match" }[:data])
       refute_includes JSON.generate(transaction.to_h), "lovelace"
     end
