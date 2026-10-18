@@ -203,6 +203,19 @@ class EditedContactTest < Minitest::Test
     )
   end
 
+  # A stored lent NOTE was read on its way in, so one that will not
+  # read now is a broken assumption to raise on (Contact.lent_text)
+  # rather than a section compared unequal to everything a client sent.
+  def test_a_lent_note_that_will_not_read_raises
+    stored = note_card("Own note.")
+    served = note_card("Own note.\n\nShared · Neighbours:\n#{NOTE_TEXT}")
+    lent = [ProTacts::Contact::Inherited.new(group: NEIGHBOURS, position: 1, line: "NOTE;=;:")]
+
+    error = assert_raises(RuntimeError) { decompose(served, before: before(stored, inherited: lent)) }
+
+    assert_equal "group nnnn lends a line that will not read", error.message
+  end
+
   # One of two sections deleted, the other and the member's own kept:
   # the present section is attributed and the absent one is the
   # removal of its row.
