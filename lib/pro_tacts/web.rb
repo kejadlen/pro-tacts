@@ -195,6 +195,10 @@ module ProTacts
         rows = typecast_params.Hash(key)
         rows&.each_key { typecast_params[key][it].str(Contact::ADDRESS_COMPONENTS) }
       end
+      %w[handle new_handle].each do |key|
+        rows = typecast_params.Hash(key)
+        rows&.each_key { typecast_params[key][it].str(%w[service value]) }
+      end
       typecast_params["birthday"].str(%w[year month day]) if typecast_params.Hash("birthday")
       request.params
     end

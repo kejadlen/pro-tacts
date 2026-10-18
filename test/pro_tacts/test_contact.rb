@@ -242,6 +242,29 @@ class ContactTest < Minitest::Test
     assert contact(broken).vcard.lines.any? { it.names?("EMAIL") && it.property.nil? }
   end
 
+  def test_reads_a_signal_handle_under_its_service
+    signal = STRUCTURED.sub("UID:", "item1.IMPP;X-SERVICE-TYPE=signal:x-apple:ada.42\r\nUID:")
+    message = contact(signal).handles.fetch(0)
+
+    assert_equal ["signal", "ada.42", "x-apple"], [message.service, message.value, message.scheme]
+    assert_equal "item1.IMPP;X-SERVICE-TYPE=signal:x-apple:ada.42\r\n", message.line.verbatim
+  end
+
+  # A service with a scheme of its own keeps it, and one the card
+  # names no service for has none.
+  def test_a_handle_keeps_its_own_scheme
+    xmpp = STRUCTURED.sub("UID:", "IMPP:xmpp:ada@example.com\r\nUID:")
+
+    message = contact(xmpp).handles.fetch(0)
+    assert_equal [nil, "ada@example.com", "xmpp"], [message.service, message.value, message.scheme]
+  end
+
+  def test_an_impp_with_no_scheme_or_no_handle_is_no_handle
+    bare = STRUCTURED.sub("UID:", "IMPP;X-SERVICE-TYPE=signal:ada.42\r\nIMPP:x-apple:\r\nUID:")
+
+    assert_empty contact(bare).handles
+  end
+
   def test_reads_an_address_as_its_seven_components
     address = contact(STRUCTURED).addresses.fetch(0)
     assert_nil address.po_box

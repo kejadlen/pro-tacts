@@ -25,7 +25,7 @@ module ProTacts
 
       # What a contact holds many of: an arriving one joins the
       # contact's unless the contact already has its value.
-      MANY = %w[TEL EMAIL ADR].freeze #: Array[String]
+      MANY = %w[TEL EMAIL IMPP ADR].freeze #: Array[String]
 
       # What a contact holds one of: an arriving one fills a gap, and
       # is left behind where the contact has its own.

@@ -2148,6 +2148,144 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  ## Editing handles
+
+  SIGNAL = ADA.sub("BDAY:", "IMPP;X-SERVICE-TYPE=signal:x-apple:ada.42\r\nBDAY:")
+
+  # A handle shows under its service, the way a labeled phone shows
+  # under its label.
+  def test_show_lists_a_handle_under_its_service
+    with_contacts({"ada" => SIGNAL}) do
+      get "/contacts/ada"
+
+      assert_includes last_response.body, '<dt class="type-label">signal</dt><dd class="type-body-sm"><div style="white-space: pre-wrap;">ada.42</div></dd>'
+    end
+  end
+
+  # Two fields per handle, the service and the handle, each named by
+  # the line's digest; the scheme is the line's, like its parameters,
+  # and no field models it.
+  def test_the_edit_screen_renders_a_service_and_a_handle_field_per_handle
+    with_contacts({"ada" => SIGNAL}) do |store|
+      get "/contacts/ada/edit"
+
+      digest = store.contact("ada").handles.first.line.digest
+      assert_includes last_response.body,
+        '<div class="field" data-blank-removes><span>handle</span><div class="field-stack">' \
+        '<input type="text" name="handle[' + digest + '][service]" value="signal" placeholder="service" aria-label="service">' \
+        '<input type="text" name="handle[' + digest + '][value]" value="ada.42" placeholder="handle" aria-label="handle">' \
+        '</div></div>'
+    end
+  end
+
+  def post_handle(store, service:, value:)
+    digest = store.contact("ada").handles.first.line.digest
+    post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", note: "Countess of Lovelace.",
+                             etag: store.contact("ada").etag,
+                             handle: {digest => {"service" => service, "value" => value}}
+    assert_equal 303, last_response.status
+    store.contact("ada").vcard.to_s
+  end
+
+  # A changed handle lands under the line's own header and scheme.
+  def test_saving_a_changed_handle_keeps_its_service_and_scheme
+    with_contacts({"ada" => SIGNAL.sub("IMPP;", "item1.IMPP;type=pref;")}) do |store|
+      card = post_handle(store, service: "signal", value: "countess.01")
+
+      assert_includes card, "item1.IMPP;type=pref;X-SERVICE-TYPE=signal:x-apple:countess.01\r\n"
+      refute_includes card, "ada.42"
+    end
+  end
+
+  # A changed service keeps the line's group and other parameters and
+  # moves the handle under x-apple:, the old scheme being the old
+  # service's (docs/plans/2026-10-18-signal-handles.md, "The service
+  # is the row's").
+  def test_saving_a_changed_service_rewrites_the_header_and_scheme
+    xmpp = ADA.sub("BDAY:", "item1.IMPP;type=pref;X-SERVICE-TYPE=Jabber:xmpp:ada@example.com\r\nBDAY:")
+
+    with_contacts({"ada" => xmpp}) do |store|
+      card = post_handle(store, service: "Delta Chat", value: "ada@example.com")
+
+      assert_includes card, "item1.IMPP;type=pref;X-SERVICE-TYPE=Delta Chat:x-apple:ada@example.com\r\n"
+      refute_includes card, "Jabber"
+    end
+  end
+
+  def test_a_blank_service_writes_none
+    with_contacts({"ada" => SIGNAL}) do |store|
+      card = post_handle(store, service: " ", value: "ada.42")
+
+      assert_includes card, "IMPP:x-apple:ada.42\r\n"
+      assert_equal [[nil, "ada.42"]], store.contact("ada").handles.map { [it.service, it.value] }
+    end
+  end
+
+  def test_a_blank_handle_removes_the_line_whatever_its_service
+    with_contacts({"ada" => SIGNAL}) do |store|
+      card = post_handle(store, service: "signal", value: "")
+
+      refute_includes card, "IMPP"
+    end
+  end
+
+  def test_an_unchanged_handle_leaves_the_stored_card_byte_identical
+    with_contacts({"ada" => SIGNAL}) do |store|
+      before = store.contact("ada").stored.to_s
+      post_handle(store, service: "signal", value: "ada.42")
+
+      assert_equal before, store.contact("ada").stored.to_s
+    end
+  end
+
+  # Each handle row posts as a hash of its two fields; any other shape
+  # is a 400, the address rows' own rule.
+  def test_a_handle_field_in_a_shape_the_form_never_sends_is_a_400
+    with_contacts({"ada" => SIGNAL}) do |store|
+      contact = store.contact("ada")
+      digest = contact.handles.first.line.digest
+      [{handle: {digest => "ada.42"}},
+       {handle: "ada.42"},
+       {new_handle: ["ada.42"]}].each do |field|
+        post "/contacts/ada", {first: "Ada", last: "Lovelace", company: "0", etag: contact.etag}.merge(field)
+
+        assert_equal 400, last_response.status, field
+        assert_equal contact.etag, store.contact("ada").etag
+      end
+    end
+  end
+
+  # The revealed rows write each service as typed, in Contacts.app's
+  # spelling of a handle (docs/plans/2026-10-18-signal-handles.md),
+  # and a row with no handle inserts nothing.
+  def test_added_handles_land_as_impp_lines_before_the_end
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
+                               new_handle: {"0" => {"service" => "signal", "value" => "ada.42"},
+                                            "1" => {"service" => "signal", "value" => ""},
+                                            "2" => {"service" => "WhatsApp", "value" => "+1-555-0100"}}
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s,
+        "IMPP;X-SERVICE-TYPE=signal:x-apple:ada.42\r\n" \
+        "IMPP;X-SERVICE-TYPE=WhatsApp:x-apple:+1-555-0100\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n"
+      assert_equal [["signal", "ada.42"], ["WhatsApp", "+1-555-0100"]],
+        store.contact("ada").handles.map { [it.service, it.value] }
+    end
+  end
+
+  # A quote is no character a parameter value can carry, quoted or
+  # not, so it is dropped rather than ending the value early.
+  def test_an_added_service_drops_what_a_parameter_cannot_carry
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
+                               new_handle: {"0" => {"service" => %(Sig"nal), "value" => "ada.42"}}
+
+      assert_equal 303, last_response.status
+      assert_includes store.contact("ada").vcard.to_s, "IMPP;X-SERVICE-TYPE=Signal:x-apple:ada.42\r\n"
+    end
+  end
+
   ## Editing addresses
 
   # An address row: the type's caption and a stack of component
@@ -2598,6 +2736,7 @@ class AdminContactsPagesTest < Minitest::Test
         '<div class="field-stack" role="radiogroup" aria-label="Type">' \
         '<label><input type="radio" name="add-type" value="phone" x-model="type">phone</label>' \
         '<label><input type="radio" name="add-type" value="email" x-model="type">email</label>' \
+        '<label><input type="radio" name="add-type" value="handle" x-model="type">handle</label>' \
         '<label><input type="radio" name="add-type" value="address" x-model="type">address</label></div>'
       assert_includes body,
         '<button type="button" popovertarget="add-property" popovertargetaction="hide">Cancel</button>'
@@ -2627,7 +2766,7 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes body,
         '<template x-for="(kind, i) in added" :key="i"><div class="field">' \
         '<span x-text="kind"></span>' \
-        '<template x-if="kind !== \'address\' && kind !== \'birthday\'">' \
+        '<template x-if="kind === \'phone\' || kind === \'email\'">' \
         '<input :type="kind === \'phone\' ? \'tel\' : kind" :name="`new_${kind}[]`" :aria-label="kind" x-init="$el.focus()">' \
         '</template>' \
         '<template x-if="kind === \'address\'">' \
@@ -2638,6 +2777,13 @@ class AdminContactsPagesTest < Minitest::Test
         '<input type="text" :name="`new_address[${i}][region]`" placeholder="region" aria-label="region">' \
         '<input type="text" :name="`new_address[${i}][postal_code]`" placeholder="postal code" aria-label="postal code">' \
         '<input type="text" :name="`new_address[${i}][country]`" placeholder="country" aria-label="country">' \
+        '</div></template>'
+      # The handle kind: the standing row's two fields, named by the
+      # add index as the address's are.
+      assert_includes body,
+        '<template x-if="kind === \'handle\'"><div class="field-stack">' \
+        '<input type="text" :name="`new_handle[${i}][service]`" placeholder="service" aria-label="service" x-init="$el.focus()">' \
+        '<input type="text" :name="`new_handle[${i}][value]`" placeholder="handle" aria-label="handle">' \
         '</div></template>'
       # The birthday kind: the standing row's own controls with
       # nothing prefilled, naming the model's birthday[] group — no

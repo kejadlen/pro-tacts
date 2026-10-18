@@ -74,6 +74,14 @@ module ProTacts
     Phone = Data.define(:value, :label, :types, :line, :property, :lent_by)
     # @rbs skip
     Email = Data.define(:value, :types, :line, :property, :lent_by)
+    # A handle: an IMPP (RFC 6350 section 6.4.3, from RFC 4770 for
+    # 3.0) as Contacts.app spells one, the service its X-SERVICE-TYPE
+    # parameter and the value the handle, with the URI scheme it sits
+    # under kept apart so a save can write it back — Apple's own
+    # `x-apple:` for a service with no scheme, Signal's case
+    # (docs/plans/2026-10-18-signal-handles.md).
+    # @rbs skip
+    Handle = Data.define(:service, :value, :scheme, :line, :property, :lent_by)
     # @rbs skip
     Note = Data.define(:value, :line)
     # @rbs skip
@@ -109,6 +117,22 @@ module ProTacts
     # so a component's position in the value is one past its index
     # here.
     ADDRESS_COMPONENTS = %w[extended street locality region postal_code country].freeze #: Array[String]
+
+    # A handle's line in Contacts.app's spelling, the service in
+    # X-SERVICE-TYPE and the handle under `x-apple:`
+    # (docs/plans/2026-10-18-signal-handles.md), keeping the group and
+    # the other parameters of the line it replaces, if any. A blank
+    # service names none. The characters a parameter value cannot
+    # carry, quoted or not (RFC 2425 section 5.8.2's QSAFE-CHAR), are
+    # dropped; VCard.header_of quotes what needs it.
+    #: (String service, String value, ?VCard::Parser::Property? replaced) -> String
+    def self.handle_line(service, value, replaced = nil)
+      service = service.gsub(/[\x00-\x1F\x7F"]/, "")
+      kept = (replaced&.parameters || []).reject { |name, _| name.casecmp?("X-SERVICE-TYPE") }
+      parameters = service.empty? ? kept : [*kept, ["X-SERVICE-TYPE", service]] #: Array[[String, String]]
+      property = VCard::Parser::Property.new(group: replaced&.group, name: "IMPP", parameters:, value: "")
+      "#{VCard.header_of(property)}x-apple:#{VCard.escape(value)}"
+    end
 
     #: (VCard vcard) -> String
     def self.etag_for(vcard)
@@ -388,6 +412,19 @@ module ProTacts
         # RFC 2426 section 3.3.2: `internet` is the format every address
         # has by default, so it names none.
         Email.new(value:, types: property.types - %w[internet], line:, property:, lent_by:) if value
+      }
+    end
+
+    # A line whose value carries no scheme is no URI and no handle
+    # this reader can split, and reads as none — the property stays
+    # the card's own, shown by #properties.
+    #: () -> Array[Handle]
+    def handles
+      rows("IMPP") { |property, line, lent_by|
+        scheme, handle = text_of(property)&.split(":", 2)
+        next if scheme.nil? || handle.nil? || handle.empty?
+
+        Handle.new(service: property.parameter("X-SERVICE-TYPE"), value: handle, scheme:, line:, property:, lent_by:)
       }
     end
 

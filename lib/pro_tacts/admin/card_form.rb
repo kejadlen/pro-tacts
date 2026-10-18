@@ -71,6 +71,7 @@ module ProTacts
         vcard = edited_text(vcard, "NOTE", params["note"], note_of(own))
         vcard = edited_values(own.phones, "phone", "TEL", vcard, params)
         vcard = edited_values(own.emails, "email", "EMAIL", vcard, params)
+        vcard = edited_handles(own, vcard, params)
         edited_addresses(own, vcard, params)
       end
 
@@ -184,6 +185,47 @@ module ProTacts
           "#{name}:#{VCard.escape(value)}" unless value.empty?
         } #: Array[String]
         vcard.insert(added)
+      end
+
+      # #edited_values' walk over a handle, a row of two fields: the
+      # service and the handle itself
+      # (docs/plans/2026-10-18-signal-handles.md, "The service is the
+      # row's"). A blank handle removes the line, a service alone being
+      # nothing to reach anyone at. A changed handle under an unchanged
+      # service swaps under the line's own header and scheme, the
+      # phones' rule; a changed service rewrites the header around the
+      # line's other parameters and moves the handle under `x-apple:`,
+      # the line's old scheme naming the old service's protocol. The
+      # rows the add dialog reveals are named by their add index, the
+      # address's reason (Rack refuses a key after a bare []).
+      #: (Contact contact, VCard vcard, Hash[String, untyped] params) -> VCard
+      def self.edited_handles(contact, vcard, params)
+        rows = hash_field(params, "handle")
+        contact.handles.each do |handle|
+          submitted = rows[handle.line.digest]
+          next if submitted.nil?
+
+          service = submitted["service"].to_s.strip
+          value = submitted["value"].to_s.strip
+          same_service = service == handle.service.to_s.strip
+          next if same_service && value == handle.value.strip
+
+          line =
+            if value.empty?
+              nil
+            elsif same_service
+              "#{VCard.header_of(handle.property)}#{handle.scheme}:#{VCard.escape(value)}"
+            else
+              Contact.handle_line(service, value, handle.property)
+            end
+          vcard = vcard.substitute(handle.line.digest, line ? [line] : [])
+        end
+
+        added = hash_field(params, "new_handle").values #: Array[Hash[String, untyped]]
+        vcard.insert(added.filter_map { |row|
+          value = row["value"].to_s.strip
+          Contact.handle_line(row["service"].to_s.strip, value) unless value.empty?
+        })
       end
 
       # #edited_values' walk, over a row that is six fields rather than
@@ -411,7 +453,7 @@ module ProTacts
         "N:#{components.join(";")}"
       end
 
-      private_class_method :edited_values, :edited_addresses, :hash_field, :address_unchanged?,
+      private_class_method :edited_values, :edited_handles, :edited_addresses, :hash_field, :address_unchanged?,
                            :address_line, :birthday_component, :text_lines, :edited_text, :edited_fn, :display_name,
                            :n_line, :company_name, :person_name, :edited_organization
     end
