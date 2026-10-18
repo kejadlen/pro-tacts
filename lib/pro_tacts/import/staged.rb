@@ -137,20 +137,20 @@ module ProTacts
       # What this import has done: the group it files under, and the
       # contact each saved card became, by the card's place in the
       # file — the name every screen of the walk calls a contact by
-      # until there is a minted id to call it by instead. Two empty
-      # answers for an import that is gone or a slot that will not
-      # parse: this is a file on disk, and one that will not read back
-      # in the shape it was written in is a broken assumption JSON
-      # says so about.
+      # until there is a minted id to call it by instead. Empty for an
+      # import that is gone, #read's ordinary case. A slot that will
+      # not read back in the shape #open wrote it in raises, #rows'
+      # posture: answering "nothing saved" would send every row back
+      # through a Save that writes its contact a second time.
       #: (String id) -> [String, Hash[String, String]]
       def self.saved(id)
         raw = read(id, SAVED)
-        return ["", ids(nil)] if raw.nil?
+        return ["", ids({})] if raw.nil?
 
         parsed = JSON.parse(raw)
-        return ["", ids(nil)] unless parsed.is_a?(Hash)
+        raise ArgumentError, "#{id}'s saved slot is not an object" unless parsed.is_a?(Hash)
 
-        [parsed[GROUP].to_s, ids(parsed[CONTACTS])]
+        [parsed.fetch(GROUP).to_s, ids(parsed.fetch(CONTACTS))]
       end
 
       # One card, written: its place in the file against the id the
@@ -233,12 +233,13 @@ module ProTacts
       end
 
       # One map of a contact's place in the file to the id it was
-      # stored under, out of whatever the file actually holds.
+      # stored under, refused where the slot holds anything else
+      # (#saved's reason).
       #: (untyped raw) -> Hash[String, String]
       def self.ids(raw)
-        ids = {} #: Hash[String, String]
-        return ids unless raw.is_a?(Hash)
+        raise ArgumentError, "the saved slot's contacts are not an object" unless raw.is_a?(Hash)
 
+        ids = {} #: Hash[String, String]
         raw.each { |index, contact| ids[index.to_s] = contact.to_s }
         ids
       end

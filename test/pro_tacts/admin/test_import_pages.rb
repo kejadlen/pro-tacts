@@ -638,6 +638,18 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # The walk's record of what it saved, read back in a shape it was
+  # never written in: a broken assumption to raise on, not "nothing
+  # saved", which would send every row through a second Save.
+  def test_a_saved_slot_that_is_not_an_object_raises
+    with_contacts({}) do
+      id = upload(JANE)
+      (Pathname.new(ENV.fetch("PRO_TACTS_DATA_DIR")) / ProTacts::Import::Staged::DIRECTORY / id / "saved.json").binwrite("[]")
+
+      assert_raises(ArgumentError) { get "/import/#{id}/0" }
+    end
+  end
+
   # The group for the import is named when the file is uploaded;
   # which of this book's own groups a contact joins is asked beside
   # that contact's card, and written by the same Save as its fields.
