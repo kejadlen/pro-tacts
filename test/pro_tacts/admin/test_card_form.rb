@@ -49,7 +49,6 @@ class CardFormTest < Minitest::Test
       "address" => own.addresses.to_h { |address|
         [address.line.digest, ProTacts::Contact::ADDRESS_COMPONENTS.to_h { [it, address.public_send(it).to_s] }]
       },
-      "company" => contact.company? ? "1" : "0",
     }
     organization = ProTacts::Admin::CardForm.organization_of(contact.stored).to_s
     params["organization"] = organization unless organization.empty?
@@ -87,7 +86,7 @@ class CardFormTest < Minitest::Test
       params = untouched(contact)
 
       saved = ProTacts::Admin::CardForm.contact_card(
-        contact, params["first"].strip, params["middle"].strip, params["last"].strip, params,
+        contact, contact.company?, params["first"].strip, params["middle"].strip, params["last"].strip, params,
       )
 
       assert_equal stored, saved.to_s

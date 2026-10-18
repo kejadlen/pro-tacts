@@ -304,15 +304,16 @@ class AdminGroupsPagesTest < Minitest::Test
   end
 
   # Everyone's book keeps its name: renaming it would empty every
-  # device's book (Store#rename_group).
-  def test_a_rename_of_a_books_group_is_refused_and_changes_nothing
+  # device's book (Store#rename_group). The editor shows a book's name
+  # as text, so only a POST made by hand names one, and it raises.
+  def test_a_rename_of_a_books_group_raises_and_changes_nothing
     with_contacts(BOOLES) do |store|
       id = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[george])
 
-      post "/groups/#{id}", version: store.group(id).version, name: "Everyone"
+      assert_raises(ProTacts::Store::SyncGroupRename) do
+        post "/groups/#{id}", version: store.group(id).version, name: "Everyone"
+      end
 
-      assert_equal 200, last_response.status
-      assert_includes last_response.body, "The sync:* group names a book and keeps its name; nothing was saved."
       assert_equal ProTacts::Group::EVERYONE, store.group(id).name
       assert_equal %w[george], store.group(id).members
     end

@@ -213,8 +213,8 @@ module ProTacts
                   # person.md), under the name it decides the shape of.
                   # The hidden "0" goes first so an unticked box still
                   # says so — Rack keeps the last of a repeated name —
-                  # and CardForm.company? reads a POST with neither as
-                  # the card's kind unchanged. The caption is a label
+                  # and the save refuses a POST with neither as a 400
+                  # (Web#apply_edit). The caption is a label
                   # beside the box rather than one wrapping it: Gloss
                   # sets a wrapping label in its checkbox type, over
                   # the caption's.

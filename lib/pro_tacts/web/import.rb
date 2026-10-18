@@ -56,7 +56,7 @@ module ProTacts
             # chosen against the default, and none at all the default
             # itself, the contact the card looks like most.
             r.get do
-              card_screen(upload, index, into: r.params.key?("into") ? r.params["into"].to_s : nil)
+              card_screen(upload, index, into: typecast_params.str("into"))
             end
 
             r.post do
@@ -87,7 +87,7 @@ module ProTacts
     # card.
     #: (untyped r) -> untyped
     def stage_upload(r)
-      upload = file_in(r.params["vcf"])
+      upload = file_in("vcf")
       return import_screen(notice: "Choose a .vcf or Monica export to import.") if upload.nil?
 
       name = File.basename(upload[:filename].to_s)
@@ -367,7 +367,7 @@ module ProTacts
       # than trusted from the page, and refused outright if the
       # contact is gone (docs/plans/2026-09-23-merging-on-import.md,
       # "The Save").
-      into = r.params["into"].to_s
+      into = typecast_params.str("into", "")
       target = into.empty? ? nil : store.contact(into)
       if !into.empty? && target.nil?
         return card_screen(upload, index, notice: "The contact this card was updating is gone; nothing was saved.")
@@ -387,25 +387,27 @@ module ProTacts
       # ticked (the plan's "Writing them in").
       choices = store.group_choices
       known = choices.map(&:id)
-      ticked = ids_in(r.params["groups"]) & known
-      was = ids_in(r.params["was"]) & known
-      wanted = ids_in(r.params["named"]).map(&:strip).reject(&:empty?)
+      ticked = ids_in("groups") & known
+      was = ids_in("was") & known
+      wanted = ids_in("named").map(&:strip).reject(&:empty?)
       # Everyone's book, which may not exist yet to tick, rides as an
       # answer rather than an id (Import::Write.call's `everyone`).
       everyone = choices.find { it.name == Group::EVERYONE }
       syncing = everyone.nil? || ticked.include?(everyone.id)
 
       # A blank name is refused, #apply_edit's check.
-      first = r.params["first"].to_s.strip
-      middle = r.params["middle"].to_s.strip
-      last = r.params["last"].to_s.strip
-      if Admin::CardForm.nameless?(contact, r.params)
+      params = card_form_params
+      company = typecast_params.bool!("company")
+      first = params["first"].to_s.strip
+      middle = params["middle"].to_s.strip
+      last = params["last"].to_s.strip
+      if Admin::CardForm.nameless?(company, params)
         return card_screen(upload, index, into:, notice: "A contact needs a name.", joined: ticked, named: wanted)
       end
 
-      fields = r.params["birthday"]
+      fields = params["birthday"]
       birthday =
-        if fields.is_a?(Hash)
+        if fields
           begin
             Admin::CardForm.birthday(fields)
           rescue ArgumentError
@@ -421,12 +423,12 @@ module ProTacts
       # import are the case, and applying this save over the other
       # one's would revert it. Over a fold, it is the contact's own
       # guard too.
-      if r.params["etag"].to_s != contact.etag
+      if typecast_params.str!("etag") != contact.etag
         return card_screen(upload, index, into:, notice: "This card changed since the page loaded; nothing was saved.",
                                           joined: ticked, named: wanted)
       end
 
-      edited = Admin::CardForm.contact_card(contact, first, middle, last, card_form_params)
+      edited = Admin::CardForm.contact_card(contact, company, first, middle, last, params)
       if target
         # A stored contact, whose birthday the model holds: the contact
         # editor's own save (#apply_edit), down to its one refusal.
@@ -560,15 +562,6 @@ module ProTacts
     #: (Contact contact) -> bool
     def carries_own_bday?(contact)
       contact.stored.lines.any? { it.names?("BDAY") }
-    end
-
-    # The file part the form sent, and none for a POST carrying no
-    # file: #ids_in's shape over an upload, and its reason for being a
-    # method — the empty case needs a type, and the signature is where
-    # one fits.
-    #: (untyped param) -> untyped
-    def file_in(param)
-      param if param.is_a?(Hash) && param[:tempfile]
     end
 
     # The screen a file is chosen on, which is all this path is: a

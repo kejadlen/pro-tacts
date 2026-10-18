@@ -85,8 +85,21 @@ module ProTacts
 
     # The shape checks a form's own fields are held to (#card_form_params),
     # raising TypecastParams::Error for a POST no page here sends, which
-    # the error handler below answers as a 400.
-    plugin :typecast_params
+    # the error handler below answers as a 400. A walk row's path
+    # (`/import/:upload/:index`) is the groups dialog's `land`, read
+    # back into its parts: the redirect is not a form field's to
+    # choose, so any other shape — which no page here renders — is
+    # refused rather than followed.
+    plugin :typecast_params do
+      handle_type(:walk_row) do |v|
+        row = (v if v.is_a?(String))&.match(%r{\A/import/([a-z]+)/(\d+)\z})
+        raise Roda::RodaPlugins::TypecastParams::Error, "not a walk row: #{v.inspect}" if row.nil?
+
+        # Kernel's, the block running as a TypecastParams instance
+        # whose own #Integer reads a param by that name.
+        [row[1].to_s, ::Kernel::Integer(row[2], 10)]
+      end
+    end
 
     # The two refusals raised as exceptions and mapped to a response.
     # ProxyAuth.login raises MissingLogin for a request that names
@@ -162,20 +175,42 @@ module ProTacts
     end
 
     # The params Admin::CardForm reads, held to the shapes the contact
-    # and group editors post: each phone, email and address field a
-    # hash keyed by its row's digest, every address row and added
-    # address a hash of components. Any other shape is a POST made by
-    # hand, refused here as a 400 (the error handler) rather than read
-    # around in CardForm. An absent field is a form that rendered no
-    # such rows, and passes.
+    # and group editors post: each text field a string, each phone and
+    # email field a hash of strings keyed by its row's digest, each
+    # added phone or email a list of strings, and every address row,
+    # added address and the birthday row a hash of component strings.
+    # Any other shape is a POST made by hand, refused here as a 400
+    # (the error handler) rather than read around in CardForm. An
+    # absent field is a form that rendered no such rows — or a name
+    # input a company disables — and passes.
     #: () -> Hash[String, untyped]
     def card_form_params
-      typecast_params.Hash(%w[phone email])
+      typecast_params.str(%w[first middle last organization nickname note])
+      typecast_params.array(:str, %w[new_phone new_email])
+      %w[phone email].each do |key|
+        rows = typecast_params.Hash(key)
+        rows&.each_key { typecast_params[key].str!(it) }
+      end
       %w[address new_address].each do |key|
         rows = typecast_params.Hash(key)
-        rows&.each_key { typecast_params[key].Hash!(it) }
+        rows&.each_key { typecast_params[key][it].str(Contact::ADDRESS_COMPONENTS) }
       end
+      typecast_params["birthday"].str(%w[year month day]) if typecast_params.Hash("birthday")
       request.params
+    end
+
+    # A form's list of ids: none for a field absent — no box ticked —
+    # and a 400 for one that is not a list of strings.
+    #: (String key) -> Array[String]
+    def ids_in(key)
+      typecast_params.array(:str, key) || []
+    end
+
+    # The file part the form sent: none for a POST carrying no file,
+    # and a 400 for a field that is not one.
+    #: (String key) -> Hash[Symbol, untyped]?
+    def file_in(key)
+      typecast_params.file(key)
     end
 
     # One step of a request, timed as a span inside its request's span

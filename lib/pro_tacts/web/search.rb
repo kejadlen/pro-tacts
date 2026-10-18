@@ -14,7 +14,7 @@ module ProTacts
     #
     # Each step is a span (Web#span), and none carries the query.
     hash_branch("search") do |r|
-      query = r.params["q"].to_s.strip
+      query = typecast_params.str("q", "").strip
 
       r.is do
         r.get do

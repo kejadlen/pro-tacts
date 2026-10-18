@@ -86,7 +86,8 @@ class AdminImportPagesTest < Minitest::Test
   def save(id, index, first:, last:, into: nil, **params)
     get "/import/#{id}/#{index}#{"?into=#{into}" if into}"
     post "/import/#{id}/#{index}",
-         {"etag" => etag, "first" => first, "middle" => "", "last" => last,
+         {"etag" => etag, "company" => ticked("company").first || "0",
+          "first" => first, "middle" => "", "last" => last,
           "nickname" => "", "note" => "",
           "groups" => ticked("groups[]"), "named" => ticked("named[]"),
           "into" => hidden("into").first.to_s, "was" => hidden("was[]")}.merge(params)
@@ -443,7 +444,7 @@ class AdminImportPagesTest < Minitest::Test
       refute_includes last_response.body, %(name="groups[]")
 
       post "/import/#{id}/0",
-           "etag" => etag, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "company" => "0", "etag" => etag, "first" => "Jane", "middle" => "", "last" => "Booles",
            "nickname" => "Jay", "note" => ""
 
       assert_equal "/import/#{id}/0", last_response.headers["location"]
@@ -517,7 +518,7 @@ class AdminImportPagesTest < Minitest::Test
 
       2.times do
         post "/import/#{id}/0",
-             "etag" => sent, "first" => "Jane", "middle" => "", "last" => "Booles",
+             "company" => "0", "etag" => sent, "first" => "Jane", "middle" => "", "last" => "Booles",
              "nickname" => "", "note" => ""
       end
 
@@ -581,7 +582,7 @@ class AdminImportPagesTest < Minitest::Test
       get "/import/#{id}/0"
 
       post "/import/#{id}/0",
-           "etag" => "not the etag", "first" => "Jane", "middle" => "", "last" => "Booles",
+           "company" => "0", "etag" => "not the etag", "first" => "Jane", "middle" => "", "last" => "Booles",
            "nickname" => "", "note" => "lost"
 
       assert_includes last_response.body, "This card changed since the page loaded"
@@ -789,7 +790,7 @@ class AdminImportPagesTest < Minitest::Test
       get "/import/#{id}/0"
 
       post "/import/#{id}/0",
-           "etag" => "not the etag", "first" => "Jane", "middle" => "", "last" => "Booles",
+           "company" => "0", "etag" => "not the etag", "first" => "Jane", "middle" => "", "last" => "Booles",
            "nickname" => "", "note" => "", "groups" => [school], "named" => ["Clarks"]
 
       assert_includes last_response.body,
@@ -857,7 +858,7 @@ class AdminImportPagesTest < Minitest::Test
       # own name unticked with it — so Zulus is spared and Group h
       # goes under alone.
       post "/import/#{id}/0",
-           "etag" => "not the etag", "first" => "Jane", "middle" => "", "last" => "Booles",
+           "company" => "0", "etag" => "not the etag", "first" => "Jane", "middle" => "", "last" => "Booles",
            "nickname" => "", "note" => "", "groups" => [zulus], "named" => []
 
       assert_includes last_response.body, %(<label data-label="zulus" :hidden="!visible($el)">)
@@ -972,7 +973,7 @@ class AdminImportPagesTest < Minitest::Test
       store.delete_group(school)
 
       post "/import/#{id}/0",
-           "etag" => sent, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "company" => "0", "etag" => sent, "first" => "Jane", "middle" => "", "last" => "Booles",
            "nickname" => "", "note" => "", "groups" => [school]
 
       # The last row there was, so the walk ends: nothing was filed
@@ -1110,7 +1111,7 @@ class AdminImportPagesTest < Minitest::Test
       store.put("jane", ProTacts::VCard.new(STORED_JANE.sub("END:VCARD", "NICKNAME:Jay\r\nEND:VCARD")))
 
       post "/import/#{id}/0",
-           "etag" => sent, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "company" => "0", "etag" => sent, "first" => "Jane", "middle" => "", "last" => "Booles",
            "nickname" => "", "note" => "", "into" => "jane"
 
       assert_includes last_response.body, "This card changed since the page loaded; nothing was saved."
@@ -1128,7 +1129,7 @@ class AdminImportPagesTest < Minitest::Test
       store.delete("jane")
 
       post "/import/#{id}/0",
-           "etag" => sent, "first" => "Jane", "middle" => "", "last" => "Booles",
+           "company" => "0", "etag" => sent, "first" => "Jane", "middle" => "", "last" => "Booles",
            "nickname" => "", "note" => "", "into" => "jane"
 
       assert_includes last_response.body, "The contact this card was updating is gone; nothing was saved."

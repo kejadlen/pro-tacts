@@ -33,26 +33,15 @@ module ProTacts
         )
       end
 
-      # Whether the save writes a company card: the editor's Company
-      # box, which submits "1" checked and the hidden "0" before it
-      # otherwise. A POST carrying neither keeps what the card is
-      # (Contact#company?), so no other form's save can switch one.
-      #: (Contact contact, Hash[String, untyped] params) -> bool
-      def self.company?(contact, params)
-        case params["company"]
-        when "1" then true
-        when "0" then false
-        else contact.company?
-        end
-      end
-
       # Whether the save is refused for want of a name, each kind
       # asking its own: a company its organization field, a person
       # either half of the pair (Admin::NamePair). The server's half
-      # of the browser's `required`.
-      #: (Contact contact, Hash[String, untyped] params) -> bool
-      def self.nameless?(contact, params)
-        if company?(contact, params)
+      # of the browser's `required`. `company` is the editor's Company
+      # box, which posts "1" checked and the hidden "0" before it
+      # otherwise, so every save names the kind it writes.
+      #: (bool company, Hash[String, untyped] params) -> bool
+      def self.nameless?(company, params)
+        if company
           params["organization"].to_s.strip.empty?
         else
           params["first"].to_s.strip.empty? && params["last"].to_s.strip.empty?
@@ -62,8 +51,8 @@ module ProTacts
       # The contact editor's save, spliced into the stored card. Where
       # each kind keeps its name, and the switch between the two, is
       # docs/plans/2026-10-07-switching-company-and-person.md.
-      #: (Contact contact, String first, String middle, String last, Hash[String, untyped] params) -> VCard
-      def self.contact_card(contact, first, middle, last, params)
+      #: (Contact contact, bool company, String first, String middle, String last, Hash[String, untyped] params) -> VCard
+      def self.contact_card(contact, company, first, middle, last, params)
         # The rows are read off the contact's own card, the one the form
         # rendered (Admin::ContactsEdit) and the one this save splices:
         # a line a group lends is on neither, so no digest here can name
@@ -73,10 +62,10 @@ module ProTacts
 
         vcard = contact.stored
         vcard =
-          if company?(contact, params)
+          if company
             company_name(vcard, params["organization"].to_s.strip)
           else
-            person_name(contact, vcard, first, middle, last, params["organization"]&.to_s&.strip)
+            person_name(contact, vcard, first, middle, last, params["organization"]&.strip)
           end
         vcard = edited_text(vcard, "NICKNAME", params["nickname"], own.nickname)
         vcard = edited_text(vcard, "NOTE", params["note"], note_of(own))
@@ -173,26 +162,25 @@ module ProTacts
       # (Admin::ContactsEdit) land as bare lines before END:VCARD, and a
       # blank one inserts nothing — inserting absence is a no-op, the
       # plan's rule for new rows, and the reason the rows nobody typed
-      # in cost nothing whether they were on screen or not. Array()
-      # because the field is a list and a request carrying one value
-      # is still a list of one.
+      # in cost nothing whether they were on screen or not.
       #: (Array[Contact::Phone | Contact::Email] rows, String field, String name, VCard vcard, Hash[String, untyped] params) -> VCard
       def self.edited_values(rows, field, name, vcard, params)
         edits = hash_field(params, field)
         rows.each do |row|
           submitted = edits[row.line.digest]
-          next if submitted.nil? || submitted.to_s.strip == row.value.strip
+          next if submitted.nil? || submitted.strip == row.value.strip
 
-          value = submitted.to_s.strip
+          value = submitted.strip
           vcard = vcard.substitute(
             row.line.digest,
             value.empty? ? [] : ["#{VCard.header_of(row.property)}#{VCard.escape(value)}"],
           )
         end
 
-        submitted = Array(params["new_#{field}"]) #: Array[untyped]
+        none = [] #: Array[String]
+        submitted = params.fetch("new_#{field}", none) #: Array[String]
         added = submitted.filter_map {
-          value = it.to_s.strip
+          value = it.strip
           "#{name}:#{VCard.escape(value)}" unless value.empty?
         } #: Array[String]
         vcard.insert(added)
