@@ -545,10 +545,14 @@ module ProTacts
     # The birthday comes out of the card and into the model, Store#put's
     # split and its rule for a BDAY the model does not read, so the
     # editor renders the same row over an import as over a contact.
+    # Only a card's one BDAY moves (EditedContact#split_birthday): a
+    # card carrying several keeps every one of them in the card, where
+    # taking the first into the model would drop the rest from it.
     #: (VCard card, Integer index) -> Contact
     def import_contact(card, index)
       bdays, rest = card.extract("BDAY")
-      birthday = bdays.filter_map { it.property }.filter_map { Birthday.from_property(it) }.first
+      property = bdays.fetch(0).property if bdays.length == 1
+      birthday = property && Birthday.from_property(property)
       Contact.new(id: index.to_s, stored: birthday ? rest : card, birthday:, inherited: [])
     end
 

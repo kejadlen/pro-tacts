@@ -620,6 +620,24 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
+  # Only a card's one BDAY moves into the model, Store#put's split: a
+  # card carrying two keeps both in the card, the second one a spelling
+  # the model does not read, where taking the first would drop the
+  # other on the Save with nothing to say it went.
+  def test_a_card_with_two_birthdays_keeps_both
+    card = "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Booles;Jane;;;\r\nFN:Jane Booles\r\n" \
+           "BDAY:1980-01-02\r\nBDAY:sometime in May\r\nUID:ABC-123\r\nEND:VCARD\r\n"
+    with_contacts({}) do |store|
+      id = upload(card)
+
+      save(id, 0, first: "Jane", last: "Booles")
+
+      stored = store.contacts.fetch(0)
+      assert_nil stored.birthday
+      assert_equal ["1980-01-02", "sometime in May"], stored.stored.properties.select { it.name == "BDAY" }.map(&:value)
+    end
+  end
+
   # The group for the import is named when the file is uploaded;
   # which of this book's own groups a contact joins is asked beside
   # that contact's card, and written by the same Save as its fields.
