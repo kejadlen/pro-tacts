@@ -181,17 +181,13 @@ module ProTacts
         edits = params[field]
         if edits
           rows.each do |row|
-            # These rows read from lines that did (Contact#phones), so
-            # a nil is a broken assumption.
-            property = row.line.property or raise "a #{field} row read from a line that will not read"
-
             submitted = edits[row.line.digest]
             next if submitted.nil? || submitted.to_s.strip == row.value.strip
 
             value = submitted.to_s.strip
             vcard = vcard.substitute(
               row.line.digest,
-              value.empty? ? [] : ["#{VCard.header_of(property)}#{VCard.escape(value)}"],
+              value.empty? ? [] : ["#{VCard.header_of(row.property)}#{VCard.escape(value)}"],
             )
           end
         end
@@ -256,7 +252,7 @@ module ProTacts
       # header.
       #: (Contact::Address? address, Hash[String, untyped] submitted) -> String?
       def self.address_line(address, submitted)
-        property = address && address.line.property
+        property = address&.property
         if property.nil?
           components = [""]
         else

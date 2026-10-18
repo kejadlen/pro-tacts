@@ -63,14 +63,17 @@ module ProTacts
     # (docs/plans/2026-09-18-phone-labels.md, "Reading"), every
     # shape's `line` is the parsed line it was read from, the address
     # a save names that row by
-    # (docs/plans/2026-09-05-web-card-editor.md), and `lent_by` the
+    # (docs/plans/2026-09-05-web-card-editor.md), a repeatable row's
+    # `property` that line's reading, which #rows only builds a row
+    # from, so a save splicing it never meets a line that would not
+    # read, and `lent_by` the
     # group lending the row, nil where the card's own (#lent_at).
     # Data classes, whose members the inline syntax cannot read; the
     # signatures live in sig/pro_tacts/contact.rbs.
     # @rbs skip
-    Phone = Data.define(:value, :label, :types, :line, :lent_by)
+    Phone = Data.define(:value, :label, :types, :line, :property, :lent_by)
     # @rbs skip
-    Email = Data.define(:value, :types, :line, :lent_by)
+    Email = Data.define(:value, :types, :line, :property, :lent_by)
     # @rbs skip
     Note = Data.define(:value, :line)
     # @rbs skip
@@ -95,6 +98,7 @@ module ProTacts
       :country,
       :types,
       :line,
+      :property,
       :lent_by,
     )
 
@@ -371,6 +375,7 @@ module ProTacts
           label: group && labels[group.downcase],
           types: property.types - %w[voice],
           line:,
+          property:,
           lent_by:,
         ) if value
       }
@@ -382,7 +387,7 @@ module ProTacts
         value = text_of(property)
         # RFC 2426 section 3.3.2: `internet` is the format every address
         # has by default, so it names none.
-        Email.new(value:, types: property.types - %w[internet], line:, lent_by:) if value
+        Email.new(value:, types: property.types - %w[internet], line:, property:, lent_by:) if value
       }
     end
 
@@ -548,15 +553,16 @@ module ProTacts
     end
 
     # ADR's components, with a value that is blank throughout reading
-    # as no address at all. Carries the line it was read from, the
-    # other provenance-carrying shapes' own address for a save.
+    # as no address at all. Carries the line it was read from and its
+    # reading, the other provenance-carrying shapes' own address for a
+    # save.
     #: (VCard::Parser::Property property, line: VCard::Parser::Line, lent_by: Group?) -> Address?
     def address_of(property, line:, lent_by:)
       components = components_of(property)
       return if components.none?
 
       po_box, extended, street, locality, region, postal_code, country = components
-      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: property.types, line:, lent_by:)
+      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: property.types, line:, property:, lent_by:)
     end
 
   end
