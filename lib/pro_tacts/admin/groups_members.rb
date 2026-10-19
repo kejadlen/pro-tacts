@@ -31,54 +31,67 @@ module ProTacts
     #
     # The same screen picks a group's first members before the group
     # exists: a contact card's "new" (Admin::ContactCard) opens it
-    # with that contact ticked, and its Create is the create (POST
-    # /groups), so a group someone backs out of is never made. With no
-    # group there is nothing toggled against, so no `was[]`, and the
-    # way back is the card it was opened from.
+    # with that contact ticked, and its Create is the create
+    # (Web#apply_new_group), so a group someone backs out of is never
+    # made.
     class GroupsMembers < Phlex::HTML
-      # @rbs @from: Group | Contact
-      # @rbs @group: Group?
       # @rbs @login: String
+      # @rbs @notice: String?
       # @rbs @contacts: Array[ListedContact]
-      # @rbs @members: Array[String]
+      # @rbs @title: String
+      # @rbs @action: String
+      # @rbs @back: [String, (String | Phlex::HTML)]
+      # @rbs @submit: String
+      # @rbs @ticked: Array[String]
+      # @rbs @was: Array[String]
       # @rbs @capped: Array[String]
 
       # The form's id, for the footer's Save outside it.
       FORM = "members-form" #: String
       private_constant :FORM
 
-      # `from` is the record the screen was opened from, and the one
-      # thing that tells its two cases apart, so no call can name both
-      # or neither: a group's page edits that group's members, and a
-      # contact's card starts a group with that contact in it.
-      #: (from: Group | Contact, contacts: Array[ListedContact], login: String) -> void
-      def initialize(from:, contacts:, login:)
-        @from = from
-        @group = from if from.is_a?(Group)
+      # `from` is the record the screen was opened from: a group's
+      # page edits that group's members, and a contact's card starts a
+      # group with that contact in it. `was` is what the page loaded
+      # with, which a group not yet made has none of.
+      #: (from: Group | Contact, contacts: Array[ListedContact], login: String, ?notice: String?) -> void
+      def initialize(from:, contacts:, login:, notice: nil)
         @login = login
+        @notice = notice
         # The order the show screen's list reads (Format.sort_key),
         # which is the order the book is browsed in everywhere else.
         @contacts = contacts.sort_by { [Format.sort_key(it), it.id] }
-        @members = from.is_a?(Group) ? from.members : [from.id]
-        # The members are never capped (GroupFilter.capped).
-        @capped = GroupFilter.capped(@contacts.map(&:id), joined: @members)
+        case from
+        in Group
+          @title = "Members of #{from.label}"
+          @action = "/groups/#{from.id}/members"
+          @back = ["/groups/#{from.id}", GroupLabel.new(group: from)]
+          @submit = "Save"
+          @ticked = from.members
+          @was = from.members
+        in Contact
+          @title = "New group"
+          @action = "/contacts/#{from.id}/groups/new"
+          @back = ["/contacts/#{from.id}", from.name || from.id]
+          # The verb the two create dialogs end on (GroupsIndex,
+          # ContactDialog).
+          @submit = "Create"
+          @ticked = [from.id]
+          @was = []
+        end
+        # The ticked are never capped (GroupFilter.capped).
+        @capped = GroupFilter.capped(@contacts.map(&:id), joined: @ticked)
       end
 
       def view_template
-        group = @group
-        title = group ? "Members of #{group.label}" : "New group"
-        render Layout.new(title:, login: @login) do
-          form(action: group ? "/groups/#{group.id}/members" : "/groups", method: "post",
-               class: "member-picker", id: FORM, x_data: GroupFilter::STATE) do
-            # Create where the save makes the group, the verb the two
-            # create dialogs end on (GroupsIndex, ContactDialog).
-            render RecordCard.new(back:, submit: group ? "Save" : "Create", form: FORM) do
+        render Layout.new(title: @title, login: @login, notice: @notice) do
+          form(action: @action, method: "post", class: "member-picker", id: FORM, x_data: GroupFilter::STATE) do
+            render RecordCard.new(back: @back, submit: @submit, form: FORM) do
               render GroupFilter.new(autofocus: true, in_form: true, placeholder: "Filter contacts")
             end
             div(class: "member-list") do
               ul(class: "card", x_ref: "options") do
                 @contacts.each do |contact|
-                  member = @members.include?(contact.id)
                   # The row's label is the name the lists show
                   # (Format.name_label), nickname and all, because
                   # that is the name a person filters by; the row
@@ -87,11 +100,11 @@ module ProTacts
                   li(**GroupFilter.row(Format.name_label(contact),
                                        capped: @capped.include?(contact.id))) do
                     label do
-                      input(type: "checkbox", name: "members[]", value: contact.id, checked: member)
+                      input(type: "checkbox", name: "members[]", value: contact.id, checked: @ticked.include?(contact.id))
                       render Avatar.new(contact:, size: "lg")
                       div(style: "flex: 1; min-width: 0; font-weight: 550;") { Format.name_label(contact) }
                     end
-                    input(type: "hidden", name: "was[]", value: contact.id) if member && @group
+                    input(type: "hidden", name: "was[]", value: contact.id) if @was.include?(contact.id)
                   end
                 end
               end
@@ -99,17 +112,6 @@ module ProTacts
               render GroupFilter::Rest.new(count: @contacts.length, noun: "contacts") if @capped.any?
             end
           end
-        end
-      end
-
-      private
-
-      # The way back to the record the screen was opened from.
-      #: () -> [String, (String | Phlex::HTML)]
-      def back
-        case (from = @from)
-        in Group then ["/groups/#{from.id}", GroupLabel.new(group: from)]
-        in Contact then ["/contacts/#{from.id}", from.name || from.id]
         end
       end
     end

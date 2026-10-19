@@ -99,15 +99,16 @@ module ProTacts
         end
 
         # The groups row's "new" (Admin::ContactCard): the members
-        # screen of a group not yet made, this contact ticked; its Create
-        # is the create (Admin::GroupsMembers).
+        # screen of a group not yet made, this contact ticked, whose
+        # Create posts back here. Above the edit's POST, as the dialog's
+        # save is.
         r.get "groups", "new" do
           contact = store.contact(id)
+          new_group_screen(contact) if contact
+        end
 
-          if contact
-            response["Content-Type"] = "text/html; charset=utf-8"
-            Admin::GroupsMembers.call(from: contact, contacts: store.listed_contacts, login: @login)
-          end
+        r.post "groups", "new" do
+          apply_new_group(r, id)
         end
 
         r.post do
@@ -264,6 +265,28 @@ module ProTacts
         return contact_screen(contact, notice:)
       end
       r.redirect(row ? "/import/#{row.fetch(0)}/#{row.fetch(1)}" : "/contacts/#{id}", 303)
+    end
+
+    # The new group's Create: a nameless group of the ticked, landed
+    # on, it being something already. None ticked makes none, the
+    # store keeping no group that never had a member
+    # (Store#create_group). Only ids that name a card
+    # (#apply_members' reason).
+    #: (untyped r, String id) -> String?
+    def apply_new_group(r, id)
+      contact = store.contact(id)
+      return if contact.nil?
+
+      members = ids_in("members") & store.contact_ids
+      return new_group_screen(contact, notice: "A group needs a member; nothing was made.") if members.empty?
+
+      r.redirect "/groups/#{store.create_group(members:)}", 303
+    end
+
+    #: (Contact contact, ?notice: String) -> String
+    def new_group_screen(contact, notice: nil)
+      response["Content-Type"] = "text/html; charset=utf-8"
+      Admin::GroupsMembers.call(from: contact, contacts: store.listed_contacts, login: @login, notice:)
     end
 
     #: (Contact contact, ?notice: String) -> String

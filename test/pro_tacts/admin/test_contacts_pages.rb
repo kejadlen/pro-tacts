@@ -921,7 +921,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 200, last_response.status
       assert_empty store.all_groups
-      assert_includes last_response.body, %(<form action="/groups" method="post")
+      assert_includes last_response.body, %(<form action="/contacts/ada/groups/new" method="post")
       assert_includes last_response.body, %(<input type="checkbox" name="members[]" value="ada" checked>)
       assert_includes last_response.body, %(<a href="/contacts/ada" class="btn">Cancel</a>)
       assert_includes last_response.body, %(data-variant="primary">Create</button>)
@@ -933,7 +933,7 @@ class AdminContactsPagesTest < Minitest::Test
   # ticked contacts and lands on it.
   def test_the_new_groups_save_makes_a_nameless_group_of_the_ticked
     with_contacts({"ada" => ADA}) do |store|
-      post "/groups", members: %w[ada nobody]
+      post "/contacts/ada/groups/new", members: %w[ada nobody]
 
       groups = store.all_groups
       group = groups.fetch(0)
@@ -946,11 +946,25 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  def test_a_new_group_for_an_unknown_contact_is_a_404
-    with_contacts({"ada" => ADA}) do
-      get "/contacts/nobody/groups/new"
+  # A Create with nobody ticked makes nothing and says so.
+  def test_the_new_groups_save_with_none_ticked_makes_none
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada/groups/new", members: %w[nobody]
 
+      assert_equal 200, last_response.status
+      assert_includes last_response.body, "A group needs a member; nothing was made."
+      assert_empty store.all_groups
+    end
+  end
+
+  def test_a_new_group_for_an_unknown_contact_is_a_404
+    with_contacts({"ada" => ADA}) do |store|
+      get "/contacts/nobody/groups/new"
       assert_equal 404, last_response.status
+
+      post "/contacts/nobody/groups/new", members: %w[ada]
+      assert_equal 404, last_response.status
+      assert_empty store.all_groups
     end
   end
 

@@ -634,9 +634,9 @@ module ProTacts
     # attempt draws again.
     #
     # `members` join in the same transaction, for a group made from a
-    # contact's card (Web's add): a group that exists only once its
-    # first member is in it, rather than one left empty and nameless
-    # when the join fails.
+    # contact's card (Web#apply_new_group): a group that exists only
+    # once its first member is in it, rather than one left empty and
+    # nameless when the join fails.
     #: (?name: String?, ?members: Array[String]) -> String
     def create_group(name: nil, members: [])
       GROUP_ID_ATTEMPTS.times do

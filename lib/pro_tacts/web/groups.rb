@@ -28,17 +28,10 @@ module ProTacts
           Admin::GroupsIndex.call(groups: store.all_groups, login: @login)
         end
 
-        # A create from the groups page names the group and lands on
-        # its editor; one from the members screen of a group not yet
-        # made (Admin::GroupsMembers, opened from a card's "new")
-        # carries its first members and lands on the group itself,
-        # being something already. Only ids that name a card
-        # (#apply_group_edit's reason).
         r.post do
           name = typecast_params.str("name", "").strip
-          members = ids_in("members") & store.contact_ids
-          id = store.create_group(name: name.empty? ? nil : name, members:)
-          r.redirect(r.params.key?("members") ? "/groups/#{id}" : "/groups/#{id}/edit", 303)
+          id = store.create_group(name: name.empty? ? nil : name)
+          r.redirect "/groups/#{id}/edit", 303
         rescue Sequel::UniqueConstraintViolation
           # A taken name (db/migrations/008_group_names.rb).
           response["Content-Type"] = "text/html; charset=utf-8"
