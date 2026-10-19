@@ -68,7 +68,9 @@ module ProTacts
         render Layout.new(title:, login: @login) do
           form(action: group ? "/groups/#{group.id}/members" : "/groups", method: "post",
                class: "member-picker", id: FORM, x_data: GroupFilter::STATE) do
-            render RecordCard.new(back:, submit: "Save", form: FORM) do
+            # Create where the save makes the group, the verb the two
+            # create dialogs end on (GroupsIndex, ContactDialog).
+            render RecordCard.new(back:, submit: group ? "Save" : "Create", form: FORM) do
               render GroupFilter.new(autofocus: true, in_form: true, placeholder: "Filter contacts")
             end
             div(class: "member-list") do

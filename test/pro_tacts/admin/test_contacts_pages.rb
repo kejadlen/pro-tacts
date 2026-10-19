@@ -914,7 +914,7 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # "new" makes nothing: it is the members screen with the contact
-  # ticked, its Save the create and its Cancel the card again.
+  # ticked, its Create the create and its Cancel the card again.
   def test_new_opens_the_members_screen_of_a_group_not_yet_made
     with_contacts({"ada" => ADA}) do |store|
       get "/contacts/ada/groups/new"
@@ -924,6 +924,7 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes last_response.body, %(<form action="/groups" method="post")
       assert_includes last_response.body, %(<input type="checkbox" name="members[]" value="ada" checked>)
       assert_includes last_response.body, %(<a href="/contacts/ada" class="btn">Cancel</a>)
+      assert_includes last_response.body, %(data-variant="primary">Create</button>)
       refute_includes last_response.body, %(name="was[]")
     end
   end
