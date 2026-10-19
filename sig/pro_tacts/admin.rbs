@@ -49,7 +49,11 @@ module ProTacts
     end
 
     class GroupsMembers
-      def self.call: (from: Group | Contact, contacts: Array[ListedContact], login: String, ?notice: String?) -> String
+      def self.call: (group: Group, contacts: Array[ListedContact], login: String) -> String
+    end
+
+    class GroupsNew
+      def self.call: (contact: Contact, contacts: Array[ListedContact], login: String, ?notice: String?) -> String
     end
 
     class DeviceSetup

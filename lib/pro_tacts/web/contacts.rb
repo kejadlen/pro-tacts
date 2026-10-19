@@ -4,7 +4,7 @@ require "pro_tacts/admin/contacts_edit"
 require "pro_tacts/admin/contacts_index"
 require "pro_tacts/admin/contacts_show"
 require "pro_tacts/admin/dashboard"
-require "pro_tacts/admin/groups_members"
+require "pro_tacts/admin/groups_new"
 require "pro_tacts/change_id"
 
 module ProTacts
@@ -286,7 +286,7 @@ module ProTacts
     #: (Contact contact, ?notice: String) -> String
     def new_group_screen(contact, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::GroupsMembers.call(from: contact, contacts: store.listed_contacts, login: @login, notice:)
+      Admin::GroupsNew.call(contact:, contacts: store.listed_contacts, login: @login, notice:)
     end
 
     #: (Contact contact, ?notice: String) -> String
