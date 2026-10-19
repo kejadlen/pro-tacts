@@ -7,8 +7,8 @@ require "pro_tacts/vcard"
 module ProTacts
   # A group as the admin screens read one: its own row, the lines it
   # lends in the order it lends them, its members' card ids, and
-  # whether it has a photo (docs/plans/2026-10-12-group-photos.md).
-  # The label is the SQL one Store#group_label computes, so a tag and a
+  # whether it has a photo (docs/plans/2026-10-12-group-photos.md). The
+  # label is the SQL one Store#group_label computes, so a tag and a
   # heading can never disagree about what to call a nameless group.
   #
   # The signature lives in sig/pro_tacts/group.rbs, this being a Data
