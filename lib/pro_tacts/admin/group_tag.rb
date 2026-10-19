@@ -22,8 +22,7 @@ module ProTacts
       end
 
       def view_template
-        shown = @members.take(SHOWN)
-        rest = @members.drop(SHOWN)
+        shown, rest = @members.partition.with_index { |_, index| index < SHOWN }
         span do
           a(href: "/groups/#{@group.id}", class: "tag") do
             render Icon.new(:image, size: 12) if @group.photo
