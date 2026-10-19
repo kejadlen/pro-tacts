@@ -152,12 +152,11 @@ module ProTacts
           if @walk
             edit_button
           else
-            # A slash tells the two apart where they sit side by side,
-            # the way the pair is said aloud; admin.css stacks them on
-            # a phone and drops it there, the line break saying it.
+            # The slash between the two is admin.css's, being no word
+            # of the page's: drawn where they sit side by side and
+            # dropped where a phone stacks them.
             div(role: "group", aria_label: "Groups") do
               edit_button
-              span(class: "gl-muted", aria_hidden: true) { "/" }
               a(href: "/contacts/#{@contact.id}/groups/new", class: "btn", data_size: "sm") { "new" }
             end
           end

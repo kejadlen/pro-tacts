@@ -1140,44 +1140,52 @@ span.avatar[data-size="lg"] {
 .detail-grid dd:has(> [role="group"]) > div:not([role="group"]) {
   grid-column: 1;
 }
-/* The slash between the pair, in the buttons' own type so it sits on
-   their baseline rather than a step larger beside it. The buttons give
-   up their inner padding toward it, the mono glyph's own bearings
-   being the space between them; the outer padding stays, so a hover
-   still fills a box. */
+/* The slash between the pair: the group's own ::after, ordered
+   between its two children so it belongs to neither and no press of
+   it is a press of edit or new, and empty alt text so a screen reader
+   reads two buttons rather than a punctuation mark. In the buttons'
+   own type so it sits on their baseline rather than a step larger
+   beside it. The two give up their inner padding toward it, the mono
+   glyph's own bearings being the space between them; the outer
+   padding stays, so a hover still fills a box. */
 .detail-grid dd > [role="group"] {
   align-items: baseline;
 }
-.detail-grid dd > [role="group"] > span {
+.detail-grid dd > [role="group"] > :first-child {
+  order: 0;
+  padding-inline-end: 0;
+}
+.detail-grid dd > [role="group"]::after {
+  content: "/" / "";
+  order: 1;
   font-family: var(--gl-font-mono);
   font-size: 0.8125rem;
   line-height: 1.15;
+  color: var(--gl-color-text-secondary);
 }
-.detail-grid dd > [role="group"] > button:first-child {
-  padding-inline-end: 0;
-}
-.detail-grid dd > [role="group"] > .btn:last-child {
+.detail-grid dd > [role="group"] > :last-child {
+  order: 2;
   padding-inline-start: 0;
 }
 /* On a phone the group stacks and the slash goes, the line break
    saying what it said: side by side the two take the tags' column
-   down to a word. The two pads between the labels are drawn out
-   entirely, so the pair reads as one control rather than two rows. */
+   down to a word. With nothing between them the two keep their whole
+   padding, so their right edges stand together, and the two pads
+   between the labels are drawn out entirely, so the pair reads as
+   one control rather than two rows. */
 @media (max-width: 48rem) {
   .detail-grid dd > [role="group"] {
     flex-direction: column;
     align-items: flex-end;
   }
-  .detail-grid dd > [role="group"] > span {
-    display: none;
+  .detail-grid dd > [role="group"]::after {
+    content: none;
   }
-  /* With no slash between them the two keep their whole padding, so
-     their right edges stand together. */
-  .detail-grid dd > [role="group"] > button:first-child,
-  .detail-grid dd > [role="group"] > .btn:last-child {
+  .detail-grid dd > [role="group"] > :first-child,
+  .detail-grid dd > [role="group"] > :last-child {
     padding-inline: var(--_pad-x);
   }
-  .detail-grid dd > [role="group"] > span + .btn {
+  .detail-grid dd > [role="group"] > :last-child {
     margin-block-start: calc(-2 * var(--gl-space-3xs));
   }
 }
