@@ -1372,6 +1372,17 @@ class StoreTest < Minitest::Test
     end
   end
 
+  def test_a_group_read_with_its_members_lists_them_in_order
+    with_store({"znorth" => ZED, "aiden" => AIDEN}) do |store|
+      FixtureData.seed_group(store, name: "Booles", members: ["znorth", "aiden"])
+
+      assert_equal [%w[aiden znorth]], store.groups_of("znorth", listed_members: true).map { it.listed_members.to_a.map(&:id) }
+      assert_equal [%w[aiden znorth]], store.all_groups(listing: store.listed_contacts).map { it.listed_members.to_a.map(&:id) }
+      assert_nil store.groups_of("znorth").fetch(0).listed_members
+      assert_nil store.all_groups.fetch(0).listed_members
+    end
+  end
+
   def test_a_group_inspects_to_its_label_and_member_count
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       id = FixtureData.seed_group(store, name: "Household", members: %w[znorth aiden])

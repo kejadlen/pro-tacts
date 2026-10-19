@@ -155,7 +155,7 @@ class AdminGroupsPagesTest < Minitest::Test
     end
   end
 
-  # The members list the way /contacts does (Format.sort_key), not in
+  # The members list the way /contacts does (Contact#<=>), not in
   # the store's id order. Seeded so the two disagree. The scan takes
   # the list's own rows — an li's link, not the change log's, which
   # names the same cards for other reasons — and only from the

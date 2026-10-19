@@ -964,6 +964,55 @@ section > h2 {
   position: relative;
 }
 
+/* Gloss's card clips, which would cut off a group tag's member list
+   (Admin::GroupTag). The clip kept a row's hover fill in the card's
+   corners, so the end rows take the corners themselves. */
+.card:has([role="tooltip"]) {
+  overflow: visible;
+}
+.card:has([role="tooltip"]) > li:first-child {
+  border-start-start-radius: inherit;
+  border-start-end-radius: inherit;
+}
+.card:has([role="tooltip"]) > li:last-child {
+  border-end-start-radius: inherit;
+  border-end-end-radius: inherit;
+}
+/* Gloss centers a tooltip, which runs a list wider than its tag past
+   the edge the tag sits near: a set's tag starts the list with it, a
+   lent row's tag, at the column's end, ends it with it. */
+.tag-set [role="tooltip"] {
+  left: 0;
+  transform: none;
+}
+.detail-grid dd > span > [role="tooltip"] {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+ol[role="tooltip"] {
+  list-style: none;
+}
+/* base.css's prose gap between list items. */
+ol[role="tooltip"] > li {
+  margin: 0;
+}
+/* On a phone a late tag sits too near the edge for a name after it,
+   so the set holds the list, which wraps inside it. */
+@media (max-width: 48rem) {
+  .tag-set {
+    position: relative;
+  }
+  .tag-set > span:has(> [role="tooltip"]) {
+    position: static;
+  }
+  .tag-set [role="tooltip"] {
+    width: max-content;
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+
 /* The members screen (Admin::GroupsMembers). The form owns the
    picker's Alpine state and so wraps both cards — the record's own,
    holding the filter and the footer, and the list under it —
@@ -1116,12 +1165,13 @@ span.avatar[data-size="lg"] {
    them one flex item, and no source-order inversion — the value is
    still read before the group that lends it.
 
-   Baseline-aligned: a grid item blockifies, so the tag's inline-flex
-   becomes a flex container, which takes its baseline from its first
-   item — the tag's text — and so shares the value's. A contact
+   Baseline-aligned: a grid item blockifies, so the span the tag's
+   tooltip hangs from (Admin::GroupTag), inline-flex in Gloss, becomes
+   a flex container, which takes its baseline from its first item —
+   the tag, and so the tag's text — and shares the value's. A contact
    card's "edit / new" take the same place as Gloss' button group,
    a flex container like the tag. */
-.detail-grid dd:has(> .tag),
+.detail-grid dd:has(> span > .tag),
 .detail-grid dd:has(> button),
 .detail-grid dd:has(> [role="group"]) {
   display: grid;
@@ -1129,13 +1179,13 @@ span.avatar[data-size="lg"] {
   align-items: baseline;
   column-gap: var(--gl-space-s);
 }
-.detail-grid dd > .tag,
+.detail-grid dd > span:has(> .tag),
 .detail-grid dd > button,
 .detail-grid dd > [role="group"] {
   grid-column: 2;
   grid-row: 1;
 }
-.detail-grid dd:has(> .tag) > div,
+.detail-grid dd:has(> span > .tag) > div,
 .detail-grid dd:has(> button) > div,
 .detail-grid dd:has(> [role="group"]) > div:not([role="group"]) {
   grid-column: 1;

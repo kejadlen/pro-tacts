@@ -15,7 +15,7 @@ module ProTacts
     # type-and-value grid, and an attribute with no data gets no row.
     # The members are what a group is, so they are a list rather than a
     # row: /contacts' rows, narrowed to this group and in its order
-    # (Format.sort_key). Under them the group's history, the change
+    # (Contact#<=>). Under them the group's history, the change
     # log the contact page renders in this page's own shape. The whole
     # book comes in beside the members (Store#contacts) because that
     # log names the cards a join or a leave moved, and a name is what
@@ -35,8 +35,7 @@ module ProTacts
         @contacts = contacts
         @changes = changes
         @reading = group.reading
-        @members = contacts.select { group.members.include?(it.id) }
-          .sort_by { [Format.sort_key(it), it.id] }
+        @members = contacts.select { group.members.include?(it.id) }.sort
       end
 
       def view_template

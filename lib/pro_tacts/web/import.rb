@@ -152,11 +152,11 @@ module ProTacts
     #: (VCard card, Integer index, Integer losses) -> Import::Staged::Row
     def import_row(card, index, losses)
       contact = import_contact(card, index)
-      Import::Staged::Row.new(label: Admin::Format.name_label(contact), sort_key: Admin::Format.sort_key(contact), losses:)
+      Import::Staged::Row.new(label: Admin::Format.name_label(contact), sort_key: contact.sort_key, losses:)
     end
 
     # The rows' places in the file, in the order the list shows them:
-    # the contacts page's (Format.sort_key), so a file reads the way
+    # the contacts page's (Contact#sort_key), so a file reads the way
     # the book it is joining does. The place in the file breaks a tie
     # where the book's id would, as a number: a row's id is that place
     # spelled as a string, and "10" sorts before "2". A row is still
@@ -215,7 +215,7 @@ module ProTacts
         Admin::ImportSaved.call(
           contact:,
           login: @login,
-          groups: store.groups_of(contact.id),
+          groups: store.groups_of(contact.id, listed_members: true),
           all_groups: store.group_choices,
           aside: Admin::ImportOriginal.new(card: original, dropped:),
           sidebar:,

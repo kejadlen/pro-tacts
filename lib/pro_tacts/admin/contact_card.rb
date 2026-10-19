@@ -33,6 +33,7 @@ module ProTacts
       # @rbs @contact: Contact
       # @rbs @groups: Array[Group]
       # @rbs @walk: bool
+      # @rbs @listed_groups: Hash[String, Group]
 
       #: (contact: Contact, groups: Array[Group], ?walk: bool) -> void
       def initialize(contact:, groups:, walk: false)
@@ -40,6 +41,7 @@ module ProTacts
         @groups = groups
         @walk = walk
         @birthday = Format.birthday(contact)
+        @listed_groups = groups.to_h { [it.id, it] }
       end
 
       def view_template
@@ -122,7 +124,7 @@ module ProTacts
           dt(class: "type-label") { "notes" }
           dd(class: "type-body-sm") do
             div(style: "white-space: pre-wrap;") { text }
-            render GroupTag.new(group: lent.group)
+            render GroupTag.new(group: @listed_groups.fetch(lent.group.id))
           end
         end
       end
@@ -183,7 +185,7 @@ module ProTacts
           # The groups row's own tag, pinned to this row's first line
           # at the right edge of the value column (admin.css) — under
           # the value it could be read as marking the row below.
-          render GroupTag.new(group: lent_by) if lent_by
+          render GroupTag.new(group: @listed_groups.fetch(lent_by.id)) if lent_by
         end
       end
 

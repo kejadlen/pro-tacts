@@ -24,7 +24,8 @@ module ProTacts
         # contacts (docs/DESIGN.md, "The core idea").
         r.get do
           response["Content-Type"] = "text/html; charset=utf-8"
-          Admin::ContactsIndex.call(contacts: store.listed_contacts, groups: store.all_groups, login: @login)
+          contacts = store.listed_contacts
+          Admin::ContactsIndex.call(contacts:, groups: store.all_groups(listing: contacts), login: @login)
         end
 
         # The browser's create, from the dashboard's dialog: POST is
@@ -295,7 +296,7 @@ module ProTacts
       Admin::ContactsShow.call(
         contact:,
         login: @login,
-        groups: store.groups_of(contact.id),
+        groups: store.groups_of(contact.id, listed_members: true),
         all_groups: store.group_choices,
         changes: store.changes_of(contact.id),
         notice:,

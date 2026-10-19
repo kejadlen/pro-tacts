@@ -23,18 +23,6 @@ module ProTacts
         nickname || name || contact.id
       end
 
-      # The order a contact lists under: N's family name (RFC 2426
-      # section 3.1.2), falling back the way #initials does — FN for a
-      # card with no N, the id for a card with no name at all — and
-      # case-insensitive, so the card's spelling of a family name does
-      # not move it. Every listing of contacts sorts by it, the id
-      # breaking a tie.
-      #: (Contact | ListedContact contact) -> String
-      def self.sort_key(contact)
-        family, = contact.name_components || []
-        (family || contact.name || contact.id).to_s.downcase
-      end
-
       # The string a search compares on: the query and the value it
       # is matched against both lowercased and accents folded to the
       # letters they sit on, so "munoz" finds "Muñoz". NFD plus

@@ -18,6 +18,7 @@ module ProTacts
   class ListedContact
     # @rbs @contact: Contact
     # @rbs @photo: bool
+    # @rbs @sort_key: String?
 
     #: (Contact contact, photo: bool) -> void
     def initialize(contact, photo:)
@@ -36,6 +37,16 @@ module ProTacts
 
     #: () -> String?
     def nickname = @contact.nickname
+
+    # Kept, since a sort asks at every comparison; nothing writes
+    # through a listed contact to change it.
+    #: () -> String
+    def sort_key = @sort_key ||= @contact.sort_key
+
+    #: (Contact | ListedContact other) -> Integer?
+    def <=>(other)
+      [sort_key, id] <=> [other.sort_key, other.id]
+    end
 
     #: () -> String?
     def organization = @contact.organization

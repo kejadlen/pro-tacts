@@ -190,7 +190,7 @@ class AdminImportPagesTest < Minitest::Test
     end
   end
 
-  # The list reads the way the contacts page does (Format.sort_key),
+  # The list reads the way the contacts page does (Contact#sort_key),
   # not in the file's order, and the walk goes down it as it reads:
   # the upload opens on the first row, and a Save steps to the next.
   # The row keeps its place in the file as its name.

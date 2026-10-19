@@ -45,9 +45,9 @@ module ProTacts
       def initialize(contacts:, login:, notice: nil)
         @login = login
         @notice = notice
-        # The order the show screen's list reads (Format.sort_key),
+        # The order the show screen's list reads (Contact#<=>),
         # which is the order the book is browsed in everywhere else.
-        @contacts = contacts.sort_by { [Format.sort_key(it), it.id] }
+        @contacts = contacts.sort
         # The ticked are never capped (GroupFilter.capped).
         @capped = GroupFilter.capped(@contacts.map(&:id), joined: ticked)
       end

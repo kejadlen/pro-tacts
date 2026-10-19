@@ -186,7 +186,8 @@ class AdminContactsPagesTest < Minitest::Test
 
       get "/contacts"
 
-      assert_includes last_response.body, %(<a href="/groups/#{group_id}" class="tag">Booles</a>)
+      assert_includes last_response.body,
+                      %(<a href="/groups/#{group_id}" class="tag">Booles</a><ol role="tooltip"><li>Ada Lovelace</li></ol>)
     end
   end
 
@@ -604,7 +605,7 @@ class AdminContactsPagesTest < Minitest::Test
       id = FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
 
       get "/contacts/ada"
-      marks = last_response.body.scan(%(<a href="/groups/#{id}" class="tag">Booles</a></dd>))
+      marks = last_response.body.scan(%(<a href="/groups/#{id}" class="tag">Booles</a><ol role="tooltip"><li>Ada Lovelace</li></ol></span></dd>))
 
       assert_equal 2, marks.size
       assert_includes last_response.body, "7 Calculus Close"
@@ -642,9 +643,26 @@ class AdminContactsPagesTest < Minitest::Test
       id = FixtureData.seed_group(store, members: ["ada"], lines: HOUSEHOLD)
 
       get "/contacts/ada"
-      marks = last_response.body.scan(%r{<a href="/groups/#{id}" class="tag">((?:(?!</a>).)*)</a></dd>})
+      marks = last_response.body.scan(%r{<a href="/groups/#{id}" class="tag">((?:(?!</a>).)*)</a><ol role="tooltip"><li>[^<]*</li></ol></span></dd>})
 
       assert_equal [[%(<span data-nameless>#{id}</span>)]] * 2, marks
+    end
+  end
+
+  # In the group page's order, by family name.
+  def test_a_tag_names_the_first_five_members_and_counts_the_rest
+    families = %w[Grey Abel Fox Cole Eddy Baker Drew]
+    cards = families.to_h {
+      [it.downcase, "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Sam #{it}\r\nN:#{it};Sam;;;\r\nUID:#{it.downcase}\r\nEND:VCARD\r\n"]
+    }
+
+    with_contacts(cards) do |store|
+      FixtureData.seed_group(store, name: "Club", members: cards.keys)
+
+      get "/contacts/grey"
+      names = last_response.body[%r{<ol role="tooltip">(.*?)</ol>}, 1].to_s.scan(%r{<li>(.*?)</li>}).flatten
+
+      assert_equal ["Sam Abel", "Sam Baker", "Sam Cole", "Sam Drew", "Sam Eddy", "and 2 more"], names
     end
   end
 

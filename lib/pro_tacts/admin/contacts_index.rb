@@ -9,7 +9,7 @@ module ProTacts
   module Admin
     # GET /contacts — every contact in one list, sorted by last name:
     # the one screen that browses the whole contact set (docs/DESIGN.md,
-    # "The core idea"), in Format.sort_key's order. Rows carry the
+    # "The core idea"), in Contact#<=>'s order. Rows carry the
     # label the dashboard's rows do (Format.name_label) and the
     # contact's groups as chips under it.
     #
@@ -25,7 +25,7 @@ module ProTacts
       #: (contacts: Array[ListedContact], groups: Array[Group], login: String) -> void
       def initialize(contacts:, groups:, login:)
         @login = login
-        @rows = contacts.sort_by { [Format.sort_key(it), it.id] }
+        @rows = contacts.sort
         # Whole groups inverted into memberships, the way Admin::Search
         # inverts them: which groups a contact is in is the store's
         # fact, read from that side once instead of per row. The
@@ -81,7 +81,7 @@ module ProTacts
         end
       end
 
-      # The rows cut at each first letter of Format.sort_key, the way
+      # The rows cut at each first letter of Contact#sort_key, the way
       # a phone's contacts list is: a contact files under the letter
       # it sorts by, so one with no family name files under its FN's.
       # An accent files with its base letter, whose rows it follows,
@@ -97,7 +97,7 @@ module ProTacts
 
       #: (ListedContact contact) -> String
       def letter_of(contact)
-        base = Format.sort_key(contact).unicode_normalize(:nfd)[0].to_s
+        base = contact.sort_key.unicode_normalize(:nfd)[0].to_s
         base.match?(/[a-z]/) ? base.upcase : "#"
       end
     end

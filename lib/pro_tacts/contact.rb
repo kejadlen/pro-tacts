@@ -342,6 +342,23 @@ module ProTacts
       text_of(vcard.property("NICKNAME"))
     end
 
+    # The order a contact lists under: N's family name (RFC 2426
+    # section 3.1.2), falling back the way Admin::Format.initials does
+    # — FN for a card with no N, the id for a card with no name at all
+    # — and case-insensitive, so the card's spelling of a family name
+    # does not move it.
+    #: () -> String
+    def sort_key
+      family, = name_components || []
+      (family || name || id).to_s.downcase
+    end
+
+    # Not Comparable, for Group#<=>'s reason.
+    #: (Contact | ListedContact other) -> Integer?
+    def <=>(other)
+      [sort_key, id] <=> [other.sort_key, other.id]
+    end
+
     # ORG's value (RFC 2426 section 3.5.5), in text form — the whole
     # value as the card spells it, org name and units together, which
     # is what a search reads; no screen has asked for the components
