@@ -19,7 +19,7 @@ module ProTacts
     class ImportSaved < Phlex::HTML
       # @rbs @contact: Contact
       # @rbs @login: String
-      # @rbs @groups: Array[Group]
+      # @rbs @groups: Array[ListedGroup]
       # @rbs @all_groups: Array[Store::GroupChoice]
       # @rbs @aside: Phlex::HTML
       # @rbs @sidebar: Phlex::HTML
@@ -27,7 +27,7 @@ module ProTacts
       # @rbs @land: String
       # @rbs @notice: String?
 
-      #: (contact: Contact, login: String, groups: Array[Group], all_groups: Array[Store::GroupChoice], aside: Phlex::HTML, sidebar: Phlex::HTML, edit: String, land: String, ?notice: String?) -> void
+      #: (contact: Contact, login: String, groups: Array[ListedGroup], all_groups: Array[Store::GroupChoice], aside: Phlex::HTML, sidebar: Phlex::HTML, edit: String, land: String, ?notice: String?) -> void
       def initialize(contact:, login:, groups:, all_groups:, aside:, sidebar:, edit:, land:, notice: nil)
         @contact = contact
         @login = login

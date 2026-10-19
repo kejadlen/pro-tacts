@@ -31,10 +31,10 @@ module ProTacts
     # save lands on the group it made rather than back on the walk.
     class ContactCard < Phlex::HTML
       # @rbs @contact: Contact
-      # @rbs @groups: Array[Group]
+      # @rbs @groups: Array[ListedGroup]
       # @rbs @walk: bool
 
-      #: (contact: Contact, groups: Array[Group], ?walk: bool) -> void
+      #: (contact: Contact, groups: Array[ListedGroup], ?walk: bool) -> void
       def initialize(contact:, groups:, walk: false)
         @contact = contact
         @groups = groups
@@ -188,7 +188,7 @@ module ProTacts
       end
 
       # A lent row's group as the groups row read it, with its members.
-      #: (Group lent) -> Group
+      #: (Group lent) -> ListedGroup
       def listed(lent) = @groups.find { it.id == lent.id } || raise(ArgumentError, "group #{lent.id} lends a row but is not among the contact's groups")
 
       #: (String | Array[String] value) -> void

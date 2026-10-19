@@ -12,6 +12,7 @@ require "pro_tacts/contact"
 require "pro_tacts/edited_contact"
 require "pro_tacts/group"
 require "pro_tacts/listed_contact"
+require "pro_tacts/listed_group"
 require "pro_tacts/vcard"
 require "pro_tacts/vcard/parser"
 
@@ -360,17 +361,20 @@ module ProTacts
     # rather than on it: what a group lends is in the card and belongs
     # to the model of one, and which groups a contact is in is a
     # relationship the card never carries.
-    #: (String id, ?listed_members: bool) -> Array[Group]
-    def groups_of(id, listed_members: false)
-      rows = labeled_groups
+    #: (String id) -> Array[Group]
+    def groups_of(id)
+      load_groups(labeled_groups
         .join(:group_members, group_id: :id)
         .where(card_id: id)
         .order(Sequel[:groups][:id])
-        .all
-      return load_groups(rows) unless listed_members
+        .all)
+    end
 
-      members = group_members.where(group_id: rows.map { it.fetch(:id) }).select_map(:card_id).map(&:to_s).uniq
-      load_groups(rows, listing: listed_contacts(members))
+    # #groups_of with each group's members listed, for a contact's tags.
+    #: (String id) -> Array[ListedGroup]
+    def listed_groups_of(id)
+      groups = groups_of(id)
+      list_members(groups, listed_contacts(groups.flat_map(&:members).uniq))
     end
 
     # The cards one user's client syncs: every member of `sync:*` and of
@@ -663,12 +667,18 @@ module ProTacts
     end
 
     # Every group, ordered by id — the order #groups_of and the
-    # composition both use, so a rename never moves one. A `listing`
-    # the caller already read lists each group's members out of it,
-    # since `sync:*` would otherwise read the whole book again.
-    #: (?listing: Array[ListedContact]?) -> Array[Group]
-    def all_groups(listing: nil)
-      load_groups(labeled_groups.order(:id).all, listing:)
+    # composition both use, so a rename never moves one.
+    #: () -> Array[Group]
+    def all_groups
+      load_groups(labeled_groups.order(:id).all)
+    end
+
+    # #all_groups with each group's members listed out of a `listing`
+    # the caller already read, since `sync:*` would otherwise read the
+    # whole book again.
+    #: (Array[ListedContact] listing) -> Array[ListedGroup]
+    def all_listed_groups(listing)
+      list_members(all_groups, listing)
     end
 
     # Every group as a picker needs it: the row, its label and how many
@@ -1128,29 +1138,39 @@ module ProTacts
 
     # Groups rows read whole: the lines and members of every group in
     # `rows`, and which have a photo, three reads however many groups
-    # there are. The photo read takes ids, never bytes. A `listing` is
-    # sorted once here rather than by every tag that shows a group.
-    #: (Array[Hash[Symbol, untyped]] rows, ?listing: Array[ListedContact]?) -> Array[Group]
-    def load_groups(rows, listing: nil)
+    # there are. The photo read takes ids, never bytes.
+    #: (Array[Hash[Symbol, untyped]] rows) -> Array[Group]
+    def load_groups(rows)
       ids = rows.map { it.fetch(:id).to_s }
       lines = group_properties.where(group_id: ids).order(:group_id, :position).all
         .group_by { it.fetch(:group_id).to_s }
       members = group_members.where(group_id: ids).order(:card_id).all
         .group_by { it.fetch(:group_id).to_s }
       photos = group_photos.where(group_id: ids).select_map(:group_id).map(&:to_s)
-      sorted = listing&.sort
       rows.map { |row|
         id = row.fetch(:id).to_s
-        member_ids = members.fetch(id, []).map { it.fetch(:card_id).to_s }
-        joined = member_ids.to_set
         Group.new(
           id:,
           name: row.fetch(:name)&.to_s,
           label: row.fetch(:label).to_s,
           lines: lines.fetch(id, []).map { it.fetch(:line).to_s },
-          members: member_ids,
+          members: members.fetch(id, []).map { it.fetch(:card_id).to_s },
           photo: photos.include?(id),
-          listed_members: sorted&.select { joined.include?(it.id) },
+        )
+      }
+    end
+
+    # The listing is sorted once here rather than by every tag that
+    # shows a group.
+    #: (Array[Group] groups, Array[ListedContact] listing) -> Array[ListedGroup]
+    def list_members(groups, listing)
+      sorted = listing.sort
+      groups.map { |group|
+        joined = group.members.to_set
+        ListedGroup.new(
+          id: group.id, name: group.name, label: group.label, lines: group.lines,
+          members: group.members, photo: group.photo,
+          listed_members: sorted.select { joined.include?(it.id) },
         )
       }
     end

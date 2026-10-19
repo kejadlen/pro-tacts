@@ -20,9 +20,9 @@ module ProTacts
     class ContactsIndex < Phlex::HTML
       # @rbs @rows: Array[ListedContact]
       # @rbs @login: String
-      # @rbs @groups_of: Hash[String, Array[Group]]
+      # @rbs @groups_of: Hash[String, Array[ListedGroup]]
 
-      #: (contacts: Array[ListedContact], groups: Array[Group], login: String) -> void
+      #: (contacts: Array[ListedContact], groups: Array[ListedGroup], login: String) -> void
       def initialize(contacts:, groups:, login:)
         @login = login
         @rows = contacts.sort

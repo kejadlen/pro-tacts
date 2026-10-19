@@ -7,7 +7,7 @@
 module ProTacts
   module Admin
     class ContactsShow
-      def self.call: (contact: Contact, login: String, groups: Array[Group], all_groups: Array[Store::GroupChoice], changes: Array[Store::Change], ?notice: String?) -> String
+      def self.call: (contact: Contact, login: String, groups: Array[ListedGroup], all_groups: Array[Store::GroupChoice], changes: Array[Store::Change], ?notice: String?) -> String
     end
 
     # `aside` is a Phlex component, which has no type here: phlex
@@ -33,7 +33,7 @@ module ProTacts
     end
 
     class ContactsIndex
-      def self.call: (contacts: Array[ListedContact], groups: Array[Group], login: String) -> String
+      def self.call: (contacts: Array[ListedContact], groups: Array[ListedGroup], login: String) -> String
     end
 
     class GroupsIndex
@@ -83,7 +83,7 @@ module ProTacts
     end
 
     class ImportSaved
-      def self.call: (contact: Contact, login: String, groups: Array[Group], all_groups: Array[Store::GroupChoice], aside: untyped, sidebar: untyped, edit: String, land: String, ?notice: String?) -> String
+      def self.call: (contact: Contact, login: String, groups: Array[ListedGroup], all_groups: Array[Store::GroupChoice], aside: untyped, sidebar: untyped, edit: String, land: String, ?notice: String?) -> String
     end
 
     # Its name_label is the import's list rows' (Web#import_row), and

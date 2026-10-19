@@ -215,7 +215,7 @@ module ProTacts
         Admin::ImportSaved.call(
           contact:,
           login: @login,
-          groups: store.groups_of(contact.id, listed_members: true),
+          groups: store.listed_groups_of(contact.id),
           all_groups: store.group_choices,
           aside: Admin::ImportOriginal.new(card: original, dropped:),
           sidebar:,

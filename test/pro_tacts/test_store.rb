@@ -1376,10 +1376,10 @@ class StoreTest < Minitest::Test
     with_store({"znorth" => ZED, "aiden" => AIDEN}) do |store|
       FixtureData.seed_group(store, name: "Booles", members: ["znorth", "aiden"])
 
-      assert_equal [%w[aiden znorth]], store.groups_of("znorth", listed_members: true).map { it.listed_members.to_a.map(&:id) }
-      assert_equal [%w[aiden znorth]], store.all_groups(listing: store.listed_contacts).map { it.listed_members.to_a.map(&:id) }
-      assert_nil store.groups_of("znorth").fetch(0).listed_members
-      assert_nil store.all_groups.fetch(0).listed_members
+      assert_equal [%w[aiden znorth]], store.listed_groups_of("znorth").map { it.listed_members.map(&:id) }
+      assert_equal [%w[aiden znorth]], store.all_listed_groups(store.listed_contacts).map { it.listed_members.map(&:id) }
+      assert_instance_of ProTacts::Group, store.groups_of("znorth").fetch(0)
+      assert_instance_of ProTacts::Group, store.all_groups.fetch(0)
     end
   end
 

@@ -12,17 +12,15 @@ module ProTacts
     class GroupTag < Phlex::HTML
       SHOWN = 5 #: Integer
 
-      # @rbs @group: Group
-      # @rbs @members: Array[ListedContact]
+      # @rbs @group: ListedGroup
 
-      #: (group: Group) -> void
+      #: (group: ListedGroup) -> void
       def initialize(group:)
         @group = group
-        @members = group.listed_members || raise(ArgumentError, "group #{group.id} was read without its members listed")
       end
 
       def view_template
-        shown, rest = @members.partition.with_index { |_, index| index < SHOWN }
+        shown, rest = @group.listed_members.partition.with_index { |_, index| index < SHOWN }
         span do
           a(href: "/groups/#{@group.id}", class: "tag") do
             render Icon.new(:image, size: 12) if @group.photo
