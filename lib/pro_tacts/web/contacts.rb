@@ -99,7 +99,7 @@ module ProTacts
         end
 
         # The groups row's "new" (Admin::ContactCard): the members
-        # screen of a group not yet made, this contact ticked; its Save
+        # screen of a group not yet made, this contact ticked; its Create
         # is the create (Admin::GroupsMembers).
         r.get "groups", "new" do
           contact = store.contact(id)

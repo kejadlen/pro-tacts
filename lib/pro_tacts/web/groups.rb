@@ -190,7 +190,7 @@ module ProTacts
     #: (Group group) -> String
     def members_screen(group)
       response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::GroupsMembers.call(group:, contacts: store.listed_contacts, login: @login)
+      Admin::GroupsMembers.call(from: group, contacts: store.listed_contacts, login: @login)
     end
   end
 end

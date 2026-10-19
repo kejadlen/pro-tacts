@@ -31,33 +31,35 @@ module ProTacts
     #
     # The same screen picks a group's first members before the group
     # exists: a contact card's "new" (Admin::ContactCard) opens it
-    # with that contact ticked, and its Save is the create (POST
+    # with that contact ticked, and its Create is the create (POST
     # /groups), so a group someone backs out of is never made. With no
     # group there is nothing toggled against, so no `was[]`, and the
     # way back is the card it was opened from.
     class GroupsMembers < Phlex::HTML
+      # @rbs @from: Group | Contact
       # @rbs @group: Group?
       # @rbs @login: String
       # @rbs @contacts: Array[ListedContact]
       # @rbs @members: Array[String]
       # @rbs @capped: Array[String]
-      # @rbs @from: Contact?
 
       # The form's id, for the footer's Save outside it.
       FORM = "members-form" #: String
       private_constant :FORM
 
-      # `group` for a group that exists; `from` for one that does not
-      # yet, the contact it is being started from.
-      #: (contacts: Array[ListedContact], login: String, ?group: Group?, ?from: Contact?) -> void
-      def initialize(contacts:, login:, group: nil, from: nil)
-        @group = group
+      # `from` is the record the screen was opened from, and the one
+      # thing that tells its two cases apart, so no call can name both
+      # or neither: a group's page edits that group's members, and a
+      # contact's card starts a group with that contact in it.
+      #: (from: Group | Contact, contacts: Array[ListedContact], login: String) -> void
+      def initialize(from:, contacts:, login:)
         @from = from
+        @group = from if from.is_a?(Group)
         @login = login
         # The order the show screen's list reads (Format.sort_key),
         # which is the order the book is browsed in everywhere else.
         @contacts = contacts.sort_by { [Format.sort_key(it), it.id] }
-        @members = group&.members || [from&.id].compact
+        @members = from.is_a?(Group) ? from.members : [from.id]
         # The members are never capped (GroupFilter.capped).
         @capped = GroupFilter.capped(@contacts.map(&:id), joined: @members)
       end
@@ -102,15 +104,13 @@ module ProTacts
 
       private
 
-      # The record the screen was opened from: the group's page, or
-      # the card a new group is being started from.
+      # The way back to the record the screen was opened from.
       #: () -> [String, (String | Phlex::HTML)]
       def back
-        group = @group
-        return ["/groups/#{group.id}", GroupLabel.new(group:)] if group
-
-        from = @from or raise ArgumentError, "a members screen needs a group or a contact"
-        ["/contacts/#{from.id}", from.name || from.id]
+        case (from = @from)
+        in Group then ["/groups/#{from.id}", GroupLabel.new(group: from)]
+        in Contact then ["/contacts/#{from.id}", from.name || from.id]
+        end
       end
     end
   end
