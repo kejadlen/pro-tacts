@@ -20,7 +20,9 @@ module ProTacts
       end
 
       def view_template
-        shown, rest = @group.listed_members.partition.with_index { |_, index| index < SHOWN }
+        members = @group.listed_members
+        # A slice starting past the end is nil rather than empty.
+        shown, rest = members[...SHOWN], members[SHOWN..].to_a
         span do
           a(href: "/groups/#{@group.id}", class: "tag") do
             render Icon.new(:image, size: 12) if @group.photo
