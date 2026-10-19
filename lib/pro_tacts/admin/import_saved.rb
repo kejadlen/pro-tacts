@@ -48,7 +48,7 @@ module ProTacts
             aside: @aside,
             sidebar: @sidebar,
           ) do
-            render ContactCard.new(contact: @contact, groups: @groups, dialog: true, card: false)
+            render ContactCard.new(contact: @contact, groups: @groups, walk: true)
           end
           # The contact page's own dialog over the same card, told to
           # land back on the row: the boxes to check are the groups this

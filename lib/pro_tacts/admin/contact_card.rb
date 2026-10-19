@@ -21,34 +21,29 @@ module ProTacts
     # one screen shows is a property the other cannot drop.
     #
     # `groups` is the contact's membership (Store#groups_of), the row
-    # framing the values under it. `dialog` names whether that row
-    # carries its "edit" button, which needs GroupDialog on the
-    # page: the contact's page and a walk's saved row both render it,
-    # each telling the save where to land. `new` names whether it also
-    # carries "new": the contact's page alone, its save landing on the
-    # group it made rather than back on a walk. `card` names
-    # whether this renders the card around its own body or the body
-    # alone for a card someone else supplies — the walk's read screen
-    # (ImportSaved), whose trunk RecordCard owns.
+    # framing the values under it. Its "edit" needs GroupDialog on the
+    # page, which both callers render, each telling the save where to
+    # land.
+    #
+    # `walk` is the one difference between the two: the walk's read
+    # screen (ImportSaved) supplies the card around the body, its trunk
+    # being RecordCard's, and its groups row carries no "new", whose
+    # save lands on the group it made rather than back on the walk.
     class ContactCard < Phlex::HTML
       # @rbs @contact: Contact
       # @rbs @groups: Array[Group]
-      # @rbs @dialog: bool
-      # @rbs @new: bool
-      # @rbs @card: bool
+      # @rbs @walk: bool
 
-      #: (contact: Contact, groups: Array[Group], ?dialog: bool, ?new: bool, ?card: bool) -> void
-      def initialize(contact:, groups:, dialog: false, new: false, card: true)
+      #: (contact: Contact, groups: Array[Group], ?walk: bool) -> void
+      def initialize(contact:, groups:, walk: false)
         @contact = contact
         @groups = groups
-        @dialog = dialog
-        @new = new
-        @card = card
+        @walk = walk
         @birthday = Format.birthday(contact)
       end
 
       def view_template
-        return body unless @card
+        return body if @walk
 
         div(class: "card") do
           div(class: "card-body") do
@@ -95,7 +90,7 @@ module ProTacts
       # beside the card, and a group holds only addresses and notes
       # anyway (see db/migrations/004_groups.rb).
       def rows
-        groups_row if @dialog || @groups.any?
+        groups_row
         @contact.phones.each do |phone|
           row(Format.type_label(phone.label, phone.types, "phone"), phone.value, phone.lent_by)
         end
@@ -138,10 +133,8 @@ module ProTacts
       # the group it names (docs/DESIGN.md, "Relationships are
       # navigable"), the other half of the member list on a group's own
       # page (Admin::GroupsShow). Rendered for a contact in no group
-      # too when the dialog is on the page, even before any group
-      # exists, because the row holds the way to join or start one.
-      # Without the dialog the row stands only when there is a member
-      # to name: an empty row with nothing to press is nothing at all.
+      # too, even before any group exists, because the row holds the
+      # way to join or start one.
       #
       # "edit" opens the dialog over the groups that exist; "new" opens
       # the members screen of a nameless one not yet made, this contact
@@ -156,7 +149,9 @@ module ProTacts
               @groups.each { render GroupTag.new(group: it) }
             end
           end
-          if @new
+          if @walk
+            edit_button
+          else
             # A slash tells the two apart where they sit side by side,
             # the way the pair is said aloud; admin.css stacks them on
             # a phone and drops it there, the line break saying it.
@@ -165,8 +160,6 @@ module ProTacts
               span(class: "gl-muted", aria_hidden: true) { "/" }
               a(href: "/contacts/#{@contact.id}/groups/new", class: "btn", data_size: "sm") { "new" }
             end
-          elsif @dialog
-            edit_button
           end
         end
       end

@@ -43,7 +43,7 @@ module ProTacts
               a(href: "/", class: "type-label") { "‹ contacts" }
               a(href: "/contacts/#{@contact.id}/edit", class: "btn", data_size: "sm") { "edit" }
             end
-            render ContactCard.new(contact: @contact, groups: @groups, dialog: true, new: true)
+            render ContactCard.new(contact: @contact, groups: @groups)
           end
           # The stored card in its own card under the record, collapsed
           # (docs/DESIGN.md, "The stored card is reachable"). Native
