@@ -6,5 +6,6 @@ item1.TEL;type=CELL:+1-555-0177
 item1.X-ABLabel:Google Voice
 TEL;TYPE=home:+1-555-0142
 EMAIL:grace@example.com
+IMPP;X-SERVICE-TYPE=signal:x-apple:amazing.grace.06
 UID:phone-label
 END:VCARD

@@ -177,7 +177,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/household-mary.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"560b20be0da57be6ed51c2f3a2f04cca803853fa341458877f7de14111ebf018"</d:getetag>
+        <d:getetag>"fa2728b04e39109658e54bad8c2eb086099b560cef4ae3dafbd713461e585ee6"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
@@ -204,7 +204,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/phone-label.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"d4d6f7201122bb9383bfac1dd0f2e55bd0a01a59c0c1007ea9e36580539fd24d"</d:getetag>
+        <d:getetag>"aa9f78c36fef1fac963c92220a7fddba89bddc1e71b095991ab63febcf97c316"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
