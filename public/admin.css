@@ -1156,7 +1156,7 @@ span.avatar[data-size="lg"] {
 .detail-grid dd > [role="group"] > button:first-child {
   padding-inline-end: 0;
 }
-.detail-grid dd > [role="group"] > button:last-child {
+.detail-grid dd > [role="group"] > .btn:last-child {
   padding-inline-start: 0;
 }
 /* On a phone the group stacks and the slash goes, the line break
@@ -1174,10 +1174,10 @@ span.avatar[data-size="lg"] {
   /* With no slash between them the two keep their whole padding, so
      their right edges stand together. */
   .detail-grid dd > [role="group"] > button:first-child,
-  .detail-grid dd > [role="group"] > button:last-child {
+  .detail-grid dd > [role="group"] > .btn:last-child {
     padding-inline: var(--_pad-x);
   }
-  .detail-grid dd > [role="group"] > span + button {
+  .detail-grid dd > [role="group"] > span + .btn {
     margin-block-start: calc(-2 * var(--gl-space-3xs));
   }
 }

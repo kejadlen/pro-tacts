@@ -78,7 +78,6 @@ module ProTacts
           # so the dialog is told which boxes to check rather than
           # reading every group's members to work it out.
           render GroupDialog.new(contact: @contact, groups: @all_groups, joined: @groups.map(&:id))
-          form(id: ContactCard::NEW, action: "/contacts/#{@contact.id}/groups/new", method: "post")
         end
       end
 

@@ -412,7 +412,7 @@ class AdminImportPagesTest < Minitest::Test
       refute_includes last_response.body, %(name="etag")
       assert_includes last_response.body, %(popovertarget="edit-groups")
       # And no "new", which would land on the new group, off the walk.
-      refute_includes last_response.body, %(form="new-group")
+      refute_includes last_response.body, %(/groups/new")
       assert_includes last_response.body,
                     %(<input type="hidden" name="land" value="/import/#{id}/0">)
       # And the row's verdict is the check landed in its circle.

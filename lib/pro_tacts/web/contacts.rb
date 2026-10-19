@@ -4,6 +4,7 @@ require "pro_tacts/admin/contacts_edit"
 require "pro_tacts/admin/contacts_index"
 require "pro_tacts/admin/contacts_show"
 require "pro_tacts/admin/dashboard"
+require "pro_tacts/admin/groups_members"
 require "pro_tacts/change_id"
 
 module ProTacts
@@ -97,11 +98,16 @@ module ProTacts
           apply_groups(r, id)
         end
 
-        # The groups row's "new" (Admin::ContactCard): a nameless group
-        # holding this contact, landing on its members screen, where
-        # the rest of the household is picked.
-        r.post "groups", "new" do
-          r.redirect "/groups/#{store.create_group(members: [id])}/members", 303 if store.contact(id)
+        # The groups row's "new" (Admin::ContactCard): the members
+        # screen of a group not yet made, this contact ticked; its Save
+        # is the create (Admin::GroupsMembers).
+        r.get "groups", "new" do
+          contact = store.contact(id)
+
+          if contact
+            response["Content-Type"] = "text/html; charset=utf-8"
+            Admin::GroupsMembers.call(from: contact, contacts: store.listed_contacts, login: @login)
+          end
         end
 
         r.post do

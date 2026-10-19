@@ -25,17 +25,12 @@ module ProTacts
     # carries its "edit" button, which needs GroupDialog on the
     # page: the contact's page and a walk's saved row both render it,
     # each telling the save where to land. `new` names whether it also
-    # carries "new", which needs the NEW form on the page: the
-    # contact's page alone, its save landing on the group it made
-    # rather than back on a walk. `card` names
+    # carries "new": the contact's page alone, its save landing on the
+    # group it made rather than back on a walk. `card` names
     # whether this renders the card around its own body or the body
     # alone for a card someone else supplies — the walk's read screen
     # (ImportSaved), whose trunk RecordCard owns.
     class ContactCard < Phlex::HTML
-      # The form "new" submits, outside the grid for the dialog's
-      # reason (ContactsShow).
-      NEW = "new-group" #: String
-
       # @rbs @contact: Contact
       # @rbs @groups: Array[Group]
       # @rbs @dialog: bool
@@ -148,9 +143,9 @@ module ProTacts
       # Without the dialog the row stands only when there is a member
       # to name: an empty row with nothing to press is nothing at all.
       #
-      # "edit" opens the dialog over the groups that exist; "new" makes
-      # a new nameless one holding this contact and opens its members
-      # screen, the household's start — a family needs no name to be
+      # "edit" opens the dialog over the groups that exist; "new" opens
+      # the members screen of a nameless one not yet made, this contact
+      # ticked, the household's start — a family needs no name to be
       # one, and the dialog's offer to make a group is a name typed.
       #: () -> void
       def groups_row
@@ -168,7 +163,7 @@ module ProTacts
             div(role: "group", aria_label: "Groups") do
               edit_button
               span(class: "gl-muted", aria_hidden: true) { "/" }
-              button(type: "submit", form: NEW, data_size: "sm") { "new" }
+              a(href: "/contacts/#{@contact.id}/groups/new", class: "btn", data_size: "sm") { "new" }
             end
           elsif @dialog
             edit_button

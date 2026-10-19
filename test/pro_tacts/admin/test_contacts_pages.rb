@@ -902,29 +902,43 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # The groups row's two ways in: "edit" opens the dialog over the
-  # groups that exist, and "new" submits the form that makes one.
+  # groups that exist, and "new" opens the members screen of one not
+  # yet made.
   def test_show_offers_to_edit_the_groups_or_start_a_new_one
     with_contacts({"ada" => ADA}) do
       get "/contacts/ada"
 
       assert_includes last_response.body, %(popovertarget="edit-groups">edit</button>)
-      assert_includes last_response.body, %(<button type="submit" form="new-group" data-size="sm">new</button>)
-      assert_includes last_response.body, %(<form id="new-group" action="/contacts/ada/groups/new" method="post">)
+      assert_includes last_response.body, %(<a href="/contacts/ada/groups/new" class="btn" data-size="sm">new</a>)
     end
   end
 
-  # A family needs no name: the new group is nameless, holds the
-  # contact it was made from, and the save lands on its members screen
-  # for the rest of the household.
-  def test_a_new_group_from_the_card_is_nameless_and_holds_the_contact
+  # "new" makes nothing: it is the members screen with the contact
+  # ticked, its Save the create and its Cancel the card again.
+  def test_new_opens_the_members_screen_of_a_group_not_yet_made
     with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/ada/groups/new"
+      get "/contacts/ada/groups/new"
+
+      assert_equal 200, last_response.status
+      assert_empty store.all_groups
+      assert_includes last_response.body, %(<form action="/groups" method="post")
+      assert_includes last_response.body, %(<input type="checkbox" name="members[]" value="ada" checked>)
+      assert_includes last_response.body, %(<a href="/contacts/ada" class="btn">Cancel</a>)
+      refute_includes last_response.body, %(name="was[]")
+    end
+  end
+
+  # A family needs no name: the save makes a nameless group of the
+  # ticked contacts and lands on it.
+  def test_the_new_groups_save_makes_a_nameless_group_of_the_ticked
+    with_contacts({"ada" => ADA}) do |store|
+      post "/groups", members: %w[ada nobody]
 
       groups = store.all_groups
       group = groups.fetch(0)
       assert_equal 1, groups.length
       assert_equal 303, last_response.status
-      assert_equal "/groups/#{group.id}/members", last_response["Location"]
+      assert_equal "/groups/#{group.id}", last_response["Location"]
       assert_nil group.name
       assert_equal ["ada"], group.members
       assert_equal %w[create join], store.group_changes_of(group.id).map(&:action).reverse
@@ -932,11 +946,10 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   def test_a_new_group_for_an_unknown_contact_is_a_404
-    with_contacts({"ada" => ADA}) do |store|
-      post "/contacts/nobody/groups/new"
+    with_contacts({"ada" => ADA}) do
+      get "/contacts/nobody/groups/new"
 
       assert_equal 404, last_response.status
-      assert_empty store.all_groups
     end
   end
 
