@@ -250,6 +250,24 @@
   color: var(--gl-color-danger);
 }
 
+/* A handle row's two fields — service and handle — on one line in
+   the value column: the service names what the handle is, so the two
+   read as one value, the birthday row's reading. The service is the
+   shorter word and takes the narrower share; both shed their floor so
+   the pair fits a phone's value column rather than widening it. */
+.card-body form.field-stack .field > .handle-row {
+  display: flex;
+  gap: var(--gl-space-2xs);
+}
+.card-body form.field-stack .field > .handle-row > input {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-block: var(--gl-space-3xs);
+}
+.card-body form.field-stack .field > .handle-row > input:last-child {
+  flex-grow: 2;
+}
+
 /* The date line breaks in two when its row cannot hold a whole
    date: a month name, two year boxes, and the two icon buttons need
    ~20rem side by side, and on a phone the value column has a

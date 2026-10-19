@@ -2171,7 +2171,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       digest = store.contact("ada").handles.first.line.digest
       assert_includes last_response.body,
-        '<div class="field" data-blank-removes><span>handle</span><div class="field-stack">' \
+        '<div class="field" data-blank-removes><span>handle</span><div class="handle-row">' \
         '<input type="text" name="handle[' + digest + '][service]" value="signal" placeholder="service" aria-label="service">' \
         '<input type="text" name="handle[' + digest + '][value]" value="ada.42" placeholder="handle" aria-label="handle">' \
         '</div></div>'
@@ -2781,7 +2781,7 @@ class AdminContactsPagesTest < Minitest::Test
       # The handle kind: the standing row's two fields, named by the
       # add index as the address's are.
       assert_includes body,
-        '<template x-if="kind === \'handle\'"><div class="field-stack">' \
+        '<template x-if="kind === \'handle\'"><div class="handle-row">' \
         '<input type="text" :name="`new_handle[${i}][service]`" placeholder="service" aria-label="service" x-init="$el.focus()">' \
         '<input type="text" :name="`new_handle[${i}][value]`" placeholder="handle" aria-label="handle">' \
         '</div></template>'

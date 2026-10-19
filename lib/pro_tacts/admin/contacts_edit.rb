@@ -73,7 +73,8 @@ module ProTacts
 
       # A handle row's two fields, the service first because it says
       # what the handle is (docs/plans/2026-10-18-signal-handles.md,
-      # "The service is the row's"). Field name to placeholder, the
+      # "The service is the row's"), side by side on one line as a
+      # birthday's are (admin.css). Field name to placeholder, the
       # address fields' shape.
       HANDLE_FIELDS = [
         ["service", "service"],
@@ -344,7 +345,7 @@ module ProTacts
             # The handle kind: the standing row's two fields, named by
             # the add index for the address's reason.
             template("x-if": "kind === 'handle'") do
-              div(class: "field-stack") do
+              div(class: "handle-row") do
                 HANDLE_FIELDS.each_with_index do |(field, label), index|
                   input(type: "text", ":name": "`new_handle[${i}][#{field}]`",
                         placeholder: label, aria_label: label,
@@ -524,7 +525,7 @@ module ProTacts
       def handle_row(handle)
         div(class: "field", data: {blank_removes: true}) do
           span { "handle" }
-          div(class: "field-stack") do
+          div(class: "handle-row") do
             HANDLE_FIELDS.each do |field, label|
               input(type: "text", name: "handle[#{handle.line.digest}][#{field}]",
                     value: handle.public_send(field), placeholder: label, aria_label: label)
