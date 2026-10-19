@@ -1,5 +1,5 @@
-# Contact::Phone, ::Email, ::Note, ::Inherited, ::Photo, and ::Address are
-# Data classes, whose members the inline parser cannot read: Data.define
+# Contact::Phone, ::Email, ::Handle, ::Note, ::Inherited, ::Photo,
+# and ::Address are Data classes, whose members the inline parser cannot read: Data.define
 # leaves them no constant super class. Each is marked `@rbs skip` in
 # contact.rb and signed here; Contact itself is a plain class and
 # carries its signature inline.
@@ -24,6 +24,17 @@ module ProTacts
       attr_reader lent_by: Group?
 
       def self.new: (value: String, types: Array[String], line: VCard::Parser::Line, property: VCard::Parser::Property, lent_by: Group?) -> instance
+    end
+
+    class Handle
+      attr_reader service: String?
+      attr_reader value: String
+      attr_reader scheme: String
+      attr_reader line: VCard::Parser::Line
+      attr_reader property: VCard::Parser::Property
+      attr_reader lent_by: Group?
+
+      def self.new: (service: String?, value: String, scheme: String, line: VCard::Parser::Line, property: VCard::Parser::Property, lent_by: Group?) -> instance
     end
 
     class Note

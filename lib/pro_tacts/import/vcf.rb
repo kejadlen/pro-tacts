@@ -30,7 +30,7 @@ module ProTacts
       # store takes into the model on the way in
       # (docs/plans/2026-09-11-every-birthday-in-the-model.md).
       KNOWN = [
-        *%w[BEGIN END VERSION UID N FN NICKNAME BDAY TEL EMAIL ADR NOTE PHOTO ORG X-ABSHOWAS],
+        *%w[BEGIN END VERSION UID N FN NICKNAME BDAY TEL EMAIL IMPP ADR NOTE PHOTO ORG X-ABSHOWAS],
         LABEL,
       ].freeze #: Array[String]
 

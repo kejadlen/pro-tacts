@@ -48,7 +48,7 @@ module ProTacts
       # added row names the model's own `birthday[]` group, there
       # being no card line to insert and room for but one — see
       # #addable_types for when the dialog offers it.
-      ADDABLE_TYPES = %w[phone email address birthday].freeze #: Array[String]
+      ADDABLE_TYPES = %w[phone email handle address birthday].freeze #: Array[String]
       private_constant :ADDABLE_TYPES
 
       # The form's id, for the footer's Save outside it.
@@ -70,6 +70,17 @@ module ProTacts
         ["postal_code", "postal code"],
         ["country", "country"],
       ].freeze #: Array[[String, String]]
+
+      # A handle row's two fields, the service first because it says
+      # what the handle is (docs/plans/2026-10-18-signal-handles.md,
+      # "The service is the row's"), side by side on one line as a
+      # birthday's are (admin.css). Field name to placeholder, the
+      # address fields' shape.
+      HANDLE_FIELDS = [
+        ["service", "service"],
+        ["value", "handle"],
+      ].freeze #: Array[[String, String]]
+      private_constant :HANDLE_FIELDS
 
       # @rbs @contact: Contact
       # @rbs @login: String
@@ -246,6 +257,9 @@ module ProTacts
                     value_row(Format.type_label(nil, email.types, "email"),
                               type: "email", name: "email[#{email.line.digest}]", value: email.value)
                   end
+                  @own.handles.each do
+                    handle_row(it)
+                  end
                   @own.addresses.each do
                     address_row(it)
                   end
@@ -310,7 +324,7 @@ module ProTacts
             # The single-value kinds: one input, its type and name
             # bound to the kind — the keyboard a phone number or an
             # email address wants, on the one client that has one.
-            template("x-if": "kind !== 'address' && kind !== 'birthday'") do
+            template("x-if": "kind === 'phone' || kind === 'email'") do
               input(":type": "kind === 'phone' ? 'tel' : kind", ":name": "`new_${kind}[]`",
                     ":aria-label": "kind", "x-init": "$el.focus()")
             end
@@ -323,6 +337,17 @@ module ProTacts
               div(class: "field-stack") do
                 ADDRESS_FIELDS.each_with_index do |(component, label), index|
                   input(type: "text", ":name": "`new_address[${i}][#{component}]`",
+                        placeholder: label, aria_label: label,
+                        "x-init": index.zero? ? "$el.focus()" : nil)
+                end
+              end
+            end
+            # The handle kind: the standing row's two fields, named by
+            # the add index for the address's reason.
+            template("x-if": "kind === 'handle'") do
+              div(class: "handle-row") do
+                HANDLE_FIELDS.each_with_index do |(field, label), index|
+                  input(type: "text", ":name": "`new_handle[${i}][#{field}]`",
                         placeholder: label, aria_label: label,
                         "x-init": index.zero? ? "$el.focus()" : nil)
                 end
@@ -487,6 +512,23 @@ module ProTacts
             ADDRESS_FIELDS.each do |component, label|
               input(type: "text", name: "address[#{address.line.digest}][#{component}]",
                     value: address.public_send(component), placeholder: label, aria_label: label)
+            end
+          end
+        end
+      end
+
+      # A standing handle row: the service and the handle, each a field
+      # of the row's digest, and a blank handle removes the line
+      # (CardForm.edited_handles), so the removal state is
+      # unconditional, the single-value rows' own.
+      #: (Contact::Handle handle) -> void
+      def handle_row(handle)
+        div(class: "field", data: {blank_removes: true}) do
+          span { "handle" }
+          div(class: "handle-row") do
+            HANDLE_FIELDS.each do |field, label|
+              input(type: "text", name: "handle[#{handle.line.digest}][#{field}]",
+                    value: handle.public_send(field), placeholder: label, aria_label: label)
             end
           end
         end

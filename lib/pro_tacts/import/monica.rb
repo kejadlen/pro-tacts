@@ -1,6 +1,7 @@
 require "json"
 
 require "pro_tacts/birthday"
+require "pro_tacts/contact"
 require "pro_tacts/import/vcf"
 require "pro_tacts/vcard"
 
@@ -189,11 +190,13 @@ module ProTacts
       end
 
       # A contact field: a phone or an email by the type Monica filed it
-      # under, and anything else — Facebook, Twitter, a type the account
-      # made up — as a social profile named for that type, which no
-      # screen here shows. A field naming a type the export does not
-      # hold is left behind, its value with it: guessing a kind for it
-      # would file a phone as a profile nobody sees.
+      # under, a Signal handle by a type the account named Signal
+      # (Monica ships no such type), and nothing for anything else —
+      # Facebook, Twitter, another type the account made up — which no
+      # screen here shows (docs/plans/2026-10-18-signal-handles.md,
+      # "What comes in on import"). A field naming a type the export
+      # does not hold is left behind, its value with it: guessing a kind
+      # for it would file a phone as a handle nobody meant.
       #: (Hash[String, untyped] field, Hash[String, untyped]? type) -> String?
       def self.contact_field(field, type)
         value = field["data"].to_s.strip
@@ -203,7 +206,7 @@ module ProTacts
         case type["type"]
         when "phone" then "TEL:#{VCard.escape(value)}"
         when "email" then "EMAIL;type=INTERNET:#{VCard.escape(value)}"
-        else "X-SOCIALPROFILE;type=#{type["name"].to_s.gsub(/[^\w-]/, "")}:#{VCard.escape(value)}"
+        else Contact.handle_line("signal", value) if type["name"].to_s.strip.casecmp?("signal")
         end
       end
 

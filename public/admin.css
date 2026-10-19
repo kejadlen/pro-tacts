@@ -250,6 +250,38 @@
   color: var(--gl-color-danger);
 }
 
+/* A handle row's two fields — service and handle — on one line in
+   the value column: the service names what the handle is, so the two
+   read as one value, the birthday row's reading. The service is the
+   shorter word and takes the narrower share. On a phone the value
+   column held each field to a stub that clipped its text, so below
+   the date row's own threshold (27rem of row, asked of the row for
+   that rule's reason, below) the pair stacks, the service over the
+   handle, each the column's full width. */
+.card-body form.field-stack .field > .handle-row {
+  display: flex;
+  gap: var(--gl-space-2xs);
+}
+.card-body form.field-stack .field > .handle-row > input {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-block: var(--gl-space-3xs);
+}
+.card-body form.field-stack .field > .handle-row > input:last-child {
+  flex-grow: 2;
+}
+.card-body form.field-stack > .field:has(> .handle-row) {
+  container-type: inline-size;
+}
+@container (width < 27rem) {
+  .card-body form.field-stack .field > .handle-row {
+    flex-direction: column;
+  }
+  .card-body form.field-stack .field > .handle-row > input {
+    flex: none;
+  }
+}
+
 /* The date line breaks in two when its row cannot hold a whole
    date: a month name, two year boxes, and the two icon buttons need
    ~20rem side by side, and on a phone the value column has a

@@ -66,6 +66,16 @@ class ImportMergeTest < Minitest::Test
     assert_equal ["555-010-0100", "555 010 0199"], phones
   end
 
+  # A handle is one of many, like an email: a new one comes in, and
+  # one the contact has does not come in twice.
+  def test_a_handle_it_lacks_comes_in_and_one_it_has_does_not
+    signal = "IMPP;X-SERVICE-TYPE=signal:x-apple:jb.01\r\n"
+    into = jane(STORED.sub("UID:", "#{signal}UID:"))
+    arriving = ARRIVING.sub("UID:", "#{signal}IMPP;X-SERVICE-TYPE=signal:x-apple:janet.02\r\nUID:")
+
+    assert_equal ["jb.01", "janet.02"], merge(into, arriving).contact.handles.map(&:value)
+  end
+
   # Apple numbers `item` groups per card, so the arriving email's
   # item1 would collide with the contact's own: it is renumbered, and
   # its label goes with it.

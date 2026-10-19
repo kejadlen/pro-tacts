@@ -166,6 +166,16 @@ class ImportVcfTest < Minitest::Test
     assert Vcf.cards(revised).fetch(0).card?
   end
 
+  # A Signal handle, and any other IMPP, is a row a screen here shows
+  # (docs/plans/2026-10-18-signal-handles.md).
+  def test_reading_a_card_keeps_its_handles
+    handle = JANE.sub("UID:", "IMPP;X-SERVICE-TYPE=signal:x-apple:jb.01\r\nUID:")
+    read = Vcf.read(Vcf.cards(handle).fetch(0))
+
+    assert_includes read.card.to_s, "IMPP;X-SERVICE-TYPE=signal:x-apple:jb.01\r\n"
+    refute(read.dropped.any? { it.verbatim.start_with?("IMPP") })
+  end
+
   # A company card is read by its flag and its ORG
   # (docs/plans/2026-09-24-company-cards.md), so both come in and
   # neither is a decision; without them it would arrive as a person.

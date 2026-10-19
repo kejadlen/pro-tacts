@@ -5,6 +5,7 @@ FN:Mary Everest Boole
 NICKNAME:Mrs B
 EMAIL:mary@example.com
 TEL;TYPE=cell:+44 7700 900218
+IMPP;X-SERVICE-TYPE=signal:x-apple:mary.1832
 BDAY:1832-03-11
 UID:household-mary
 END:VCARD

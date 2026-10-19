@@ -17,6 +17,7 @@ class ImportMonicaTest < Minitest::Test
   PHONE = "type-phone"
   EMAIL = "type-email"
   TWITTER = "type-twitter"
+  SIGNAL = "type-signal"
 
   # A red pixel, as the data URL Monica's Photo resource writes.
   PIXEL = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
@@ -89,6 +90,7 @@ class ImportMonicaTest < Minitest::Test
             {"uuid" => PHONE, "properties" => {"name" => "Phone", "type" => "phone"}},
             {"uuid" => EMAIL, "properties" => {"name" => "Email", "type" => "email"}},
             {"uuid" => TWITTER, "properties" => {"name" => "Twitter"}},
+            {"uuid" => SIGNAL, "properties" => {"name" => "Signal"}},
           ],
         },
       },
@@ -127,6 +129,26 @@ class ImportMonicaTest < Minitest::Test
     assert_equal ";;1 Main St;Springfield;IL;62701;US", card.property("ADR").value
     assert_equal "Home", card.property("X-ABLabel").text
     assert_equal PIXEL, card.property("PHOTO").value
+  end
+
+  # A social profile is not written at all: no screen here shows one,
+  # and the import says nothing of it.
+  def test_a_social_profile_is_not_written
+    refute_includes Monica.vcf(export(jane)), "janeb"
+  end
+
+  # Monica ships no Signal type, so a handle is filed under one the
+  # account made, and comes in as the line the editor writes
+  # (docs/plans/2026-10-18-signal-handles.md).
+  def test_a_field_filed_under_signal_comes_in_as_a_handle
+    kim = {
+      "uuid" => "kim-uuid",
+      "properties" => {"first_name" => "Kim"},
+      "data" => [collection("contact_field", [{"uuid" => "f9", "properties" => {"data" => "kim.07", "type" => SIGNAL}}])],
+    }
+    card = Vcf.read(card_for(export(kim), "Kim")).card
+
+    assert_includes card.to_s, "IMPP;X-SERVICE-TYPE=signal:x-apple:kim.07\r\n"
   end
 
   # A company Monica kept as a vCard's raw ORG loses the trailing
@@ -177,7 +199,6 @@ class ImportMonicaTest < Minitest::Test
     dropped = Vcf.read(card_for(export(jane), "Jane Booles")).dropped.map { Vcf.summary(it) }
 
     assert_includes dropped, "TITLE:Welder"
-    assert_includes dropped, "X-SOCIALPROFILE;type=Twitter:janeb"
     assert_includes dropped, "X-MONICA-REMINDER:2026-10-01 — Call about the dish"
     assert_includes dropped, "X-MONICA-ACTIVITY:2026-06-01 — Picnic"
   end
