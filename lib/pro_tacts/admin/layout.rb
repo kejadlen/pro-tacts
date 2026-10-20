@@ -74,7 +74,10 @@ module ProTacts
             # need anything else reachable to render. `defer` is
             # Alpine's own requirement — it initializes on
             # DOMContentLoaded and must not run before the markup it
-            # reads exists.
+            # reads exists. A plugin goes before the core: it
+            # registers on the alpine:init the core fires on starting,
+            # and deferred scripts run in document order.
+            script(defer: true, src: "/vendor/alpine/resize.min.js")
             script(defer: true, src: "/vendor/alpine/alpine.min.js")
           end
           body do

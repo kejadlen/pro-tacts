@@ -332,7 +332,9 @@ class AdminContactsPagesTest < Minitest::Test
       refute_includes head, "fonts.googleapis.com"
       refute_includes head, "fonts.gstatic.com"
       refute_includes head, "ibm-plex-mono"
-      assert_includes head, '<script defer src="/vendor/alpine/alpine.min.js"></script>'
+      assert_includes head,
+        '<script defer src="/vendor/alpine/resize.min.js"></script>' \
+        '<script defer src="/vendor/alpine/alpine.min.js"></script>'
       assert_empty head.scan(%r{(?:href|src)="(https?:)?//[^"]*"}),
         "the layout links something off this host"
     end
