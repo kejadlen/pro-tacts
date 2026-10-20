@@ -467,8 +467,8 @@ module ProTacts
         select(name: "birthday[month]", aria_label: "month",
                "x-init": focus ? "$el.focus()" : nil, "x-resize": fit) do
           option(value: "", selected: birthday&.month.nil?) { "month" }
-          Date::MONTHNAMES.compact.zip(Date::ABBR_MONTHNAMES.compact).each_with_index do |(name, short), index|
-            option(value: index + 1, selected: birthday&.month == index + 1, data: {short:}) { name }
+          Date::MONTHNAMES.compact.zip(Date::ABBR_MONTHNAMES.compact).each.with_index(1) do |(name, short), month|
+            option(value: month, selected: birthday&.month == month, data: {short:}) { name }
           end
         end
         input(type: "number", name: "birthday[day]", value: birthday&.day,
