@@ -441,13 +441,32 @@ module ProTacts
       # same names for both callers is the point: a birthday needs no
       # digest, there being at most one, and the save reads either
       # caller's row identically. A nil birthday is the added row.
+      #
+      # The month reads in full where the select has the room for its
+      # widest name and short ("Sep") where it does not: a select
+      # clips its text with no ellipsis, and a phone's narrow shapes
+      # (admin.css) cut "September" to "Septem". Room is the select's
+      # own width, which its track or the line's shrinking sets
+      # whatever its text, so x-resize asks again whenever that
+      # changes. Need is the full names' width: the labels come off
+      # and the select is measured out of flow at max-content, where
+      # nothing squeezes it. All twelve switch together, so the list
+      # never mixes spellings. The short name rides in each option's
+      # label, which a select shows in place of the text; the value and
+      # the text stay the full month, so the save and the picker are
+      # untouched.
       #: (Birthday? birthday, ?focus: bool) -> void
       def birthday_controls(birthday, focus: false)
+        fit = "const months = $el.querySelectorAll('option[data-short]'), s = $el.style, room = $el.offsetWidth; " \
+              "months.forEach(o => o.removeAttribute('label')); " \
+              "s.position = 'absolute'; s.width = 'max-content'; " \
+              "const need = $el.offsetWidth; s.position = s.width = ''; " \
+              "if (room < need) months.forEach(o => o.label = o.dataset.short)"
         select(name: "birthday[month]", aria_label: "month",
-               "x-init": focus ? "$el.focus()" : nil) do
+               "x-init": focus ? "$el.focus()" : nil, "x-resize": fit) do
           option(value: "", selected: birthday&.month.nil?) { "month" }
-          Date::MONTHNAMES.compact.each_with_index do |name, index|
-            option(value: index + 1, selected: birthday&.month == index + 1) { name }
+          Date::MONTHNAMES.compact.zip(Date::ABBR_MONTHNAMES.compact).each_with_index do |(name, short), index|
+            option(value: index + 1, selected: birthday&.month == index + 1, data: {short:}) { name }
           end
         end
         input(type: "number", name: "birthday[day]", value: birthday&.day,

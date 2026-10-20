@@ -59,6 +59,18 @@ class AdminContactsPagesTest < Minitest::Test
     %(<path d="M8 2v4"></path><path d="M16 2v4"></path>) +
     %(<rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path></svg></button>) #: String
 
+  # The month select's fit to its room
+  # (Admin::ContactsEdit#birthday_controls): short names in each
+  # option's label while the select is narrower than its full names,
+  # asked again on every resize. Shared by the standing row and the
+  # added one for the picker's reason above.
+  BIRTHDAY_MONTH_FIT =
+    %(x-resize="const months = $el.querySelectorAll('option[data-short]'), s = $el.style, room = $el.offsetWidth; ) +
+    %(months.forEach(o => o.removeAttribute('label')); ) +
+    %(s.position = 'absolute'; s.width = 'max-content'; ) +
+    %(const need = $el.offsetWidth; s.position = s.width = ''; ) +
+    %(if (room < need) months.forEach(o => o.label = o.dataset.short)") #: String
+
   def test_index_lists_recently_updated_contacts
     with_contacts({"ada" => ADA}) do
       get "/"
@@ -2557,9 +2569,10 @@ class AdminContactsPagesTest < Minitest::Test
 
       body = last_response.body
       assert_includes body,
-        '<div class="field" data-blank-removes><span>birthday</span><div class="date-row">' \
-        '<select name="birthday[month]" aria-label="month"><option value="">month</option>'
-      assert_includes body, '<option value="12" selected>December</option></select>'
+        '<div class="field" data-blank-removes><span>birthday</span><div class="date-row">' +
+        %(<select name="birthday[month]" aria-label="month" #{BIRTHDAY_MONTH_FIT}><option value="">month</option>) +
+        '<option value="1" data-short="Jan">January</option>'
+      assert_includes body, '<option value="12" selected data-short="Dec">December</option></select>'
       assert_includes body,
         '<input type="number" name="birthday[day]" value="10" min="1" max="31" placeholder="day" aria-label="day">'
       assert_includes body,
@@ -2814,10 +2827,11 @@ class AdminContactsPagesTest < Minitest::Test
       # Asserted in two contiguous pieces: the month names sit
       # between the empty option and December.
       assert_includes body,
-        '<template x-if="kind === \'birthday\'"><div class="date-row">' \
-        '<select name="birthday[month]" aria-label="month" x-init="$el.focus()"><option value="" selected>month</option>'
+        '<template x-if="kind === \'birthday\'"><div class="date-row">' +
+        %(<select name="birthday[month]" aria-label="month" x-init="$el.focus()" #{BIRTHDAY_MONTH_FIT}>) +
+        '<option value="" selected>month</option>'
       assert_includes body,
-        '<option value="12">December</option></select>' \
+        '<option value="12" data-short="Dec">December</option></select>' \
         '<input type="number" name="birthday[day]" min="1" max="31" placeholder="day" aria-label="day">' \
         '<input type="number" name="birthday[year]" min="1" max="9999" placeholder="year" aria-label="year">' +
         BIRTHDAY_PICKER + "</div></template></div></template>"
