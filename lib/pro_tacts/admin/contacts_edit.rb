@@ -457,11 +457,13 @@ module ProTacts
       # untouched.
       #: (Birthday? birthday, ?focus: bool) -> void
       def birthday_controls(birthday, focus: false)
-        fit = "const months = $el.querySelectorAll('option[data-short]'), s = $el.style, room = $el.offsetWidth; " \
-              "months.forEach(o => o.removeAttribute('label')); " \
-              "s.position = 'absolute'; s.width = 'max-content'; " \
-              "const need = $el.offsetWidth; s.position = s.width = ''; " \
-              "if (room < need) months.forEach(o => o.label = o.dataset.short)"
+        fit = <<~JS
+          const months = $el.querySelectorAll('option[data-short]'), s = $el.style, room = $el.offsetWidth
+          months.forEach(o => o.removeAttribute('label'))
+          s.position = 'absolute'; s.width = 'max-content'
+          const need = $el.offsetWidth; s.position = s.width = ''
+          if (room < need) months.forEach(o => o.label = o.dataset.short)
+        JS
         select(name: "birthday[month]", aria_label: "month",
                "x-init": focus ? "$el.focus()" : nil, "x-resize": fit) do
           option(value: "", selected: birthday&.month.nil?) { "month" }

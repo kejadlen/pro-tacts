@@ -64,12 +64,13 @@ class AdminContactsPagesTest < Minitest::Test
   # option's label while the select is narrower than its full names,
   # asked again on every resize. Shared by the standing row and the
   # added one for the picker's reason above.
-  BIRTHDAY_MONTH_FIT =
-    %(x-resize="const months = $el.querySelectorAll('option[data-short]'), s = $el.style, room = $el.offsetWidth; ) +
-    %(months.forEach(o => o.removeAttribute('label')); ) +
-    %(s.position = 'absolute'; s.width = 'max-content'; ) +
-    %(const need = $el.offsetWidth; s.position = s.width = ''; ) +
-    %(if (room < need) months.forEach(o => o.label = o.dataset.short)") #: String
+  BIRTHDAY_MONTH_FIT = <<~JS #: String
+    const months = $el.querySelectorAll('option[data-short]'), s = $el.style, room = $el.offsetWidth
+    months.forEach(o => o.removeAttribute('label'))
+    s.position = 'absolute'; s.width = 'max-content'
+    const need = $el.offsetWidth; s.position = s.width = ''
+    if (room < need) months.forEach(o => o.label = o.dataset.short)
+  JS
 
   def test_index_lists_recently_updated_contacts
     with_contacts({"ada" => ADA}) do
@@ -2570,7 +2571,7 @@ class AdminContactsPagesTest < Minitest::Test
       body = last_response.body
       assert_includes body,
         '<div class="field" data-blank-removes><span>birthday</span><div class="date-row">' +
-        %(<select name="birthday[month]" aria-label="month" #{BIRTHDAY_MONTH_FIT}><option value="">month</option>) +
+        %(<select name="birthday[month]" aria-label="month" x-resize="#{BIRTHDAY_MONTH_FIT}"><option value="">month</option>) +
         '<option value="1" data-short="Jan">January</option>'
       assert_includes body, '<option value="12" selected data-short="Dec">December</option></select>'
       assert_includes body,
@@ -2828,7 +2829,7 @@ class AdminContactsPagesTest < Minitest::Test
       # between the empty option and December.
       assert_includes body,
         '<template x-if="kind === \'birthday\'"><div class="date-row">' +
-        %(<select name="birthday[month]" aria-label="month" x-init="$el.focus()" #{BIRTHDAY_MONTH_FIT}>) +
+        %(<select name="birthday[month]" aria-label="month" x-init="$el.focus()" x-resize="#{BIRTHDAY_MONTH_FIT}">) +
         '<option value="" selected>month</option>'
       assert_includes body,
         '<option value="12" data-short="Dec">December</option></select>' \
