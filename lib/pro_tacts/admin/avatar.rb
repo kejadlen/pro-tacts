@@ -15,7 +15,10 @@ module ProTacts
     # bytes in hand, so the page carries a URL where it would otherwise
     # carry megabytes of base64 (see the route in Web). Alt is empty:
     # the contact's name is adjacent text in every slot, so the image
-    # is decoration, not information.
+    # is decoration, not information. Loaded lazily, because /contacts
+    # draws an avatar for every card in the book and a browser would
+    # otherwise fetch every picture before the page counts as loaded,
+    # most of them far below anything on screen.
     class Avatar < Phlex::HTML
       # @rbs @contact: Contact | ListedContact
       # @rbs @size: String?
@@ -28,7 +31,7 @@ module ProTacts
 
       def view_template
         if @contact.photo?
-          img(class: "avatar", src: "/contacts/#{@contact.id}/photo", alt: "", **attributes)
+          img(class: "avatar", src: "/contacts/#{@contact.id}/photo", alt: "", loading: "lazy", **attributes)
         else
           span(class: "avatar", **attributes) { Format.initials(@contact) }
         end

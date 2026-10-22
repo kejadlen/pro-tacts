@@ -1,5 +1,3 @@
-require "digest"
-
 require "pro_tacts/admin/card_form"
 require "pro_tacts/admin/groups_edit"
 require "pro_tacts/admin/groups_index"
@@ -60,11 +58,7 @@ module ProTacts
 
             # The page never points at a photo the group lacks, so one
             # with none is the 404 case.
-            if photo
-              response["Content-Type"] = photo.mime_type
-              response["ETag"] = %("#{Digest::SHA256.hexdigest(photo.bytes)}")
-              photo.bytes
-            end
+            serve_photo(photo) if photo
           end
 
           r.post do

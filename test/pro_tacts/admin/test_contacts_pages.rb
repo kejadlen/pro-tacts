@@ -1271,7 +1271,7 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/pic"
 
       assert_equal 200, last_response.status
-      assert_includes last_response.body, '<img class="avatar" src="/contacts/pic/photo" alt=""'
+      assert_includes last_response.body, '<img class="avatar" src="/contacts/pic/photo" alt="" loading="lazy"'
       assert_includes last_response.body, 'data-size="xl"'
       refute_includes last_response.body, '<span class="avatar"'
     end
@@ -1291,16 +1291,41 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # The route the avatars point at: the decoded bytes under the type
-  # their own magic bytes name, with the contact's etag — so a picture
-  # changes exactly when its card does.
+  # their own magic bytes name, with an etag of those bytes.
   def test_the_photo_route_serves_the_decoded_bytes
     with_contacts({"pic" => PhotoCard.photo("pic", bytes: 256)}) do |store|
       get "/contacts/pic/photo"
 
+      bytes = store.contact("pic").photo.bytes
       assert_equal 200, last_response.status
       assert_equal "image/jpeg", last_response["Content-Type"]
-      assert_equal store.contact("pic").photo.bytes, last_response.body
-      assert_equal store.contact("pic").etag, last_response["ETag"]
+      assert_equal bytes, last_response.body
+      assert_equal %("#{Digest::SHA256.hexdigest(bytes)}"), last_response["ETag"]
+      assert_equal "private, no-cache", last_response["Cache-Control"]
+    end
+  end
+
+  # A browser holding the picture asks with its etag and is told to
+  # keep it, so a page of avatars it has seen sends no picture again
+  # (Web#serve_photo). An edit that leaves the picture alone keeps
+  # its etag; a new picture is a new one, and is sent.
+  def test_the_photo_route_answers_a_held_picture_with_a_304
+    with_contacts({"pic" => PhotoCard.photo("pic", bytes: 256)}) do |store|
+      get "/contacts/pic/photo"
+      etag = last_response["ETag"]
+
+      get "/contacts/pic/photo", {}, "HTTP_IF_NONE_MATCH" => etag
+      assert_equal 304, last_response.status
+      assert_empty last_response.body
+
+      store.put("pic", ProTacts::VCard.new(PhotoCard.photo("pic", bytes: 256, extra: ["NICKNAME:Countess"])))
+      get "/contacts/pic/photo", {}, "HTTP_IF_NONE_MATCH" => etag
+      assert_equal 304, last_response.status
+
+      store.put("pic", ProTacts::VCard.new(PhotoCard.photo("pic", bytes: 512)))
+      get "/contacts/pic/photo", {}, "HTTP_IF_NONE_MATCH" => etag
+      assert_equal 200, last_response.status
+      refute_equal etag, last_response["ETag"]
     end
   end
 

@@ -4,6 +4,7 @@ require "pathname"
 require "pro_tacts"
 require "sentry-ruby"
 
+require "rack/deflater"
 require "rack/rewindable_input"
 require "roda"
 
@@ -48,6 +49,15 @@ module ProTacts
       end
     end
 
+    # The pages and the files they load, gzipped for a browser that
+    # asks: /contacts is half a megabyte of markup that compresses
+    # thirtyfold, and a phone on the tailnet pays for every byte. Only
+    # those types, so a DAV response — XML or a card — goes out as the
+    # bytes the clients were confirmed against (docs/carddav.md), and a
+    # picture, compressed already, is not squeezed again. Outermost,
+    # so the exchange log below records a body as the app wrote it.
+    use Rack::Deflater, include: %w[text/html text/css text/javascript]
+
     # RewindableInput lets the exchange log below read the request body
     # after the application has.
     use Rack::RewindableInput::Middleware
@@ -67,6 +77,7 @@ module ProTacts
     plugin :all_verbs
     plugin :dav_verbs
     plugin :public, root: PUBLIC_ROOT.to_s
+    plugin :caching
     plugin :hash_branches
 
     # A DAV 404 warns through RefusalAlerts; an admin one reports nothing.

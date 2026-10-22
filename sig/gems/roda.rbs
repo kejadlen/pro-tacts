@@ -83,12 +83,20 @@ class Roda
     # Dispatches to the hash_branch for the next segment, if one is
     # defined, and ends the request with its answer.
     def hash_branches: (?String | Symbol namespace) -> void
+
+    # The caching plugin's: sets the ETag, quoting the value, and halts
+    # with a 304 when the request's If-None-Match already names it.
+    def etag: (String value) -> void
   end
 
   class RodaResponse
     def []=: (String header, String value) -> void
     def status=: (Integer status) -> void
     def write: (String body) -> void
+
+    # The caching plugin's: a Cache-Control header from its
+    # directives, each key spelled with underscores for dashes.
+    def cache_control: (**bool directives) -> void
   end
 
   class RodaError < StandardError

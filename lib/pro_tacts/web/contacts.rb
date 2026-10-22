@@ -1,3 +1,5 @@
+require "digest"
+
 require "pro_tacts/admin/card_form"
 require "pro_tacts/admin/contact_dialog"
 require "pro_tacts/admin/contacts_edit"
@@ -120,17 +122,14 @@ module ProTacts
         # bytes under their own content type, served from a route
         # rather than inlined as base64 so a page of avatars is a
         # page of cacheable image requests instead of ten 330 KB
-        # payloads stitched into the HTML. The contact's etag, so a
-        # picture changes exactly when its card does.
+        # payloads stitched into the HTML (#serve_photo).
         r.get "photo" do
           contact = store.contact(id)
 
           # The views never point at a photo the card lacks, so a
           # contact with none is the 404 case above.
           if contact && (photo = contact.photo)
-            response["Content-Type"] = photo.mime_type
-            response["ETag"] = contact.etag
-            photo.bytes
+            serve_photo(photo)
           end
         end
 
@@ -143,6 +142,22 @@ module ProTacts
     end
 
     private
+
+    # A picture, a contact's or a group's, answered so a browser keeps
+    # it: an ETag of its own bytes and `no-cache`, which stores the
+    # picture but asks before each reuse, so a page of avatars costs a
+    # 304 apiece rather than every picture again on every visit, and a
+    # replaced picture shows the moment it is. The bytes' digest rather
+    # than the card's etag, so an edit to a phone number keeps the
+    # picture a browser holds. Roda's caching plugin answers the 304,
+    # halting before the bytes are sent.
+    #: (Contact::Photo photo) -> String
+    def serve_photo(photo)
+      response["Content-Type"] = photo.mime_type
+      response.cache_control(private: true, no_cache: true)
+      request.etag(Digest::SHA256.hexdigest(photo.bytes))
+      photo.bytes
+    end
 
     # The dashboard GET and a refused create render the same page.
     #: (?notice: String?) -> String

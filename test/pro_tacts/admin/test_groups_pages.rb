@@ -381,6 +381,10 @@ class AdminGroupsPagesTest < Minitest::Test
       assert_equal 200, last_response.status
       assert_equal "image/jpeg", last_response["Content-Type"]
       assert_equal JPEG, last_response.body.b
+
+      # Held by a browser the way a contact's is (Web#serve_photo).
+      get "/groups/#{id}/photo", {}, "HTTP_IF_NONE_MATCH" => last_response["ETag"]
+      assert_equal 304, last_response.status
     end
   end
 
