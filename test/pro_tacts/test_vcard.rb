@@ -233,4 +233,25 @@ class VCardTest < Minitest::Test
     assert card.card?
     assert_equal "aiden", card.uid
   end
+
+  # A card already read hands #insert's result its reading, which must
+  # be the one a fresh read of the bytes makes: either line break, a
+  # fold, a final break or none, lines that come with their own break
+  # and lines that take the neighbour's.
+  def test_an_inserted_cards_reading_is_a_fresh_reading
+    value = from_regex('[^\r\n\x00]{0,40}', fullmatch: true)
+    Hegel.test(test_cases: 500) do |tc|
+      eol = tc.draw(sampled_from(["\r\n", "\n"]))
+      body = tc.draw(arrays(value, max_size: 4)).map { "NOTE:#{it}#{eol}" }
+      folded = tc.draw(booleans) ? "FN:Ada#{eol} Lovelace#{eol}" : "FN:Ada Lovelace#{eol}"
+      ending = tc.draw(booleans) ? eol : ""
+      card = ProTacts::VCard.new("BEGIN:VCARD#{eol}VERSION:3.0#{eol}#{folded}#{body.join}END:VCARD#{ending}")
+      card.lines
+      inserted = tc.draw(arrays(value.map { |v| tc.draw(booleans) ? "NOTE:#{v}\r\n" : "NOTE:#{v}" }, min_size: 1, max_size: 3))
+
+      composed = card.insert(inserted)
+
+      assert_equal ProTacts::VCard::Parser.lines(composed.to_s), composed.lines
+    end
+  end
 end

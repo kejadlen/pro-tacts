@@ -1310,8 +1310,10 @@ module ProTacts
     # one, so a list reads the same names, numbers and lent lines a
     # contact's page does without reading a picture to show a name. The
     # index holds what #reindex read off the stored card, and a line
-    # that would not read is in neither. Of a PHOTO, the first
-    # characters alone, which is all Contact.photo_head? decodes.
+    # that would not read is in neither. Each line keeps the property
+    # it was written from as its reading (VCard.of), so the card is not
+    # parsed back into what the rows already said. Of a PHOTO, the
+    # first characters alone, which is all Contact.photo_head? decodes.
     #: (Array[String]? ids) -> Hash[String, ListedContact]
     def listed_by_id(ids)
       scope = ids ? card_properties.where(card_id: ids) : card_properties
@@ -1330,16 +1332,16 @@ module ProTacts
       inherited = inherited_by_id
       (ids ? cards.where(id: ids) : cards).order(:id).select_map(:id).to_h { |raw|
         id = raw.to_s
-        text = lines.fetch(id, []).map { |row|
+        read = lines.fetch(id, []).map { |row|
           pairs = parameters.fetch("#{id} #{row.fetch(:position)}", []).map {
             [it.fetch(:name).to_s, it.fetch(:value).to_s] #: [String, String]
           }
           property = VCard::Parser::Property.new(
             group: row.fetch(:property_group)&.to_s, name: row.fetch(:name).to_s, parameters: pairs, value: row.fetch(:value).to_s,
           )
-          "#{VCard.header_of(property)}#{property.value}\r\n"
-        }.join
-        contact = Contact.new(id:, stored: VCard.new(text), birthday: birthdays[id], inherited: inherited.fetch(id, []))
+          VCard::Parser::Line.new(property:, verbatim: "#{VCard.header_of(property)}#{property.value}\r\n", error: nil)
+        }
+        contact = Contact.new(id:, stored: VCard.of(read), birthday: birthdays[id], inherited: inherited.fetch(id, []))
         head = heads[id]
         listed = ListedContact.new(contact, photo: !head.nil? && Contact.photo_head?(head))
         [id, listed] #: [String, ListedContact]

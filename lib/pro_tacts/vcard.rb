@@ -104,7 +104,7 @@ module ProTacts
     def self.header_of(property)
       prefix = property.group ? "#{property.group}." : ""
       parameters = property.parameters.map { |name, value|
-        bare = /\A#{Parser::PTEXT}\z/.match?(value)
+        bare = Parser::BARE.match?(value)
         ";#{name}=#{bare ? value : "\"#{value}\""}"
       }
       "#{prefix}#{property.name}#{parameters.join}:"
@@ -192,9 +192,15 @@ module ProTacts
     # The first property naming `name`, or nil where the card carries
     # none — the read every caller after a property a card holds one of
     # makes. Names match without case (RFC 2426 section 4).
+    # Off a table of each name's first property, built on the first
+    # ask: a list reads a contact's name, its N and its NICKNAME over
+    # and over as it sorts, files and labels it, and a walk of the
+    # properties for each read was most of a /contacts render. Names
+    # are ASCII (RFC 2426 section 4's iana-token and x-name), so
+    # upcasing is casecmp?'s comparison.
     #: (String name) -> Parser::Property?
     def property(name)
-      properties.find { it.name.casecmp?(name) }
+      first_by_name[name.upcase]
     end
 
     # The lines naming `name`, and the card without them: the split
@@ -275,7 +281,10 @@ module ProTacts
     #
     # A card back, like #extract's remainder: text with text put into it
     # is still text, so there is nothing here for a caller to re-read or
-    # re-judge, and one that wants the bytes asks #to_s for them.
+    # re-judge, and one that wants the bytes asks #to_s for them. A
+    # card already read hands its reading on with the new lines read
+    # into it (#read_into), since a contact composes its birthday and
+    # lent lines in this way and a list composes every contact.
     #: (Array[String] lines) -> VCard
     def insert(lines)
       return self if lines.empty?
@@ -285,10 +294,37 @@ module ProTacts
 
       eol = @bytes.byteindex("\n", index)
       neighbour = @bytes.byteslice(index, eol ? eol - index + 1 : @bytes.bytesize).to_s
-      VCard.new(@bytes.dup.bytesplice(index, 0, terminate(lines, neighbour).join))
+      inserted = terminate(lines, neighbour).join
+      VCard.new(@bytes.dup.bytesplice(index, 0, inserted), lines: (read_into(index, inserted) if defined?(@lines)))
     end
 
     private
+
+    # #property's table: each name, upcased, to the first property
+    # naming it.
+    #: () -> Hash[String, Parser::Property]
+    def first_by_name
+      return @first_by_name if defined?(@first_by_name)
+
+      first = {} #: Hash[String, Parser::Property]
+      properties.each { first[it.name.upcase] ||= it }
+      @first_by_name = first
+    end
+
+    # This card's lines with `inserted` read and put in at byte `at`,
+    # or nil where `at` starts none of them. #insert's END:VCARD starts
+    # one: `^` follows a "\n", which ends a line, and a continuation
+    # starts with whitespace, which END does not.
+    #: (Integer at, String inserted) -> Array[Parser::Line]?
+    def read_into(at, inserted)
+      start = 0
+      position = lines.index { |line|
+        found = start == at
+        start += line.verbatim.bytesize
+        found
+      }
+      position && lines.dup.insert(position, *Parser.lines(inserted))
+    end
 
     # The given lines, each with a terminator on it that has none,
     # taken from the line it lands beside — so a card written in one

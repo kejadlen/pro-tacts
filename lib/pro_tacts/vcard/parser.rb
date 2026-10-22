@@ -209,6 +209,12 @@ module ProTacts
       QUOTED_STRING = /"([^\x00-\x08\x0A-\x1F\x7F"]*)"/ #: Regexp
       VALUE = /[^\r\n]*/ #: Regexp
 
+      # A parameter value that is PTEXT throughout, which VCard.header_of
+      # writes bare. Built once here rather than interpolated in the
+      # method, which compiled it again for every parameter of every
+      # line a listing writes back out (Store#listed_by_id).
+      BARE = /\A#{PTEXT}\z/ #: Regexp
+
       # A bare CR is not a line break in the grammar, but it ends a value
       # and has to end a line here too: without it the scanner would sit
       # on one forever, because no token can consume it.
