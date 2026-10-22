@@ -16,26 +16,38 @@ module ProTacts
     # The members are what a group is, so they are a list rather than a
     # row: /contacts' rows, narrowed to this group and in its order
     # (Contact#<=>). Under them the group's history, the change
-    # log the contact page renders in this page's own shape. The whole
-    # book comes in beside the members (Store#contacts) because that
-    # log names the cards a join or a leave moved, and a name is what
-    # a person reads; the members list is the narrowing of it.
+    # log the contact page renders in this page's own shape. The cards
+    # that log names (.moved) come in beside the members, because a
+    # join or a leave is read by the name of who moved, and one who
+    # left is no member; the members list is the narrowing of them.
+    # Those and no more, rather than the whole book: a household's
+    # page built every card to show four.
     class GroupsShow < Phlex::HTML
       # @rbs @group: Group
       # @rbs @login: String
       # @rbs @reading: Contact
-      # @rbs @contacts: Array[ListedContact]
       # @rbs @members: Array[ListedContact]
+      # @rbs @named: Hash[String, ListedContact]
       # @rbs @changes: Array[Store::GroupChange]
 
       #: (group: Group, contacts: Array[ListedContact], changes: Array[Store::GroupChange], login: String) -> void
       def initialize(group:, contacts:, changes:, login:)
         @group = group
         @login = login
-        @contacts = contacts
         @changes = changes
         @reading = group.reading
-        @members = contacts.select { group.members.include?(it.id) }.sort
+        joined = group.members.to_set
+        @members = contacts.select { joined.include?(it.id) }.sort
+        @named = contacts.to_h { [it.id, it] }
+      end
+
+      # The cards a join or a leave in these changes moved: who the log
+      # names, beside the members, in the contacts this page is handed.
+      #: (Array[Store::GroupChange] changes) -> Array[String]
+      def self.moved(changes)
+        changes.filter_map {
+          it.detail.fetch("card").to_s if [Store::GroupAction::JOIN, Store::GroupAction::LEAVE].include?(it.action)
+        }
       end
 
       def view_template
@@ -193,7 +205,7 @@ module ProTacts
       #: (Hash[String, untyped] detail) -> void
       def member_link(detail)
         id = detail.fetch("card").to_s
-        contact = @contacts.find { it.id == id }
+        contact = @named[id]
         if contact
           a(href: "/contacts/#{id}") { Format.name_label(contact) }
         else

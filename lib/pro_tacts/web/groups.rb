@@ -82,11 +82,12 @@ module ProTacts
 
           if group
             response["Content-Type"] = "text/html; charset=utf-8"
+            changes = store.group_changes_of(id)
             Admin::GroupsShow.call(
               group:,
               login: @login,
-              contacts: store.listed_contacts,
-              changes: store.group_changes_of(id),
+              contacts: store.listed_contacts((group.members + Admin::GroupsShow.moved(changes)).uniq),
+              changes:,
             )
           end
         end

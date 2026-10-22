@@ -42,6 +42,7 @@ module ProTacts
 
     class GroupsShow
       def self.call: (group: Group, contacts: Array[ListedContact], changes: Array[Store::GroupChange], login: String) -> String
+      def self.moved: (Array[Store::GroupChange] changes) -> Array[String]
     end
 
     # Rendered by the views that tag groups; the routes read how many
