@@ -252,18 +252,45 @@
 
 /* A row's label field (Admin::ContactsEdit#label_field) sits in the
    type column the caption held and the record card's key still holds,
-   so it reads in the caption's register — Gloss's .field type, mono
-   uppercase at the step below the value — inside the box that says it
-   can be edited (docs/plans/2026-10-22-a-row-edits-its-label.md). The
-   word is stored as typed; only its showing is uppercase. */
+   and at rest it is that caption: Gloss's .field type, mono uppercase
+   at the step below the value, with no box around it — the row reads
+   as the record does (docs/DESIGN.md, "Alignment is the layout"). The
+   box comes back under the pointer, saying the word can be changed,
+   and stays while the field has focus, which a click gives it: editing
+   on click is the input's own behavior, and markup's job here (see
+   Admin::Layout). A word wider than the column ends in an ellipsis
+   until then. The word is stored as typed; only its showing is
+   uppercase, and an unlabeled row's placeholder, the kind, reads in
+   the caption's color rather than a hint's. */
 .card-body form.field-stack > .field > .row-label {
   padding-block: var(--gl-space-3xs);
+  padding-inline: 0;
+  border-color: transparent;
+  background: transparent;
+  text-overflow: ellipsis;
+  cursor: text;
   font-family: var(--gl-font-mono);
   font-size: var(--gl-step--2);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--gl-color-text-secondary);
+}
+.card-body form.field-stack > .field > .row-label::placeholder {
+  color: var(--gl-color-text-secondary);
+}
+.card-body form.field-stack > .field > .row-label:is(:hover, :focus) {
+  padding-inline: calc(var(--gl-space-xs) - 1px);
+  border-color: var(--gl-color-border-default);
+  background: var(--gl-color-surface-card);
+}
+.card-body form.field-stack > .field > .row-label:focus {
+  border-color: var(--gl-color-accent);
+}
+/* Chrome's arrow for the list would take a third of a 6rem column
+   from the word; the list still opens on a click or a keystroke. */
+.card-body form.field-stack > .field > .row-label::-webkit-calendar-picker-indicator {
+  display: none !important;
 }
 
 /* The date line breaks in two when its row cannot hold a whole
