@@ -250,11 +250,11 @@ module ProTacts
                           placeholder: @own.nickname ? "removed on save" : nil)
                   end
                   @own.phones.each do |phone|
-                    value_row(Format.type_label(phone.label, phone.types, "phone"),
+                    value_row(phone.label || "phone",
                               type: "tel", name: "phone[#{phone.line.digest}]", value: phone.value)
                   end
                   @own.emails.each do |email|
-                    value_row(Format.type_label(nil, email.types, "email"),
+                    value_row(email.label || "email",
                               type: "email", name: "email[#{email.line.digest}]", value: email.value)
                   end
                   @own.handles.each do
@@ -528,7 +528,7 @@ module ProTacts
       #: (Contact::Address address) -> void
       def address_row(address)
         div(class: "field", data: {blank_removes: address.po_box.nil?}) do
-          span { Format.type_label(nil, address.types, "address") }
+          span { address.label || "address" }
           div(class: "field-stack") do
             ADDRESS_FIELDS.each do |component, label|
               input(type: "text", name: "address[#{address.line.digest}][#{component}]",

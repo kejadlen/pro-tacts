@@ -92,16 +92,16 @@ module ProTacts
       def rows
         groups_row
         @contact.phones.each do |phone|
-          row(Format.type_label(phone.label, phone.types, "phone"), phone.value, phone.lent_by)
+          row(phone.label || "phone", phone.value, phone.lent_by)
         end
         @contact.emails.each do |email|
-          row(Format.type_label(nil, email.types, "email"), email.value, email.lent_by)
+          row(email.label || "email", email.value, email.lent_by)
         end
         @contact.handles.each do |handle|
-          row(Format.type_label(handle.service, [], "handle"), handle.value, handle.lent_by)
+          row(handle.label || "handle", handle.value, handle.lent_by)
         end
         @contact.addresses.each do |address|
-          row(Format.type_label(nil, address.types, "address"), Format.address_lines(address), address.lent_by)
+          row(address.label || "address", Format.address_lines(address), address.lent_by)
         end
         row("birthday", @birthday) if @birthday
         note_rows

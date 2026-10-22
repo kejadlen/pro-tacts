@@ -2063,8 +2063,8 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # The edit screen's phone row captions render a label the same way
-  # the show screen's keys do — both render that span through
-  # Format.type_label — while the field keeps editing the number alone.
+  # the show screen's keys do — both read Contact::Phone#label — while
+  # the field keeps editing the number alone.
   def test_the_edit_screen_captions_a_labeled_phone_with_its_label
     labeled = ADA.sub("TEL;TYPE=mobile:+1-555-0100\r\n",
       "item1.TEL;type=CELL:+1-555-0100\r\nitem1.X-ABLabel:Google Voice\r\n")

@@ -121,15 +121,44 @@ module ProTacts
     # here.
     ADDRESS_COMPONENTS = %w[extended street locality region postal_code country].freeze #: Array[String]
 
-    # Reopened rather than defined in the block above, for the reason
+    # The word a row's type column says: the `X-ABLabel` sharing its
+    # group, unwrapped from Apple's own vocabulary (`_$!<Other>!$_`
+    # reads `Other`), else the types the reader shows, else nil. One
+    # word to a reader, whichever of the two spellings the line carries
+    # (docs/plans/2026-10-22-a-row-edits-its-label.md, "One word, three
+    # spellings"); where a row has both the label wins, which is what
+    # Contacts itself shows (docs/plans/2026-09-18-phone-labels.md,
+    # "Reading").
+    #: (VCard::Parser::Line? label_line, Array[String] types) -> String?
+    def self.label_of(label_line, types)
+      text = label_line&.property&.text
+      return VCard.unwrap(text) unless text.nil? || text.empty?
+
+      types.join(", ") unless types.empty?
+    end
+
+    # Reopened rather than defined in the blocks above, for the reason
     # VCard::Parser::Property is.
     class Phone
-      # The `X-ABLabel`'s text, nil for a number that has none.
       #: () -> String?
-      def label
-        text = label_line&.property&.text
-        text unless text.nil? || text.empty?
-      end
+      def label = Contact.label_of(label_line, types)
+    end
+
+    class Email
+      #: () -> String?
+      def label = Contact.label_of(label_line, types)
+    end
+
+    class Address
+      #: () -> String?
+      def label = Contact.label_of(label_line, types)
+    end
+
+    class Handle
+      # A handle's word is its service, the column the record card has
+      # always shown it in.
+      #: () -> String?
+      def label = service
     end
 
     # A handle's line in Contacts.app's spelling, the service in

@@ -154,8 +154,9 @@ class ContactTest < Minitest::Test
 
   # The label is the `X-ABLabel` sharing the phone's property group — a
   # different line than the row it describes — and the types are a
-  # different fact: a row can carry both
-  # (docs/plans/2026-09-18-phone-labels.md).
+  # different fact: a row can carry both, and the label wins
+  # (docs/plans/2026-09-18-phone-labels.md). A row with no such line
+  # reads its types as its label.
   def test_reads_a_phones_label_off_the_line_sharing_its_group
     labeled = STRUCTURED.sub(
       "TEL;TYPE=work:+1-555-0199\r\n",
@@ -163,7 +164,7 @@ class ContactTest < Minitest::Test
     )
 
     phones = contact(labeled).phones
-    assert_nil phones.fetch(0).label
+    assert_equal "mobile", phones.fetch(0).label
     assert_equal "Google Voice", phones.fetch(1).label
     assert_equal %w[work], phones.fetch(1).types
   end
@@ -179,10 +180,23 @@ class ContactTest < Minitest::Test
     assert_equal "Google Voice", contact(labeled).phones.fetch(1).label
   end
 
-  def test_a_phone_in_a_group_with_no_labeling_line_reads_no_label
+  def test_a_phone_in_a_group_with_no_labeling_line_reads_its_types
     grouped = STRUCTURED.sub("TEL;TYPE=work:", "item2.TEL;TYPE=work:")
 
-    assert_equal [nil, nil], contact(grouped).phones.map(&:label)
+    assert_equal %w[mobile work], contact(grouped).phones.map(&:label)
+  end
+
+  # Emails and addresses read the label beside them as a phone does,
+  # and Apple's wrapped vocabulary reads as its word
+  # (docs/plans/2026-10-22-a-row-edits-its-label.md).
+  def test_an_email_and_an_address_read_their_labels
+    labeled = STRUCTURED
+      .sub(/^EMAIL[^\r]*/) { "item3.#{it}\r\nitem3.X-ABLabel:_$!<Other>!$_" }
+      .sub(/^ADR[^\r]*/) { "item4.#{it}\r\nitem4.X-ABLabel:lab" }
+    contact = contact(labeled)
+
+    assert_equal "Other", contact.emails.fetch(0).label
+    assert_equal "lab", contact.addresses.fetch(0).label
   end
 
   # Each phone carries the line it was read from — the address a save
