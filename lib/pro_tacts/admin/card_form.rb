@@ -172,9 +172,8 @@ module ProTacts
           next if submitted.nil? || submitted.strip == row.value.strip
 
           value = submitted.strip
-          vcard = vcard.substitute(
-            row.line.digest,
-            value.empty? ? [] : ["#{VCard.header_of(row.property)}#{VCard.escape(value)}"],
+          vcard = value.empty? ? removed(vcard, row) : vcard.substitute(
+            row.line.digest, ["#{VCard.header_of(row.property)}#{VCard.escape(value)}"],
           )
         end
 
@@ -241,7 +240,7 @@ module ProTacts
           next if submitted.nil? || address_unchanged?(address, submitted)
 
           line = address_line(address, submitted)
-          vcard = vcard.substitute(address.line.digest, line ? [line] : [])
+          vcard = line ? vcard.substitute(address.line.digest, [line]) : removed(vcard, address)
         end
 
         # The add dialog names an added address by its add index
@@ -252,6 +251,17 @@ module ProTacts
         # included.
         added = hash_field(params, "new_address").values #: Array[Hash[String, untyped]]
         vcard.insert(added.filter_map { address_line(nil, it) })
+      end
+
+      # A row's lines gone from the card: its own, and the `X-ABLabel`
+      # sharing its group, which would otherwise be left naming nothing
+      # (docs/plans/2026-10-22-a-row-edits-its-label.md, "Removing a row
+      # removes its label").
+      #: (VCard vcard, Contact::Phone | Contact::Email | Contact::Address row) -> VCard
+      def self.removed(vcard, row)
+        vcard = vcard.substitute(row.line.digest, [])
+        label = row.label_line
+        label ? vcard.substitute(label.digest, []) : vcard
       end
 
       # A field the editors post as a hash keyed by row: none where the
@@ -453,7 +463,7 @@ module ProTacts
         "N:#{components.join(";")}"
       end
 
-      private_class_method :edited_values, :edited_handles, :edited_addresses, :hash_field, :address_unchanged?,
+      private_class_method :edited_values, :edited_handles, :edited_addresses, :removed, :hash_field, :address_unchanged?,
                            :address_line, :birthday_component, :text_lines, :edited_text, :edited_fn, :display_name,
                            :n_line, :company_name, :person_name, :edited_organization
     end

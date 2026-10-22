@@ -58,9 +58,11 @@ module ProTacts
     # ADR's seven components (section 3.2.1: post office box, extended
     # address, street, locality, region, postal code, country — nil
     # where the card left the position blank or stopped short of it).
-    # A phone's `label` is the `X-ABLabel` sharing its property group,
-    # a different fact from its types
-    # (docs/plans/2026-09-18-phone-labels.md, "Reading"), every
+    # A row's `label_line` is the `X-ABLabel` sharing its property
+    # group, a different fact from its types
+    # (docs/plans/2026-09-18-phone-labels.md, "Reading"), carried as
+    # the line so that a save removing the row removes its label with
+    # it (docs/plans/2026-10-22-a-row-edits-its-label.md), every
     # shape's `line` is the parsed line it was read from, the address
     # a save names that row by
     # (docs/plans/2026-09-05-web-card-editor.md), a repeatable row's
@@ -71,9 +73,9 @@ module ProTacts
     # Data classes, whose members the inline syntax cannot read; the
     # signatures live in sig/pro_tacts/contact.rbs.
     # @rbs skip
-    Phone = Data.define(:value, :label, :types, :line, :property, :lent_by)
+    Phone = Data.define(:value, :label_line, :types, :line, :property, :lent_by)
     # @rbs skip
-    Email = Data.define(:value, :types, :line, :property, :lent_by)
+    Email = Data.define(:value, :label_line, :types, :line, :property, :lent_by)
     # A handle: an IMPP (RFC 6350 section 6.4.3, from RFC 4770 for
     # 3.0) as Contacts.app spells one, the service its X-SERVICE-TYPE
     # parameter and the value the handle, with the URI scheme it sits
@@ -105,6 +107,7 @@ module ProTacts
       :postal_code,
       :country,
       :types,
+      :label_line,
       :line,
       :property,
       :lent_by,
@@ -117,6 +120,17 @@ module ProTacts
     # so a component's position in the value is one past its index
     # here.
     ADDRESS_COMPONENTS = %w[extended street locality region postal_code country].freeze #: Array[String]
+
+    # Reopened rather than defined in the block above, for the reason
+    # VCard::Parser::Property is.
+    class Phone
+      # The `X-ABLabel`'s text, nil for a number that has none.
+      #: () -> String?
+      def label
+        text = label_line&.property&.text
+        text unless text.nil? || text.empty?
+      end
+    end
 
     # A handle's line in Contacts.app's spelling, the service in
     # X-SERVICE-TYPE and the handle under `x-apple:`
@@ -405,15 +419,14 @@ module ProTacts
 
     #: () -> Array[Phone]
     def phones
-      labels = labels_by_group
+      labels = label_lines
       rows("TEL") { |property, line, lent_by|
         value = text_of(property)
-        group = property.group
         # RFC 2426 section 3.3.1: `voice` is the type every number has
         # by default, so it names none.
         Phone.new(
           value:,
-          label: group && labels[group.downcase],
+          label_line: label_line_of(property, labels),
           types: property.types - %w[voice],
           line:,
           property:,
@@ -424,11 +437,19 @@ module ProTacts
 
     #: () -> Array[Email]
     def emails
+      labels = label_lines
       rows("EMAIL") { |property, line, lent_by|
         value = text_of(property)
         # RFC 2426 section 3.3.2: `internet` is the format every address
         # has by default, so it names none.
-        Email.new(value:, types: property.types - %w[internet], line:, property:, lent_by:) if value
+        Email.new(
+          value:,
+          label_line: label_line_of(property, labels),
+          types: property.types - %w[internet],
+          line:,
+          property:,
+          lent_by:,
+        ) if value
       }
     end
 
@@ -447,7 +468,10 @@ module ProTacts
 
     #: () -> Array[Address]
     def addresses
-      rows("ADR") { |property, line, lent_by| address_of(property, line:, lent_by:) }
+      labels = label_lines
+      rows("ADR") { |property, line, lent_by|
+        address_of(property, label_line: label_line_of(property, labels), line:, lent_by:)
+      }
     end
 
     # The card's NOTEs (RFC 2426 section 3.6.2), in text form. On the
@@ -549,27 +573,34 @@ module ProTacts
       "NOTE:#{VCard.escape(NoteSections.join(member, sections))}"
     end
 
-    # A property group to the `X-ABLabel` text anchoring it — the
+    # A property group to the `X-ABLabel` line anchoring it — the
     # label a group's lines carry, on a different line than the row it
     # describes. Read off the composed card: a group lends only bare
     # `ADR` and `NOTE` (db/migrations/004_groups.rb), so an inherited
     # line can never collide with a member's own `item` numbering
     # (docs/plans/2026-09-18-phone-labels.md, "Reading"). Keyed
     # lowercased, a group name comparing without case as a property
-    # name does and as EditedContact#label_of pairs them.
-    #: () -> Hash[String, String]
-    def labels_by_group
-      properties
-        .filter_map { |property|
+    # name does and as EditedContact#label_of pairs them. A label with
+    # no text labels nothing, and is left out.
+    #: () -> Hash[String, VCard::Parser::Line]
+    def label_lines
+      vcard.lines
+        .filter_map { |line|
+          property = line.property
+          next if property.nil? || !property.name.casecmp?("X-ABLabel")
+
           group = property.group
-          next if group.nil? || !property.name.casecmp?("X-ABLabel")
+          next if group.nil? || text_of(property).nil?
 
-          text = text_of(property)
-          next if text.nil?
-
-          [group.downcase, text] #: [String, String]
+          [group.downcase, line] #: [String, VCard::Parser::Line]
         }
         .to_h
+    end
+
+    #: (VCard::Parser::Property property, Hash[String, VCard::Parser::Line] labels) -> VCard::Parser::Line?
+    def label_line_of(property, labels)
+      group = property.group
+      labels[group.downcase] if group
     end
 
     # The rows a repeatable property reads as: each line naming it
@@ -610,13 +641,14 @@ module ProTacts
     # as no address at all. Carries the line it was read from and its
     # reading, the other provenance-carrying shapes' own address for a
     # save.
-    #: (VCard::Parser::Property property, line: VCard::Parser::Line, lent_by: Group?) -> Address?
-    def address_of(property, line:, lent_by:)
+    #: (VCard::Parser::Property property, label_line: VCard::Parser::Line?, line: VCard::Parser::Line, lent_by: Group?) -> Address?
+    def address_of(property, label_line:, line:, lent_by:)
       components = components_of(property)
       return if components.none?
 
       po_box, extended, street, locality, region, postal_code, country = components
-      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: property.types, line:, property:, lent_by:)
+      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: property.types, label_line:, line:,
+                  property:, lent_by:)
     end
 
   end

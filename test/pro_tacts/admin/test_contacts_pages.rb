@@ -2079,6 +2079,25 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # A labeled number is two lines, and blanking it removes both: the
+  # label left behind would name nothing, and the next line Contacts
+  # files under its group would wear it.
+  def test_a_blank_labeled_phone_removes_its_label_too
+    labeled = ADA.sub("TEL;TYPE=mobile:+1-555-0100\r\n",
+      "item1.TEL;type=CELL:+1-555-0100\r\nitem1.X-ABLabel:Google Voice\r\n")
+
+    with_contacts({"ada" => labeled}) do |store|
+      digest = store.contact("ada").phones.first.line.digest
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
+                               phone: {digest => ""}
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      refute_includes card, "TEL"
+      refute_includes card, "X-ABLabel"
+    end
+  end
+
   ## Editing emails
 
   # The email rows: the phone row's own shape over EMAIL — one value
