@@ -370,11 +370,24 @@ module ProTacts
         .all)
     end
 
-    # #groups_of with each group's members listed, for a contact's tags.
-    #: (String id) -> Array[ListedGroup]
-    def listed_groups_of(id)
+    # #groups_of with each group's first few members listed, for a
+    # contact's tags: the `first` of them in Contact#<=>'s order, read
+    # off the sort keys (#reindex), so the tag for `sync:*` lists five
+    # contacts rather than the whole book to take five from. The order
+    # agrees with a list's because the keys are Contact#sort_key and
+    # SQLite compares text bytewise, as Ruby does, with the id behind
+    # it for a tie.
+    #: (String id, first: Integer) -> Array[ListedGroup]
+    def listed_groups_of(id, first:)
       groups = groups_of(id)
-      list_members(groups, listed_contacts(groups.flat_map(&:members).uniq))
+      member = Sequel[:group_members][:card_id]
+      firsts = groups.to_h { |group|
+        ids = group_members.join(:sort_keys, card_id: :card_id).where(group_id: group.id)
+          .order(:sort_key, member).limit(first).select_map(member).map(&:to_s)
+        [group.id, ids] #: [String, Array[String]]
+      }
+      listed = listed_by_id(firsts.values.flatten.uniq)
+      groups.map { listed_group(it, firsts.fetch(it.id).map { listed.fetch(it) }) }
     end
 
     # The cards one user's client syncs: every member of `sync:*` and of
@@ -605,6 +618,7 @@ module ProTacts
             # parameters follow their properties away on the cascade.
             card_properties.where(card_id: id).delete
             search_keys.where(card_id: id).delete
+            sort_keys.where(card_id: id).delete
             after = contact!(new_id)
             record(id, action: Action::DELETE, etag: nil, diff: CardDiff.between(before.vcard, nil))
             record(
@@ -673,12 +687,16 @@ module ProTacts
       load_groups(labeled_groups.order(:id).all)
     end
 
-    # #all_groups with each group's members listed out of a `listing`
-    # the caller already read, since `sync:*` would otherwise read the
-    # whole book again.
-    #: (Array[ListedContact] listing) -> Array[ListedGroup]
-    def all_listed_groups(listing)
-      list_members(all_groups, listing)
+    # #all_groups with each group's first few members listed out of a
+    # `listing` the caller already read, since `sync:*` would otherwise
+    # read the whole book again.
+    #: (Array[ListedContact] listing, first: Integer) -> Array[ListedGroup]
+    def all_listed_groups(listing, first:)
+      sorted = listing.sort
+      all_groups.map { |group|
+        joined = group.members.to_set
+        listed_group(group, sorted.lazy.select { joined.include?(it.id) }.first(first))
+      }
     end
 
     # Every group as a picker needs it: the row, its label and how many
@@ -944,6 +962,7 @@ module ProTacts
       @database.transaction do
         card_properties.delete
         search_keys.delete
+        sort_keys.delete
         cards.order(:id).all.each do
           reindex(it.fetch(:id).to_s, VCard.new(it.fetch(:vcard).to_s))
         end
@@ -970,6 +989,11 @@ module ProTacts
     #: () -> Sequel::Dataset
     def search_keys
       @database[:search_keys]
+    end
+
+    #: () -> Sequel::Dataset
+    def sort_keys
+      @database[:sort_keys]
     end
 
     #: () -> Sequel::Dataset
@@ -1160,19 +1184,12 @@ module ProTacts
       }
     end
 
-    # The listing is sorted once here rather than by every tag that
-    # shows a group.
-    #: (Array[Group] groups, Array[ListedContact] listing) -> Array[ListedGroup]
-    def list_members(groups, listing)
-      sorted = listing.sort
-      groups.map { |group|
-        joined = group.members.to_set
-        ListedGroup.new(
-          id: group.id, name: group.name, label: group.label, lines: group.lines,
-          members: group.members, photo: group.photo,
-          listed_members: sorted.select { joined.include?(it.id) },
-        )
-      }
+    #: (Group group, Array[ListedContact] first_members) -> ListedGroup
+    def listed_group(group, first_members)
+      ListedGroup.new(
+        id: group.id, name: group.name, label: group.label, lines: group.lines,
+        members: group.members, photo: group.photo, first_members:,
+      )
     end
 
     # The id of the `sync:*` group, created on first use. One row
@@ -1237,6 +1254,7 @@ module ProTacts
       # not keep the rows from when it did.
       card_properties.where(card_id: id).delete
       search_keys.where(card_id: id).delete
+      sort_keys.where(card_id: id).delete
 
       vcard.properties.each.with_index do |property, position|
         card_properties.insert(
@@ -1250,8 +1268,9 @@ module ProTacts
           card_parameters.insert(card_id: id, position:, name:, value:)
         end
       end
-      key = Admin::Search.key(Contact.new(id:, stored: vcard, birthday: nil, inherited: []))
-      search_keys.insert(card_id: id, key: key.to_json)
+      contact = Contact.new(id:, stored: vcard, birthday: nil, inherited: [])
+      search_keys.insert(card_id: id, key: Admin::Search.key(contact).to_json)
+      sort_keys.insert(card_id: id, sort_key: contact.sort_key)
     end
 
     # Applies whatever migrations the database has not seen. On one it is

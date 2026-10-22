@@ -1,11 +1,11 @@
 module ProTacts
   class ListedGroup < Group
-    @listed_members: Array[ListedContact]
+    @first_members: Array[ListedContact]
 
-    attr_reader listed_members: Array[ListedContact]
+    attr_reader first_members: Array[ListedContact]
 
-    def self.new: (id: String, name: String?, label: String, lines: Array[String], members: Array[String], ?photo: bool, listed_members: Array[ListedContact]) -> instance
+    def self.new: (id: String, name: String?, label: String, lines: Array[String], members: Array[String], ?photo: bool, first_members: Array[ListedContact]) -> instance
 
-    def initialize: (listed_members: Array[ListedContact], **untyped) -> void
+    def initialize: (first_members: Array[ListedContact], **untyped) -> void
   end
 end

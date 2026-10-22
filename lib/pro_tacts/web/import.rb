@@ -1,6 +1,7 @@
 require "pro_tacts/admin/card_form"
 require "pro_tacts/admin/contacts_edit"
 require "pro_tacts/admin/format"
+require "pro_tacts/admin/group_tag"
 require "pro_tacts/admin/import_groups"
 require "pro_tacts/admin/import_original"
 require "pro_tacts/admin/import_saved"
@@ -215,7 +216,7 @@ module ProTacts
         Admin::ImportSaved.call(
           contact:,
           login: @login,
-          groups: store.listed_groups_of(contact.id),
+          groups: store.listed_groups_of(contact.id, first: Admin::GroupTag::SHOWN),
           all_groups: store.group_choices,
           aside: Admin::ImportOriginal.new(card: original, dropped:),
           sidebar:,

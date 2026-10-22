@@ -20,9 +20,8 @@ module ProTacts
       end
 
       def view_template
-        members = @group.listed_members
-        # A slice starting past the end is nil rather than empty.
-        shown, rest = members[...SHOWN], members[SHOWN..].to_a
+        shown = @group.first_members
+        rest = @group.members.length - shown.length
         span do
           a(href: "/groups/#{@group.id}", class: "tag") do
             render Icon.new(:image, size: 12) if @group.photo
@@ -32,7 +31,7 @@ module ProTacts
           # Not a ul, which Gloss's .card-body ul sets as prose.
           ol(role: "tooltip") do
             shown.each { |contact| li { Format.name_label(contact) } }
-            li { "and #{rest.length} more" } if rest.any?
+            li { "and #{rest} more" } if rest.positive?
           end
         end
       end

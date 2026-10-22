@@ -1376,10 +1376,48 @@ class StoreTest < Minitest::Test
     with_store({"znorth" => ZED, "aiden" => AIDEN}) do |store|
       FixtureData.seed_group(store, name: "Booles", members: ["znorth", "aiden"])
 
-      assert_equal [%w[aiden znorth]], store.listed_groups_of("znorth").map { it.listed_members.map(&:id) }
-      assert_equal [%w[aiden znorth]], store.all_listed_groups(store.listed_contacts).map { it.listed_members.map(&:id) }
+      assert_equal [%w[aiden znorth]], store.listed_groups_of("znorth", first: 5).map { it.first_members.map(&:id) }
+      assert_equal [%w[aiden znorth]], store.all_listed_groups(store.listed_contacts, first: 5).map { it.first_members.map(&:id) }
       assert_instance_of ProTacts::Group, store.groups_of("znorth").fetch(0)
       assert_instance_of ProTacts::Group, store.all_groups.fetch(0)
+    end
+  end
+
+  # A tag lists only a group's first few, the contact's read taking
+  # them off the sort keys and the whole list's off the listing it
+  # sorted: the two agree with each other and with Contact#<=> — a
+  # family name first, FN for a card with no N, the id behind both —
+  # and every member is still counted.
+  def test_a_group_read_for_a_tag_lists_its_first_few_in_a_lists_order
+    cards = {
+      "znorth" => ZED,
+      "aiden" => AIDEN,
+      "boole" => "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Boole;Mary;;;\r\nFN:Mary Boole\r\nUID:boole\r\nEND:VCARD\r\n",
+      "boole2" => "BEGIN:VCARD\r\nVERSION:3.0\r\nN:boole;George;;;\r\nFN:George Boole\r\nUID:boole2\r\nEND:VCARD\r\n",
+    }
+    with_store(cards) do |store|
+      FixtureData.seed_group(store, name: "Everyone", members: cards.keys)
+      expected = store.listed_contacts.sort.first(3).map(&:id)
+
+      assert_equal %w[aiden boole boole2], expected
+      [store.listed_groups_of("znorth", first: 3), store.all_listed_groups(store.listed_contacts, first: 3)].each do |groups|
+        assert_equal 1, groups.length
+        group = groups.fetch(0)
+        assert_equal expected, group.first_members.map(&:id)
+        assert_equal 4, group.members.length
+      end
+    end
+  end
+
+  # A card's sort key follows its name: a rename moves it in a tag's
+  # first few as it moves in a list.
+  def test_a_rename_moves_a_card_among_a_groups_first_few
+    with_store({"znorth" => ZED, "aiden" => AIDEN}) do |store|
+      FixtureData.seed_group(store, name: "Booles", members: %w[znorth aiden])
+
+      store.put("znorth", ProTacts::VCard.new(ZED.sub("FN:Zed", "FN:Abe")))
+
+      assert_equal %w[znorth], store.listed_groups_of("aiden", first: 1).fetch(0).first_members.map(&:id)
     end
   end
 
@@ -2719,6 +2757,7 @@ class StoreTest < Minitest::Test
       database(store)[:card_properties].order(:card_id, :position).all,
       database(store)[:card_parameters].order(:card_id, :position, :name, :value).all,
       database(store)[:search_keys].order(:card_id).all,
+      database(store)[:sort_keys].order(:card_id).all,
     ]
   end
 
@@ -2733,5 +2772,6 @@ class StoreTest < Minitest::Test
     database(store)[:card_parameters].delete
     database(store)[:card_properties].update(value: "wrong")
     database(store)[:search_keys].delete
+    database(store)[:sort_keys].delete
   end
 end

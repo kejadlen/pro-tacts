@@ -6,6 +6,7 @@ require "pro_tacts/admin/contacts_edit"
 require "pro_tacts/admin/contacts_index"
 require "pro_tacts/admin/contacts_show"
 require "pro_tacts/admin/dashboard"
+require "pro_tacts/admin/group_tag"
 require "pro_tacts/admin/groups_new"
 require "pro_tacts/change_id"
 
@@ -27,7 +28,8 @@ module ProTacts
         r.get do
           response["Content-Type"] = "text/html; charset=utf-8"
           contacts = store.listed_contacts
-          Admin::ContactsIndex.call(contacts:, groups: store.all_listed_groups(contacts), login: @login)
+          groups = store.all_listed_groups(contacts, first: Admin::GroupTag::SHOWN)
+          Admin::ContactsIndex.call(contacts:, groups:, login: @login)
         end
 
         # The browser's create, from the dashboard's dialog: POST is
@@ -311,7 +313,7 @@ module ProTacts
       Admin::ContactsShow.call(
         contact:,
         login: @login,
-        groups: store.listed_groups_of(contact.id),
+        groups: store.listed_groups_of(contact.id, first: Admin::GroupTag::SHOWN),
         all_groups: store.group_choices,
         changes: store.changes_of(contact.id),
         notice:,

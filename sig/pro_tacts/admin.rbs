@@ -44,6 +44,12 @@ module ProTacts
       def self.call: (group: Group, contacts: Array[ListedContact], changes: Array[Store::GroupChange], login: String) -> String
     end
 
+    # Rendered by the views that tag groups; the routes read how many
+    # members a tag names, to list that many.
+    class GroupTag
+      SHOWN: Integer
+    end
+
     class GroupsEdit
       def self.call: (group: Group, login: String, ?notice: String?) -> String
     end
