@@ -6,6 +6,7 @@ require "digest"
 require "fileutils"
 require "pathname"
 require "rack/test"
+require "zlib"
 
 require "pro_tacts/config"
 require "pro_tacts/vcard"
@@ -200,6 +201,40 @@ class WebTest < Minitest::Test
       get path
 
       assert_equal 401, last_response.status, path
+    end
+  end
+
+  ## Compression
+
+  # A page and the files it loads go out gzipped to a browser that
+  # asks, and come back to the page's own bytes.
+  def test_a_page_and_its_stylesheet_are_gzipped_for_a_browser
+    with_contacts({"pic" => PhotoCard.photo("pic", bytes: 256)}) do
+      header "Accept-Encoding", "gzip"
+
+      %w[/contacts /admin.css].each do |path|
+        get path
+
+        assert_equal "gzip", last_response["Content-Encoding"], path
+        refute_empty Zlib.gunzip(last_response.body), path
+      end
+    end
+  end
+
+  # What a DAV client is sent stays the bytes it was confirmed
+  # against, whatever it says it accepts, and a picture is not
+  # squeezed twice.
+  def test_dav_responses_and_pictures_go_out_as_written
+    with_contacts({"pic" => PhotoCard.photo("pic", bytes: 256)}) do
+      header "Accept-Encoding", "gzip"
+
+      request "/dav/addressbook/", method: "PROPFIND"
+      assert_equal 207, last_response.status
+      assert_nil last_response["Content-Encoding"]
+
+      get "/contacts/pic/photo"
+      assert_equal 200, last_response.status
+      assert_nil last_response["Content-Encoding"]
     end
   end
 
