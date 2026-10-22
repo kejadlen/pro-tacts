@@ -1805,7 +1805,7 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # A po box has no field, and the save's removal is blank throughout,
-  # po box included (Admin::CardForm.address_line) — so a line
+  # po box included (Contact::Address#edit) — so a line
   # surviving by its po box alone cannot be removed from this form, and
   # its row, blank as it renders, wears no removal state.
   def test_a_po_box_only_address_row_wears_no_removal_state
@@ -1814,11 +1814,12 @@ class AdminContactsPagesTest < Minitest::Test
       "ADR;TYPE=home:PO Box 1;;;;;",
     )
 
-    with_contacts({"ada" => po}) do
+    with_contacts({"ada" => po}) do |store|
       get "/contacts/ada/edit"
 
+      digest = store.contact("ada").addresses.first.line.digest
       assert_includes last_response.body,
-        '<div class="field"><span>home</span><div class="field-stack">'
+        '<div class="field"><input type="text" class="row-label" name="address[' + digest + '][label]" value="home"'
     end
   end
 
@@ -1875,7 +1876,7 @@ class AdminContactsPagesTest < Minitest::Test
       digest = store.contact("ada").phones.first.line.digest
       post "/contacts/ada", first: "Ada", middle: "B.", last: "Lovelace",
                                note: "Countess of Lovelace.",
-                               company: "0", etag: store.contact("ada").etag, phone: {digest => "+1-555-0199"}
+                               company: "0", etag: store.contact("ada").etag, phone: {digest => {"value" => "+1-555-0199"}}
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -1984,7 +1985,7 @@ class AdminContactsPagesTest < Minitest::Test
   # component's own bytes, rather than rounding through unescape and
   # re-escape — which is not byte-stable: `\x` is no escape the
   # reader knows, so it survives the read and the writer would
-  # double its backslash. The rule address_line already writes under
+  # double its backslash. The rule Contact.address_value already writes under
   # (CardForm.n_line), at the name's grain.
   def test_a_name_component_returned_unchanged_keeps_its_own_bytes
     odd = ADA.sub("N:Lovelace;Ada;;;", "N:Lovelace;Ada;Byron\\x;;")
@@ -2046,10 +2047,11 @@ class AdminContactsPagesTest < Minitest::Test
 
   ## Editing phones
 
-  # The phone rows: one value field per line, named by the line's
-  # digest — the address the save substitutes — beside the type's own
-  # caption. The blank row a new phone goes in is in the add dialog,
-  # not the card (see below).
+  # The phone rows: a label field in the type column and a value field
+  # beside it, both named by the line's digest — the address the save
+  # substitutes. The label offers the kind's words from a list by id,
+  # and wears the kind as its placeholder. The blank row a new phone
+  # goes in is in the add dialog, not the card (see below).
   def test_the_edit_screen_renders_a_digest_named_field_per_phone
     with_contacts({"ada" => ADA}) do |store|
       get "/contacts/ada/edit"
@@ -2057,14 +2059,19 @@ class AdminContactsPagesTest < Minitest::Test
       digest = store.contact("ada").phones.first.line.digest
       body = last_response.body
       assert_includes body,
-        '<label class="field" data-blank-removes><span>mobile</span>' \
-        '<input type="tel" name="phone[' + digest + ']" value="+1-555-0100" placeholder="removed on save"></label>'
+        '<div class="field" data-blank-removes>' \
+        '<input type="text" class="row-label" name="phone[' + digest + '][label]" value="mobile" autocomplete="off" ' \
+        'list="phone-labels" placeholder="phone" aria-label="phone label">' \
+        '<input type="tel" name="phone[' + digest + '][value]" value="+1-555-0100" placeholder="removed on save" ' \
+        'aria-label="phone"></div>'
+      assert_includes body,
+        '<datalist id="phone-labels"><option value="cell"></option><option value="home"></option>' \
+        '<option value="work"></option><option value="other"></option></datalist>'
     end
   end
 
-  # The edit screen's phone row captions render a label the same way
-  # the show screen's keys do — both read Contact::Phone#label — while
-  # the field keeps editing the number alone.
+  # The edit screen's phone row labels render the same word the show
+  # screen's keys do — both read Contact::Phone#label.
   def test_the_edit_screen_captions_a_labeled_phone_with_its_label
     labeled = ADA.sub("TEL;TYPE=mobile:+1-555-0100\r\n",
       "item1.TEL;type=CELL:+1-555-0100\r\nitem1.X-ABLabel:Google Voice\r\n")
@@ -2074,8 +2081,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       digest = store.contact("ada").phones.first.line.digest
       assert_includes last_response.body,
-        '<label class="field" data-blank-removes><span>Google Voice</span>' \
-        '<input type="tel" name="phone[' + digest + ']" value="+1-555-0100" placeholder="removed on save"></label>'
+        '<input type="text" class="row-label" name="phone[' + digest + '][label]" value="Google Voice"'
     end
   end
 
@@ -2089,7 +2095,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => labeled}) do |store|
       digest = store.contact("ada").phones.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               phone: {digest => ""}
+                               phone: {digest => {"value" => ""}}
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -2098,19 +2104,117 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  ## Editing labels
+
+  # A relabel posts the row's label and value both, the value as it
+  # rendered: the save writes the new word and leaves the value's bytes.
+  def relabel(store, field, label)
+    contact = store.contact("ada")
+    row = contact.own.public_send({"phone" => :phones, "email" => :emails, "address" => :addresses}.fetch(field)).first
+    post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: contact.etag,
+                             field => {row.line.digest => {"label" => label, **row.fields}}
+    assert_equal 303, last_response.status
+    store.contact("ada").vcard.to_s
+  end
+
+  # A word Contacts models goes in as a TYPE, in its spelling, in place
+  # of the types the label field showed
+  # (docs/plans/2026-10-22-a-row-edits-its-label.md, "The typed kinds'
+  # rule").
+  def test_a_relabel_to_a_type_word_writes_the_type
+    with_contacts({"ada" => ADA}) do |store|
+      card = relabel(store, "phone", "Work")
+
+      assert_includes card, "TEL;TYPE=WORK:+1-555-0100\r\n"
+    end
+  end
+
+  # What the label never showed stays: `pref` and the default `voice`
+  # ride through a relabel, with the line's other parameters.
+  def test_a_relabel_keeps_the_types_the_label_did_not_show
+    apple = ADA.sub("TEL;TYPE=mobile:", "TEL;type=CELL;type=VOICE;type=pref:")
+
+    with_contacts({"ada" => apple}) do |store|
+      card = relabel(store, "phone", "home")
+
+      assert_includes card, "TEL;type=VOICE;type=pref;TYPE=HOME:+1-555-0100\r\n"
+    end
+  end
+
+  # Any other word is a custom label: an X-ABLabel under the card's
+  # lowest free group, straight after its row — the pair Contacts keeps
+  # bound (docs/apple-contacts.md, "An annotation survives only on its
+  # own line").
+  def test_a_relabel_to_any_other_word_writes_an_x_ablabel_in_a_free_group
+    taken = ADA.sub("EMAIL;", "item1.EMAIL;")
+
+    with_contacts({"ada" => taken}) do |store|
+      card = relabel(store, "phone", "Google Voice")
+
+      assert_includes card, "item2.TEL:+1-555-0100\r\nitem2.X-ABLabel:Google Voice\r\n"
+      assert_equal "Google Voice", store.contact("ada").phones.first.label
+    end
+  end
+
+  # A labeled row keeps its group: relabelled, the old label goes and
+  # the new one takes its place; relabelled to a type word, the label
+  # goes and the type replaces the types it hid behind.
+  def test_a_relabel_of_a_labeled_row_replaces_its_label
+    labeled = ADA.sub("TEL;TYPE=mobile:+1-555-0100\r\n",
+      "item1.TEL;type=CELL:+1-555-0100\r\nURL:https://example.com\r\nitem1.X-ABLabel:Google Voice\r\n")
+
+    with_contacts({"ada" => labeled}) do |store|
+      card = relabel(store, "phone", "Signal number")
+      assert_includes card, "item1.TEL:+1-555-0100\r\nitem1.X-ABLabel:Signal number\r\nURL:https://example.com\r\n"
+      refute_includes card, "Google Voice"
+
+      card = relabel(store, "phone", "home")
+      assert_includes card, "item1.TEL;TYPE=HOME:+1-555-0100\r\nURL:https://example.com\r\n"
+      refute_includes card, "X-ABLabel"
+    end
+  end
+
+  # Other is Apple's own word and goes in wrapped, as the macOS data
+  # carries it; a blank label writes no label at all.
+  def test_other_writes_apples_wrapped_label_and_blank_writes_none
+    with_contacts({"ada" => ADA}) do |store|
+      card = relabel(store, "email", "other")
+      assert_includes card, "item1.EMAIL:ada@example.com\r\nitem1.X-ABLabel:_$!<Other>!$_\r\n"
+      assert_equal "Other", store.contact("ada").emails.first.label
+
+      card = relabel(store, "address", "")
+      assert_includes card, "ADR:;;12 Analytical Way;"
+    end
+  end
+
+  # An added row takes its label as a standing one does.
+  def test_an_added_row_lands_under_its_label
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
+                               new_email: {"0" => {"label" => "work", "value" => "countess@example.com"}},
+                               new_address: {"0" => {"label" => "lab", "street" => "1 Engine Row"}}
+
+      assert_equal 303, last_response.status
+      card = store.contact("ada").vcard.to_s
+      assert_includes card, "EMAIL;TYPE=WORK:countess@example.com\r\n"
+      assert_includes card, "item1.ADR:;;1 Engine Row;;;;\r\nitem1.X-ABLabel:lab\r\n"
+    end
+  end
+
   ## Editing emails
 
-  # The email rows: the phone row's own shape over EMAIL — one value
-  # field per line, named by the line's digest, beside the type's own
-  # caption.
+  # The email rows: the phone row's own shape over EMAIL.
   def test_the_edit_screen_renders_a_digest_named_field_per_email
     with_contacts({"ada" => ADA}) do |store|
       get "/contacts/ada/edit"
 
       digest = store.contact("ada").emails.first.line.digest
       assert_includes last_response.body,
-        '<label class="field" data-blank-removes><span>home</span>' \
-        '<input type="email" name="email[' + digest + ']" value="ada@example.com" placeholder="removed on save"></label>'
+        '<div class="field" data-blank-removes>' \
+        '<input type="text" class="row-label" name="email[' + digest + '][label]" value="home" autocomplete="off" ' \
+        'list="email-labels" placeholder="email" aria-label="email label">' \
+        '<input type="email" name="email[' + digest + '][value]" value="ada@example.com" placeholder="removed on save" ' \
+        'aria-label="email"></div>'
     end
   end
 
@@ -2125,7 +2229,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => two}) do |store|
       digest = store.contact("ada").emails.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               email: {digest => "lovelace@example.com"}
+                               email: {digest => {"value" => "lovelace@example.com"}}
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -2143,7 +2247,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => apple}) do |store|
       digest = store.contact("ada").emails.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               email: {digest => "lovelace@example.com"}
+                               email: {digest => {"value" => "lovelace@example.com"}}
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s,
@@ -2157,7 +2261,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => ADA}) do |store|
       digest = store.contact("ada").emails.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               email: {digest => " "}
+                               email: {digest => {"value" => " "}}
 
       assert_equal 303, last_response.status
       refute_includes store.contact("ada").vcard.to_s, "EMAIL"
@@ -2172,8 +2276,8 @@ class AdminContactsPagesTest < Minitest::Test
       email_digest = store.contact("ada").emails.first.line.digest
       address_digest = store.contact("ada").addresses.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
-                               company: "0", etag: store.contact("ada").etag, new_email: [""],
-                               email: {email_digest => "ada@example.com"},
+                               company: "0", etag: store.contact("ada").etag, new_email: {"0" => {"value" => ""}},
+                               email: {email_digest => {"value" => "ada@example.com"}},
                                address: {address_digest => {
                                  "street" => "12 Analytical Way", "locality" => "London",
                                  "region" => "England", "postal_code" => "NW1 1AA",
@@ -2190,7 +2294,8 @@ class AdminContactsPagesTest < Minitest::Test
   def test_an_added_email_lands_as_a_bare_email_before_the_end
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               new_email: ["lovelace@example.com", "", "countess@example.com"]
+                               new_email: {"0" => {"value" => "lovelace@example.com"}, "1" => {"value" => ""},
+                                           "2" => {"value" => "countess@example.com"}}
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -2214,19 +2319,20 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # Two fields per handle, the service and the handle, each named by
-  # the line's digest; the scheme is the line's, like its parameters,
+  # A handle row is the phone row's shape, its service the label in
+  # the type column; the scheme is the line's, like its parameters,
   # and no field models it.
-  def test_the_edit_screen_renders_a_service_and_a_handle_field_per_handle
+  def test_the_edit_screen_renders_a_handle_under_its_service
     with_contacts({"ada" => SIGNAL}) do |store|
       get "/contacts/ada/edit"
 
       digest = store.contact("ada").handles.first.line.digest
       assert_includes last_response.body,
-        '<div class="field" data-blank-removes><span>handle</span><div class="handle-row">' \
-        '<input type="text" name="handle[' + digest + '][service]" value="signal" placeholder="service" aria-label="service">' \
-        '<input type="text" name="handle[' + digest + '][value]" value="ada.42" placeholder="handle" aria-label="handle">' \
-        '</div></div>'
+        '<div class="field" data-blank-removes>' \
+        '<input type="text" class="row-label" name="handle[' + digest + '][label]" value="signal" autocomplete="off" ' \
+        'list="handle-labels" placeholder="handle" aria-label="handle label">' \
+        '<input type="text" name="handle[' + digest + '][value]" value="ada.42" placeholder="removed on save" ' \
+        'aria-label="handle"></div>'
     end
   end
 
@@ -2234,7 +2340,7 @@ class AdminContactsPagesTest < Minitest::Test
     digest = store.contact("ada").handles.first.line.digest
     post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", note: "Countess of Lovelace.",
                              etag: store.contact("ada").etag,
-                             handle: {digest => {"service" => service, "value" => value}}
+                             handle: {digest => {"label" => service, "value" => value}}
     assert_equal 303, last_response.status
     store.contact("ada").vcard.to_s
   end
@@ -2290,15 +2396,17 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # Each handle row posts as a hash of its two fields; any other shape
-  # is a 400, the address rows' own rule.
-  def test_a_handle_field_in_a_shape_the_form_never_sends_is_a_400
+  # Each repeatable row posts as a hash of its label and its fields;
+  # any other shape is a 400, the address rows' own rule.
+  def test_a_row_field_in_a_shape_the_form_never_sends_is_a_400
     with_contacts({"ada" => SIGNAL}) do |store|
       contact = store.contact("ada")
       digest = contact.handles.first.line.digest
       [{handle: {digest => "ada.42"}},
        {handle: "ada.42"},
-       {new_handle: ["ada.42"]}].each do |field|
+       {new_handle: ["ada.42"]},
+       {phone: {"0" * 64 => "+1-555-0199"}},
+       {new_email: ["ada@example.com"]}].each do |field|
         post "/contacts/ada", {first: "Ada", last: "Lovelace", company: "0", etag: contact.etag}.merge(field)
 
         assert_equal 400, last_response.status, field
@@ -2313,9 +2421,9 @@ class AdminContactsPagesTest < Minitest::Test
   def test_added_handles_land_as_impp_lines_before_the_end
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               new_handle: {"0" => {"service" => "signal", "value" => "ada.42"},
-                                            "1" => {"service" => "signal", "value" => ""},
-                                            "2" => {"service" => "WhatsApp", "value" => "+1-555-0100"}}
+                               new_handle: {"0" => {"label" => "signal", "value" => "ada.42"},
+                                            "1" => {"label" => "signal", "value" => ""},
+                                            "2" => {"label" => "WhatsApp", "value" => "+1-555-0100"}}
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s,
@@ -2331,7 +2439,7 @@ class AdminContactsPagesTest < Minitest::Test
   def test_an_added_service_drops_what_a_parameter_cannot_carry
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               new_handle: {"0" => {"service" => %(Sig"nal), "value" => "ada.42"}}
+                               new_handle: {"0" => {"label" => %(Sig"nal), "value" => "ada.42"}}
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s, "IMPP;X-SERVICE-TYPE=Signal:x-apple:ada.42\r\n"
@@ -2340,7 +2448,7 @@ class AdminContactsPagesTest < Minitest::Test
 
   ## Editing addresses
 
-  # An address row: the type's caption and a stack of component
+  # An address row: the label field and a stack of component
   # fields in the value column, each named by the row's digest and
   # its component — and no po box field, which the save preserves
   # raw rather than letting a form near it.
@@ -2351,7 +2459,10 @@ class AdminContactsPagesTest < Minitest::Test
       digest = store.contact("ada").addresses.first.line.digest
       body = last_response.body
       assert_includes body,
-        '<div class="field" data-blank-removes><span>home</span><div class="field-stack">' \
+        '<div class="field" data-blank-removes>' \
+        '<input type="text" class="row-label" name="address[' + digest + '][label]" value="home" autocomplete="off" ' \
+        'list="address-labels" placeholder="address" aria-label="address label">' \
+        '<div class="field-stack">' \
         '<input type="text" name="address[' + digest + '][street]" value="12 Analytical Way" placeholder="street" aria-label="street">' \
         '<input type="text" name="address[' + digest + '][extended]" placeholder="street 2" aria-label="street 2">' \
         '<input type="text" name="address[' + digest + '][locality]" value="London" placeholder="city" aria-label="city">'
@@ -2812,15 +2923,20 @@ class AdminContactsPagesTest < Minitest::Test
       body = (get("/contacts/ada/edit") && last_response.body)
 
       assert_includes body, %(<div x-data="{ added: [], type: 'phone', company: false, firstBlank: false, lastBlank: false }">)
-      # One template serves every kind: the single-value kinds get an
-      # input whose type and name bind to the kind, the address kind
-      # the same six component fields a standing row gets — named by
-      # the add index, there being no line yet to digest.
+      # One template serves every kind, each the standing row's shape: a
+      # label field bound to the kind, then the single-value kinds an
+      # input whose type and name bind to it, the address kind the same
+      # six component fields a standing row gets — named by the add
+      # index, there being no line yet to digest.
       assert_includes body,
         '<template x-for="(kind, i) in added" :key="i"><div class="field">' \
-        '<span x-text="kind"></span>' \
-        '<template x-if="kind === \'phone\' || kind === \'email\'">' \
-        '<input :type="kind === \'phone\' ? \'tel\' : kind" :name="`new_${kind}[]`" :aria-label="kind" x-init="$el.focus()">' \
+        '<template x-if="kind === \'birthday\'"><span x-text="kind"></span></template>' \
+        '<template x-if="kind !== \'birthday\'">' \
+        '<input type="text" class="row-label" autocomplete="off" :name="`new_${kind}[${i}][label]`" ' \
+        ':list="`${kind}-labels`" :placeholder="kind" :aria-label="`${kind} label`"></template>' \
+        '<template x-if="{ phone: \'tel\', email: \'email\', handle: \'text\' }[kind]">' \
+        '<input :type="{ phone: \'tel\', email: \'email\', handle: \'text\' }[kind]" ' \
+        ':name="`new_${kind}[${i}][value]`" :aria-label="kind" x-init="$el.focus()">' \
         '</template>' \
         '<template x-if="kind === \'address\'">' \
         '<div class="field-stack">' \
@@ -2830,13 +2946,6 @@ class AdminContactsPagesTest < Minitest::Test
         '<input type="text" :name="`new_address[${i}][region]`" placeholder="region" aria-label="region">' \
         '<input type="text" :name="`new_address[${i}][postal_code]`" placeholder="postal code" aria-label="postal code">' \
         '<input type="text" :name="`new_address[${i}][country]`" placeholder="country" aria-label="country">' \
-        '</div></template>'
-      # The handle kind: the standing row's two fields, named by the
-      # add index as the address's are.
-      assert_includes body,
-        '<template x-if="kind === \'handle\'"><div class="handle-row">' \
-        '<input type="text" :name="`new_handle[${i}][service]`" placeholder="service" aria-label="service" x-init="$el.focus()">' \
-        '<input type="text" :name="`new_handle[${i}][value]`" placeholder="handle" aria-label="handle">' \
         '</div></template>'
       # The birthday kind: the standing row's own controls with
       # nothing prefilled, naming the model's birthday[] group — no
@@ -2871,7 +2980,8 @@ class AdminContactsPagesTest < Minitest::Test
   def test_a_single_save_adds_every_phone_that_was_typed
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               new_phone: ["+1-555-0177", "+1-555-0188", "", ""]
+                               new_phone: {"0" => {"value" => "+1-555-0177"}, "1" => {"value" => "+1-555-0188"},
+                                           "2" => {"value" => ""}, "3" => {"value" => ""}}
 
       assert_equal 303, last_response.status
       assert_equal ["+1-555-0100", "+1-555-0177", "+1-555-0188"],
@@ -2889,7 +2999,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => two}) do |store|
       digest = store.contact("ada").phones.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               phone: {digest => "+1-555-0150"}
+                               phone: {digest => {"value" => "+1-555-0150"}}
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -2914,7 +3024,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => labeled}) do |store|
       digest = store.contact("ada").phones.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               phone: {digest => "+1-555-0150"}
+                               phone: {digest => {"value" => "+1-555-0150"}}
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -2933,7 +3043,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => apple}) do |store|
       digest = store.contact("ada").phones.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               phone: {digest => "+1-555-0150"}
+                               phone: {digest => {"value" => "+1-555-0150"}}
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s,
@@ -2948,7 +3058,7 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => ADA}) do |store|
       digest = store.contact("ada").phones.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               phone: {digest => " "}
+                               phone: {digest => {"value" => " "}}
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -2965,8 +3075,8 @@ class AdminContactsPagesTest < Minitest::Test
       before = store.contact("ada").stored.to_s
       digest = store.contact("ada").phones.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
-                               company: "0", etag: store.contact("ada").etag, new_phone: [""],
-                               phone: {digest => " +1-555-0100 "}
+                               company: "0", etag: store.contact("ada").etag, new_phone: {"0" => {"value" => ""}},
+                               phone: {digest => {"value" => " +1-555-0100 "}}
 
       assert_equal 303, last_response.status
       assert_equal before, store.contact("ada").stored.to_s
@@ -2979,7 +3089,7 @@ class AdminContactsPagesTest < Minitest::Test
   def test_an_added_phone_lands_as_a_bare_tel_before_the_end
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               new_phone: ["+1 (555) 020-0700, x9"]
+                               new_phone: {"0" => {"value" => "+1 (555) 020-0700, x9"}}
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
@@ -2991,7 +3101,7 @@ class AdminContactsPagesTest < Minitest::Test
   def test_a_blank_add_row_inserts_nothing
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               new_phone: [" "]
+                               new_phone: {"0" => {"value" => " "}}
 
       assert_equal 303, last_response.status
       assert_equal 1, store.contact("ada").phones.length
@@ -3004,8 +3114,8 @@ class AdminContactsPagesTest < Minitest::Test
   def test_a_digest_the_card_never_had_is_ignored
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               phone: {"0" * 64 => "+1-555-9999"},
-                               email: {"1" * 64 => "x@example.com"},
+                               phone: {"0" * 64 => {"value" => "+1-555-9999"}},
+                               email: {"1" * 64 => {"value" => "x@example.com"}},
                                address: {"2" * 64 => {"street" => "nowhere"}}
 
       assert_equal 303, last_response.status

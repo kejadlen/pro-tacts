@@ -58,14 +58,16 @@ three things:
 - `#fields`, the row's values by form field name: `{"value" => ...}`
   for a phone, an email, and a handle, the six components for an
   address (`Contact::ADDRESS_COMPONENTS`).
-- `#lines(label, fields, card)`, the lines that replace the row's own,
-  none for a blank value. A class method of the same name writes an
-  added row. `card` is there for the one thing a label can need from
-  the rest of the card: a free property group.
+- `#edit(card, label, fields)`, the card with the row's own lines
+  rewritten — removed, for a blank value. A class method `.add` of the
+  same shape writes an added row. The row takes the card rather than
+  handing back lines because a labeled row is two lines, and only the
+  row knows which; a label can also need a free property group from
+  the rest of the card.
 
-Phone, email, and address share their label rule through one module
-the three Data classes include, each naming its own vocabulary; the
-handle keeps `Contact.handle_line` as its rule. The address's value
+Phone, email, and address share their label rule through functions on
+`Contact` (`edited_row`, `added_row`, `removed_row`), each naming its
+own vocabulary; the handle keeps `Contact.handle_line` as its rule. The address's value
 splice (`CardForm.address_line`) moves onto `Address` with it. This is
 the precedent `Contact.handle_line` already set: the line's spelling
 lives with the model that reads it.
@@ -137,8 +139,8 @@ handle's `service` field becomes `label`. `Web#card_form_params` becomes
 one loop over the kinds, each kind's field names from its row class,
 and `CardForm.edited_values`, `.edited_handles`, and `.edited_addresses`
 become one walk: for each row, skip it where label and fields both
-submit what it read, and substitute its lines (`#lines`) otherwise;
-then insert each added row's. The three walks differ today only in
+submit what it read, and hand it the card (`#edit`) otherwise; then
+add each added row. The three walks differ today only in
 what this plan moves onto the rows.
 
 ### The type column's field
@@ -198,11 +200,11 @@ One PR, in commits that each pass:
    labeled phone removes its label. The orphan fix stands alone.
 2. `#label` widens and emails and addresses read theirs; the record
    card shows them.
-3. The rows answer `#fields` and `#lines`; the form takes its one
-   shape and `CardForm` its one walk, with no visible change.
-4. The type column's field, and the handle row's second field goes.
+3. The rows answer `#fields` and `#edit`, the form takes its one
+   shape and `CardForm` its one walk, and the type column's field
+   replaces the handle row's second field. One commit: the form's new
+   shape and the field that posts it cannot pass apart.
 
-The hegel properties in `test/pro_tacts/admin/test_card_form.rb` get
-one per kind: a
-relabel reads back as the label typed, and a save that changes no
-field leaves the card's bytes alone.
+The hegel properties in `test/pro_tacts/admin/test_card_form.rb` grow
+two ways: a relabel reads back as the label typed, with no label left
+naming nothing, and the untouched save posts every kind's label too.

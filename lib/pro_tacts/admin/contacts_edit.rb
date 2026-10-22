@@ -40,11 +40,9 @@ module ProTacts
       # lists them — exactly the rows the save can insert
       # (docs/plans/2026-09-05-web-card-editor.md), because a type
       # listed here that the save cannot write would be a row that
-      # silently does nothing. Each name is the radio's value;
-      # `new_<type>[]` is the single-value kinds' field name and
-      # `new_address[<i>][<component>]` the structured one's, the
-      # bare [] unable to carry a component set (Rack refuses a key
-      # after an empty one). The birthday is the exception: its
+      # silently does nothing. Each name is the radio's value and
+      # `new_<type>[<i>][<field>]` its added row's fields
+      # (CardForm.edited_rows). The birthday is the exception: its
       # added row names the model's own `birthday[]` group, there
       # being no card line to insert and room for but one — see
       # #addable_types for when the dialog offers it.
@@ -71,16 +69,11 @@ module ProTacts
         ["country", "country"],
       ].freeze #: Array[[String, String]]
 
-      # A handle row's two fields, the service first because it says
-      # what the handle is (docs/plans/2026-10-18-signal-handles.md,
-      # "The service is the row's"), side by side on one line as a
-      # birthday's are (admin.css). Field name to placeholder, the
-      # address fields' shape.
-      HANDLE_FIELDS = [
-        ["service", "service"],
-        ["value", "handle"],
-      ].freeze #: Array[[String, String]]
-      private_constant :HANDLE_FIELDS
+      # The input type of each single-value kind's value field: the
+      # keyboard a phone number or an email address wants, on the one
+      # client that has one.
+      VALUE_TYPES = {"phone" => "tel", "email" => "email", "handle" => "text"}.freeze #: Hash[String, String]
+      private_constant :VALUE_TYPES
 
       # @rbs @contact: Contact
       # @rbs @login: String
@@ -249,17 +242,9 @@ module ProTacts
                     input(type: "text", name: "nickname", value: @own.nickname,
                           placeholder: @own.nickname ? "removed on save" : nil)
                   end
-                  @own.phones.each do |phone|
-                    value_row(phone.label || "phone",
-                              type: "tel", name: "phone[#{phone.line.digest}]", value: phone.value)
-                  end
-                  @own.emails.each do |email|
-                    value_row(email.label || "email",
-                              type: "email", name: "email[#{email.line.digest}]", value: email.value)
-                  end
-                  @own.handles.each do
-                    handle_row(it)
-                  end
+                  @own.phones.each { value_row("phone", it) }
+                  @own.emails.each { value_row("email", it) }
+                  @own.handles.each { value_row("handle", it) }
                   @own.addresses.each do
                     address_row(it)
                   end
@@ -280,6 +265,7 @@ module ProTacts
                 end
               end
             add_property_dialog
+            label_words
           end
         end
       end
@@ -308,46 +294,39 @@ module ProTacts
       # Layout).
       #
       # The row is a div rather than the standing rows' label because
-      # one template serves every kind and the address kind holds six
-      # controls a label cannot name — so the single-value input
-      # carries its own aria-label, and the address inputs their
-      # placeholders.
+      # one template serves every kind, and each kind's row is the
+      # standing row's own shape: its label field in the type column
+      # and its value beside it, named by the add index rather than a
+      # digest — there is no line yet to digest, and Rack refuses a key
+      # after a bare [] (CardForm.edited_rows). Each `x-if` holds the
+      # one root Alpine allows it, so the two columns are two of them,
+      # every one a direct child of the row's grid.
       #
-      # `x-init` on the input rather than autofocus: it runs when the
+      # `x-init` on the value rather than autofocus: it runs when the
       # element is created, which is exactly when the row is added,
       # and there is nothing to focus on page load because `added`
-      # starts empty.
+      # starts empty. The value rather than the label, the value being
+      # what the row is added for.
       def added_rows
         template(x_for: "(kind, i) in added", ":key": "i") do
           div(class: "field") do
-            span("x-text": "kind")
-            # The single-value kinds: one input, its type and name
-            # bound to the kind — the keyboard a phone number or an
-            # email address wants, on the one client that has one.
-            template("x-if": "kind === 'phone' || kind === 'email'") do
-              input(":type": "kind === 'phone' ? 'tel' : kind", ":name": "`new_${kind}[]`",
+            template("x-if": "kind === 'birthday'") do
+              span("x-text": "kind")
+            end
+            template("x-if": "kind !== 'birthday'") do
+              input(type: "text", class: "row-label", autocomplete: "off",
+                    ":name": "`new_${kind}[${i}][label]`", ":list": "`${kind}-labels`",
+                    ":placeholder": "kind", ":aria-label": "`${kind} label`")
+            end
+            value_types = "{ #{VALUE_TYPES.map { |kind, type| "#{kind}: '#{type}'" }.join(", ")} }[kind]"
+            template("x-if": value_types) do
+              input(":type": value_types, ":name": "`new_${kind}[${i}][value]`",
                     ":aria-label": "kind", "x-init": "$el.focus()")
             end
-            # The address kind: the same six component fields a
-            # standing row gets, named by the add index rather than a
-            # digest — there is no line yet to digest, and the
-            # []-appended name the other kinds use cannot carry a
-            # component set (Rack refuses a key after a bare []).
             template("x-if": "kind === 'address'") do
               div(class: "field-stack") do
                 ADDRESS_FIELDS.each_with_index do |(component, label), index|
                   input(type: "text", ":name": "`new_address[${i}][#{component}]`",
-                        placeholder: label, aria_label: label,
-                        "x-init": index.zero? ? "$el.focus()" : nil)
-                end
-              end
-            end
-            # The handle kind: the standing row's two fields, named by
-            # the add index for the address's reason.
-            template("x-if": "kind === 'handle'") do
-              div(class: "handle-row") do
-                HANDLE_FIELDS.each_with_index do |(field, label), index|
-                  input(type: "text", ":name": "`new_handle[${i}][#{field}]`",
                         placeholder: label, aria_label: label,
                         "x-init": index.zero? ? "$el.focus()" : nil)
                 end
@@ -373,23 +352,52 @@ module ProTacts
         end
       end
 
-      # A standing single-value row — a phone, an email — editing its
-      # value and nothing else: the TYPE parameters ride in the line's
-      # own header, which the save keeps (VCard.header_of), where a
-      # header rebuilt from form fields would drop the parameters no
-      # field models, and macOS writes three TYPE parameters on one
-      # TEL. The digest in the field's name is the row's address, and
-      # a blank value removes the line — the state is unconditional,
-      # a row standing only over a line there is to lose. Identical
-      # duplicate lines share a digest and therefore a field name, and
-      # Rack keeps the last value of a duplicated name — editing one of
-      # a pair of byte-identical rows means blanking one, saving, then
-      # editing the other.
-      #: (String caption, type: String, name: String, value: String) -> void
-      def value_row(caption, type:, name:, value:)
-        label(class: "field", data: {blank_removes: true}) do
-          span { caption }
-          input(type:, name:, value:, placeholder: "removed on save")
+      # A row's label in the type column, where the record card shows it
+      # (docs/plans/2026-10-22-a-row-edits-its-label.md, "The type
+      # column's field"): a free word, its kind's usual ones offered
+      # beside it (#label_words), and the kind as its placeholder, so an
+      # unlabeled row reads as it always has. Blanking it is a relabel to
+      # nothing, never a removal, so admin.css's removal state asks after
+      # the value beside it and only strikes this. `autocomplete` off so
+      # the browser's memory of past entries does not crowd the list out.
+      #: (String field, String name, String? value) -> void
+      def label_field(field, name, value)
+        input(type: "text", class: "row-label", name:, value:, autocomplete: "off",
+              list: "#{field}-labels", placeholder: field, aria_label: "#{field} label")
+      end
+
+      # Each kind's suggested labels, one list per kind for every row of
+      # it, standing and added, to name by id.
+      #: () -> void
+      def label_words
+        CardForm::ROWS.each do |field, kind|
+          datalist(id: "#{field}-labels") do
+            kind.label_words.each { option(value: it) }
+          end
+        end
+      end
+
+      # A standing single-value row — a phone, an email, a handle —
+      # its label beside its value. Each field is the row's digest's,
+      # the address the save substitutes; the line's other parameters
+      # ride in its own header, which the save keeps (VCard.header_of),
+      # where a header rebuilt from form fields would drop the ones no
+      # field models — macOS writes three TYPE parameters on one TEL. A
+      # blank value removes the line, so the state is unconditional, a
+      # row standing only over a line there is to lose. A div rather
+      # than a label, as the address row is: it holds two controls, and
+      # each carries its own aria-label. Identical duplicate lines share
+      # a digest and therefore a field name, and Rack keeps the last
+      # value of a duplicated name — editing one of a pair of
+      # byte-identical rows means blanking one, saving, then editing the
+      # other.
+      #: (String field, Contact::Phone | Contact::Email | Contact::Handle row) -> void
+      def value_row(field, row)
+        name = "#{field}[#{row.line.digest}]"
+        div(class: "field", data: {blank_removes: true}) do
+          label_field(field, "#{name}[label]", row.label)
+          input(type: VALUE_TYPES.fetch(field), name: "#{name}[value]", value: row.value,
+                placeholder: "removed on save", aria_label: field)
         end
       end
 
@@ -511,45 +519,26 @@ module ProTacts
         end
       end
 
-      # An address row: the type's caption and a stack of component
+      # An address row: the label field and a stack of component
       # fields in the value column — the multi-line value's own lines
       # (docs/DESIGN.md: a multi-line value breaks inside the value
-      # column and stays in it). A div rather than the single-value
-      # rows' label, because the row holds six controls and a label
-      # names one — each input carries its placeholder as its
-      # aria-label instead, and the caption is the type's. The digest
-      # in each field's name is the row's address; the po box has no
-      # field, and the save preserves its bytes. The removal state
-      # rides only on a line with no po box: the save's removal is
-      # blank throughout, po box included (CardForm.address_line), so
+      # column and stays in it), each input carrying its placeholder as
+      # its aria-label. The digest in each field's name is the row's
+      # address; the po box has no field, and the save preserves its
+      # bytes. The removal state rides only on a line with no po box:
+      # the save's removal is blank throughout, po box included
+      # (Contact::Address#edit), so
       # a line surviving by its po box alone cannot be removed from
       # this form at all — its row wears no state however blank it
       # renders.
       #: (Contact::Address address) -> void
       def address_row(address)
         div(class: "field", data: {blank_removes: address.po_box.nil?}) do
-          span { address.label || "address" }
+          label_field("address", "address[#{address.line.digest}][label]", address.label)
           div(class: "field-stack") do
             ADDRESS_FIELDS.each do |component, label|
               input(type: "text", name: "address[#{address.line.digest}][#{component}]",
                     value: address.public_send(component), placeholder: label, aria_label: label)
-            end
-          end
-        end
-      end
-
-      # A standing handle row: the service and the handle, each a field
-      # of the row's digest, and a blank handle removes the line
-      # (CardForm.edited_handles), so the removal state is
-      # unconditional, the single-value rows' own.
-      #: (Contact::Handle handle) -> void
-      def handle_row(handle)
-        div(class: "field", data: {blank_removes: true}) do
-          span { "handle" }
-          div(class: "handle-row") do
-            HANDLE_FIELDS.each do |field, label|
-              input(type: "text", name: "handle[#{handle.line.digest}][#{field}]",
-                    value: handle.public_send(field), placeholder: label, aria_label: label)
             end
           end
         end

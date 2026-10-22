@@ -5,6 +5,11 @@
 # carries its signature inline.
 module ProTacts
   class Contact
+    # The repeatable rows' classes, which the editor walks alike
+    # (Admin::CardForm.edited_rows). An alias the inline syntax has no
+    # spelling for.
+    type row_class = singleton(Phone) | singleton(Email) | singleton(Handle) | singleton(Address)
+
     class Phone
       attr_reader value: String
       attr_reader label_line: VCard::Parser::Line?
