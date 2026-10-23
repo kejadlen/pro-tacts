@@ -58,9 +58,11 @@ module ProTacts
     # ADR's seven components (section 3.2.1: post office box, extended
     # address, street, locality, region, postal code, country — nil
     # where the card left the position blank or stopped short of it).
-    # A phone's `label` is the `X-ABLabel` sharing its property group,
-    # a different fact from its types
-    # (docs/plans/2026-09-18-phone-labels.md, "Reading"), every
+    # A row's `label_line` is the `X-ABLabel` sharing its property
+    # group, a different fact from its types
+    # (docs/plans/2026-09-18-phone-labels.md, "Reading"), carried as
+    # the line so that a save removing the row removes its label with
+    # it (docs/plans/2026-10-22-a-row-edits-its-label.md), every
     # shape's `line` is the parsed line it was read from, the address
     # a save names that row by
     # (docs/plans/2026-09-05-web-card-editor.md), a repeatable row's
@@ -71,9 +73,9 @@ module ProTacts
     # Data classes, whose members the inline syntax cannot read; the
     # signatures live in sig/pro_tacts/contact.rbs.
     # @rbs skip
-    Phone = Data.define(:value, :label, :types, :line, :property, :lent_by)
+    Phone = Data.define(:value, :label_line, :types, :line, :property, :lent_by)
     # @rbs skip
-    Email = Data.define(:value, :types, :line, :property, :lent_by)
+    Email = Data.define(:value, :label_line, :types, :line, :property, :lent_by)
     # A handle: an IMPP (RFC 6350 section 6.4.3, from RFC 4770 for
     # 3.0) as Contacts.app spells one, the service its X-SERVICE-TYPE
     # parameter and the value the handle, with the URI scheme it sits
@@ -105,6 +107,7 @@ module ProTacts
       :postal_code,
       :country,
       :types,
+      :label_line,
       :line,
       :property,
       :lent_by,
@@ -117,6 +120,289 @@ module ProTacts
     # so a component's position in the value is one past its index
     # here.
     ADDRESS_COMPONENTS = %w[extended street locality region postal_code country].freeze #: Array[String]
+
+    # The word a row's type column says: the `X-ABLabel` sharing its
+    # group, unwrapped from Apple's own vocabulary (`_$!<Other>!$_`
+    # reads `Other`), else the types the reader shows, else nil. One
+    # word to a reader, whichever of the two spellings the line carries
+    # (docs/plans/2026-10-22-a-row-edits-its-label.md, "One word, three
+    # spellings"); where a row has both the label wins, which is what
+    # Contacts itself shows (docs/plans/2026-09-18-phone-labels.md,
+    # "Reading").
+    #: (VCard::Parser::Line? label_line, Array[String] types) -> String?
+    def self.label_of(label_line, types)
+      text = label_line&.property&.text
+      return VCard.unwrap(text) unless text.nil? || text.empty?
+
+      types.join(", ") unless types.empty?
+    end
+
+    # The words Contacts models as a TYPE value, by the property they
+    # type, each to its spelling there: what a client has been seen
+    # writing (docs/apple-contacts.md, "The client rewrites every card
+    # it touches", and the fixtures), uppercase as Contacts writes
+    # them. Any other word is a custom label, the safe direction to be
+    # wrong in (docs/plans/2026-10-22-a-row-edits-its-label.md, "The
+    # typed kinds' rule"). A word joins when a recorded session shows
+    # Contacts spelling it as a type.
+    TYPE_WORDS = {
+      "TEL" => {"cell" => "CELL", "home" => "HOME", "work" => "WORK"},
+      "EMAIL" => {"home" => "HOME", "work" => "WORK"},
+      "ADR" => {"home" => "HOME", "work" => "WORK"},
+    }.freeze #: Hash[String, Hash[String, String]]
+
+    # Apple's own word for a row of no particular kind, written in its
+    # wrapped spelling because that is how the 31 emails labeled Other
+    # in the macOS data carry it (docs/plans/2026-09-18-phone-labels.md,
+    # "What the data has").
+    OTHER = "_$!<Other>!$_" #: String
+
+    # The words the editor offers in a typed row's label field: the
+    # type words and Apple's Other.
+    #: (String name) -> Array[String]
+    def self.typed_words(name) = [*TYPE_WORDS.fetch(name).keys, "other"]
+
+    # A typed row — a phone, an email, an address — rewritten into the
+    # card under `value`, its value already in the line's spelling.
+    # A label that is nil or says what the row read leaves the header
+    # alone, byte for byte; any other takes off what the reader showed
+    # and writes the new word (#labeled_lines).
+    #: (VCard card, Phone | Email | Address row, String value, String? label) -> VCard
+    def self.edited_row(card, row, value, label)
+      if label.nil? || label == row.label.to_s.strip
+        return card.substitute(row.line.digest, ["#{VCard.header_of(row.property)}#{value}"])
+      end
+
+      label_line = row.label_line
+      card = card.substitute(label_line.digest, []) if label_line
+      card.substitute(row.line.digest, labeled_lines(card, row.property, row.types, value, label))
+    end
+
+    # An added typed row's lines into the card, a bare line of `name`
+    # under its label.
+    #: (VCard card, String name, String value, String? label) -> VCard
+    def self.added_row(card, name, value, label)
+      property = VCard::Parser::Property.new(group: nil, name:, parameters: [], value: "")
+      card.insert(labeled_lines(card, property, [], value, label.to_s))
+    end
+
+    # A phone's or an email's edit, one text value: a blank removes
+    # the row, a changed one re-escapes from the form, and an unchanged
+    # one under a new label keeps its bytes.
+    #: (VCard card, Phone | Email row, String? label, Hash[String, String] fields) -> VCard
+    def self.edited_value(card, row, label, fields)
+      submitted = fields.fetch("value")
+      return removed_row(card, row) if submitted.empty?
+
+      edited_row(card, row, submitted == row.value.strip ? row.property.value : VCard.escape(submitted), label)
+    end
+
+    # An added phone or email, nothing for a blank one: inserting
+    # absence is a no-op (docs/plans/2026-09-05-web-card-editor.md).
+    #: (VCard card, String name, String? label, Hash[String, String] fields) -> VCard
+    def self.added_value(card, name, label, fields)
+      value = fields.fetch("value")
+      value.empty? ? card : added_row(card, name, VCard.escape(value), label)
+    end
+
+    # A typed row's lines gone from the card: its own, and the
+    # `X-ABLabel` sharing its group, which would otherwise be left
+    # naming nothing (docs/plans/2026-10-22-a-row-edits-its-label.md,
+    # "Removing a row removes its label").
+    #: (VCard card, Phone | Email | Address row) -> VCard
+    def self.removed_row(card, row)
+      card = card.substitute(row.line.digest, [])
+      label_line = row.label_line
+      label_line ? card.substitute(label_line.digest, []) : card
+    end
+
+    # The line of `property` under `value` and the label `label`, and
+    # the X-ABLabel beside it where the label needs one. The types the
+    # reader showed (`shown`) come off and every other parameter stays
+    # — `pref`, the defaults the reader hides — so a relabel removes
+    # exactly what the field rendered. A label every comma-separated
+    # word of which is a type word goes in as TYPE values; any other
+    # goes in an X-ABLabel under the line's group, or the card's
+    # lowest free one (VCard#free_group). Blank writes neither.
+    #: (VCard card, VCard::Parser::Property property, Array[String] shown, String value, String label) -> Array[String]
+    def self.labeled_lines(card, property, shown, value, label)
+      kept = property.parameters.reject { |name, type| name.casecmp?("TYPE") && shown.include?(type.downcase) }
+      words = label.split(",").map(&:strip).reject(&:empty?)
+      none = {} #: Hash[String, String]
+      types = TYPE_WORDS.fetch(property.name.upcase, none)
+      if words.all? { types.key?(it.downcase) }
+        typed = words.map { ["TYPE", types.fetch(it.downcase)] } #: Array[[String, String]]
+        line = VCard::Parser::Property.new(group: property.group, name: property.name, parameters: [*kept, *typed], value:)
+        return ["#{VCard.header_of(line)}#{value}"]
+      end
+
+      group = property.group || card.free_group
+      text = label.casecmp?("other") ? OTHER : VCard.escape(label)
+      line = VCard::Parser::Property.new(group:, name: property.name, parameters: kept, value:)
+      ["#{VCard.header_of(line)}#{value}", "#{group}.X-ABLabel:#{text}"]
+    end
+
+    # An address's value, components spliced from the form's fields:
+    # the raw components re-joined, or nil when the result is blank
+    # throughout (blank is absent, the reader's own rule for an ADR —
+    # the caller removes the line). A component that submits its
+    # current reading keeps its own bytes — the po box always, having
+    # no field, and any other the form left alone — where a moved one
+    # re-escapes from the form; the splice over still-escaped
+    # components is n_line's own rule (Admin::CardForm),
+    # unescape-then-re-escape not being byte-stable. A nil address is
+    # an added row: seven fresh positions, po box empty.
+    #: (Address? address, Hash[String, String] fields) -> String?
+    def self.address_value(address, fields)
+      components = address ? VCard.split_raw_components(address.property.value) : [""]
+      components << "" while components.length < 7
+      ADDRESS_COMPONENTS.each_with_index do |name, index|
+        position = index + 1
+        value = fields.fetch(name)
+        current = address && address.public_send(name).to_s.strip
+        components[position] = value == current ? components.fetch(position) : VCard.escape(value)
+      end
+      components.join(";") unless components.all?(&:empty?)
+    end
+
+    private_class_method :labeled_lines
+
+    # Reopened rather than defined in the blocks above, for the reason
+    # VCard::Parser::Property is. Each row answers the editor the same
+    # three things — its label, its fields by form name, and itself
+    # rewritten into a card — and each class writes an added one, so
+    # the save walks every kind alike and the difference between
+    # them is where each writes its label
+    # (docs/plans/2026-10-22-a-row-edits-its-label.md, "The row writes
+    # its own label").
+    class Phone
+      #: () -> Array[String]
+      def self.label_words = Contact.typed_words("TEL")
+
+      #: () -> Array[String]
+      def self.field_names = %w[value]
+
+      #: () -> String?
+      def label = Contact.label_of(label_line, types)
+
+      #: () -> Hash[String, String]
+      def fields = {"value" => value}
+
+      #: (VCard card, String? label, Hash[String, String] fields) -> VCard
+      def edit(card, label, fields)
+        Contact.edited_value(card, self, label, fields)
+      end
+
+      #: (VCard card, String? label, Hash[String, String] fields) -> VCard
+      def self.add(card, label, fields)
+        Contact.added_value(card, "TEL", label, fields)
+      end
+    end
+
+    class Email
+      #: () -> Array[String]
+      def self.label_words = Contact.typed_words("EMAIL")
+
+      #: () -> Array[String]
+      def self.field_names = %w[value]
+
+      #: () -> String?
+      def label = Contact.label_of(label_line, types)
+
+      #: () -> Hash[String, String]
+      def fields = {"value" => value}
+
+      #: (VCard card, String? label, Hash[String, String] fields) -> VCard
+      def edit(card, label, fields)
+        Contact.edited_value(card, self, label, fields)
+      end
+
+      #: (VCard card, String? label, Hash[String, String] fields) -> VCard
+      def self.add(card, label, fields)
+        Contact.added_value(card, "EMAIL", label, fields)
+      end
+    end
+
+    class Address
+      #: () -> Array[String]
+      def self.label_words = Contact.typed_words("ADR")
+
+      #: () -> Array[String]
+      def self.field_names = ADDRESS_COMPONENTS
+
+      #: () -> String?
+      def label = Contact.label_of(label_line, types)
+
+      #: () -> Hash[String, String]
+      def fields
+        ADDRESS_COMPONENTS.to_h {
+          field = [it, public_send(it).to_s] #: [String, String]
+          field
+        }
+      end
+
+      # Removal is the reader's own rule (Contact#address_of): a row
+      # blank throughout, po box included, removes the line, where a
+      # partially blanked one keeps it — partial blanks are legal empty
+      # components.
+      #: (VCard card, String? label, Hash[String, String] fields) -> VCard
+      def edit(card, label, fields)
+        value = Contact.address_value(self, fields)
+        value ? Contact.edited_row(card, self, value, label) : Contact.removed_row(card, self)
+      end
+
+      #: (VCard card, String? label, Hash[String, String] fields) -> VCard
+      def self.add(card, label, fields)
+        value = Contact.address_value(nil, fields)
+        value ? Contact.added_row(card, "ADR", value, label) : card
+      end
+    end
+
+    class Handle
+      # Signal, the one service this server writes
+      # (docs/plans/2026-10-18-signal-handles.md); any other is typed.
+      #: () -> Array[String]
+      def self.label_words = %w[signal]
+
+      #: () -> Array[String]
+      def self.field_names = %w[value]
+
+      # A handle's word is its service, the column the record card has
+      # always shown it in.
+      #: () -> String?
+      def label = service
+
+      #: () -> Hash[String, String]
+      def fields = {"value" => value}
+
+      # A blank handle removes the line, a service alone being nothing
+      # to reach anyone at. A changed handle under an unchanged service
+      # swaps under the line's own header and scheme, the phones' rule;
+      # a changed service rewrites the header around the line's other
+      # parameters and moves the handle under `x-apple:`, the line's old
+      # scheme naming the old service's protocol
+      # (docs/plans/2026-10-18-signal-handles.md, "The service is the
+      # row's").
+      #: (VCard card, String? label, Hash[String, String] fields) -> VCard
+      def edit(card, label, fields)
+        submitted = fields.fetch("value")
+        return card.substitute(line.digest, []) if submitted.empty?
+
+        written =
+          if label.nil? || label == service.to_s.strip
+            "#{VCard.header_of(property)}#{scheme}:#{VCard.escape(submitted)}"
+          else
+            Contact.handle_line(label, submitted, property)
+          end
+        card.substitute(line.digest, [written])
+      end
+
+      #: (VCard card, String? label, Hash[String, String] fields) -> VCard
+      def self.add(card, label, fields)
+        value = fields.fetch("value")
+        value.empty? ? card : card.insert([Contact.handle_line(label.to_s, value)])
+      end
+    end
 
     # A handle's line in Contacts.app's spelling, the service in
     # X-SERVICE-TYPE and the handle under `x-apple:`
@@ -405,15 +691,14 @@ module ProTacts
 
     #: () -> Array[Phone]
     def phones
-      labels = labels_by_group
+      labels = label_lines
       rows("TEL") { |property, line, lent_by|
         value = text_of(property)
-        group = property.group
         # RFC 2426 section 3.3.1: `voice` is the type every number has
         # by default, so it names none.
         Phone.new(
           value:,
-          label: group && labels[group.downcase],
+          label_line: label_line_of(property, labels),
           types: property.types - %w[voice],
           line:,
           property:,
@@ -424,11 +709,19 @@ module ProTacts
 
     #: () -> Array[Email]
     def emails
+      labels = label_lines
       rows("EMAIL") { |property, line, lent_by|
         value = text_of(property)
         # RFC 2426 section 3.3.2: `internet` is the format every address
         # has by default, so it names none.
-        Email.new(value:, types: property.types - %w[internet], line:, property:, lent_by:) if value
+        Email.new(
+          value:,
+          label_line: label_line_of(property, labels),
+          types: property.types - %w[internet],
+          line:,
+          property:,
+          lent_by:,
+        ) if value
       }
     end
 
@@ -447,7 +740,10 @@ module ProTacts
 
     #: () -> Array[Address]
     def addresses
-      rows("ADR") { |property, line, lent_by| address_of(property, line:, lent_by:) }
+      labels = label_lines
+      rows("ADR") { |property, line, lent_by|
+        address_of(property, label_line: label_line_of(property, labels), line:, lent_by:)
+      }
     end
 
     # The card's NOTEs (RFC 2426 section 3.6.2), in text form. On the
@@ -549,27 +845,34 @@ module ProTacts
       "NOTE:#{VCard.escape(NoteSections.join(member, sections))}"
     end
 
-    # A property group to the `X-ABLabel` text anchoring it — the
+    # A property group to the `X-ABLabel` line anchoring it — the
     # label a group's lines carry, on a different line than the row it
     # describes. Read off the composed card: a group lends only bare
     # `ADR` and `NOTE` (db/migrations/004_groups.rb), so an inherited
     # line can never collide with a member's own `item` numbering
     # (docs/plans/2026-09-18-phone-labels.md, "Reading"). Keyed
     # lowercased, a group name comparing without case as a property
-    # name does and as EditedContact#label_of pairs them.
-    #: () -> Hash[String, String]
-    def labels_by_group
-      properties
-        .filter_map { |property|
+    # name does and as EditedContact#label_of pairs them. A label with
+    # no text labels nothing, and is left out.
+    #: () -> Hash[String, VCard::Parser::Line]
+    def label_lines
+      vcard.lines
+        .filter_map { |line|
+          property = line.property
+          next if property.nil? || !property.name.casecmp?("X-ABLabel")
+
           group = property.group
-          next if group.nil? || !property.name.casecmp?("X-ABLabel")
+          next if group.nil? || text_of(property).nil?
 
-          text = text_of(property)
-          next if text.nil?
-
-          [group.downcase, text] #: [String, String]
+          [group.downcase, line] #: [String, VCard::Parser::Line]
         }
         .to_h
+    end
+
+    #: (VCard::Parser::Property property, Hash[String, VCard::Parser::Line] labels) -> VCard::Parser::Line?
+    def label_line_of(property, labels)
+      group = property.group
+      labels[group.downcase] if group
     end
 
     # The rows a repeatable property reads as: each line naming it
@@ -610,13 +913,14 @@ module ProTacts
     # as no address at all. Carries the line it was read from and its
     # reading, the other provenance-carrying shapes' own address for a
     # save.
-    #: (VCard::Parser::Property property, line: VCard::Parser::Line, lent_by: Group?) -> Address?
-    def address_of(property, line:, lent_by:)
+    #: (VCard::Parser::Property property, label_line: VCard::Parser::Line?, line: VCard::Parser::Line, lent_by: Group?) -> Address?
+    def address_of(property, label_line:, line:, lent_by:)
       components = components_of(property)
       return if components.none?
 
       po_box, extended, street, locality, region, postal_code, country = components
-      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: property.types, line:, property:, lent_by:)
+      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: property.types, label_line:, line:,
+                  property:, lent_by:)
     end
 
   end

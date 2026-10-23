@@ -186,10 +186,11 @@ module ProTacts
     end
 
     # The params Admin::CardForm reads, held to the shapes the contact
-    # and group editors post: each text field a string, each phone and
-    # email field a hash of strings keyed by its row's digest, each
-    # added phone or email a list of strings, and every address row,
-    # added address and the birthday row a hash of component strings.
+    # and group editors post: each text field a string, every
+    # repeatable row — standing, keyed by its digest, or added, by its
+    # add index — a hash of its label and its kind's field strings
+    # (CardForm::ROWS), and the birthday row a hash of component
+    # strings.
     # Any other shape is a POST made by hand, refused here as a 400
     # (the error handler) rather than read around in CardForm. An
     # absent field is a form that rendered no such rows — or a name
@@ -197,18 +198,12 @@ module ProTacts
     #: () -> Hash[String, untyped]
     def card_form_params
       typecast_params.str(%w[first middle last organization nickname note])
-      typecast_params.array(:str, %w[new_phone new_email])
-      %w[phone email].each do |key|
-        rows = typecast_params.Hash(key)
-        rows&.each_key { typecast_params[key].str!(it) }
-      end
-      %w[address new_address].each do |key|
-        rows = typecast_params.Hash(key)
-        rows&.each_key { typecast_params[key][it].str(Contact::ADDRESS_COMPONENTS) }
-      end
-      %w[handle new_handle].each do |key|
-        rows = typecast_params.Hash(key)
-        rows&.each_key { typecast_params[key][it].str(%w[service value]) }
+      Admin::CardForm::ROWS.each do |field, kind|
+        fields = ["label", *kind.field_names]
+        [field, "new_#{field}"].each do |key|
+          rows = typecast_params.Hash(key)
+          rows&.each_key { typecast_params[key][it].str(fields) }
+        end
       end
       typecast_params["birthday"].str(%w[year month day]) if typecast_params.Hash("birthday")
       request.params

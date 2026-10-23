@@ -165,6 +165,19 @@ module ProTacts
       @properties = lines.filter_map { it.property }
     end
 
+    # The lowest `itemN` property group no line of the card names, the
+    # spelling Contacts gives its own (docs/apple-contacts.md, "An
+    # annotation survives only on its own line"), for a line that
+    # needs a group to carry a label beside it. A group name compares
+    # without case, as a property name does.
+    #: () -> String
+    def free_group
+      taken = properties.filter_map { it.group&.downcase }
+      number = 1
+      number += 1 while taken.include?("item#{number}")
+      "item#{number}"
+    end
+
     # Whether the parsed properties carry the envelope RFC 2426 section
     # 4 requires of a card: BEGIN:VCARD first, END:VCARD last, and a
     # VERSION in between. Deciding that is deliberately not the

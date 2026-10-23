@@ -250,36 +250,48 @@
   color: var(--gl-color-danger);
 }
 
-/* A handle row's two fields — service and handle — on one line in
-   the value column: the service names what the handle is, so the two
-   read as one value, the birthday row's reading. The service is the
-   shorter word and takes the narrower share. On a phone the value
-   column held each field to a stub that clipped its text, so below
-   the date row's own threshold (27rem of row, asked of the row for
-   that rule's reason, below) the pair stacks, the service over the
-   handle, each the column's full width. */
-.card-body form.field-stack .field > .handle-row {
-  display: flex;
-  gap: var(--gl-space-2xs);
-}
-.card-body form.field-stack .field > .handle-row > input {
-  flex: 1 1 0;
-  min-width: 0;
+/* A row's label field (Admin::ContactsEdit#label_field) sits in the
+   type column the caption held and the record card's key still holds,
+   and at rest it is that caption: Gloss's .field type, mono uppercase
+   at the step below the value, with no box around it — the row reads
+   as the record does (docs/DESIGN.md, "Alignment is the layout"). The
+   box comes back under the pointer, saying the word can be changed,
+   and stays while the field has focus, which a click gives it: editing
+   on click is the input's own behavior, and markup's job here (see
+   Admin::Layout). A word wider than the column ends in an ellipsis
+   until then. Lowercase rather than the captions' uppercase: the
+   field shows the word as it is stored and as it will be saved, and
+   an unlabeled row's placeholder, the kind, reads in the caption's
+   color rather than a hint's. */
+.card-body form.field-stack > .field > .row-label {
   padding-block: var(--gl-space-3xs);
+  padding-inline: 0;
+  border-color: transparent;
+  background: transparent;
+  text-overflow: ellipsis;
+  cursor: text;
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--2);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0.06em;
+  color: var(--gl-color-text-secondary);
 }
-.card-body form.field-stack .field > .handle-row > input:last-child {
-  flex-grow: 2;
+.card-body form.field-stack > .field > .row-label::placeholder {
+  color: var(--gl-color-text-secondary);
 }
-.card-body form.field-stack > .field:has(> .handle-row) {
-  container-type: inline-size;
+.card-body form.field-stack > .field > .row-label:is(:hover, :focus) {
+  padding-inline: calc(var(--gl-space-xs) - 1px);
+  border-color: var(--gl-color-border-default);
+  background: var(--gl-color-surface-card);
 }
-@container (width < 27rem) {
-  .card-body form.field-stack .field > .handle-row {
-    flex-direction: column;
-  }
-  .card-body form.field-stack .field > .handle-row > input {
-    flex: none;
-  }
+.card-body form.field-stack > .field > .row-label:focus {
+  border-color: var(--gl-color-accent);
+}
+/* Chrome's arrow for the list would take a third of a 6rem column
+   from the word; the list still opens on a click or a keystroke. */
+.card-body form.field-stack > .field > .row-label::-webkit-calendar-picker-indicator {
+  display: none !important;
 }
 
 /* The date line breaks in two when its row cannot hold a whole
@@ -401,15 +413,23 @@
    refused one. One gap, noted rather than scripted: a
    whitespace-only value hides the placeholder and the strike with
    it, while the save strips before it compares. */
-.field[data-blank-removes]:has(> input:placeholder-shown) > span,
+.field[data-blank-removes]:has(> input:not(.row-label):placeholder-shown) > :is(span, .row-label),
 .field[data-blank-removes]:has(> textarea:placeholder-shown) > span,
-.field[data-blank-removes]:has(> .field-stack):not(:has(input:not(:placeholder-shown))) > span,
+.field[data-blank-removes]:has(> .field-stack):not(:has(> .field-stack > input:not(:placeholder-shown))) > :is(span, .row-label),
 .field[data-blank-removes]:has(> .date-row):has(option[value=""]:checked):not(:has(input[type="number"]:not(:placeholder-shown))) > span {
   text-decoration: line-through;
   color: var(--gl-color-danger);
 }
-.field[data-blank-removes]:has(> input:placeholder-shown) > input::placeholder,
+.field[data-blank-removes]:has(> input:not(.row-label):placeholder-shown) > input:not(.row-label)::placeholder,
 .field[data-blank-removes]:has(> textarea:placeholder-shown) > textarea::placeholder {
+  color: var(--gl-color-danger);
+}
+/* A label field's own placeholder is the kind it stands in for, and
+   is struck with the row. A pseudo-element answers no :is() above, so
+   it takes its own rule. */
+.field[data-blank-removes]:has(> input:not(.row-label):placeholder-shown) > .row-label::placeholder,
+.field[data-blank-removes]:has(> .field-stack):not(:has(> .field-stack > input:not(:placeholder-shown))) > .row-label::placeholder {
+  text-decoration: line-through;
   color: var(--gl-color-danger);
 }
 

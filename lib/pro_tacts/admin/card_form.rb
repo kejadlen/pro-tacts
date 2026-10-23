@@ -14,6 +14,18 @@ module ProTacts
     #
     # Not a view, unlike its neighbours, so the Steepfile checks it.
     module CardForm
+      # The repeatable rows by the form's name for each kind: the field
+      # a standing row posts under and, prefixed `new_`, the one an
+      # added row does, each reading back into the row class that
+      # writes it (#edited_rows). Public for the route's shape checks
+      # (Web#card_form_params) and the editor's rows.
+      ROWS = {
+        "phone" => Contact::Phone,
+        "email" => Contact::Email,
+        "handle" => Contact::Handle,
+        "address" => Contact::Address,
+      }.freeze #: Hash[String, Contact::row_class]
+
       # A created contact's card: the envelope RFC 2426 section 4
       # requires — BEGIN, VERSION, and the N and FN that section makes
       # mandatory — plus the UID this server's id model is (see
@@ -69,10 +81,10 @@ module ProTacts
           end
         vcard = edited_text(vcard, "NICKNAME", params["nickname"], own.nickname)
         vcard = edited_text(vcard, "NOTE", params["note"], note_of(own))
-        vcard = edited_values(own.phones, "phone", "TEL", vcard, params)
-        vcard = edited_values(own.emails, "email", "EMAIL", vcard, params)
-        vcard = edited_handles(own, vcard, params)
-        edited_addresses(own, vcard, params)
+        vcard = edited_rows(own.phones, "phone", vcard, params)
+        vcard = edited_rows(own.emails, "email", vcard, params)
+        vcard = edited_rows(own.handles, "handle", vcard, params)
+        edited_rows(own.addresses, "address", vcard, params)
       end
 
       # The group editor's save: the note replaced and the contact
@@ -84,7 +96,7 @@ module ProTacts
       def self.group_lines(group, params)
         reading = group.reading
         card = edited_text(reading.stored, "NOTE", params["note"], note_of(reading))
-        card = edited_addresses(reading, card, params)
+        card = edited_rows(reading.addresses, "address", card, params)
         card.lines.filter_map {
           line = it.content
           line unless line.empty?
@@ -147,111 +159,53 @@ module ProTacts
         vcard.replace(name, text_lines(name, value))
       end
 
-      # The single-value rows' half of the surgical save, walked once
-      # for the phones and once for the emails: each row names its line
-      # by digest, so a row the request leaves out is a line the save
-      # never mentions, and an unchanged row is skipped — the line keeps
-      # its own bytes by construction, not by careful re-rendering. A
-      # blank row removes its line; a changed row swaps the value under
-      # the line's own header (VCard.header_of), where the TYPE
-      # parameters no field models ride. The rows come from the
-      # contact, never the request, so a doctored digest names nothing
-      # and a missing one touches nothing.
+      # The repeatable rows' half of the surgical save, walked once per
+      # kind: each row names its line by digest, so a row the request
+      # leaves out is a line the save never mentions, and a row whose
+      # label and fields all submit what it read is skipped — the line
+      # keeps its own bytes by construction, not by careful
+      # re-rendering. Any other is the row's to rewrite (Contact::Phone#edit
+      # and kin), which is where the kinds differ: what a blank removes
+      # and where a label is written
+      # (docs/plans/2026-10-22-a-row-edits-its-label.md). A row posting
+      # no label leaves its label be, as the group editor's addresses
+      # do. The rows come from the contact, never the request, so a
+      # doctored digest names nothing and a missing one touches nothing.
       #
-      # `field` is the form's name for the kind and `name` the property
-      # an added row is written as. The rows the add dialog reveals
-      # (Admin::ContactsEdit) land as bare lines before END:VCARD, and a
-      # blank one inserts nothing — inserting absence is a no-op, the
-      # plan's rule for new rows, and the reason the rows nobody typed
-      # in cost nothing whether they were on screen or not.
-      #: (Array[Contact::Phone | Contact::Email] rows, String field, String name, VCard vcard, Hash[String, untyped] params) -> VCard
-      def self.edited_values(rows, field, name, vcard, params)
+      # `field` is the form's name for the kind. The rows the add
+      # dialog reveals (Admin::ContactsEdit) are named by their add
+      # index (`new_phone[i][value]`) rather than a bare [], because
+      # Rack refuses a key after an empty one — so they arrive as a
+      # hash of hashes and read out by their values, landing as bare
+      # lines before END:VCARD. A blank one inserts nothing.
+      #: (Array[Contact::Phone | Contact::Email | Contact::Handle | Contact::Address] rows, String field, VCard vcard, Hash[String, untyped] params) -> VCard
+      def self.edited_rows(rows, field, vcard, params)
+        kind = ROWS.fetch(field)
         edits = hash_field(params, field)
         rows.each do |row|
           submitted = edits[row.line.digest]
-          next if submitted.nil? || submitted.strip == row.value.strip
-
-          value = submitted.strip
-          vcard = vcard.substitute(
-            row.line.digest,
-            value.empty? ? [] : ["#{VCard.header_of(row.property)}#{VCard.escape(value)}"],
-          )
-        end
-
-        none = [] #: Array[String]
-        submitted = params.fetch("new_#{field}", none) #: Array[String]
-        added = submitted.filter_map {
-          value = it.strip
-          "#{name}:#{VCard.escape(value)}" unless value.empty?
-        } #: Array[String]
-        vcard.insert(added)
-      end
-
-      # #edited_values' walk over a handle, a row of two fields: the
-      # service and the handle itself
-      # (docs/plans/2026-10-18-signal-handles.md, "The service is the
-      # row's"). A blank handle removes the line, a service alone being
-      # nothing to reach anyone at. A changed handle under an unchanged
-      # service swaps under the line's own header and scheme, the
-      # phones' rule; a changed service rewrites the header around the
-      # line's other parameters and moves the handle under `x-apple:`,
-      # the line's old scheme naming the old service's protocol. The
-      # rows the add dialog reveals are named by their add index, the
-      # address's reason (Rack refuses a key after a bare []).
-      #: (Contact contact, VCard vcard, Hash[String, untyped] params) -> VCard
-      def self.edited_handles(contact, vcard, params)
-        rows = hash_field(params, "handle")
-        contact.handles.each do |handle|
-          submitted = rows[handle.line.digest]
           next if submitted.nil?
 
-          service = submitted["service"].to_s.strip
-          value = submitted["value"].to_s.strip
-          same_service = service == handle.service.to_s.strip
-          next if same_service && value == handle.value.strip
+          label = submitted["label"]&.strip
+          fields = submitted_fields(kind, submitted)
+          next if (label.nil? || label == row.label.to_s.strip) && fields.all? { |name, value| value == row.fields.fetch(name).strip }
 
-          line =
-            if value.empty?
-              nil
-            elsif same_service
-              "#{VCard.header_of(handle.property)}#{handle.scheme}:#{VCard.escape(value)}"
-            else
-              Contact.handle_line(service, value, handle.property)
-            end
-          vcard = vcard.substitute(handle.line.digest, line ? [line] : [])
+          vcard = row.edit(vcard, label, fields)
         end
 
-        added = hash_field(params, "new_handle").values #: Array[Hash[String, untyped]]
-        vcard.insert(added.filter_map { |row|
-          value = row["value"].to_s.strip
-          Contact.handle_line(row["service"].to_s.strip, value) unless value.empty?
-        })
+        added = hash_field(params, "new_#{field}").values #: Array[Hash[String, untyped]]
+        added.each do |row|
+          vcard = kind.add(vcard, row["label"].to_s.strip, submitted_fields(kind, row))
+        end
+        vcard
       end
 
-      # #edited_values' walk, over a row that is six fields rather than
-      # one (Admin::ContactsEdit). Removal is the reader's own rule
-      # (Contact#address_of): a row blank throughout, po box included,
-      # removes the line, where a partially blanked one keeps it —
-      # partial blanks are legal empty components.
-      #: (Contact contact, VCard vcard, Hash[String, untyped] params) -> VCard
-      def self.edited_addresses(contact, vcard, params)
-        rows = hash_field(params, "address")
-        contact.addresses.each do |address|
-          submitted = rows[address.line.digest]
-          next if submitted.nil? || address_unchanged?(address, submitted)
-
-          line = address_line(address, submitted)
-          vcard = vcard.substitute(address.line.digest, line ? [line] : [])
-        end
-
-        # The add dialog names an added address by its add index
-        # (`new_address[i][street]`) rather than the bare [] every
-        # single-valued kind appends to, because Rack refuses a key
-        # after an empty one — so the rows arrive as a hash of hashes
-        # and read out by their values, several adds in one pass
-        # included.
-        added = hash_field(params, "new_address").values #: Array[Hash[String, untyped]]
-        vcard.insert(added.filter_map { address_line(nil, it) })
+      #: (Contact::row_class kind, Hash[String, untyped] submitted) -> Hash[String, String]
+      def self.submitted_fields(kind, submitted)
+        kind.field_names.to_h {
+          field = [it, submitted[it].to_s.strip] #: [String, String]
+          field
+        }
       end
 
       # A field the editors post as a hash keyed by row: none where the
@@ -265,45 +219,6 @@ module ProTacts
         raise ArgumentError, "the form's #{key} field is not a hash" unless value.is_a?(Hash)
 
         value
-      end
-
-      #: (Contact::Address address, Hash[String, untyped] submitted) -> bool
-      def self.address_unchanged?(address, submitted)
-        Contact::ADDRESS_COMPONENTS.all? { |name|
-          submitted[name].to_s.strip == address.public_send(name).to_s.strip
-        }
-      end
-
-      # One address row's replacement line: the raw components spliced
-      # and re-joined under the line's own header, or nil when the result
-      # is blank throughout (blank is absent, the reader's own rule for
-      # an ADR — the caller removes the line). A component that submits
-      # its current reading keeps its own bytes — the po box always,
-      # having no field, and any other the form left alone — where a
-      # moved one re-escapes from the form; the splice over
-      # still-escaped components is n_line's own rule,
-      # unescape-then-re-escape not being byte-stable. A nil address is
-      # an added row: seven fresh positions, po box empty, a bare ADR
-      # header.
-      #: (Contact::Address? address, Hash[String, untyped] submitted) -> String?
-      def self.address_line(address, submitted)
-        property = address&.property
-        if property.nil?
-          components = [""]
-        else
-          components = VCard.split_raw_components(property.value)
-        end
-        components << "" while components.length < 7
-        Contact::ADDRESS_COMPONENTS.each_with_index do |name, index|
-          position = index + 1
-          value = submitted[name].to_s.strip
-          current = address && address.public_send(name).to_s.strip
-          components[position] = value == current ? components.fetch(position) : VCard.escape(value)
-        end
-        return if components.all?(&:empty?)
-
-        header = property ? VCard.header_of(property) : "ADR:"
-        "#{header}#{components.join(";")}"
       end
 
       # One component off the wire: nil for blank, the integer it names
@@ -424,7 +339,7 @@ module ProTacts
       # what the splice over the still-escaped value buys
       # (docs/plans/2026-09-05-web-card-editor.md). A component that
       # submits its current reading keeps its own bytes too, the rule
-      # address_line already writes under: unescape-then-re-escape is
+      # Contact.address_value already writes under: unescape-then-re-escape is
       # not byte-stable (VCard.split_raw_components), so a save that
       # moved a phone number must not rewrite the name it left alone. A
       # card with no N a form can read splices into a bare
@@ -453,8 +368,7 @@ module ProTacts
         "N:#{components.join(";")}"
       end
 
-      private_class_method :edited_values, :edited_handles, :edited_addresses, :hash_field, :address_unchanged?,
-                           :address_line, :birthday_component, :text_lines, :edited_text, :edited_fn, :display_name,
+      private_class_method :edited_rows, :submitted_fields, :hash_field, :birthday_component, :text_lines, :edited_text, :edited_fn, :display_name,
                            :n_line, :company_name, :person_name, :edited_organization
     end
   end

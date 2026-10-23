@@ -80,18 +80,6 @@ module ProTacts
         ].compact.reject { it.empty? }
       end
 
-      # A row's key: the label it carries, else its types, else the
-      # kind of value, so no row renders unlabeled in the grid. Where
-      # a row has both a label and types the label wins, which is what
-      # Contacts itself shows (docs/plans/2026-09-18-phone-labels.md,
-      # "Reading"); a row with no label of its own passes nil.
-      #: (String? label, Array[String] types, String kind) -> String
-      def self.type_label(label, types, kind)
-        return label if label
-
-        types.empty? ? kind : types.join(", ")
-      end
-
       # A value — a property's or a parameter's — at or under this many
       # octets renders whole. Anything longer is a wall of folded or
       # unbroken octets (an inline PHOTO payload, a memoji's binary

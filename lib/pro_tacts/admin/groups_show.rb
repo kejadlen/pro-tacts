@@ -87,7 +87,7 @@ module ProTacts
       #: () -> void
       def rows
         @reading.addresses.each do |address|
-          row(Format.type_label(nil, address.types, "address")) do
+          row(address.label || "address") do
             Format.address_lines(address).each { |line| div { line } }
           end
         end

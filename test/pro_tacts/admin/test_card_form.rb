@@ -44,16 +44,19 @@ class CardFormTest < Minitest::Test
       "first" => given.to_s, "middle" => additional.to_s, "last" => family.to_s,
       "nickname" => own.nickname.to_s,
       "note" => ProTacts::Admin::CardForm.note_of(own).to_s.gsub("\n", "\r\n"),
-      "phone" => own.phones.to_h { [it.line.digest, it.value] },
-      "email" => own.emails.to_h { [it.line.digest, it.value] },
-      "address" => own.addresses.to_h { |address|
-        [address.line.digest, ProTacts::Contact::ADDRESS_COMPONENTS.to_h { [it, address.public_send(it).to_s] }]
-      },
+      "phone" => rows(own.phones),
+      "email" => rows(own.emails),
+      "handle" => rows(own.handles),
+      "address" => rows(own.addresses),
     }
     organization = ProTacts::Admin::CardForm.organization_of(contact.stored).to_s
     params["organization"] = organization unless organization.empty?
     params
   end
+
+  # Each row's fields as it renders them: its label, empty for none,
+  # and its fields.
+  def rows(rows) = rows.to_h { [it.line.digest, {"label" => it.label.to_s, **it.fields}] }
 
   # A save that changed nothing changes no byte, however the card spells
   # what the form shows: parameters and groups the form never modeled,
@@ -90,6 +93,42 @@ class CardFormTest < Minitest::Test
       )
 
       assert_equal stored, saved.to_s
+    end
+  end
+
+  ## Labels
+
+  # Whatever a row is relabelled to reads back as that word, whichever
+  # spelling the save picked for it — a type, an X-ABLabel, Apple's
+  # wrapped Other — over lines grouped, labeled, and typed every way a
+  # client writes them, the other rows untouched beside it
+  # (docs/plans/2026-10-22-a-row-edits-its-label.md). A type word reads
+  # in the reader's lowercase, and blank reads as no label.
+  def test_a_relabelled_row_reads_back_as_its_label
+    Hegel.test(test_cases: 500) do |tc|
+      lines = Array.new(tc.draw(integers(min_value: 1, max_value: 3))) { |index|
+        group = tc.draw(optional(sampled_from(["item#{index + 1}", "ITEM#{index + 7}"])))
+        header = tc.draw(sampled_from(["TEL", "TEL;TYPE=cell", "TEL;type=HOME;type=VOICE;type=pref", "EMAIL;TYPE=INTERNET"]))
+        label = group && tc.draw(optional(sampled_from(["Google Voice", "_$!<Other>!$_"])))
+        ["#{group && "#{group}."}#{header}:+1-555-010#{index}\r\n", *(label ? ["#{group}.X-ABLabel:#{label}\r\n"] : [])]
+      }.flatten
+      stored = ["BEGIN:VCARD\r\n", "VERSION:3.0\r\n", "N:Lovelace;Ada;;;\r\n", "FN:Ada Lovelace\r\n", *lines, "UID:aiden\r\n", "END:VCARD\r\n"].join
+      contact = ProTacts::Contact.new(id: "aiden", stored: ProTacts::VCard.new(stored), birthday: nil, inherited: [])
+      field, rows = tc.draw(sampled_from([["phone", :phones], ["email", :emails]].select { contact.public_send(it[1]).any? }))
+      row = tc.draw(sampled_from(contact.public_send(rows)))
+      label = tc.draw(sampled_from(["", "home", "Work", "cell", "other", "Google Voice", "home, work", "lab, too"]))
+      params = untouched(contact)
+      params[field] = params.fetch(field).merge(row.line.digest => {"label" => label, "value" => row.value})
+
+      saved = ProTacts::Admin::CardForm.contact_card(contact, false, "Ada", "", "Lovelace", params)
+      after = ProTacts::Contact.new(id: "aiden", stored: saved, birthday: nil, inherited: [])
+      relabelled = after.public_send(rows).find { it.value == row.value }
+
+      expected = {"" => nil, "Work" => "work", "other" => "Other"}.fetch(label, label)
+      expected.nil? ? assert_nil(relabelled.label) : assert_equal(expected, relabelled.label)
+      assert_equal contact.public_send(rows).length, after.public_send(rows).length
+      # No label is left naming nothing, and none is lost.
+      assert_equal [*after.phones, *after.emails].count(&:label_line), saved.properties.count { it.name.casecmp?("X-ABLabel") }
     end
   end
 
