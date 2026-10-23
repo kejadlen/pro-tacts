@@ -259,9 +259,10 @@
    and stays while the field has focus, which a click gives it: editing
    on click is the input's own behavior, and markup's job here (see
    Admin::Layout). A word wider than the column ends in an ellipsis
-   until then. The word is stored as typed; only its showing is
-   uppercase, and an unlabeled row's placeholder, the kind, reads in
-   the caption's color rather than a hint's. */
+   until then. Lowercase rather than the captions' uppercase: the
+   field shows the word as it is stored and as it will be saved, and
+   an unlabeled row's placeholder, the kind, reads in the caption's
+   color rather than a hint's. */
 .card-body form.field-stack > .field > .row-label {
   padding-block: var(--gl-space-3xs);
   padding-inline: 0;
@@ -272,7 +273,7 @@
   font-family: var(--gl-font-mono);
   font-size: var(--gl-step--2);
   font-weight: 500;
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: 0.06em;
   color: var(--gl-color-text-secondary);
 }
