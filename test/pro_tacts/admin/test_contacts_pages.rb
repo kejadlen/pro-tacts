@@ -1832,7 +1832,8 @@ class AdminContactsPagesTest < Minitest::Test
   # A po box has no field, and the save's removal is blank throughout,
   # po box included (Contact::Address#edit) — so a line
   # surviving by its po box alone cannot be removed from this form, and
-  # its row, blank as it renders, wears no removal state.
+  # its row, blank as it renders, wears no removal state and offers no
+  # delete.
   def test_a_po_box_only_address_row_wears_no_removal_state
     po = ADA.sub(
       "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
@@ -1844,7 +1845,8 @@ class AdminContactsPagesTest < Minitest::Test
 
       digest = store.contact("ada").addresses.first.line.digest
       assert_includes last_response.body,
-        '<div class="field"><input type="text" class="row-label" name="address[' + digest + '][label]" value="home"'
+        '<div class="field"><span class="row-type"><input type="text" class="row-label" name="address[' + digest + '][label]" value="home"'
+      refute_includes last_response.body, 'aria-label="Delete address"'
     end
   end
 
@@ -2084,9 +2086,10 @@ class AdminContactsPagesTest < Minitest::Test
       digest = store.contact("ada").phones.first.line.digest
       body = last_response.body
       assert_includes body,
-        '<div class="field" data-blank-removes>' \
+        '<div class="field" data-blank-removes><span class="row-type">' \
         '<input type="text" class="row-label" name="phone[' + digest + '][label]" value="mobile" autocomplete="off" ' \
-        'list="phone-labels" placeholder="phone" aria-label="phone label">' \
+        'list="phone-labels" placeholder="phone" aria-label="phone label">' +
+        row_delete("phone") + '</span>' +
         '<input type="tel" name="phone[' + digest + '][value]" value="+1-555-0100" placeholder="removed on save" ' \
         'aria-label="phone"></div>'
       assert_includes body,
@@ -2130,6 +2133,18 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   ## Editing labels
+
+  # A standing row's delete, as ContactsEdit#delete_button renders it
+  # after the row's label field.
+  def row_delete(kind)
+    %(<button type="button" class="icon-button row-delete" data-size="sm" aria-label="Delete #{kind}" ) +
+      %(@mousedown.prevent @click="const row = $el.closest('.field'); ) +
+      %(row.querySelectorAll('input:not(.row-label)').forEach(el => el.value = ''); ) +
+      %(row.querySelector('.row-label').blur()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" ) +
+      %(stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden>) +
+      %(<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path>) +
+      %(<path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>)
+  end
 
   # A relabel posts the row's label and value both, the value as it
   # rendered: the save writes the new word and leaves the value's bytes.
@@ -2235,9 +2250,10 @@ class AdminContactsPagesTest < Minitest::Test
 
       digest = store.contact("ada").emails.first.line.digest
       assert_includes last_response.body,
-        '<div class="field" data-blank-removes>' \
+        '<div class="field" data-blank-removes><span class="row-type">' \
         '<input type="text" class="row-label" name="email[' + digest + '][label]" value="home" autocomplete="off" ' \
-        'list="email-labels" placeholder="email" aria-label="email label">' \
+        'list="email-labels" placeholder="email" aria-label="email label">' +
+        row_delete("email") + '</span>' +
         '<input type="email" name="email[' + digest + '][value]" value="ada@example.com" placeholder="removed on save" ' \
         'aria-label="email"></div>'
     end
@@ -2353,9 +2369,10 @@ class AdminContactsPagesTest < Minitest::Test
 
       digest = store.contact("ada").handles.first.line.digest
       assert_includes last_response.body,
-        '<div class="field" data-blank-removes>' \
+        '<div class="field" data-blank-removes><span class="row-type">' \
         '<input type="text" class="row-label" name="handle[' + digest + '][label]" value="signal" autocomplete="off" ' \
-        'list="handle-labels" placeholder="handle" aria-label="handle label">' \
+        'list="handle-labels" placeholder="handle" aria-label="handle label">' +
+        row_delete("handle") + '</span>' +
         '<input type="text" name="handle[' + digest + '][value]" value="ada.42" placeholder="removed on save" ' \
         'aria-label="handle"></div>'
     end
@@ -2484,9 +2501,10 @@ class AdminContactsPagesTest < Minitest::Test
       digest = store.contact("ada").addresses.first.line.digest
       body = last_response.body
       assert_includes body,
-        '<div class="field" data-blank-removes>' \
+        '<div class="field" data-blank-removes><span class="row-type">' \
         '<input type="text" class="row-label" name="address[' + digest + '][label]" value="home" autocomplete="off" ' \
-        'list="address-labels" placeholder="address" aria-label="address label">' \
+        'list="address-labels" placeholder="address" aria-label="address label">' +
+        row_delete("address") + '</span>' +
         '<div class="field-stack">' \
         '<input type="text" name="address[' + digest + '][street]" value="12 Analytical Way" placeholder="street" aria-label="street">' \
         '<input type="text" name="address[' + digest + '][extended]" placeholder="street 2" aria-label="street 2">' \
@@ -2956,9 +2974,9 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes body,
         '<template x-for="(kind, i) in added" :key="i"><div class="field">' \
         '<template x-if="kind === \'birthday\'"><span x-text="kind"></span></template>' \
-        '<template x-if="kind !== \'birthday\'">' \
+        '<template x-if="kind !== \'birthday\'"><span class="row-type">' \
         '<input type="text" class="row-label" autocomplete="off" :name="`new_${kind}[${i}][label]`" ' \
-        ':list="`${kind}-labels`" :placeholder="kind" :aria-label="`${kind} label`"></template>' \
+        ':list="`${kind}-labels`" :placeholder="kind" :aria-label="`${kind} label`"></span></template>' \
         '<template x-if="{ phone: \'tel\', email: \'email\', handle: \'text\' }[kind]">' \
         '<input :type="{ phone: \'tel\', email: \'email\', handle: \'text\' }[kind]" ' \
         ':name="`new_${kind}[${i}][value]`" :aria-label="kind" x-init="$el.focus()">' \

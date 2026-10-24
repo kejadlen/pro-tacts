@@ -314,9 +314,11 @@ module ProTacts
               span("x-text": "kind")
             end
             template("x-if": "kind !== 'birthday'") do
-              input(type: "text", class: "row-label", autocomplete: "off",
-                    ":name": "`new_${kind}[${i}][label]`", ":list": "`${kind}-labels`",
-                    ":placeholder": "kind", ":aria-label": "`${kind} label`")
+              span(class: "row-type") do
+                input(type: "text", class: "row-label", autocomplete: "off",
+                      ":name": "`new_${kind}[${i}][label]`", ":list": "`${kind}-labels`",
+                      ":placeholder": "kind", ":aria-label": "`${kind} label`")
+              end
             end
             value_types = "{ #{VALUE_TYPES.map { |kind, type| "#{kind}: '#{type}'" }.join(", ")} }[kind]"
             template("x-if": value_types) do
@@ -360,10 +362,42 @@ module ProTacts
       # nothing, never a removal, so admin.css's removal state asks after
       # the value beside it and only strikes this. `autocomplete` off so
       # the browser's memory of past entries does not crowd the list out.
-      #: (String field, String name, String? value) -> void
-      def label_field(field, name, value)
-        input(type: "text", class: "row-label", name:, value:, autocomplete: "off",
-              list: "#{field}-labels", placeholder: field, aria_label: "#{field} label")
+      #
+      # The click that edits the label also offers the row's delete
+      # (#delete_button), so the type column is where a row is both
+      # renamed and removed; the two share a span so admin.css can set
+      # the one inside the other's box. A row the form cannot remove
+      # (#address_row's po box) is not offered it. An added row's label
+      # (#added_rows) wears the span for the same styles and no delete:
+      # its blank is already nothing.
+      #: (String field, String name, String? value, ?deletable: bool) -> void
+      def label_field(field, name, value, deletable: true)
+        span(class: "row-type") do
+          input(type: "text", class: "row-label", name:, value:, autocomplete: "off",
+                list: "#{field}-labels", placeholder: field, aria_label: "#{field} label")
+          delete_button(field) if deletable
+        end
+      end
+
+      # A row's delete: blank is the rule that removes, and this is its
+      # one-click spelling, the birthday's remove control (#birthday_row)
+      # moved to where the label is edited. It empties the row's values
+      # and leaves the label, the struck caption says the rest, and
+      # nothing is gone until Save, so it asks no confirm(). admin.css
+      # shows it inside the label's box only while that has focus.
+      # `@mousedown.prevent` keeps the focus there through the click —
+      # Safari never focuses a clicked button, so the label would blur,
+      # the button hide, and the click land on nothing. The label then
+      # blurs on purpose, the row reading as the record again, struck.
+      #: (String field) -> void
+      def delete_button(field)
+        clear = "const row = $el.closest('.field'); " \
+                "row.querySelectorAll('input:not(.row-label)').forEach(el => el.value = ''); " \
+                "row.querySelector('.row-label').blur()"
+        button(type: "button", class: "icon-button row-delete", data_size: "sm",
+               aria_label: "Delete #{field}", "@mousedown.prevent": true, "@click": clear) do
+          render Icon.new(:trash, size: 14)
+        end
       end
 
       # Each kind's suggested labels, one list per kind for every row of
@@ -534,7 +568,8 @@ module ProTacts
       #: (Contact::Address address) -> void
       def address_row(address)
         div(class: "field", data: {blank_removes: address.po_box.nil?}) do
-          label_field("address", "address[#{address.line.digest}][label]", address.label)
+          label_field("address", "address[#{address.line.digest}][label]", address.label,
+                      deletable: address.po_box.nil?)
           div(class: "field-stack") do
             ADDRESS_FIELDS.each do |component, label|
               input(type: "text", name: "address[#{address.line.digest}][#{component}]",

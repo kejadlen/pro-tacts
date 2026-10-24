@@ -263,7 +263,7 @@
    field shows the word as it is stored and as it will be saved, and
    an unlabeled row's placeholder, the kind, reads in the caption's
    color rather than a hint's. */
-.card-body form.field-stack > .field > .row-label {
+.card-body form.field-stack > .field > .row-type > .row-label {
   padding-block: var(--gl-space-3xs);
   padding-inline: 0;
   border-color: transparent;
@@ -277,21 +277,61 @@
   letter-spacing: 0.06em;
   color: var(--gl-color-text-secondary);
 }
-.card-body form.field-stack > .field > .row-label::placeholder {
+.card-body form.field-stack > .field > .row-type > .row-label::placeholder {
   color: var(--gl-color-text-secondary);
 }
-.card-body form.field-stack > .field > .row-label:is(:hover, :focus) {
+.card-body form.field-stack > .field > .row-type > .row-label:is(:hover, :focus) {
   padding-inline: calc(var(--gl-space-xs) - 1px);
   border-color: var(--gl-color-border-default);
   background: var(--gl-color-surface-card);
 }
-.card-body form.field-stack > .field > .row-label:focus {
+.card-body form.field-stack > .field > .row-type > .row-label:focus {
   border-color: var(--gl-color-accent);
 }
 /* Chrome's arrow for the list would take a third of a 6rem column
    from the word; the list still opens on a click or a keystroke. */
-.card-body form.field-stack > .field > .row-label::-webkit-calendar-picker-indicator {
+.card-body form.field-stack > .field > .row-type > .row-label::-webkit-calendar-picker-indicator {
   display: none !important;
+}
+/* The type column holds the label field and the row's delete
+   (Admin::ContactsEdit#label_field) in one box, so the row's baseline
+   is still the word's — a flex box's is its first item's — and the
+   delete can sit inside the field's end, centered on it whatever the
+   row's height. It shows only while the label or it has focus, the
+   click that edits the word being the click that offers it. Hidden
+   by opacity rather than visibility, which would make it unfocusable:
+   the label's Tab could not land on it, Chrome dropping the focus as
+   the label lets go. At rest it takes no pointer, so a click on the
+   word's end still reaches the field under it. The focused label
+   gives it room, so a long word ends in its ellipsis before the
+   icon. The removal register is the birthday's
+   remove control's: quiet at rest, danger on hover. */
+.card-body form.field-stack > .field > .row-type {
+  display: flex;
+  position: relative;
+  min-width: 0;
+}
+.card-body form.field-stack > .field > .row-type > .row-label {
+  flex: 1;
+  min-width: 0;
+}
+.card-body form.field-stack > .field > .row-type > .row-delete {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  margin-block: auto;
+  opacity: 0;
+  pointer-events: none;
+}
+.card-body form.field-stack > .field > .row-type:focus-within > .row-delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+.card-body form.field-stack > .field > .row-type:has(> .row-delete) > .row-label:focus {
+  padding-inline-end: 1.75rem;
+}
+.card-body form.field-stack > .field > .row-type > .row-delete:hover {
+  color: var(--gl-color-danger);
 }
 
 /* The date line breaks in two when its row cannot hold a whole
@@ -413,22 +453,24 @@
    refused one. One gap, noted rather than scripted: a
    whitespace-only value hides the placeholder and the strike with
    it, while the save strips before it compares. */
-.field[data-blank-removes]:has(> input:not(.row-label):placeholder-shown) > :is(span, .row-label),
+.field[data-blank-removes]:has(> input:placeholder-shown) > span,
+.field[data-blank-removes]:has(> input:placeholder-shown) > .row-type > .row-label,
 .field[data-blank-removes]:has(> textarea:placeholder-shown) > span,
-.field[data-blank-removes]:has(> .field-stack):not(:has(> .field-stack > input:not(:placeholder-shown))) > :is(span, .row-label),
+.field[data-blank-removes]:has(> .field-stack):not(:has(> .field-stack > input:not(:placeholder-shown))) > span,
+.field[data-blank-removes]:has(> .field-stack):not(:has(> .field-stack > input:not(:placeholder-shown))) > .row-type > .row-label,
 .field[data-blank-removes]:has(> .date-row):has(option[value=""]:checked):not(:has(input[type="number"]:not(:placeholder-shown))) > span {
   text-decoration: line-through;
   color: var(--gl-color-danger);
 }
-.field[data-blank-removes]:has(> input:not(.row-label):placeholder-shown) > input:not(.row-label)::placeholder,
+.field[data-blank-removes]:has(> input:placeholder-shown) > input::placeholder,
 .field[data-blank-removes]:has(> textarea:placeholder-shown) > textarea::placeholder {
   color: var(--gl-color-danger);
 }
 /* A label field's own placeholder is the kind it stands in for, and
    is struck with the row. A pseudo-element answers no :is() above, so
    it takes its own rule. */
-.field[data-blank-removes]:has(> input:not(.row-label):placeholder-shown) > .row-label::placeholder,
-.field[data-blank-removes]:has(> .field-stack):not(:has(> .field-stack > input:not(:placeholder-shown))) > .row-label::placeholder {
+.field[data-blank-removes]:has(> input:placeholder-shown) > .row-type > .row-label::placeholder,
+.field[data-blank-removes]:has(> .field-stack):not(:has(> .field-stack > input:not(:placeholder-shown))) > .row-type > .row-label::placeholder {
   text-decoration: line-through;
   color: var(--gl-color-danger);
 }
