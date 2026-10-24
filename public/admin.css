@@ -49,11 +49,22 @@
   display: flex;
 }
 .record-nav .btn,
-.record-nav button {
+.record-nav button,
+.record-nav .record-actions {
   position: absolute;
   inset-block-start: 50%;
   inset-inline-end: 0;
   translate: 0 -50%;
+}
+/* A row with two actions pins them together, so they sit side by
+   side rather than stacked on the one right edge. */
+.record-actions {
+  display: flex;
+  gap: var(--gl-space-2xs);
+}
+.record-nav .record-actions > * {
+  position: static;
+  translate: none;
 }
 
 /* A card's h1 carries no margin of its own — Gloss zeroes h3 in a

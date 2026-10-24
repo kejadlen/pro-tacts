@@ -1127,7 +1127,9 @@ class AdminContactsPagesTest < Minitest::Test
       digest = store.contact("ada").etag.delete('"')
       assert_includes last_response.body,
                       %(<abbr class="type-mono" title="#{digest}">#{digest[0, 12]}…</abbr>)
-      refute_includes last_response.body, "&quot;#{digest}"
+      # The log alone: the delete dialog's form carries the etag as
+      # the wire spells it, for its check (Web#apply_delete).
+      refute_includes last_response.body[/<dl class="detail-grid change-log">.*?<\/dl>/m], "&quot;#{digest}"
     end
   end
 
@@ -1848,7 +1850,7 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The details page names its other mode: the edit link rides the
+  # The details page names its other modes: edit and delete ride the
   # back-link's line at the right edge, so the card below stays a
   # clean read of the record.
   def test_the_details_page_links_to_the_edit_screen
@@ -1856,8 +1858,9 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/ada"
 
       assert_includes last_response.body,
-        '<div class="record-nav"><a href="/" class="type-label">‹ contacts</a>' \
-        '<a href="/contacts/ada/edit" class="btn" data-size="sm">edit</a></div>'
+        '<div class="record-nav"><a href="/" class="type-label">‹ contacts</a><div class="record-actions">' \
+        '<button type="button" data-size="sm" popovertarget="delete-contact">delete</button>' \
+        '<a href="/contacts/ada/edit" class="btn" data-size="sm">edit</a></div></div>'
     end
   end
 
@@ -3165,6 +3168,54 @@ class AdminContactsPagesTest < Minitest::Test
       # The refusal re-renders the screen from the current card.
       assert_includes last_response.body, 'value="Ada"'
       assert_includes store.contact("ada").vcard.to_s, "FN:Ada Lovelace"
+    end
+  end
+
+  # The details page offers delete beside edit, behind a popover that
+  # carries the etag the removal is checked against.
+  def test_the_details_page_confirms_a_delete_in_a_popover
+    with_contacts({"ada" => ADA}) do |store|
+      get "/contacts/ada"
+
+      body = last_response.body
+      assert_includes body, '<button type="button" data-size="sm" popovertarget="delete-contact">delete</button>'
+      assert_includes body, '<dialog id="delete-contact" popover="auto"><header>Delete Ada Lovelace?</header>'
+      assert_includes body, '<form id="delete-contact-form" action="/contacts/ada/delete" method="post">' +
+                            %(<input type="hidden" name="etag" value="&quot;#{store.contact("ada").etag.delete('"')}&quot;">)
+    end
+  end
+
+  # A confirmed delete removes the card, leaves the tombstone a
+  # syncing client is told by, and lands on the dashboard.
+  def test_a_confirmed_delete_removes_the_contact
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada/delete", etag: store.contact("ada").etag
+
+      assert_equal 303, last_response.status
+      assert_equal "/", last_response["Location"]
+      assert_nil store.contact("ada")
+      assert_equal ProTacts::Store::Action::DELETE, store.changes_of("ada").first.action
+    end
+  end
+
+  # The snapshot guard, the save's: a card changed since the page
+  # loaded is not the one confirmed, so it stays and the page shows it.
+  def test_a_delete_over_a_stale_snapshot_is_refused
+    with_contacts({"ada" => ADA}) do |store|
+      post "/contacts/ada/delete", etag: '"stale"'
+
+      assert_equal 200, last_response.status
+      assert_includes last_response.body,
+        '<div role="status" data-fixed><span>This contact changed since the page loaded; nothing was deleted.</span></div>'
+      refute_nil store.contact("ada")
+    end
+  end
+
+  def test_deleting_a_contact_that_is_not_there_is_a_404
+    with_contacts({}) do
+      post "/contacts/ada/delete", etag: '"any"'
+
+      assert_equal 404, last_response.status
     end
   end
 
