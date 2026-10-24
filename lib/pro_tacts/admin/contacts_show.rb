@@ -12,6 +12,8 @@ module ProTacts
     # its edit link opens ContactsEdit, and its delete asks first
     # (#delete_form).
     class ContactsShow < Phlex::HTML
+      DELETE = "delete-contact" #: String
+
       # The groups come from the store beside the contact rather than
       # off it: a contact's card carries what its groups lend it, never
       # which groups those are (Store#groups_of). Required, and not
@@ -44,9 +46,12 @@ module ProTacts
           div(class: "record") do
             div(class: "record-nav") do
               a(href: "/", class: "type-label") { "‹ contacts" }
-              div(class: "record-actions") do
+              # The groups row's edit/new pair (ContactCard#groups_row),
+              # the slash admin.css's. The delete button submits its
+              # form from outside it, so the pair is two siblings.
+              div(role: "group", aria_label: "Contact") do
                 a(href: "/contacts/#{@contact.id}/edit", class: "btn", data_size: "sm") { "edit" }
-                delete_form
+                button(type: "submit", form: DELETE, data_size: "sm") { "delete" }
               end
             end
             render ContactCard.new(contact: @contact, groups: @groups)
@@ -84,6 +89,7 @@ module ProTacts
           # so the dialog is told which boxes to check rather than
           # reading every group's members to work it out.
           render GroupDialog.new(contact: @contact, groups: @all_groups, joined: @groups.map(&:id))
+          delete_form
         end
       end
 
@@ -96,10 +102,9 @@ module ProTacts
       #: () -> void
       def delete_form
         question = JSON.generate("Delete #{@contact.name || @contact.id}?")
-        form(action: "/contacts/#{@contact.id}/delete", method: "post", x_data: true,
+        form(id: DELETE, action: "/contacts/#{@contact.id}/delete", method: "post", x_data: true,
              "@submit": "confirm(#{question}) || $event.preventDefault()") do
           input(type: "hidden", name: "etag", value: @contact.etag)
-          button(type: "submit", data_size: "sm") { "delete" }
         end
       end
 

@@ -1858,8 +1858,9 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/ada"
 
       assert_includes last_response.body,
-        '<div class="record-nav"><a href="/" class="type-label">‹ contacts</a><div class="record-actions">' \
-        '<a href="/contacts/ada/edit" class="btn" data-size="sm">edit</a><form action="/contacts/ada/delete"'
+        '<div class="record-nav"><a href="/" class="type-label">‹ contacts</a>' \
+        '<div role="group" aria-label="Contact"><a href="/contacts/ada/edit" class="btn" data-size="sm">edit</a>' \
+        '<button type="submit" form="delete-contact" data-size="sm">delete</button></div></div>'
     end
   end
 
@@ -3178,10 +3179,9 @@ class AdminContactsPagesTest < Minitest::Test
       get "/contacts/ada"
 
       assert_includes last_response.body,
-        '<form action="/contacts/ada/delete" method="post" x-data ' \
+        '<form id="delete-contact" action="/contacts/ada/delete" method="post" x-data ' \
         '@submit="confirm(&quot;Delete Ada Lovelace?&quot;) || $event.preventDefault()">' +
-        %(<input type="hidden" name="etag" value="&quot;#{store.contact("ada").etag.delete('"')}&quot;">) +
-        '<button type="submit" data-size="sm">delete</button></form>'
+        %(<input type="hidden" name="etag" value="&quot;#{store.contact("ada").etag.delete('"')}&quot;"></form>)
     end
   end
 
