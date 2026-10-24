@@ -1860,7 +1860,7 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes last_response.body,
         '<div class="record-nav"><a href="/" class="type-label">‹ contacts</a>' \
         '<div role="group" aria-label="Contact"><a href="/contacts/ada/edit" class="btn" data-size="sm">edit</a>' \
-        '<button type="submit" form="delete-contact" data-size="sm">delete</button></div></div>'
+        '<button type="button" data-size="sm" popovertarget="delete-contact">delete</button></div></div>'
     end
   end
 
@@ -3171,17 +3171,17 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The details page offers delete beside edit, behind the browser's
-  # confirm(), its form carrying the etag the removal is checked
-  # against.
-  def test_the_details_page_confirms_a_delete
+  # The details page offers delete beside edit, behind a popover that
+  # carries the etag the removal is checked against.
+  def test_the_details_page_confirms_a_delete_in_a_popover
     with_contacts({"ada" => ADA}) do |store|
       get "/contacts/ada"
 
-      assert_includes last_response.body,
-        '<form id="delete-contact" action="/contacts/ada/delete" method="post" x-data ' \
-        '@submit="confirm(&quot;Delete Ada Lovelace?&quot;) || $event.preventDefault()">' +
-        %(<input type="hidden" name="etag" value="&quot;#{store.contact("ada").etag.delete('"')}&quot;"></form>)
+      body = last_response.body
+      assert_includes body, '<form id="delete-contact-form" action="/contacts/ada/delete" method="post">' +
+                            %(<input type="hidden" name="etag" value="&quot;#{store.contact("ada").etag.delete('"')}&quot;"></form>) +
+                            '<dialog id="delete-contact" popover="auto"><header>Delete Ada Lovelace?</header><footer>'
+      assert_includes body, '<button type="submit" form="delete-contact-form" data-variant="danger">Delete</button>'
     end
   end
 

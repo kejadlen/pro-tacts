@@ -1,5 +1,3 @@
-require "json"
-
 require "pro_tacts/admin/phlex"
 
 require "pro_tacts/admin/contact_card"
@@ -10,7 +8,7 @@ module ProTacts
   module Admin
     # GET /contacts/:id — a contact's card (ContactCard), read-only;
     # its edit link opens ContactsEdit, and its delete asks first
-    # (#delete_form).
+    # (#delete_dialog).
     class ContactsShow < Phlex::HTML
       DELETE = "delete-contact" #: String
 
@@ -47,11 +45,10 @@ module ProTacts
             div(class: "record-nav") do
               a(href: "/", class: "type-label") { "‹ contacts" }
               # The groups row's edit/new pair (ContactCard#groups_row),
-              # the slash admin.css's. The delete button submits its
-              # form from outside it, so the pair is two siblings.
+              # the slash admin.css's.
               div(role: "group", aria_label: "Contact") do
                 a(href: "/contacts/#{@contact.id}/edit", class: "btn", data_size: "sm") { "edit" }
-                button(type: "submit", form: DELETE, data_size: "sm") { "delete" }
+                button(type: "button", data_size: "sm", popovertarget: DELETE) { "delete" }
               end
             end
             render ContactCard.new(contact: @contact, groups: @groups)
@@ -89,22 +86,28 @@ module ProTacts
           # so the dialog is told which boxes to check rather than
           # reading every group's members to work it out.
           render GroupDialog.new(contact: @contact, groups: @all_groups, joined: @groups.map(&:id))
-          delete_form
+          delete_dialog
         end
       end
 
       private
 
-      # The browser's own confirm() is the confirmation: a yes or no
-      # needs no dialog of ours, and Alpine is already loaded (Layout).
-      # The etag rides along for the edit form's reason
-      # (Web#apply_delete).
+      # The confirmation, a popover for ContactDialog's reasons: the
+      # question and the two answers, with no body between them. The
+      # form stands outside the dialog for that, the Delete reaching it
+      # by id; nothing in it shows. The etag rides along for the edit
+      # form's reason (Web#apply_delete).
       #: () -> void
-      def delete_form
-        question = JSON.generate("Delete #{@contact.name || @contact.id}?")
-        form(id: DELETE, action: "/contacts/#{@contact.id}/delete", method: "post", x_data: true,
-             "@submit": "confirm(#{question}) || $event.preventDefault()") do
+      def delete_dialog
+        form(id: "#{DELETE}-form", action: "/contacts/#{@contact.id}/delete", method: "post") do
           input(type: "hidden", name: "etag", value: @contact.etag)
+        end
+        dialog(id: DELETE, popover: "auto") do
+          header { "Delete #{@contact.name || @contact.id}?" }
+          footer do
+            button(type: "button", popovertarget: DELETE, popovertargetaction: "hide") { "Cancel" }
+            button(type: "submit", form: "#{DELETE}-form", data: {variant: "danger"}) { "Delete" }
+          end
         end
       end
 

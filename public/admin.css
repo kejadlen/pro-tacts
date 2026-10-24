@@ -63,6 +63,17 @@
   position: static;
   translate: none;
 }
+/* The contact's delete in the color Gloss keeps for destructive, so
+   the pair says which of its two words cannot be taken back. */
+.record-nav [popovertarget="delete-contact"] {
+  color: var(--gl-color-danger);
+}
+/* A dialog that is only a question and its answers (the contact's
+   delete) has no body between Gloss's header and footer, and their
+   two hairlines would stack into one heavy rule; the header's stays. */
+dialog > header + footer {
+  border-top: 0;
+}
 
 /* A card's h1 carries no margin of its own — Gloss zeroes h3 in a
    card-body the same way — because every h1 in one is a page's
