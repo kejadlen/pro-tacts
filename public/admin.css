@@ -62,7 +62,8 @@
   display: flex;
   gap: var(--gl-space-2xs);
 }
-.record-nav .record-actions > * {
+.record-nav .record-actions .btn,
+.record-nav .record-actions button {
   position: static;
   translate: none;
 }

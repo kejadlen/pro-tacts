@@ -1127,7 +1127,7 @@ class AdminContactsPagesTest < Minitest::Test
       digest = store.contact("ada").etag.delete('"')
       assert_includes last_response.body,
                       %(<abbr class="type-mono" title="#{digest}">#{digest[0, 12]}…</abbr>)
-      # The log alone: the delete dialog's form carries the etag as
+      # The log alone: the delete form carries the etag as
       # the wire spells it, for its check (Web#apply_delete).
       refute_includes last_response.body[/<dl class="detail-grid change-log">.*?<\/dl>/m], "&quot;#{digest}"
     end
@@ -1859,8 +1859,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_includes last_response.body,
         '<div class="record-nav"><a href="/" class="type-label">‹ contacts</a><div class="record-actions">' \
-        '<button type="button" data-size="sm" popovertarget="delete-contact">delete</button>' \
-        '<a href="/contacts/ada/edit" class="btn" data-size="sm">edit</a></div></div>'
+        '<a href="/contacts/ada/edit" class="btn" data-size="sm">edit</a><form action="/contacts/ada/delete"'
     end
   end
 
@@ -3171,17 +3170,18 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The details page offers delete beside edit, behind a popover that
-  # carries the etag the removal is checked against.
-  def test_the_details_page_confirms_a_delete_in_a_popover
+  # The details page offers delete beside edit, behind the browser's
+  # confirm(), its form carrying the etag the removal is checked
+  # against.
+  def test_the_details_page_confirms_a_delete
     with_contacts({"ada" => ADA}) do |store|
       get "/contacts/ada"
 
-      body = last_response.body
-      assert_includes body, '<button type="button" data-size="sm" popovertarget="delete-contact">delete</button>'
-      assert_includes body, '<dialog id="delete-contact" popover="auto"><header>Delete Ada Lovelace?</header>'
-      assert_includes body, '<form id="delete-contact-form" action="/contacts/ada/delete" method="post">' +
-                            %(<input type="hidden" name="etag" value="&quot;#{store.contact("ada").etag.delete('"')}&quot;">)
+      assert_includes last_response.body,
+        '<form action="/contacts/ada/delete" method="post" x-data ' \
+        '@submit="confirm(&quot;Delete Ada Lovelace?&quot;) || $event.preventDefault()">' +
+        %(<input type="hidden" name="etag" value="&quot;#{store.contact("ada").etag.delete('"')}&quot;">) +
+        '<button type="submit" data-size="sm">delete</button></form>'
     end
   end
 
