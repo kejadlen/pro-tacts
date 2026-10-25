@@ -472,6 +472,24 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # The card is a component of its entity: a put makes one under the
+  # card's id, and a delete takes the entity and lets the cascade take
+  # the card and everything keyed by it.
+  def test_a_card_lives_and_dies_with_its_entity
+    with_store({"aiden" => "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nBDAY:1985-04-12\r\nEND:VCARD\r\n"}) do |store|
+      group = store.create_group(name: "Booles")
+      store.add_member(group, "aiden")
+      assert_equal %w[aiden], database(store)[:entities].select_map(:id)
+
+      store.delete("aiden")
+
+      assert_empty database(store)[:entities].all
+      %i[cards birthdays group_members card_properties search_keys sort_keys].each do |table|
+        assert_empty database(store)[table].all, table
+      end
+    end
+  end
+
   def test_deleting_nothing_logs_nothing
     with_store({"aiden" => AIDEN}) do |store|
       before = store.changes.length
@@ -520,6 +538,7 @@ class StoreTest < Minitest::Test
 
       assert ProTacts::ChangeId.minted?(new_id)
       assert_nil store.contact(UUID)
+      assert_equal [new_id], database(store)[:entities].select_map(:id)
       assert_equal "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:#{new_id}\r\nEND:VCARD\r\n",
                    store.contact(new_id).vcard.to_s
     end
@@ -2504,6 +2523,41 @@ class StoreTest < Minitest::Test
 
         database(store)[:groups].where(id: "nous").delete
         assert_empty database(store)[:group_properties].all
+      end
+    end
+  end
+
+  # The entities rebuild carries cards and every table under them, for
+  # 005's hazard on a larger scale. Rows asserted across the upgrade,
+  # and the cascade from an entity asserted to reach each of them — a
+  # child redeclared without its foreign key would keep its row here.
+  def test_the_migration_makes_each_card_an_entity_and_carries_its_rows
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 15)
+        db[:cards].insert(id: "aiden", vcard: AIDEN, created_at: "2026-01-02T03:04:05.678Z")
+        db[:card_properties].insert(card_id: "aiden", position: 0, name: "FN", value: "Aiden")
+        db[:card_parameters].insert(card_id: "aiden", position: 0, name: "TYPE", value: "HOME")
+        db[:birthdays].insert(card_id: "aiden", year: 1985, month: 4, day: 12)
+        db[:groups].insert(id: "nous", name: "Booles")
+        db[:group_members].insert(group_id: "nous", card_id: "aiden")
+        db[:search_keys].insert(card_id: "aiden", key: "{}")
+        db[:sort_keys].insert(card_id: "aiden", sort_key: "aiden")
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        db = database(store)
+        assert_equal %w[aiden], db[:entities].select_map(:id)
+        assert_equal "2026-01-02T03:04:05.678Z", card_row(store, "aiden").fetch(:created_at)
+        assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), store.contact("aiden").birthday
+        assert_equal %w[aiden], store.group("nous").members
+        tables = %i[cards card_properties card_parameters birthdays group_members search_keys sort_keys]
+        tables.each { assert_equal 1, db[it].count, it }
+
+        db[:entities].where(id: "aiden").delete
+        tables.each { assert_empty db[it].all, it }
+        assert_equal %w[nous], db[:groups].select_map(:id)
       end
     end
   end

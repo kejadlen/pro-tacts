@@ -22,10 +22,11 @@ module ProTacts
   # The transactional store: one SQLite database holding each contact's
   # card exactly as it was submitted.
   #
-  # Seven kinds of state live here and they are not equally precious.
-  # Only the cards, the change log, the birthdays, the groups, the
-  # books, the group change log, and the group photos cannot be
-  # rebuilt, and each is argued where it was decided: the first two in
+  # Eight kinds of state live here and they are not equally precious.
+  # Only the entities, the cards, the change log, the birthdays, the
+  # groups, the books, the group change log, and the group photos
+  # cannot be rebuilt, and each is argued where it was decided: the
+  # entities in db/migrations/016_entities.rb, the cards and the log in
   # docs/plans/2026-08-25-sqlite-schema.md,
   # "What the tables are for", the birthdays in
   # docs/plans/2026-08-31-partial-birthdays.md, the groups in
@@ -558,12 +559,14 @@ module ProTacts
     # Removes a card, leaving the change-log entry that tells a syncing
     # client it is gone. The tombstone carries the whole card away in
     # its diff — every line removed and none added — which is the only
-    # record left of what was here, the row itself being gone.
+    # record left of what was here, the row itself being gone. The
+    # entity goes, and the card and everything keyed by it follow on
+    # the cascade (db/migrations/016_entities.rb).
     #: (String id) -> bool
     def delete(id)
       @database.transaction do
         before = contact(id)
-        deleted = cards.where(id:).delete.positive?
+        deleted = entities.where(id:).delete.positive?
         record(id, action: Action::DELETE, etag: nil, diff: CardDiff.between(before&.vcard, nil)) if deleted
         deleted
       end
@@ -609,6 +612,7 @@ module ProTacts
             # resets at commit); `foreign_keys` itself is a no-op there
             # (db/migrations/005_group_identity.rb records the reason).
             @database.run("PRAGMA defer_foreign_keys = ON")
+            entities.where(id:).update(id: new_id)
             cards.where(id:).update(id: new_id, vcard: stored.to_s, updated_at: NOW)
             birthdays.where(card_id: id).update(card_id: new_id)
             group_members.where(card_id: id).update(card_id: new_id)
@@ -631,8 +635,8 @@ module ProTacts
           end
           return new_id
         rescue Sequel::UniqueConstraintViolation
-          # The minted id collided with a card already holding it; the
-          # only unique constraint this write can hit.
+          # The minted id collided with an entity already holding it;
+          # the only unique constraint this write can hit first.
           next
         end
       end
@@ -972,6 +976,11 @@ module ProTacts
     private
 
     #: () -> Sequel::Dataset
+    def entities
+      @database[:entities]
+    end
+
+    #: () -> Sequel::Dataset
     def cards
       @database[:cards]
     end
@@ -1053,6 +1062,7 @@ module ProTacts
     # column default only fires on insert (NOW).
     #: (String id, VCard vcard) -> void
     def upsert_card(id, vcard)
+      entities.insert_conflict.insert(id:)
       cards
         .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
         .insert(id:, vcard: vcard.to_s)
