@@ -1124,6 +1124,17 @@ class WebTest < Minitest::Test
     end
   end
 
+  def test_a_put_under_a_groups_id_is_not_a_member
+    with_contacts({"aiden" => "Aiden"}) do |store|
+      group = store.create_group(name: "Booles")
+
+      put_request group, card(group, "Booles"), "CONTENT_TYPE" => VCARD
+
+      assert_equal 404, last_response.status
+      assert_nil store.contact(group)
+    end
+  end
+
   def test_each_user_syncs_their_own_book
     with_contacts({"aiden" => "Aiden"}) do |store|
       store.put("znorth", ProTacts::VCard.new(card("znorth", "Zed")))
