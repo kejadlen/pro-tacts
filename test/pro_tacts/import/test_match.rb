@@ -14,7 +14,7 @@ class ImportMatchTest < Minitest::Test
 
   def contact(id, name, *lines)
     card = ["BEGIN:VCARD", "VERSION:3.0", "FN:#{name}", *lines, "UID:#{id}", "END:VCARD", ""].join("\r\n")
-    ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(card), birthday: nil, inherited: [])
+    ProTacts::Contact.of_card(id:, card: ProTacts::VCard.new(card), birthday: nil)
   end
 
   def test_the_distance_is_levenshteins
@@ -104,8 +104,8 @@ class ImportMatchTest < Minitest::Test
   end
 
   def test_a_card_with_nothing_to_compare_matches_nothing
-    arriving = ProTacts::Contact.new(
-      id: "0", stored: ProTacts::VCard.new("BEGIN:VCARD\r\nVERSION:3.0\r\nEND:VCARD\r\n"), birthday: nil, inherited: [],
+    arriving = ProTacts::Contact.of_card(
+      id: "0", card: ProTacts::VCard.new("BEGIN:VCARD\r\nVERSION:3.0\r\nEND:VCARD\r\n"), birthday: nil
     )
 
     assert_empty Match.candidates(arriving, [contact("jane", "Jane Booles")])

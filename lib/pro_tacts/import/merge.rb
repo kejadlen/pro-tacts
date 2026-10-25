@@ -60,17 +60,22 @@ module ProTacts
           name = property.name.upcase
           if MANY.include?(name)
             taken.concat(moved(line, property)) unless held?(property)
+          elsif name == "NOTE"
+            # The note is the entity's component rather than a line of
+            # the card (docs/plans/2026-10-25-contacts-on-entities.md);
+            # an arriving one fills the gap where the contact has none,
+            # and several join into the one they fill
+            # (docs/plans/2026-09-25-one-note-per-contact.md), the
+            # joined line written below the walk.
+            if @into.note.nil?
+              arriving_notes << property.text
+            elsif @into.note != property.text
+              left << line
+            end
           elsif ONE.include?(name)
             own = into.stored.property(name)
             if own.nil?
-              # A contact holds one note, so several arriving join into
-              # the one they fill (docs/plans/2026-09-25-one-note-per-
-              # contact.md); the joined line is written below the walk.
-              if name == "NOTE"
-                arriving_notes << property.text
-              else
-                taken.concat(moved(line, property))
-              end
+              taken.concat(moved(line, property))
             elsif own.value != property.value
               left << line
             end
@@ -93,13 +98,22 @@ module ProTacts
           end
         end
         @left = left
-        # The arriving notes' one line, at the walk's end: whatever
-        # order they arrived in, the join is the value the book keeps
-        # and the one-note invariant asks for.
-        unless arriving_notes.empty?
-          taken << "NOTE:#{VCard.escape(arriving_notes.join("\n\n"))}\r\n"
-        end
-        @contact = into.with(stored: into.stored.insert(taken), birthday:)
+        # What the walk took apart, at its end: the lines join the
+        # stored card, and the ADRs among them — none the contact
+        # already serves, #held?'s check — join the entity's addresses
+        # behind the member's own. The arriving notes fill the note's
+        # gap as one value, the join the one-note invariant asks for;
+        # where the member holds a note the walk left arriving ones
+        # behind already. Whatever order they arrived in, the join is
+        # the value the book keeps.
+        composed = into.stored.insert(taken)
+        arriving, stored = Contact.take_addresses(composed)
+        @contact = into.with(
+          stored:,
+          birthday:,
+          addresses: [*into.addresses, *arriving],
+          note: into.note || (arriving_notes.empty? ? nil : arriving_notes.join("\n\n")),
+        )
       end
 
       # The contact as it would be saved, which the editor renders.

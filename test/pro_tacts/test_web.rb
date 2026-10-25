@@ -485,13 +485,14 @@ class WebTest < Minitest::Test
   # (EditedContact).
   def test_a_members_put_of_its_served_card_keeps_the_strong_etag
     address = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
+    rendered = "ADR;TYPE=HOME:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
 
     with_contacts({"aiden" => "Aiden"}) do |store|
       FixtureData.seed_group(store, name: "Booles", lines: [address], members: ["aiden"])
 
       get "/dav/addressbook/aiden.vcf"
       served = last_response.body
-      assert_includes served, address
+      assert_includes served, rendered
 
       put_request "aiden", served, "CONTENT_TYPE" => VCARD
 

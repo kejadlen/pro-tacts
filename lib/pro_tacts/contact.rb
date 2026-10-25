@@ -17,16 +17,17 @@ module ProTacts
   # What it holds is the *stored* card — a VCard rather than its bytes,
   # since every caller handing one over already had a card in hand and
   # a contact holding bytes would have to make one to answer anything —
-  # with the birthday and the lines its groups lend beside it rather
+  # with the birthday and the addresses and the note beside it rather
   # than parsed back out of the card they compose into; #vcard composes
-  # the served one from the three.
-  # Why each sits beside the card instead of in it, and why they are
-  # independent rather than two spellings of one fact, is
+  # the served one from those. The addresses and the note belong to the
+  # contact's entity, which a card shares with a group
+  # (docs/plans/2026-10-25-contacts-on-entities.md); why each sits
+  # beside the card instead of in it, and why they are independent
+  # rather than two spellings of one fact, is
   # docs/plans/2026-09-05-contact-takes-its-structure.md,
-  # docs/plans/2026-08-31-partial-birthdays.md, and
-  # docs/plans/2026-08-24-vcard-storage-and-groups.md. An unmodeled
-  # BDAY spelling stays the card's own: #properties shows it, and
-  # #birthday reads nil over it.
+  # docs/plans/2026-08-31-partial-birthdays.md, and that plan. An
+  # unmodeled BDAY spelling stays the card's own: #properties shows it,
+  # and #birthday reads nil over it.
   #
   # The etag hashes the composed card, so it changes exactly when what
   # the client downloads changes, and is derived here and stored
@@ -44,38 +45,34 @@ module ProTacts
     # @rbs @id: String
     # @rbs @stored: VCard
     # @rbs @birthday: Birthday?
-    # @rbs @inherited: Array[Inherited]
+    # @rbs @addresses: Array[Address]
+    # @rbs @note: String?
+    # @rbs @lent: Array[Lent]
     # @rbs @vcard: VCard
     # @rbs @etag: String
-    # @rbs @lent_at: Hash[Integer, Group]
+    # @rbs @own: Contact
 
     # Ids end up in paths and arrive from client-supplied hrefs, so an id
     # outside this charset cannot be served.
     ID_FORMAT = /\A[\w-]+\z/ #: Regexp
 
     # The structured shapes the accessors return: text value and types
-    # for TEL (RFC 2426 section 3.3.1) and EMAIL (section 3.3.2), and
-    # ADR's seven components (section 3.2.1: post office box, extended
-    # address, street, locality, region, postal code, country — nil
-    # where the card left the position blank or stopped short of it).
-    # A row's `label_line` is the `X-ABLabel` sharing its property
+    # for TEL (RFC 2426 section 3.3.1) and EMAIL (section 3.3.2). A
+    # row's `label_line` is the `X-ABLabel` sharing its property
     # group, a different fact from its types
     # (docs/plans/2026-09-18-phone-labels.md, "Reading"), carried as
     # the line so that a save removing the row removes its label with
     # it (docs/plans/2026-10-22-a-row-edits-its-label.md), every
-    # shape's `line` is the parsed line it was read from, the address
-    # a save names that row by
-    # (docs/plans/2026-09-05-web-card-editor.md), a repeatable row's
-    # `property` that line's reading, which #rows only builds a row
-    # from, so a save splicing it never meets a line that would not
-    # read, and `lent_by` the
-    # group lending the row, nil where the card's own (#lent_at).
+    # shape's `line` the parsed line it was read from, the row a save
+    # names by its digest, and `property` that line's reading, which
+    # #rows only builds a row from, so a save splicing it never meets a
+    # line that would not read.
     # Data classes, whose members the inline syntax cannot read; the
     # signatures live in sig/pro_tacts/contact.rbs.
     # @rbs skip
-    Phone = Data.define(:value, :label_line, :types, :line, :property, :lent_by)
+    Phone = Data.define(:value, :label_line, :types, :line, :property)
     # @rbs skip
-    Email = Data.define(:value, :label_line, :types, :line, :property, :lent_by)
+    Email = Data.define(:value, :label_line, :types, :line, :property)
     # A handle: an IMPP (RFC 6350 section 6.4.3, from RFC 4770 for
     # 3.0) as Contacts.app spells one, the service its X-SERVICE-TYPE
     # parameter and the value the handle, with the URI scheme it sits
@@ -83,20 +80,20 @@ module ProTacts
     # `x-apple:` for a service with no scheme, Signal's case
     # (docs/plans/2026-10-18-signal-handles.md).
     # @rbs skip
-    Handle = Data.define(:service, :value, :scheme, :line, :property, :lent_by)
-    # @rbs skip
-    Note = Data.define(:value, :line)
+    Handle = Data.define(:service, :value, :scheme, :line, :property)
     # @rbs skip
     Photo = Data.define(:mime_type, :bytes)
 
-    # One line a group lends this contact, and the group that lends it,
-    # whole (Store#inheritance). Not its name, because two groups may
-    # share one, and a screen marking the line opens the one group that
-    # lent it (docs/DESIGN.md, "Relationships are navigable"). The
-    # position is the group_properties row the line came from, which a
-    # member's edit to it writes back to (EditedContact::GroupEdit).
-    # @rbs skip
-    Inherited = Data.define(:group, :position, :line)
+    # An address the entity holds: ADR's seven components (RFC 2426
+    # section 3.2.1 — a component the entity left blank is "", which
+    # reads as absent) and its label, the one word a reader shows
+    # (#label_of's reading — an X-ABLabel's text, or the types joined),
+    # nil where the address carries none. The component is the record:
+    # #address_lines renders it into a card and #take_addresses reads
+    # one back, so what moves between cards and components is the
+    # reading, never the bytes. `lent_by` is the group lending the row
+    # on a served contact, nil on the entity's own — provenance the
+    # screens mark a row with, not a fact of the address.
     # @rbs skip
     Address = Data.define(
       :po_box,
@@ -106,17 +103,46 @@ module ProTacts
       :region,
       :postal_code,
       :country,
-      :types,
-      :label_line,
-      :line,
-      :property,
+      :label,
       :lent_by,
     )
 
+    # Reopened rather than defined in the block above, for the reason
+    # VCard::Parser::Property is: the default lives here where Steep
+    # reads the signature.
+    class Address
+      #: (?label: String?, ?lent_by: Group?, **untyped) -> void
+      def initialize(label: nil, lent_by: nil, **)
+        super
+      end
+
+      #: () -> Array[String]
+      def self.label_words = Contact.typed_words("ADR")
+
+      # The row's fields by form name: each component as the editor
+      # shows it, the po box excepted, no field editing it.
+      #: () -> Hash[String, String]
+      def fields
+        Contact::ADDRESS_COMPONENTS.to_h { |name|
+          pair = [name, public_send(name)] #: [String, String]
+          pair
+        }
+      end
+    end
+
+    # What one group lends a contact: its addresses at their positions
+    # and its note, whole — the group's components read beside the
+    # membership that carries them (Store#lent_of). A group with
+    # nothing to lend does not appear.
+    # @rbs skip
+    Lent = Data.define(:group, :addresses, :note)
+    # @rbs skip
+    LentAddress = Data.define(:position, :address)
+
     # An ADR's editable components, in the order the value spells them
     # (RFC 2426 section 3.2.1). The post office box heads that value
-    # and is not among them — no screen shows one, and a save
-    # preserves its bytes rather than letting a form field near them —
+    # and is not among them — no screen shows one, and a save preserves
+    # its bytes rather than letting a form field near them —
     # so a component's position in the value is one past its index
     # here.
     ADDRESS_COMPONENTS = %w[extended street locality region postal_code country].freeze #: Array[String]
@@ -162,12 +188,32 @@ module ProTacts
     #: (String name) -> Array[String]
     def self.typed_words(name) = [*TYPE_WORDS.fetch(name).keys, "other"]
 
-    # A typed row — a phone, an email, an address — rewritten into the
-    # card under `value`, its value already in the line's spelling.
+    # An address as the lines a card carries it in, rendered through
+    # #labeled_lines: a label of type words whole as TYPE values, any
+    # other under an `item` group beside an X-ABLabel, and none as a
+    # bare line. The group is numbered past every group `card` already
+    # names (VCard#free_group), so a rendered label can never pair with
+    # a line the stored card carries — the numbering the composition
+    # owes a lent label (docs/plans/2026-10-25-contacts-on-entities.md,
+    # "Composition"). Composition calls this one address at a time over
+    # the card it has composed so far, so each label takes its own
+    # group.
+    #: (VCard card, Address address) -> Array[String]
+    def self.address_lines(card, address)
+      value = [address.po_box, address.extended, address.street, address.locality,
+               address.region, address.postal_code, address.country].map { |component|
+        VCard.escape(component)
+      }.join(";")
+      property = VCard::Parser::Property.new(group: nil, name: "ADR", parameters: [], value: "")
+      labeled_lines(card, property, [], value, address.label.to_s)
+    end
+
+    # A typed row — a phone, an email — rewritten into the card under
+    # `value`, its value already in the line's spelling.
     # A label that is nil or says what the row read leaves the header
     # alone, byte for byte; any other takes off what the reader showed
     # and writes the new word (#labeled_lines).
-    #: (VCard card, Phone | Email | Address row, String value, String? label) -> VCard
+    #: (VCard card, Phone | Email row, String value, String? label) -> VCard
     def self.edited_row(card, row, value, label)
       if label.nil? || label == row.label.to_s.strip
         return card.substitute(row.line.digest, ["#{VCard.header_of(row.property)}#{value}"])
@@ -209,7 +255,7 @@ module ProTacts
     # `X-ABLabel` sharing its group, which would otherwise be left
     # naming nothing (docs/plans/2026-10-22-a-row-edits-its-label.md,
     # "Removing a row removes its label").
-    #: (VCard card, Phone | Email | Address row) -> VCard
+    #: (VCard card, Phone | Email row) -> VCard
     def self.removed_row(card, row)
       card = card.substitute(row.line.digest, [])
       label_line = row.label_line
@@ -242,39 +288,97 @@ module ProTacts
       ["#{VCard.header_of(line)}#{value}", "#{group}.X-ABLabel:#{text}"]
     end
 
-    # An address's value, components spliced from the form's fields:
-    # the raw components re-joined, or nil when the result is blank
-    # throughout (blank is absent, the reader's own rule for an ADR —
-    # the caller removes the line). A component that submits its
-    # current reading keeps its own bytes — the po box always, having
-    # no field, and any other the form left alone — where a moved one
-    # re-escapes from the form; the splice over still-escaped
-    # components is n_line's own rule (Admin::CardForm),
-    # unescape-then-re-escape not being byte-stable. A nil address is
-    # an added row: seven fresh positions, po box empty.
-    #: (Address? address, Hash[String, String] fields) -> String?
-    def self.address_value(address, fields)
-      components = address ? VCard.split_raw_components(address.property.value) : [""]
-      components << "" while components.length < 7
-      ADDRESS_COMPONENTS.each_with_index do |name, index|
-        position = index + 1
-        value = fields.fetch(name)
-        current = address && address.public_send(name).to_s.strip
-        components[position] = value == current ? components.fetch(position) : VCard.escape(value)
-      end
-      components.join(";") unless components.all?(&:empty?)
-    end
-
     private_class_method :labeled_lines
 
+    # The card's ADRs as components, and the card without them — the
+    # reading half of #address_lines, and the one walk every arrival
+    # takes: a card a client submits (EditedContact), a card an import
+    # composes (Contact.of_card), and the migration that moved every
+    # ADR off the stored bytes. Each address takes the `X-ABLabel`
+    # paired to its group with it, the pairing #label_of reads, so a
+    # label never names a line that stayed behind; a label no address
+    # took stays in the card, naming a line of its own. An ADR that
+    # reads as no address at all — blank throughout, po box included —
+    # is left in the card as it lies: it holds nothing to move, and
+    # the bytes are served either way, the parser's own posture. A
+    # line that would not read stays for the same reason.
+    #: (VCard card) -> [Array[Address], VCard]
+    def self.take_addresses(card)
+      labels = card.lines.filter_map { |line|
+        property = line.property
+        next if property.nil? || !property.name.casecmp?("X-ABLABEL") || property.group.nil?
+
+        [property.group.downcase, line] #: [String, VCard::Parser::Line]
+      }.to_h
+      addresses = [] #: Array[Address]
+      taken = [] #: Array[VCard::Parser::Line]
+      card.lines.each do |line|
+        next unless line.names?("ADR")
+
+        property = line.property
+        next if property.nil?
+
+        label_line = property.group && labels[property.group.downcase]
+        address = Contact.address_of(property, label_line)
+        next if address.nil?
+
+        addresses << address
+        taken << line
+        taken << label_line if label_line
+      end
+      [addresses, VCard.new(card.lines.reject { |line| taken.any? { it.equal?(line) } }.map(&:verbatim).join)]
+    end
+
+    # The card's NOTEs as the one note the model holds, and the card
+    # without them: several join at a blank line — foreign input's
+    # answer under the one-note invariant
+    # (docs/plans/2026-09-25-one-note-per-contact.md, "The invariant")
+    # — and a note that reads as no text, like one that would not
+    # read, stays in the card as it lies: it holds nothing to move,
+    # and the bytes are served either way.
+    #: (VCard card) -> [String?, VCard]
+    def self.take_note(card)
+      notes = card.lines.select { it.names?("NOTE") }
+      return [nil, card] if notes.empty?
+
+      texts = [] #: Array[String]
+      taken = [] #: Array[VCard::Parser::Line]
+      notes.each do |line|
+        property = line.property
+        next if property.nil?
+
+        text = property.text
+        next if text.empty?
+
+        texts << text
+        taken << line
+      end
+      note = texts.empty? ? nil : texts.join("\n\n")
+      [note, VCard.new(card.lines.reject { |line| taken.any? { it.equal?(line) } }.map(&:verbatim).join)]
+    end
+
+    # A card a PUT or an import arrived with, read as the contact it
+    # would store: its addresses and note taken off it, the rest its
+    # stored card. What a group lends plays no part — a contact being
+    # created has nothing lent, and a submitted card's lent lines are
+    # struck before this walks what is left (EditedContact).
+    #: (id: String, card: VCard, birthday: Birthday?, ?lent: Array[Lent]) -> Contact
+    def self.of_card(id:, card:, birthday:, lent: [])
+      addresses, stored = take_addresses(card)
+      note, stored = take_note(stored)
+      new(id:, stored:, birthday:, addresses:, note:, lent:)
+    end
+
     # Reopened rather than defined in the blocks above, for the reason
-    # VCard::Parser::Property is. Each row answers the editor the same
-    # three things — its label, its fields by form name, and itself
-    # rewritten into a card — and each class writes an added one, so
-    # the save walks every kind alike and the difference between
+    # VCard::Parser::Property is. The phone and email classes answer
+    # the editor the same three things — its label, its fields by form
+    # name, and itself rewritten into a card — and each writes an added
+    # one, so the save walks every kind alike; the difference between
     # them is where each writes its label
     # (docs/plans/2026-10-22-a-row-edits-its-label.md, "The row writes
-    # its own label").
+    # its own label"). The address is not one of these: it is a
+    # component rather than a card line, and the editor writes it
+    # through Admin::CardForm.addresses.
     class Phone
       #: () -> Array[String]
       def self.label_words = Contact.typed_words("TEL")
@@ -320,41 +424,6 @@ module ProTacts
       #: (VCard card, String? label, Hash[String, String] fields) -> VCard
       def self.add(card, label, fields)
         Contact.added_value(card, "EMAIL", label, fields)
-      end
-    end
-
-    class Address
-      #: () -> Array[String]
-      def self.label_words = Contact.typed_words("ADR")
-
-      #: () -> Array[String]
-      def self.field_names = ADDRESS_COMPONENTS
-
-      #: () -> String?
-      def label = Contact.label_of(label_line, types)
-
-      #: () -> Hash[String, String]
-      def fields
-        ADDRESS_COMPONENTS.to_h {
-          field = [it, public_send(it).to_s] #: [String, String]
-          field
-        }
-      end
-
-      # Removal is the reader's own rule (Contact#address_of): a row
-      # blank throughout, po box included, removes the line, where a
-      # partially blanked one keeps it — partial blanks are legal empty
-      # components.
-      #: (VCard card, String? label, Hash[String, String] fields) -> VCard
-      def edit(card, label, fields)
-        value = Contact.address_value(self, fields)
-        value ? Contact.edited_row(card, self, value, label) : Contact.removed_row(card, self)
-      end
-
-      #: (VCard card, String? label, Hash[String, String] fields) -> VCard
-      def self.add(card, label, fields)
-        value = Contact.address_value(nil, fields)
-        value ? Contact.added_row(card, "ADR", value, label) : card
       end
     end
 
@@ -425,32 +494,35 @@ module ProTacts
       %("#{Digest::SHA256.hexdigest(vcard.to_s)}")
     end
 
-    # A contact from its id, its stored card, its birthday, and the
-    # content lines it inherits from its groups. Why `birthday:` and
-    # `inherited:` are required and carry no default, and why the card
-    # is `stored:` rather than `vcard:`, is
+    # A contact from its id, its stored card, its birthday, the
+    # addresses and note its entity holds, and what its groups lend it.
+    # Why `birthday:` and the rest are required and carry no default,
+    # and why the card is `stored:` rather than `vcard:`, is
     # docs/plans/2026-09-05-contact-takes-its-structure.md, "The
     # contracts".
     #
     # The id check is here rather than behind a factory: a guard a
     # caller can walk around by reaching for `new` is not a guard.
-    #: (id: String, stored: VCard, birthday: Birthday?, inherited: Array[Inherited]) -> void
-    def initialize(id:, stored:, birthday:, inherited:)
+    #: (id: String, stored: VCard, birthday: Birthday?, addresses: Array[Address], note: String?, lent: Array[Lent]) -> void
+    def initialize(id:, stored:, birthday:, addresses:, note:, lent:)
       raise ArgumentError, "invalid contact id: #{id}" unless id.match?(ID_FORMAT)
 
       @id = id
       @stored = stored
       @birthday = birthday
-      @inherited = inherited
+      @addresses = addresses
+      @note = note
+      @lent = lent
     end
 
     attr_reader :id
 
-    # The stored card, without the birthday composed in — the editor's
-    # handle on the bytes it mutates (docs/plans/2026-09-05-web-card-editor.md).
-    # Everything else this class answers describes #vcard, the card a
-    # client downloads; the stored one is what a surgical edit applies
-    # to, and what the store writes back after it.
+    # The stored card, without the addresses, the note, or the birthday
+    # composed in — the editor's handle on the bytes it mutates
+    # (docs/plans/2026-09-05-web-card-editor.md). Everything else this
+    # class answers describes #vcard, the card a client downloads; the
+    # stored one is what a surgical edit applies to, and what the store
+    # writes back after it.
     attr_reader :stored
 
     # The model held beside the card (see the class comment) — the
@@ -459,40 +531,67 @@ module ProTacts
     # #properties' job.
     attr_reader :birthday
 
-    # The lines this contact's groups lend it (Inherited), which a
-    # submitted card is measured against to tell a member's edit to a
-    # shared line from a line of its own (EditedContact).
-    attr_reader :inherited
+    # The addresses the contact's entity holds, its own — the group's
+    # are #lent's. What a save writes (Admin::CardForm.addresses) and
+    # what the editor renders over (Contact#own).
+    attr_reader :addresses
 
-    # The card to serve: the stored one with the inherited lines and the
-    # birthday composed back in, in that order, each immediately before
-    # END:VCARD — stored + inherited + birthday, the card a client
-    # downloads. A lent NOTE is the one exception: it composes as a
-    # labeled section inside the member's single NOTE, not as a second
-    # line (docs/plans/2026-09-25-one-note-per-contact.md). A birthday
-    # with no wire form, or none at all, and an empty inheritance leave
-    # their halves as they lie, and an empty inheritance is #insert's
-    # own no-op — the same card object — so a contact in no group serves
-    # exactly its stored bytes, etag included. Composed on first ask and
-    # memoized, and the etag's derivation deferred with it: a caller
-    # that reads neither — and the listing paths read neither — pays for
-    # no composition of its own.
+    # The note the contact's entity holds, its own — the one note a
+    # contact is (docs/plans/2026-09-25-one-note-per-contact.md), the
+    # member's half of what #vcard composes.
+    attr_reader :note
+
+    # What this contact's groups lend it: each lending group, its
+    # addresses at their positions and its note — what a submitted card
+    # is measured against to tell a member's edit to a shared address
+    # or note from one of its own (EditedContact).
+    attr_reader :lent
+
+    # The card to serve: the stored one with the addresses — the
+    # entity's own first, then each group's in lending order — the one
+    # NOTE, and the birthday composed in, each immediately before
+    # END:VCARD. A labeled address composes under an `item` group of
+    # its own (#address_lines), numbered past every group the stored
+    # card already uses, so a lent label can never pair with the
+    # member's own line. The NOTE is the member's own text and a
+    # labeled section per group that lends one
+    # (docs/plans/2026-09-25-one-note-per-contact.md). A birthday with
+    # no wire form, or none at all, and no addresses and no note leave
+    # their halves as they lie, and an empty insert is #insert's own
+    # no-op — the same card object — so a contact holding nothing
+    # serves exactly its stored bytes, etag included. Composed on first
+    # ask and memoized, and the etag's derivation deferred with it: a
+    # caller that reads neither — and the listing paths read neither —
+    # pays for no composition of its own.
     #: () -> VCard
     def vcard
       return @vcard if defined?(@vcard)
 
-      lent_notes, lent_lines = @inherited.partition { |row| note_row?(row.line) }
-      with_inherited = @stored.insert(lent_lines.map { it.line })
-      composed = composed_note(lent_notes)
-      with_note = composed ? with_inherited.replace("NOTE", [composed]) : with_inherited
+      composed = @stored
+      addresses_in_order.each { |address| composed = composed.insert(Contact.address_lines(composed, address)) }
+      note = composed_note
+      replaced = note ? composed.replace("NOTE", [note]) : composed
       line = @birthday && @birthday.to_line
-      @vcard = line ? with_note.insert([line]) : with_note
+      inserted = line ? [line] : [] #: Array[String]
+      @vcard = replaced.insert(inserted)
+    end
+
+    # Every address the contact serves, its own first and then each
+    # group's, each carrying the group that lends it on `lent_by` —
+    # the read the contact's page and the search walk, over the
+    # components rather than the composed bytes, so a row and its
+    # provenance cannot drift apart.
+    #: () -> Array[Address]
+    def served_addresses
+      @addresses + @lent.flat_map { |lent|
+        lent.addresses.map { it.address.with(lent_by: lent.group) }
+      }
     end
 
     # The same contact with nothing its groups lend it: the editor's
     # subject, because a form rendered from the composed contact would
-    # save a group's value into the member's own card — the
-    # materialization the composition exists to avoid
+    # save a group's value into the member's own — the materialization
+    # the composition exists to avoid
     # (docs/plans/2026-08-24-vcard-storage-and-groups.md). The etag is
     # not this contact's: a screen guarding a save still carries the
     # composed one, which is what a client downloads and what the
@@ -501,16 +600,18 @@ module ProTacts
     def own
       return @own if defined?(@own)
 
-      @own = self.class.new(id: @id, stored: @stored, birthday: @birthday, inherited: [])
+      @own = self.class.new(id: @id, stored: @stored, birthday: @birthday, addresses: @addresses,
+                            note: @note, lent: [])
     end
 
     # The same contact over another card and birthday, still lent what
     # its groups lend it: what an import proposes this contact become
-    # (Import::Merge), composed the way the stored one is so that the
-    # editor rendered over it carries the etag its save will recompute.
-    #: (stored: VCard, birthday: Birthday?) -> Contact
-    def with(stored:, birthday:)
-      self.class.new(id: @id, stored:, birthday:, inherited: @inherited)
+    # (Import::Merge), the card and the components the proposal holds
+    # — the card's own ADRs and NOTE have joined the entity's, the way
+    # a save writes them.
+    #: (stored: VCard, birthday: Birthday?, addresses: Array[Address], note: String?) -> Contact
+    def with(stored:, birthday:, addresses:, note:)
+      self.class.new(id:, stored:, birthday:, addresses:, note:, lent: @lent)
     end
 
     #: () -> String
@@ -692,7 +793,7 @@ module ProTacts
     #: () -> Array[Phone]
     def phones
       labels = label_lines
-      rows("TEL") { |property, line, lent_by|
+      rows("TEL") { |property, line|
         value = text_of(property)
         # RFC 2426 section 3.3.1: `voice` is the type every number has
         # by default, so it names none.
@@ -702,7 +803,6 @@ module ProTacts
           types: property.types - %w[voice],
           line:,
           property:,
-          lent_by:,
         ) if value
       }
     end
@@ -710,7 +810,7 @@ module ProTacts
     #: () -> Array[Email]
     def emails
       labels = label_lines
-      rows("EMAIL") { |property, line, lent_by|
+      rows("EMAIL") { |property, line|
         value = text_of(property)
         # RFC 2426 section 3.3.2: `internet` is the format every address
         # has by default, so it names none.
@@ -720,7 +820,6 @@ module ProTacts
           types: property.types - %w[internet],
           line:,
           property:,
-          lent_by:,
         ) if value
       }
     end
@@ -730,130 +829,53 @@ module ProTacts
     # the card's own, shown by #properties.
     #: () -> Array[Handle]
     def handles
-      rows("IMPP") { |property, line, lent_by|
+      rows("IMPP") { |property, line|
         scheme, handle = text_of(property)&.split(":", 2)
         next if scheme.nil? || handle.nil? || handle.empty?
 
-        Handle.new(service: property.parameter("X-SERVICE-TYPE"), value: handle, scheme:, line:, property:, lent_by:)
-      }
-    end
-
-    #: () -> Array[Address]
-    def addresses
-      labels = label_lines
-      rows("ADR") { |property, line, lent_by|
-        address_of(property, label_line: label_line_of(property, labels), line:, lent_by:)
-      }
-    end
-
-    # The card's NOTEs (RFC 2426 section 3.6.2), in text form. On the
-    # stored card this is at most one — the one-note invariant
-    # (docs/plans/2026-09-25-one-note-per-contact.md) — and on the
-    # composed card it is exactly one wherever a group lends a note,
-    # the member's own and every lent one joined into a single value
-    # that #vcard builds. The reader stays a plural because the
-    # composed card is bytes like any other: a card a client sent
-    # before the invariant, or one this server did not compose, says
-    # whatever its lines say.
-    #: () -> Array[Note]
-    def notes
-      rows("NOTE") { |property, line|
-        value = text_of(property)
-        Note.new(value:, line:) if value
+        Handle.new(service: property.parameter("X-SERVICE-TYPE"), value: handle, scheme:, line:, property:)
       }
     end
 
     private
 
-    # Which of the composed card's lines the groups lend, keyed by where
-    # each sits in #vcard's parse: #vcard appends what the groups lend
-    # after the stored card's own lines, so a walk that spends the
-    # stored card's copies first leaves every lent line to pair with the
-    # inherited row composition placed there. A member whose own card
-    # spells a line exactly as its group lends — an address already on
-    # the card when its holder joined — reads as the member's own first
-    # and the group's second; a match on bytes would name the group over
-    # both copies. Keyed by position rather than by the Line itself
-    # because a Line is a value: the two copies a card holds of one line
-    # hash alike, and only where each sits tells them apart. A NOTE is
-    # never matched: a lent one composes as a section of the member's
-    # single NOTE, so a screen marking one reads the inheritance
-    # directly.
-    #: () -> Hash[Integer, Group]
-    def lent_at
-      return @lent_at if defined?(@lent_at)
-
-      rows = @inherited.reject { note_row?(it.line) } #: Array[Contact::Inherited]
-      # Nothing lent outside a note is nothing to place, and the walk
-      # below copies every line of both cards to find that out.
-      return @lent_at = {} if rows.empty?
-
-      remaining = @stored.lines.map { it.verbatim.chomp }.tally
-      @lent_at = {} #: Hash[Integer, Group]
-      vcard.lines.each_with_index do |served, index|
-        next if served.names?("NOTE")
-
-        bytes = served.verbatim.chomp
-        count = remaining[bytes] || 0
-        if count.positive?
-          remaining[bytes] = count - 1
-        elsif (row = rows.shift)
-          @lent_at[index] = row.group
-        end
-      end
-      @lent_at
-    end
-
-    # A lent line's text. Every write that stores one reads it first
-    # (#composed_note's reason), so one that will not read raises
-    # rather than being skipped as though the group lent nothing.
-    #: (Inherited row) -> String
-    def self.lent_text(row)
-      property = VCard.new(row.line).lines.fetch(0).property
-      raise "group #{row.group.id} lends a line that will not read" if property.nil?
-
-      property.text
-    end
-
-    # Whether a lent line is a NOTE, read off its bytes the way
-    # EditedContact reads a property name off them: the group schema
-    # admits no `item1.` prefix to strip (db/migrations/004_groups.rb).
-    #: (String line) -> bool
-    def note_row?(line)
-      line[/\A[^;:]*/].to_s.casecmp?("NOTE") == true
+    # The addresses in the order the composition renders them: the
+    # entity's own, then each group's in lending order.
+    #: () -> Array[Address]
+    def addresses_in_order
+      @addresses + @lent.flat_map { |lent| lent.addresses.map { |row| row.address } }
     end
 
     # The one NOTE the served card carries, as a content line: the
     # member's own text and the lent notes as sections, written
     # through NoteSections and escaped the way the editors write a
-    # text value, with no terminator so it takes the one of the line it
-    # replaces and an LF card stays one (VCard#replace). Nil where nothing is lent — a member whose groups
-    # hold no note serves its own NOTE's bytes as they lie, whatever
-    # they say, the editor's whole safety.
-    #
-    # A member holds at most one NOTE: migration 012 joined the
-    # stored ones and Store#assert_one_note refuses a write of two. A
-    # lent line that will not read is a broken assumption too, every
-    # write the schema and EditedContact#shareable? gate reading it
-    # first, so it raises (Contact.lent_text).
-    #: (Array[Inherited] rows) -> String?
-    def composed_note(rows)
-      return if rows.empty?
+    # text value, with no terminator so it takes the one of the line
+    # it lands beside. Nil where the entity holds no note and nothing
+    # is lent — nothing to compose. A stored card may still carry a
+    # NOTE line that would not read (#take_note's reason for leaving
+    # it); the replace below takes it with it, so the served card
+    # carries the one NOTE wherever the model holds one at all — the
+    # invariant's own bargain (docs/plans/2026-09-25-one-note-per-
+    # contact.md, "The invariant").
+    #: () -> String?
+    def composed_note
+      sections = @lent.filter_map { |lent|
+        lent.note && NoteSections::Section.new(label: lent.group.label, text: lent.note)
+      }
+      member = @note.to_s
+      return if member.empty? && sections.empty?
 
-      sections = rows.map { NoteSections::Section.new(label: it.group.label, text: Contact.lent_text(it)) }
-      member = @stored.property("NOTE")&.text.to_s
       "NOTE:#{VCard.escape(NoteSections.join(member, sections))}"
     end
 
     # A property group to the `X-ABLabel` line anchoring it — the
-    # label a group's lines carry, on a different line than the row it
-    # describes. Read off the composed card: a group lends only bare
-    # `ADR` and `NOTE` (db/migrations/004_groups.rb), so an inherited
-    # line can never collide with a member's own `item` numbering
-    # (docs/plans/2026-09-18-phone-labels.md, "Reading"). Keyed
-    # lowercased, a group name comparing without case as a property
-    # name does and as EditedContact#label_of pairs them. A label with
-    # no text labels nothing, and is left out.
+    # label a line's group carries, on a different line than the row it
+    # describes. Read off the composed card, whose addresses render
+    # under `item` groups of their own (#address_lines), so a phone's
+    # label and an address's never share one. Keyed lowercased, a
+    # group name comparing without case as a property name does and as
+    # EditedContact#label_of pairs them. A label with no text labels
+    # nothing, and is left out.
     #: () -> Hash[String, VCard::Parser::Line]
     def label_lines
       vcard.lines
@@ -877,16 +899,14 @@ module ProTacts
 
     # The rows a repeatable property reads as: each line naming it
     # folded by the block, which answers nil for a row with nothing
-    # to show — and told which group lends the line, the provenance a
-    # screen marks a row with, carried by position rather than read
-    # back off the bytes (#lent_at's reason).
-    #: [T] (String name) { (VCard::Parser::Property, VCard::Parser::Line, Group?) -> T? } -> Array[T]
+    # to show.
+    #: [T] (String name) { (VCard::Parser::Property, VCard::Parser::Line) -> T? } -> Array[T]
     def rows(name)
-      vcard.lines.each.with_index.filter_map { |line, index|
+      vcard.lines.filter_map { |line|
         next unless line.names?(name)
 
         property = line.property
-        yield(property, line, lent_at[index]) unless property.nil?
+        yield(property, line) unless property.nil?
       }
     end
 
@@ -909,19 +929,25 @@ module ProTacts
       property.components.map { it.empty? ? nil : it }
     end
 
-    # ADR's components, with a value that is blank throughout reading
-    # as no address at all. Carries the line it was read from and its
-    # reading, the other provenance-carrying shapes' own address for a
-    # save.
-    #: (VCard::Parser::Property property, label_line: VCard::Parser::Line?, line: VCard::Parser::Line, lent_by: Group?) -> Address?
-    def address_of(property, label_line:, line:, lent_by:)
-      components = components_of(property)
-      return if components.none?
+    # An ADR as the component the entity holds, or nil where the value
+    # reads as no address at all — blank throughout, the reader's own
+    # rule for an ADR (Admin::CardForm's blank-equals-absent). The
+    # components read unescaped, the value's reading rather than its
+    # bytes; the label is #label_of's reading of the line, so a
+    # component round-trips through #address_lines keeping what it
+    # says and not how it was spelled.
+    #: (VCard::Parser::Property property, VCard::Parser::Line? label_line) -> Address?
+    def self.address_of(property, label_line)
+      components = property.components
+      return if components.all?(&:empty?)
 
-      po_box, extended, street, locality, region, postal_code, country = components
-      Address.new(po_box:, extended:, street:, locality:, region:, postal_code:, country:, types: property.types, label_line:, line:,
-                  property:, lent_by:)
+      components << "" while components.length < 7
+      Address.new(
+        po_box: components.fetch(0), extended: components.fetch(1), street: components.fetch(2),
+        locality: components.fetch(3), region: components.fetch(4), postal_code: components.fetch(5),
+        country: components.fetch(6),
+        label: label_of(label_line, property.types),
+      )
     end
-
   end
 end

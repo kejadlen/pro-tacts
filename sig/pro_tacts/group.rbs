@@ -7,10 +7,11 @@ module ProTacts
     attr_reader id: String
     attr_reader name: String?
     attr_reader label: String
-    attr_reader lines: Array[String]
+    attr_reader addresses: Array[Contact::Address]
+    attr_reader note: String?
     attr_reader members: Array[String]
     attr_reader photo: bool
 
-    def self.new: (id: String, name: String?, label: String, lines: Array[String], members: Array[String], ?photo: bool) -> instance
+    def self.new: (id: String, name: String?, label: String, ?addresses: Array[Contact::Address], ?note: String?, members: Array[String], ?photo: bool) -> instance
   end
 end

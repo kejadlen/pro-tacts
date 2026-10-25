@@ -4,7 +4,7 @@ module ProTacts
 
     attr_reader first_members: Array[ListedContact]
 
-    def self.new: (id: String, name: String?, label: String, lines: Array[String], members: Array[String], ?photo: bool, first_members: Array[ListedContact]) -> instance
+    def self.new: (id: String, name: String?, label: String, ?addresses: Array[Contact::Address], ?note: String?, members: Array[String], ?photo: bool, first_members: Array[ListedContact]) -> instance
 
     def initialize: (first_members: Array[ListedContact], **untyped) -> void
   end

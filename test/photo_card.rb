@@ -97,9 +97,14 @@ module PhotoCard
     card(id, property(MEMOJI_PARAMETERS, image(23 * 1024)), extra:)
   end
 
-  # The card around the picture trio, the capture's own lines: the
-  # trio sits between NOTE and REV, and `extra` lands above it, which
-  # is where the captures carry their BDAY.
+  # The card around the picture trio, the capture's own lines. The
+  # capture carried an ADR and a NOTE above the trio and `extra`
+  # lands there too, which is where the captures carry their BDAY;
+  # the address and the note are the entity's components now
+  # (docs/plans/2026-10-25-contacts-on-entities.md), so a card that
+  # carried them composes them at the end rather than round-tripping
+  # byte for byte, and this card leaves them out to keep its claim
+  # about the trio it exists for.
   #: (String id, String photo_property, extra: Array[String]) -> String
   def self.card(id, photo_property, extra: [])
     [
@@ -111,8 +116,6 @@ module PhotoCard
       "EMAIL;type=INTERNET;type=pref:ada@example.com",
       "TEL;type=CELL;type=VOICE;type=pref:+1-555-0100",
       "X-ADDRESSING-GRAMMAR;type=pref:#{Base64.strict_encode64("addressing-grammar")}",
-      "ADR;type=HOME;type=pref:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
-      "NOTE:Test",
       *extra,
       "X-IMAGEHASH:#{IMAGE_HASH}",
       "X-IMAGETYPE:PHOTO",

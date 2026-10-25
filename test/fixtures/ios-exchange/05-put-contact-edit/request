@@ -1,6 +1,6 @@
 PUT /dav/addressbook/oqmvpzooywwmtwwx.vcf HTTP/1.1
 Content-Type: text/vcard; charset=utf-8
-If-Match: "e63c84519663074659f6cd80ba7c4de31fe7c72c87736cbf630619bb0448d1cd"
+If-Match: "ca3a62221f75bc36b891262e492949bfc95f6423ba0726f05d50e6a180dfebff"
 
 BEGIN:VCARD
 VERSION:3.0

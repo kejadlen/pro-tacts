@@ -403,13 +403,18 @@ module ProTacts
       end
 
       # Each kind's suggested labels, one list per kind for every row of
-      # it, standing and added, to name by id.
+      # it, standing and added, to name by id. The address is not one
+      # of CardForm::ROWS — it saves as a component — but its rows
+      # carry a label like any typed row's, so it gets its list too.
       #: () -> void
       def label_words
         CardForm::ROWS.each do |field, kind|
           datalist(id: "#{field}-labels") do
             kind.label_words.each { option(value: it) }
           end
+        end
+        datalist(id: "address-labels") do
+          Contact::Address.label_words.each { option(value: it) }
         end
       end
 
@@ -559,22 +564,22 @@ module ProTacts
       # fields in the value column — the multi-line value's own lines
       # (docs/DESIGN.md: a multi-line value breaks inside the value
       # column and stays in it), each input carrying its placeholder as
-      # its aria-label. The digest in each field's name is the row's
-      # address; the po box has no field, and the save preserves its
-      # bytes. The removal state rides only on a line with no po box:
-      # the save's removal is blank throughout, po box included
-      # (Contact::Address#edit), so
-      # a line surviving by its po box alone cannot be removed from
-      # this form at all — its row wears no state however blank it
-      # renders.
+      # its aria-label. A standing row is named by its position in the
+      # entity's list, the address a save reads it by
+      # (CardForm.addresses); the po box has no field, and the save
+      # keeps it. The removal state rides only on an address with no
+      # po box: the save's removal is blank throughout, po box included
+      # (CardForm.address_of), so an address surviving by its po box
+      # alone cannot be removed from this form at all — its row wears
+      # no state however blank it renders.
       #: (Contact::Address address, Integer index) -> void
       def address_row(address, index)
-        div(class: "field", data: {blank_removes: address.po_box.nil?}) do
-          label_field("address", "address-#{index}-type", "address[#{address.line.digest}][label]", address.label,
-                      deletable: address.po_box.nil?)
+        div(class: "field", data: {blank_removes: address.po_box.empty?}) do
+          label_field("address", "address-#{index}-type", "address[#{index}][label]", address.label,
+                      deletable: address.po_box.empty?)
           div(class: "field-stack") do
             ADDRESS_FIELDS.each do |component, label|
-              input(type: "text", name: "address[#{address.line.digest}][#{component}]",
+              input(type: "text", name: "address[#{index}][#{component}]",
                     value: address.public_send(component), placeholder: label, aria_label: label)
             end
           end

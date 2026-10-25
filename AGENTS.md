@@ -1,8 +1,11 @@
 # Project conventions
 
 A CardDAV server for a family address book, in Ruby on Roda.
-Contacts are vCard 3.0 documents in SQLite, served as the bytes that
-were stored.
+Contacts are vCard 3.0 documents in SQLite, served as the bytes
+that were stored with the contact's addresses and note composed
+in — they are components of the contact's entity, not lines of the
+card
+(docs/plans/2026-10-25-contacts-on-entities.md).
 
 `docs/carddav.md` covers the minimal property set macOS Contacts needs,
 and `docs/apple-contacts.md` the client quirks behind it. Read both before

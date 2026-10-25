@@ -97,8 +97,9 @@ module ProTacts
     private
 
     # The group editor's POST, #apply_edit's shape over a group: the
-    # snapshot guard, then the lines the form splices
-    # (Admin::CardForm.group_lines), and one store write for the lot.
+    # snapshot guard, then the components the form's rows read back
+    # into (Admin::CardForm.group_components), and one store write for
+    # the lot.
     #: (untyped r, String id) -> String?
     def apply_group_edit(r, id)
       group = store.group(id)
@@ -115,7 +116,8 @@ module ProTacts
       name = typecast_params.str("name", group.name)
 
       begin
-        store.edit_group(id, name:, lines: Admin::CardForm.group_lines(group, card_form_params))
+        addresses, note = Admin::CardForm.group_components(group, card_form_params)
+        store.edit_group(id, name:, addresses:, note:)
       rescue Sequel::UniqueConstraintViolation
         # A taken name (db/migrations/008_group_names.rb). The save is
         # one transaction, so nothing of it landed.

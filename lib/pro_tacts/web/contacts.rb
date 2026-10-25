@@ -241,7 +241,13 @@ module ProTacts
         return refuse.call(contact, notice: "This contact's card carries its own birthday spelling; nothing was saved.")
       end
 
-      store.save_edit(id, Admin::CardForm.contact_card(contact, company, first, middle, last, params), birthday:)
+      store.save_edit(
+        id,
+        Admin::CardForm.contact_card(contact, company, first, middle, last, params),
+        birthday:,
+        addresses: Admin::CardForm.addresses(contact.own.addresses, params),
+        note: Admin::CardForm.note(params["note"], Admin::CardForm.note_of(contact))
+      )
       r.redirect land || "/contacts/#{id}", 303
     end
 

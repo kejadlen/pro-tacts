@@ -46,8 +46,8 @@ module ProTacts
         def +(other) = with(texts: texts + other.texts, phones: phones + other.phones)
       end
 
-      # A contact's key, off its own card alone.
-      #: (Contact | ListedContact contact) -> Key
+      # A contact's key, off its own card and components alone.
+      #: (Contact contact) -> Key
       def self.key(contact)
         Key.new(
           texts: text_fields(contact).map { Format.search_key(it) },
@@ -91,12 +91,19 @@ module ProTacts
       end
       private_class_method :words
 
-      # The lines a group lends, read as a card, and its label. Lent
-      # lines hold no name, so a name hit is always the contact's own.
+      # What a group lends as a search key: its addresses' and note's
+      # text, added to each member's key at search time, and its label.
+      # Lent lines hold no name, so a name hit is always the contact's
+      # own.
       #: (Group group) -> Key
       def self.group_key(group)
-        lent = key(group.reading)
-        lent.with(texts: [*lent.texts, Format.search_key(group.label)])
+        texts = group.addresses.map { |address|
+          Format.search_key(
+            [address.extended, address.street, address.locality, address.region, address.postal_code, address.country].compact.join(" ")
+          )
+        }
+        texts << Format.search_key(group.note) if group.note
+        Key.new(texts: [*texts, Format.search_key(group.label)], phones: [], names: [])
       end
       private_class_method :group_key
 
@@ -110,10 +117,12 @@ module ProTacts
       private_class_method :matches?
 
       # Every value of the contact a word is matched against as text:
-      # its names, organization, emails, addresses, and notes. An
+      # its names, organization, emails, addresses, and note. An
       # address is its components run together, so "main st" finds a
-      # street.
-      #: (Contact | ListedContact contact) -> Array[String]
+      # street. The contact is the stored one (Store#reindex's), so its
+      # addresses and note are the entity's own; what a group lends is
+      # added at search time (#group_key).
+      #: (Contact contact) -> Array[String]
       def self.text_fields(contact)
         [
           contact.name,
@@ -121,7 +130,7 @@ module ProTacts
           contact.organization,
           *contact.emails.map(&:value),
           *contact.addresses.map { [it.extended, it.street, it.locality, it.region, it.postal_code, it.country].compact.join(" ") },
-          *contact.notes.map(&:value),
+          contact.note,
         ].compact
       end
       private_class_method :text_fields

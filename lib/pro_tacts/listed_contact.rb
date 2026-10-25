@@ -67,10 +67,16 @@ module ProTacts
     def emails = @contact.emails
 
     #: () -> Array[Contact::Address]
-    def addresses = @contact.addresses
+    def addresses = @contact.served_addresses
 
-    #: () -> Array[Contact::Note]
-    def notes = @contact.notes
+    #: () -> Array[Contact::Address]
+    def served_addresses = @contact.served_addresses
+
+    #: () -> String?
+    def note = @contact.note
+
+    #: () -> Array[Contact::Lent]
+    def lent = @contact.lent
 
     #: () -> bool
     def photo? = @photo
