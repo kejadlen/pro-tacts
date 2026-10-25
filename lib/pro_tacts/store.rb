@@ -666,17 +666,21 @@ module ProTacts
       GROUP_ID_ATTEMPTS.times do
         id = ChangeId.mint(4)
         begin
-          @database.transaction do
+          # A savepoint because #regroup calls this inside its own
+          # transaction, where a taken name would otherwise leave the
+          # entity behind to read as a taken id below.
+          @database.transaction(savepoint: true) do
+            entities.insert(id:)
             groups.insert(id:, name:)
             record_group_change(id, action: GroupAction::CREATE, detail: {"name" => name})
             members.each { add_member(id, it) }
           end
           return id
         rescue Sequel::UniqueConstraintViolation
-          # The id collided, or the name did
+          # The id collided with a card's or a group's, or the name did
           # (db/migrations/008_group_names.rb). Drawing again only helps
           # the first; the second is the caller's to hear.
-          raise if groups.where(id:).empty?
+          raise if entities.where(id:).empty?
 
           next
         end
@@ -903,7 +907,7 @@ module ProTacts
           detail: {"name" => row.fetch(:name), "lines" => lines, "members" => members},
         )
         fan_out(members, moved: Group.sync_name?(name) ? members : []) {
-          groups.where(id:).delete
+          entities.where(id:).delete
         }
         true
       end

@@ -479,11 +479,11 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nBDAY:1985-04-12\r\nEND:VCARD\r\n"}) do |store|
       group = store.create_group(name: "Booles")
       store.add_member(group, "aiden")
-      assert_equal %w[aiden], database(store)[:entities].select_map(:id)
+      assert_equal %w[aiden], database(store)[:entities].where(id: "aiden").select_map(:id)
 
       store.delete("aiden")
 
-      assert_empty database(store)[:entities].all
+      assert_empty database(store)[:entities].where(id: "aiden").all
       %i[cards birthdays group_members card_properties search_keys sort_keys].each do |table|
         assert_empty database(store)[table].all, table
       end
@@ -1487,6 +1487,28 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # Cards and groups share one id space, and the schema keeps either
+  # from landing on an entity the other already holds — by insert, by
+  # a write through the store, or by moving an id.
+  def test_the_schema_keeps_a_card_and_a_group_off_one_entity
+    with_store({"kxsv" => AIDEN.gsub("aiden", "kxsv")}) do |store|
+      db = database(store)
+      group = store.create_group(name: "Booles")
+
+      assert_raises(Sequel::DatabaseError) { db[:groups].insert(id: "kxsv") }
+      assert_raises(Sequel::DatabaseError) { store.put(group, vcard(AIDEN.gsub("aiden", group))) }
+      assert_raises(Sequel::DatabaseError) { db[:groups].where(id: group).update(id: "kxsv") }
+      db.transaction do
+        db.run("PRAGMA defer_foreign_keys = ON")
+        assert_raises(Sequel::DatabaseError) { db[:cards].where(id: "kxsv").update(id: group) }
+        raise Sequel::Rollback
+      end
+
+      assert_equal %w[kxsv], db[:cards].select_map(:id)
+      assert_equal [group], db[:groups].select_map(:id)
+    end
+  end
+
   # The schema is the gate on the id's shape, the way it is the gate on
   # what a group may hold: nothing else stops a hand-written row from
   # taking a word, a hash, or a change id's letters in the wrong case.
@@ -1637,9 +1659,12 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       id = FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
 
+      assert_equal [id], database(store)[:entities].where(id:).select_map(:id)
+
       assert store.delete_group(id)
 
       assert_nil store.group(id)
+      assert_empty database(store)[:entities].where(id:).all
       %w[aiden znorth].each do |member|
         assert_equal [], store.groups_of(member).map(&:id)
         change = store.changes_of(member).first
@@ -2548,7 +2573,7 @@ class StoreTest < Minitest::Test
 
       ProTacts::Store.connect(path) do |store|
         db = database(store)
-        assert_equal %w[aiden], db[:entities].select_map(:id)
+        assert_equal %w[aiden nous], db[:entities].select_map(:id)
         assert_equal "2026-01-02T03:04:05.678Z", card_row(store, "aiden").fetch(:created_at)
         assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), store.contact("aiden").birthday
         assert_equal %w[aiden], store.group("nous").members
@@ -2559,6 +2584,51 @@ class StoreTest < Minitest::Test
         tables.each { assert_empty db[it].all, it }
         assert_equal %w[nous], db[:groups].select_map(:id)
       end
+    end
+  end
+
+  # 016's test again for the groups: rows across the upgrade, and the
+  # cascade from a group's entity reaching each table under it.
+  def test_the_migration_makes_each_group_an_entity_and_carries_its_rows
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 16)
+        db[:entities].insert(id: "aiden")
+        db[:cards].insert(id: "aiden", vcard: AIDEN)
+        db[:groups].insert(id: "nous", name: "Booles")
+        db[:group_properties].insert(group_id: "nous", position: 0, line: HOUSEHOLD_ADDRESS)
+        db[:group_members].insert(group_id: "nous", card_id: "aiden")
+        db[:group_photos].insert(group_id: "nous", bytes: Sequel.blob("photo"))
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        db = database(store)
+        assert_equal %w[aiden nous], db[:entities].order(:id).select_map(:id)
+        assert_equal [HOUSEHOLD_ADDRESS], store.group("nous").lines
+        assert_equal %w[aiden], store.group("nous").members
+        tables = %i[groups group_properties group_members group_photos]
+        tables.each { assert_equal 1, db[it].count, it }
+
+        db[:entities].where(id: "nous").delete
+        tables.each { assert_empty db[it].all, it }
+        assert_equal %w[aiden], db[:cards].select_map(:id)
+      end
+    end
+  end
+
+  def test_the_migration_stops_on_a_group_whose_id_a_card_holds
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 16)
+        db[:entities].insert(id: "nous")
+        db[:cards].insert(id: "nous", vcard: AIDEN.gsub("aiden", "nous"))
+        db[:groups].insert(id: "nous", name: "Booles")
+      end
+
+      error = assert_raises(RuntimeError) { ProTacts::Store.connect(path) {} }
+      assert_equal "groups whose ids a card already holds: nous", error.message
     end
   end
 
