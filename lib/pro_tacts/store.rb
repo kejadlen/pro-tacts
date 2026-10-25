@@ -144,19 +144,6 @@ module ProTacts
     # ordinary, and SQLITE_BUSY straight back to the client is not.
     BUSY_TIMEOUT = 5_000 #: Integer
 
-    # How many ids a create draws before giving up. The four letters
-    # #create_group asks ChangeId for are one of 65,536, and an address
-    # book holds groups by the dozen, so a first collision is already
-    # unlucky and a run of eight is a broken generator rather than a run
-    # of bad draws — better to say so than to spin.
-    GROUP_ID_ATTEMPTS = 8 #: Integer
-
-    # How many ids a re-id draws before giving up. Twelve letters are
-    # one of 2^48, so GROUP_ID_ATTEMPTS' reasoning arrives intact at a
-    # wider alphabet: a first collision is a broken generator rather
-    # than a run of bad draws.
-    CONTACT_ID_ATTEMPTS = 8 #: Integer
-
     # A book named `*`, which would be everyone's (#name_book).
     class EveryonesBookName < ArgumentError; end
 
@@ -566,7 +553,7 @@ module ProTacts
     def delete(id)
       @database.transaction do
         before = contact(id)
-        deleted = entities.where(id:).delete.positive?
+        deleted = entities.where(id: cards.where(id:).select(:entity_id)).delete.positive?
         record(id, action: Action::DELETE, etag: nil, diff: CardDiff.between(before&.vcard, nil)) if deleted
         deleted
       end
@@ -594,53 +581,44 @@ module ProTacts
       # request to answer.
       before = contact!(id)
 
-      CONTACT_ID_ATTEMPTS.times do
-        new_id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
-        # A card with no UID line gains one here, and several collapse
-        # to it: #insert lands it before END:VCARD, the envelope's own
-        # last word, where every card this server writes leaves it.
-        _, rest = before.stored.extract("UID")
-        stored = rest.insert(["UID:#{new_id}\r\n"])
-        begin
-          @database.transaction do
-            # Deferred rather than ordered: every child row names the id
-            # the cards row is leaving, so no sequence of plain updates
-            # satisfies a foreign key that checks per row — the children
-            # cannot move before the parent does, and the parent cannot
-            # move while the children remain. `defer_foreign_keys` is
-            # the one FK pragma that works inside a transaction (it
-            # resets at commit); `foreign_keys` itself is a no-op there
-            # (db/migrations/005_group_identity.rb records the reason).
-            @database.run("PRAGMA defer_foreign_keys = ON")
-            entities.where(id:).update(id: new_id)
-            cards.where(id:).update(id: new_id, vcard: stored.to_s, updated_at: NOW)
-            birthdays.where(card_id: id).update(card_id: new_id)
-            group_members.where(card_id: id).update(card_id: new_id)
-            change_log.where(card_id: id).update(card_id: new_id)
-            # The index is a projection, dropped and re-derived below
-            # rather than moved — the deal #reindex always gives it. The
-            # parameters follow their properties away on the cascade.
-            card_properties.where(card_id: id).delete
-            search_keys.where(card_id: id).delete
-            sort_keys.where(card_id: id).delete
-            after = contact!(new_id)
-            record(id, action: Action::DELETE, etag: nil, diff: CardDiff.between(before.vcard, nil))
-            record(
-              new_id,
-              action: Action::PUT,
-              etag: after.etag,
-              diff: CardDiff.between(before.vcard, after.vcard),
-            )
-            reindex(new_id, stored)
-          end
-          return new_id
-        rescue Sequel::UniqueConstraintViolation
-          # The minted id collided with an entity already holding it;
-          # the only unique constraint this write can hit first.
-          next
-        end
+      # One draw, #new_entity's reason; a collision raises on cards' id.
+      new_id = ChangeId.mint(ChangeId::CONTACT_LENGTH)
+      # A card with no UID line gains one here, and several collapse
+      # to it: #insert lands it before END:VCARD, the envelope's own
+      # last word, where every card this server writes leaves it.
+      _, rest = before.stored.extract("UID")
+      stored = rest.insert(["UID:#{new_id}\r\n"])
+      @database.transaction do
+        # Deferred rather than ordered: every child row names the id
+        # the cards row is leaving, so no sequence of plain updates
+        # satisfies a foreign key that checks per row — the children
+        # cannot move before the parent does, and the parent cannot
+        # move while the children remain. `defer_foreign_keys` is
+        # the one FK pragma that works inside a transaction (it
+        # resets at commit); `foreign_keys` itself is a no-op there
+        # (db/migrations/005_group_identity.rb records the reason).
+        @database.run("PRAGMA defer_foreign_keys = ON")
+        cards.where(id:).update(id: new_id, vcard: stored.to_s, updated_at: NOW)
+        birthdays.where(card_id: id).update(card_id: new_id)
+        group_members.where(card_id: id).update(card_id: new_id)
+        change_log.where(card_id: id).update(card_id: new_id)
+        # The index is a projection, dropped and re-derived below
+        # rather than moved — the deal #reindex always gives it. The
+        # parameters follow their properties away on the cascade.
+        card_properties.where(card_id: id).delete
+        search_keys.where(card_id: id).delete
+        sort_keys.where(card_id: id).delete
+        after = contact!(new_id)
+        record(id, action: Action::DELETE, etag: nil, diff: CardDiff.between(before.vcard, nil))
+        record(
+          new_id,
+          action: Action::PUT,
+          etag: after.etag,
+          diff: CardDiff.between(before.vcard, after.vcard),
+        )
+        reindex(new_id, stored)
       end
-      raise "no free contact id in #{CONTACT_ID_ATTEMPTS} draws"
+      new_id
     end
 
     # Creates a group and hands back the id it was given. The name is
@@ -650,12 +628,9 @@ module ProTacts
     # Logged in the group's own log as every group write is, the
     # create's detail carrying the name it was created under.
     #
-    # The id is minted here rather than taken from the caller, for the
-    # shape db/migrations/005_group_identity.rb pins. The insert is
-    # what settles a collision, not a read before it: two creates
-    # drawing at once would both find the same id free, so a duplicate
-    # comes back as the primary key's own violation and the next
-    # attempt draws again.
+    # The id is its entity's (#new_entity). A taken name raises on the
+    # unique index (db/migrations/008_group_names.rb), the caller's to
+    # hear.
     #
     # `members` join in the same transaction, for a group made from a
     # contact's card (Web#apply_new_group): a group that exists only
@@ -663,29 +638,13 @@ module ProTacts
     # nameless when the join fails.
     #: (?name: String?, ?members: Array[String]) -> String
     def create_group(name: nil, members: [])
-      GROUP_ID_ATTEMPTS.times do
-        id = ChangeId.mint(4)
-        begin
-          # A savepoint because #regroup calls this inside its own
-          # transaction, where a taken name would otherwise leave the
-          # entity behind to read as a taken id below.
-          @database.transaction(savepoint: true) do
-            entities.insert(id:)
-            groups.insert(id:, name:)
-            record_group_change(id, action: GroupAction::CREATE, detail: {"name" => name})
-            members.each { add_member(id, it) }
-          end
-          return id
-        rescue Sequel::UniqueConstraintViolation
-          # The id collided with a card's or a group's, or the name did
-          # (db/migrations/008_group_names.rb). Drawing again only helps
-          # the first; the second is the caller's to hear.
-          raise if entities.where(id:).empty?
-
-          next
-        end
+      @database.transaction do
+        id = new_entity
+        groups.insert(id:, name:)
+        record_group_change(id, action: GroupAction::CREATE, detail: {"name" => name})
+        members.each { add_member(id, it) }
+        id
       end
-      raise "no free group id in #{GROUP_ID_ATTEMPTS} draws: #{groups.count} groups already"
     end
 
     # Every group, ordered by id — the order #groups_of and the
@@ -1066,10 +1025,19 @@ module ProTacts
     # column default only fires on insert (NOW).
     #: (String id, VCard vcard) -> void
     def upsert_card(id, vcard)
-      entities.insert_conflict.insert(id:)
-      cards
-        .insert_conflict(target: :id, update: {vcard: Sequel[:excluded][:vcard], updated_at: NOW})
-        .insert(id:, vcard: vcard.to_s)
+      return if cards.where(id:).update(vcard: vcard.to_s, updated_at: NOW).positive?
+
+      cards.insert(entity_id: new_entity, id:, vcard: vcard.to_s)
+    end
+
+    # An entity under a freshly minted id, for a card or a group to
+    # take. One draw: at 2^48 a collision is a broken generator, and
+    # the primary key's raise says so.
+    #: () -> String
+    def new_entity
+      id = ChangeId.mint(ChangeId::ENTITY_LENGTH)
+      entities.insert(id:)
+      id
     end
 
     # The diff comes in already computed rather than being taken here

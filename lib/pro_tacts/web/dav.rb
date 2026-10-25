@@ -383,10 +383,8 @@ module ProTacts
     def write_card(id)
       # A card outside the requester's book is no member of this
       # collection (#member), and its id cannot be created here either,
-      # being taken: the 404 the GET of it gets. A group's id is taken
-      # the same way (db/migrations/017_group_entities.rb).
+      # being taken: the 404 the GET of it gets.
       return if !book.include?(id) && store.contact(id)
-      return if store.group(id)
 
       # CARDDAV:supported-address-data (RFC 6352 section 6.3.2.1): what
       # arrived must be a vCard, and text/vcard is the one media type
