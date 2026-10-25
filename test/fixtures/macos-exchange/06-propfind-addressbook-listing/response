@@ -115,7 +115,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/emoji.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"f2de8c9cbbc34e304510ff6f076ed3275e620802bc15731550b5d43b0d0ae994"</d:getetag>
+        <d:getetag>"1b2189a49715b9c1a3210241958db7d14d3fcee27c0e6260457c3f038881520f"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
@@ -124,7 +124,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/household-alicia.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"ac41deef160924d5aed32b7a3b2f02485b10a8aee49608e389e931d6bac81e56"</d:getetag>
+        <d:getetag>"14f9f5b8cabe835a2d2023e312d0bc72d4eda8eca6450c432d3f1bb880c3807c"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
@@ -133,7 +133,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/household-george.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"1442812f9be9c130e2d5b549e3604fa3f5964e51ab030a9239ad93a5f6129c9e"</d:getetag>
+        <d:getetag>"2ebc67ae0618ce78a4a1c4a9777a145e382743e6043e6648240816e4b2a13256"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
@@ -142,7 +142,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/household-mary.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"5195757744dc9b9ca517224a3b560dc5715e2472262e708e64c82140d900daf7"</d:getetag>
+        <d:getetag>"93872f5d7cc85d8d4ff642c78b998e78cbdc3527bede99838f90b5cc27cac868"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
@@ -151,7 +151,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/memoji.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"bb0734ee418c5bb60047503ea7675ccb46151d8e0084af665ba628bfc4acd804"</d:getetag>
+        <d:getetag>"80cb927317994f512e730bd5bd31a2fe7a4de856dc1fffe39981f0642863e89e"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
@@ -160,7 +160,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/oqmvpzooywwmtwwx.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"e63c84519663074659f6cd80ba7c4de31fe7c72c87736cbf630619bb0448d1cd"</d:getetag>
+        <d:getetag>"ca3a62221f75bc36b891262e492949bfc95f6423ba0726f05d50e6a180dfebff"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
@@ -178,7 +178,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/photo.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"9bd93308c95dc178599a5102bdc6f194f8cb02f838262f421fbe7e2d7c1ab281"</d:getetag>
+        <d:getetag>"f27eef17e465bdda401aaee19c9002b16c33653e8c966ebbea4d99765334e932"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>

@@ -66,7 +66,12 @@ Two liberties were taken promoting them:
   card. An etag names server state, and the captured one names a dev
   database that no longer exists; the client's behavior — send back
   the etag the server last reported — is the part that is evidence,
-  and it survives the rewrite.
+  and it survives the rewrite. It was rewritten again when the
+  addresses and notes became components of the entities
+  (docs/plans/2026-10-25-contacts-on-entities.md): a served card
+  composes them now, so the same seed card hashes to a new etag.
+  Step 11 keeps the etag the phone captured — a lost update's etag is
+  stale by any spelling, which is its point.
 - The seed carries that pre-edit card (`test/fixtures/cards/`), so the
   read steps list two contacts where the original session saw one.
 

@@ -20,7 +20,7 @@ Sequel.migration do
 
     self[:cards].order(:id).each do |row|
       id = row.fetch(:id)
-      contact = ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(row.fetch(:vcard)), birthday: nil, inherited: [])
+      contact = ProTacts::Contact.of_card(id:, card: ProTacts::VCard.new(row.fetch(:vcard)), birthday: nil)
       self[:sort_keys].insert(card_id: id, sort_key: contact.sort_key)
     end
   end
