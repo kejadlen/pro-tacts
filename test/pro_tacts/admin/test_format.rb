@@ -12,10 +12,11 @@ class FormatTest < Minitest::Test
   CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada Lovelace\r\nN:Lovelace;Ada;;;\r\n" \
     "UID:ada\r\nEND:VCARD\r\n"
 
-  # The production shapes, as Contact's class comment lays them out.
-  # Nothing on these screens is in a group, so inheritance is none.
-  def contact(bytes = CARD, id: "aiden", birthday: nil, inherited: [])
-    ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(bytes), birthday:, inherited:)
+  # The production shapes, as Contact's class comment lays them
+  # out, a card read into its parts. Nothing on these screens is in
+  # a group, so lending is none.
+  def contact(bytes = CARD, id: "aiden", birthday: nil)
+    ProTacts::Contact.of_card(id:, card: ProTacts::VCard.new(bytes), birthday:)
   end
 
   # Initials come from the structured N property (given + family),

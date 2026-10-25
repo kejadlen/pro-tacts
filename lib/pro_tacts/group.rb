@@ -5,24 +5,29 @@ require "pro_tacts/contact"
 require "pro_tacts/vcard"
 
 module ProTacts
-  # A group as the admin screens read one: its own row, the lines it
-  # lends in the order it lends them, its members' card ids, and
-  # whether it has a photo (docs/plans/2026-10-12-group-photos.md). The
-  # label is the SQL one Store#group_label computes, so a tag and a
-  # heading can never disagree about what to call a nameless group.
+  # A group as the admin screens read one: its own row, the addresses
+  # and note it lends, its members' card ids, and whether it has a
+  # photo (docs/plans/2026-10-12-group-photos.md). The label is the
+  # SQL one Store#group_label computes, so a tag and a heading can
+  # never disagree about what to call a nameless group. The addresses
+  # and the note are the entity's components
+  # (docs/plans/2026-10-25-contacts-on-entities.md): a group lends
+  # what its entity holds, read beside the row the way a contact's
+  # are.
   #
   # The signature lives in sig/pro_tacts/group.rbs, this being a Data
   # class.
   # @rbs skip
-  Group = Data.define(:id, :name, :label, :lines, :members, :photo)
+  Group = Data.define(:id, :name, :label, :addresses, :note, :members, :photo)
 
   # Reopened rather than defined in the block above, for the reason
   # CardDiff is.
   class Group
-    # A photo is the exception, not the rule, so a group built without
-    # saying is one without.
-    #: (?photo: bool, **untyped) -> void
-    def initialize(photo: false, **)
+    # An address or a note is the exception, not the rule, so a group
+    # built without saying is one holding neither, and without a photo
+    # one.
+    #: (?addresses: Array[Contact::Address], ?note: String?, ?photo: bool, **untyped) -> void
+    def initialize(addresses: [], note: nil, photo: false, **)
       super
     end
 
@@ -41,20 +46,36 @@ module ProTacts
       name&.start_with?(SYNC_PREFIX) == true
     end
 
-    # The group's lines read through the one model that knows how to
-    # read an address and a note — a Contact over a card made of
-    # those lines and nothing else — for the screens that render and
-    # edit them. It composes nothing and is never stored or served.
-    #: () -> Contact
-    def reading
-      Contact.new(id:, stored: VCard.new(lines.map { "#{it}\r\n" }.join), birthday: nil, inherited: [])
-    end
-
     # Whether this is one of the `sync:` groups, for the listings
     # that set those apart from the ones a person made.
     #: () -> bool
     def sync?
       Group.sync_name?(name)
+    end
+
+    # The addresses and the note as the lines a member's card composes
+    # them in — the spelling the group's change log records a write in
+    # (CardDiff's unit) and a tombstone carries. Numbered off a bare
+    # card, a group having no stored card to number past.
+    #: () -> Array[String]
+    def composed_lines
+      Group.composed_lines(addresses, note)
+    end
+
+    # The rendering half of #composed_lines over components a write is
+    # about to hold, the way Contact.address_lines renders one address
+    # at a time over the card composed so far.
+    #: (Array[Contact::Address] addresses, String? note) -> Array[String]
+    def self.composed_lines(addresses, note)
+      card = VCard.new("BEGIN:VCARD\r\nVERSION:3.0\r\nEND:VCARD\r\n")
+      lines = [] #: Array[String]
+      addresses.each do |address|
+        added = Contact.address_lines(card, address)
+        lines.concat(added)
+        card = card.insert(added)
+      end
+      lines << "NOTE:#{VCard.escape(note)}" if note
+      lines
     end
 
     # The order every listing of groups reads in: the `sync:` groups
@@ -77,11 +98,11 @@ module ProTacts
     # Nothing serves it, so nothing has to agree with it but the form.
     #: () -> String
     def version
-      Digest::SHA256.hexdigest([name, lines, members].to_json)
+      Digest::SHA256.hexdigest([name, addresses, note, members].to_json)
     end
 
     # What a console session sees for one (console.rb): the Data
-    # class's own inspect would carry every lent line and every
+    # class's own inspect would carry every lent address and every
     # member id, and a listing of groups is unreadable at a prompt.
     #: () -> String
     def inspect

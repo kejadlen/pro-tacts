@@ -403,7 +403,8 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN_BORN}) do |store|
       edited = AIDEN.sub("FN:Aiden", "FN:Aiden Smith")
 
-      contact = store.save_edit("aiden", vcard(edited), birthday: ProTacts::Birthday.new(year: 1985, month: 4, day: 12))
+      contact = store.save_edit("aiden", vcard(edited),
+                                birthday: ProTacts::Birthday.new(year: 1985, month: 4, day: 12), addresses: [], note: nil)
 
       assert_equal edited, card_row(store, "aiden").fetch(:vcard)
       composed = edited.sub("END:VCARD\r\n", "BDAY:1985-04-12\r\nEND:VCARD\r\n")
@@ -424,7 +425,7 @@ class StoreTest < Minitest::Test
   def test_an_edit_writing_the_current_birthday_keeps_it
     with_store({"aiden" => AIDEN_BORN}) do |store|
       store.save_edit("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")),
-                      birthday: ProTacts::Birthday.new(year: 1985, month: 4, day: 12))
+                      birthday: ProTacts::Birthday.new(year: 1985, month: 4, day: 12), addresses: [], note: nil)
 
       assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), birthday_row(store, "aiden")
       assert_includes store.contact("aiden").vcard.to_s, "BDAY:1985-04-12"
@@ -439,7 +440,8 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN_BORN}) do |store|
       stored = AIDEN_BORN.sub("BDAY:1985-04-12\r\n", "")
 
-      contact = store.save_edit("aiden", vcard(stored), birthday: ProTacts::Birthday.new(month: 4, day: 12))
+      contact = store.save_edit("aiden", vcard(stored),
+                                birthday: ProTacts::Birthday.new(month: 4, day: 12), addresses: [], note: nil)
 
       assert_equal stored, card_row(store, "aiden").fetch(:vcard)
       assert_includes contact.vcard.to_s, "BDAY;X-APPLE-OMIT-YEAR=1604:1604-04-12\r\n"
@@ -454,7 +456,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN_BORN}) do |store|
       stored = AIDEN_BORN.sub("BDAY:1985-04-12\r\n", "")
 
-      contact = store.save_edit("aiden", vcard(stored), birthday: nil)
+      contact = store.save_edit("aiden", vcard(stored), birthday: nil, addresses: [], note: nil)
 
       assert_nil birthday_row(store, "aiden")
       refute_includes contact.vcard.to_s, "BDAY"
@@ -733,7 +735,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => card}) do |store|
       group = store.create_group(name: "Booles")
       store.add_member(group, "aiden")
-      store.set_group_lines(group, [HOUSEHOLD_ADDRESS])
+      store.set_group_components(group, [HOUSEHOLD], nil)
 
       key = store.search_keys_by_recency.fetch("aiden")
       assert_equal ["aiden", "ade", "plays chess"], key.texts
@@ -1189,12 +1191,21 @@ class StoreTest < Minitest::Test
   ## Groups
 
   HOUSEHOLD_ADDRESS = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom" #: String
+  # The same address as the group's component: seven components and
+  # the label the line's TYPE carries, what a write stores and the
+  # composed card renders back in the store's own spelling.
+  HOUSEHOLD = ProTacts::Contact::Address.new(
+    po_box: "", extended: "", street: "7 Calculus Close", locality: "London", region: "England",
+    postal_code: "NW1 1AB", country: "United Kingdom", label: "home"
+  ) #: ProTacts::Contact::Address
+  RENDERED_ADDRESS = "ADR;TYPE=HOME:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom" #: String
   HOUSEHOLD_NOTE = "NOTE:Gate code 1854." #: String
+  NOTE_TEXT = "Gate code 1854." #: String
 
-  # What a group lends now, in the order it lends it — the rows a
-  # propagated edit rewrites.
+  # What a group lends now, in the order it lends it — the components
+  # a propagated edit rewrites, as the lines a save renders them in.
   def lent_lines(store, group)
-    database(store)[:group_properties].where(group_id: group).order(:position).map { it[:line] }
+    store.group(group).composed_lines
   end
 
   # A member's served card is the stored one with the group's lines
@@ -1210,14 +1221,15 @@ class StoreTest < Minitest::Test
       id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
       composed = AIDEN.sub(
         "END:VCARD\r\n",
-        "#{HOUSEHOLD_ADDRESS}\r\nNOTE:Shared · #{id}:\\nGate code 1854.\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n",
+        "#{RENDERED_ADDRESS}\r\nNOTE:Shared · #{id}:\\nGate code 1854.\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n",
       )
 
       assert_equal composed, store.contact("aiden").vcard.to_s
       assert_equal composed, store.contacts.find { it.id == "aiden" }.vcard.to_s
       listed = store.contacts_by_recency.find { it.contact.id == "aiden" }.contact
-      assert_equal store.contact("aiden").addresses.map(&:street), listed.addresses.map(&:street)
-      assert_equal store.contact("aiden").notes.map(&:value), listed.notes.map(&:value)
+      assert_equal store.contact("aiden").served_addresses.map(&:street), listed.served_addresses.map(&:street)
+      assert_equal store.contact("aiden").lent.map { |row| [row.group.label, row.note] },
+                   listed.lent.map { |row| [row.group.label, row.note] }
     end
   end
 
@@ -1307,7 +1319,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN}) do |store|
       FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
-      assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
+      assert_includes store.contact("aiden").vcard.to_s, RENDERED_ADDRESS
       assert_includes indexed_names(store, "aiden"), "FN"
       refute_includes indexed_names(store, "aiden"), "ADR"
 
@@ -1329,11 +1341,11 @@ class StoreTest < Minitest::Test
       FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
       put = store.put("aiden", vcard(store.contact("aiden").vcard.to_s))
-      edit = store.save_edit("aiden", vcard(AIDEN), birthday: nil)
+      edit = store.save_edit("aiden", vcard(AIDEN), birthday: nil, addresses: [], note: nil)
       logged = database(store)[:changes].where(card_id: "aiden").order(:sequence).all
 
       assert_equal [put.etag, edit.etag], logged.last(2).map { it[:etag] }
-      assert_includes put.vcard.to_s, HOUSEHOLD_ADDRESS
+      assert_includes put.vcard.to_s, RENDERED_ADDRESS
     end
   end
 
@@ -1354,15 +1366,16 @@ class StoreTest < Minitest::Test
       change = store.changes_of("aiden").first
 
       assert_includes put.vcard.to_s, "NOTE:Own note.\\n\\nShared · Booles:\\nGate code 1854.\r\n"
-      assert_equal stored, put.stored.to_s
-      assert_equal [HOUSEHOLD_NOTE], store.group(id).lines
+      assert_equal AIDEN, put.stored.to_s
+      assert_equal "Own note.", put.note
+      assert_equal [HOUSEHOLD_NOTE], store.group(id).composed_lines
       assert_equal served.etag, change.etag
       assert_empty change.diff.added
       assert_empty change.diff.removed
     end
   end
 
-  # Every inherited line carries the group lending it, whole, on the
+  # Every served address carries the group lending it, whole, on the
   # single read and on the listing read that composes a whole
   # collection — a screen tags a row as the household's from either.
   def test_an_inherited_line_carries_its_group
@@ -1371,7 +1384,7 @@ class StoreTest < Minitest::Test
 
       listed = store.contacts.find { it.id == "aiden" }
       [store.contact("aiden"), listed].each do |contact|
-        assert_equal store.group(id), contact.addresses.fetch(0).lent_by
+        assert_equal store.group(id), contact.served_addresses.fetch(0).lent_by
       end
     end
   end
@@ -1452,28 +1465,21 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # The schema is the gate on what a group may hold
-  # (Store#set_group_lines), so what it admits is worth pinning: an
-  # address or a note, bare or parameterized, in whatever case the
-  # author spelled the name. Everything else is refused — a phone or an
-  # email reaches a person rather than a household, and a grouped ADR is
-  # half of a labeled property whose other half no group may hold.
-  def test_a_group_holds_only_addresses_and_notes
+  # The schema is the gate on the id's shape (below); what a group may
+  # hold is the model's, since components replaced the group's lines:
+  # an address or a note is all Store#set_group_components writes, and
+  # no gate remains to pin.
+
+  def test_a_joining_member_serves_the_group_and_is_logged
     with_store({"aiden" => AIDEN}) do |store|
-      properties = database(store)[:group_properties]
-      group_id = store.create_group(name: "Household")
+      id = FixtureData.seed_group(store, members: [], lines: [HOUSEHOLD_ADDRESS])
 
-      admitted = [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE, "ADR:;;1 Long Road;;;;", "note:lowercase is the same name"]
-      admitted.each.with_index do |line, position|
-        properties.insert(group_id:, position:, line:)
-      end
-      assert_equal admitted, properties.order(:position).map { it.fetch(:line) }
+      store.add_member(id, "aiden")
+      store.add_member(id, "aiden")
 
-      ["TEL;TYPE=home:+44 20 5555 0100", "EMAIL:boole@example.com", "item1.ADR:;;1 Long Road;;;;"].each do |line|
-        assert_raises(Sequel::ConstraintViolation) do
-          properties.insert(group_id:, position: admitted.size, line:)
-        end
-      end
+      assert_includes store.contact("aiden").vcard.to_s, RENDERED_ADDRESS
+      assert_equal %w[group put], store.changes_of("aiden").map(&:action)
+      assert_equal [RENDERED_ADDRESS], store.changes_of("aiden").first.diff.added
     end
   end
 
@@ -1563,7 +1569,8 @@ class StoreTest < Minitest::Test
 
       group = store.group(id)
       assert_equal "Household", group.label
-      assert_equal [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE], group.lines
+      assert_equal [HOUSEHOLD], group.addresses
+      assert_equal NOTE_TEXT, group.note
       assert_equal %w[aiden znorth], group.members
       assert_nil store.group("zzzz")
     end
@@ -1597,60 +1604,27 @@ class StoreTest < Minitest::Test
   # What a group lends is what every member serves, so setting it logs
   # a `group` entry on each (docs/plans/2026-09-09-group-edits-propagate.md,
   # "The fan-out").
-  def test_setting_a_groups_lines_reaches_every_member
+  def test_setting_a_groups_components_reaches_every_member
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       id = FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
 
-      store.set_group_lines(id, [EDITED_ADDRESS, HOUSEHOLD_NOTE])
+      edited = HOUSEHOLD.with(street: "8 Calculus Close")
+      store.set_group_components(id, [edited], NOTE_TEXT)
 
       %w[aiden znorth].each do |member|
-        assert_includes store.contact(member).vcard.to_s, EDITED_ADDRESS
+        assert_includes store.contact(member).vcard.to_s, RENDERED_EDITED_ADDRESS
         change = store.changes_of(member).first
         assert_equal "group", change.action
         assert_equal store.contact(member).etag, change.etag
-        assert_equal [EDITED_ADDRESS, "NOTE:Shared · #{id}:\\nGate code 1854."], change.diff.added
+        assert_equal [RENDERED_EDITED_ADDRESS, "NOTE:Shared · #{id}:\\nGate code 1854."], change.diff.added
       end
     end
   end
 
-  # The one-note invariant's raise: lines this server built carrying
-  # two NOTEs are a bug, and the raise reaches Sentry with the request
-  # (docs/plans/2026-09-25-one-note-per-contact.md, "The invariant").
-  def test_a_group_may_not_hold_two_notes
-    with_store({"aiden" => AIDEN}) do |store|
-      id = FixtureData.seed_group(store, members: ["aiden"])
-
-      error = assert_raises(RuntimeError) {
-        store.set_group_lines(id, [HOUSEHOLD_NOTE, "NOTE:Second."])
-      }
-      assert_equal "a group was given 2 NOTE lines", error.message
-    end
-  end
-
-  # The same raise over an editor's save — foreign input joins on its
-  # way in (EditedContact, Import::Merge), so two NOTEs here can only
-  # be a path this server built.
-  def test_an_editors_save_may_not_store_two_notes
-    with_store({"aiden" => AIDEN}) do |store|
-      two = AIDEN.sub("END:VCARD\r\n", "NOTE:First.\r\nNOTE:Second.\r\nEND:VCARD\r\n")
-
-      error = assert_raises(RuntimeError) { store.save_edit("aiden", vcard(two), birthday: nil) }
-      assert_equal "a stored card was built with 2 NOTE lines", error.message
-    end
-  end
-
-  def test_a_joining_member_serves_the_group_and_is_logged
-    with_store({"aiden" => AIDEN}) do |store|
-      id = FixtureData.seed_group(store, members: [], lines: [HOUSEHOLD_ADDRESS])
-
-      store.add_member(id, "aiden")
-      store.add_member(id, "aiden")
-
-      assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
-      assert_equal %w[group put], store.changes_of("aiden").map(&:action)
-      assert_equal [HOUSEHOLD_ADDRESS], store.changes_of("aiden").first.diff.added
-    end
-  end
+  # The one-note invariant is the schema's now — one notes row per
+  # entity, its primary key — where set_group_lines' raise and
+  # assert_one_note stood the guard; nothing remains to pin that a
+  # hand-written pair of rows would not catch.
 
   def test_a_leaving_member_stops_serving_the_group_and_is_logged
     with_store({"aiden" => AIDEN}) do |store|
@@ -1659,7 +1633,7 @@ class StoreTest < Minitest::Test
       store.remove_member(id, "aiden")
 
       assert_equal AIDEN, store.contact("aiden").vcard.to_s
-      assert_equal [HOUSEHOLD_ADDRESS], store.changes_of("aiden").first.diff.removed
+      assert_equal [RENDERED_ADDRESS], store.changes_of("aiden").first.diff.removed
     end
   end
 
@@ -1678,7 +1652,7 @@ class StoreTest < Minitest::Test
         change = store.changes_of(member).first
         assert_equal "group", change.action
         assert_equal store.contact(member).etag, change.etag
-        assert_equal [HOUSEHOLD_ADDRESS], change.diff.removed
+        assert_equal [RENDERED_ADDRESS], change.diff.removed
       end
     end
   end
@@ -1808,7 +1782,7 @@ class StoreTest < Minitest::Test
   def test_every_group_write_is_logged
     with_store({"aiden" => AIDEN}) do |store|
       id = store.create_group(name: "Booles")
-      store.set_group_lines(id, [HOUSEHOLD_ADDRESS])
+      store.set_group_components(id, [HOUSEHOLD], nil)
       store.add_member(id, "aiden")
       store.rename_group(id, name: "The Booles")
       store.remove_member(id, "aiden")
@@ -1817,13 +1791,13 @@ class StoreTest < Minitest::Test
       entries = store.group_changes_of(id)
       assert_equal %w[delete leave rename join lines create], entries.map(&:action)
       assert_equal({"name" => "Booles"}, entries.fetch(5).detail)
-      assert_equal [HOUSEHOLD_ADDRESS], entries.fetch(4).detail.fetch("added")
+      assert_equal [RENDERED_ADDRESS], entries.fetch(4).detail.fetch("added")
       assert_equal [], entries.fetch(4).detail.fetch("removed")
       assert_equal "aiden", entries.fetch(3).detail.fetch("card")
       assert_equal({"was" => "Booles", "name" => "The Booles"}, entries.fetch(2).detail)
       assert_equal "aiden", entries.fetch(1).detail.fetch("card")
       assert_equal(
-        {"name" => "The Booles", "lines" => [HOUSEHOLD_ADDRESS], "members" => []},
+        {"name" => "The Booles", "lines" => [RENDERED_ADDRESS], "members" => []},
         entries.fetch(0).detail,
       )
     end
@@ -1843,15 +1817,15 @@ class StoreTest < Minitest::Test
   def test_writes_that_move_nothing_of_the_group_log_nothing
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       id = store.create_group(name: "Booles")
-      store.set_group_lines(id, [HOUSEHOLD_ADDRESS])
+      store.set_group_components(id, [HOUSEHOLD], nil)
       store.add_member(id, "aiden")
       logged = store.group_changes_of(id).length
 
       store.rename_group(id, name: "Booles")
-      store.set_group_lines(id, [HOUSEHOLD_ADDRESS])
+      store.set_group_components(id, [HOUSEHOLD], nil)
       store.add_member(id, "aiden")
       store.remove_member(id, "znorth")
-      store.edit_group(id, name: "Booles", lines: [HOUSEHOLD_ADDRESS])
+      store.edit_group(id, name: "Booles", addresses: [HOUSEHOLD], note: nil)
       store.edit_members(id, join: [], leave: ["znorth"])
 
       assert_equal logged, store.group_changes_of(id).length
@@ -1861,11 +1835,15 @@ class StoreTest < Minitest::Test
   # A pure reorder moved every member's composed card — the fan-out
   # logs them — so it is a real entry, though the multiset difference
   # sees no line move at all.
-  def test_a_reorder_of_a_groups_lines_is_an_entry_with_an_empty_diff
+  # A pure reorder of the addresses is an entry with an empty diff —
+  # the multiset difference cannot see it, but the lending order moved
+  # every member's composed card, so it is a real write.
+  def test_a_reorder_of_a_groups_addresses_is_an_entry_with_an_empty_diff
     with_store({"aiden" => AIDEN}) do |store|
-      id = FixtureData.seed_group(store, lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      other = HOUSEHOLD.with(street: "9 Calculus Close", label: "work")
+      id = FixtureData.seed_group(store, lines: [HOUSEHOLD_ADDRESS, "ADR;TYPE=work:;;9 Calculus Close;London;England;NW1 1AB;United Kingdom"])
 
-      store.set_group_lines(id, [HOUSEHOLD_NOTE, HOUSEHOLD_ADDRESS])
+      store.set_group_components(id, [other, HOUSEHOLD], nil)
 
       entry = store.group_changes_of(id).first
       assert_equal "lines", entry.action
@@ -1881,7 +1859,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       id = FixtureData.seed_group(store, name: "Booles", members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
 
-      store.edit_group(id, name: "The Booles", lines: [HOUSEHOLD_NOTE])
+      store.edit_group(id, name: "The Booles", addresses: [], note: NOTE_TEXT)
       store.edit_members(id, join: ["znorth"], leave: ["aiden"])
 
       assert_equal %w[join leave lines rename create], store.group_changes_of(id).map(&:action)
@@ -2060,7 +2038,7 @@ class StoreTest < Minitest::Test
       assert_raises(ProTacts::Store::SyncGroupRename) { store.rename_group(everyone, name: " ") }
       assert_raises(ProTacts::Store::SyncGroupRename) { store.rename_group(alpha, name: "sync:Zoë Chen") }
       assert_raises(ProTacts::Store::SyncGroupRename) do
-        store.edit_group(everyone, name: "Everyone", lines: [])
+        store.edit_group(everyone, name: "Everyone", addresses: [], note: nil)
       end
 
       assert_equal ProTacts::Group::EVERYONE, store.group(everyone).name
@@ -2074,10 +2052,10 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN}) do |store|
       everyone = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: %w[aiden])
 
-      store.edit_group(everyone, name: ProTacts::Group::EVERYONE, lines: [HOUSEHOLD_NOTE])
+      store.edit_group(everyone, name: ProTacts::Group::EVERYONE, addresses: [], note: NOTE_TEXT)
 
       assert_equal ProTacts::Group::EVERYONE, store.group(everyone).name
-      assert_equal [HOUSEHOLD_NOTE], store.group(everyone).lines
+      assert_equal [HOUSEHOLD_NOTE], store.group(everyone).composed_lines
     end
   end
 
@@ -2110,6 +2088,7 @@ class StoreTest < Minitest::Test
   # The group's address as a client sends it back changed — one digit,
   # so nothing but the value moved.
   EDITED_ADDRESS = HOUSEHOLD_ADDRESS.sub("7 Calculus", "8 Calculus") #: String
+  RENDERED_EDITED_ADDRESS = EDITED_ADDRESS.sub("ADR;TYPE=home:", "ADR;TYPE=HOME:") #: String
   # The group's lines as macOS returns them on a card whose address and
   # note nobody edited: the parameter name lowercased, its value
   # uppercased, `pref` filled in, an unmodeled parameter dropped, and
@@ -2155,40 +2134,44 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # A member's own line of the name its group lends keeps its place in
-  # the card: the subtraction takes the lent copy and moves nothing
-  # else, which is what lets the round trip hold for a member that
-  # carries an address of its own.
-  def test_a_members_own_line_survives_the_subtraction_in_place
-    own = AIDEN.sub("FN:Aiden\r\n", "#{OWN_ADDRESS}\r\nFN:Aiden\r\n")
+  # A member's own address of the name its group lends keeps its
+  # place: the subtraction takes the lent copy and moves nothing else,
+  # which is what lets the round trip hold for a member that carries
+  # an address of its own beside the group's.
+  def test_a_members_own_address_survives_the_subtraction_in_place
+    own = ProTacts::Contact::Address.new(
+      po_box: "", extended: "", street: "1 Long Road", locality: "", region: "", postal_code: "", country: ""
+    )
 
-    with_store({"aiden" => own}) do |store|
+    with_store({"aiden" => AIDEN}) do |store|
+      store.put("aiden", vcard(AIDEN.sub("END:VCARD\r\n", "#{OWN_ADDRESS}\r\nEND:VCARD\r\n")))
       FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
       store.put("aiden", vcard(served))
 
-      assert_equal own, card_row(store, "aiden").fetch(:vcard)
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_equal [own], store.contact("aiden").addresses
       assert_equal served, store.contact("aiden").vcard.to_s
     end
   end
 
-  # An edit to a shared value is an edit to the group's line: the row
-  # takes the new bytes, the member stores none of them, and the served
-  # card carries one copy rather than the member's beside the group's
-  # (docs/plans/2026-09-09-group-edits-propagate.md).
+  # An edit to a shared value is an edit to the group's component: the
+  # row takes the new address, the member holds none of it, and the
+  # served card carries one copy rather than the member's beside the
+  # group's (docs/plans/2026-09-09-group-edits-propagate.md).
   def test_an_edited_lent_line_becomes_the_groups_line
     with_store({"aiden" => AIDEN}) do |store|
       group = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS)))
+      store.put("aiden", vcard(served.sub(RENDERED_ADDRESS, RENDERED_EDITED_ADDRESS)))
 
-      assert_equal [EDITED_ADDRESS], lent_lines(store, group)
+      assert_equal [RENDERED_EDITED_ADDRESS], lent_lines(store, group)
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       composed = store.contact("aiden").vcard.to_s
-      assert_includes composed, EDITED_ADDRESS
-      refute_includes composed, HOUSEHOLD_ADDRESS
+      assert_includes composed, RENDERED_EDITED_ADDRESS
+      refute_includes composed, RENDERED_ADDRESS
       assert_empty sentry_messages
     end
   end
@@ -2203,7 +2186,7 @@ class StoreTest < Minitest::Test
       FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, RESERIALIZED_ADDRESS)))
+      store.put("aiden", vcard(served.sub(RENDERED_ADDRESS, RESERIALIZED_ADDRESS)))
 
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       assert_equal served, store.contact("aiden").vcard.to_s
@@ -2226,23 +2209,23 @@ class StoreTest < Minitest::Test
     end
   end
 
-  # Relabelling a shared address is an edit to the shared line, and the
-  # label travels with the value: the group takes the line as the
-  # client spelled it, because re-rendering under the group's old
-  # header would propagate the address and drop the relabel (the plan's
-  # "What a propagated edit stores").
+  # Relabelling a shared address is an edit to the shared component,
+  # and the label travels with the value: the group's address carries
+  # the label the client sent, whatever spelling it arrived under
+  # (the plan's "Matching what comes back").
   def test_a_relabeled_lent_line_relabels_the_groups_line
     relabeled = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "ADR;type=WORK;type=pref:")
+    rendered = "ADR;TYPE=WORK:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
 
     with_store({"aiden" => AIDEN}) do |store|
       group = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, relabeled)))
+      store.put("aiden", vcard(served.sub(RENDERED_ADDRESS, relabeled)))
 
-      assert_equal [relabeled], lent_lines(store, group)
+      assert_equal [rendered], lent_lines(store, group)
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
-      assert_includes store.contact("aiden").vcard.to_s, relabeled
+      assert_includes store.contact("aiden").vcard.to_s, rendered
       assert_empty sentry_messages
     end
   end
@@ -2275,26 +2258,31 @@ class StoreTest < Minitest::Test
 
       store.put("aiden", vcard(served.sub(UNTYPED_ADDRESS, labeled)))
 
-      assert_equal [labeled], lent_lines(store, group)
+      assert_equal [RENDERED_ADDRESS], lent_lines(store, group)
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
-      assert_includes store.contact("aiden").vcard.to_s, labeled
+      assert_includes store.contact("aiden").vcard.to_s, RENDERED_ADDRESS
       assert_empty sentry_messages
     end
   end
 
-  # The label goes with the line it was made from: left behind, it
-  # would be a label in the member's card naming nothing.
+  # The label goes with the address it was made from: left behind, it
+  # would be a label in the member's card naming nothing. A type no
+  # field models reads back as the same word whether the client sends
+  # it as a TYPE or as an X-ABLabel — the one label either spelling
+  # reads (docs/plans/2026-10-25-contacts-on-entities.md, "Matching
+  # what comes back").
   def test_a_lent_type_the_client_made_a_label_of_comes_back_unedited
     domestic = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "ADR;TYPE=dom:")
     labeled = domestic.sub("ADR;TYPE=dom:", "item1.ADR:") + "\r\nitem1.X-ABLabel:dom"
+    rendered = ["item1.ADR:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom", "item1.X-ABLabel:dom"]
 
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       group = FixtureData.seed_group(store, members: %w[aiden znorth], lines: [domestic])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", vcard(served.sub(domestic, labeled)))
+      store.put("aiden", vcard(served.sub(rendered.join("\r\n"), labeled)))
 
-      assert_equal [domestic], lent_lines(store, group)
+      assert_equal rendered, lent_lines(store, group)
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       assert_equal ["put"], store.changes_of("znorth").map(&:action)
       assert_empty sentry_messages
@@ -2311,11 +2299,11 @@ class StoreTest < Minitest::Test
       group = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, edited)))
+      store.put("aiden", vcard(served.sub(RENDERED_ADDRESS, edited)))
 
-      assert_equal [edited], lent_lines(store, group)
+      assert_equal [RENDERED_EDITED_ADDRESS], lent_lines(store, group)
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
-      assert_includes store.contact("aiden").vcard.to_s, edited
+      assert_includes store.contact("aiden").vcard.to_s, RENDERED_EDITED_ADDRESS
       assert_empty sentry_messages
     end
   end
@@ -2331,7 +2319,7 @@ class StoreTest < Minitest::Test
       group = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", vcard(served.sub("#{HOUSEHOLD_ADDRESS}\r\n", "")))
+      store.put("aiden", vcard(served.sub("#{RENDERED_ADDRESS}\r\n", "")))
 
       assert_empty lent_lines(store, group)
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
@@ -2352,14 +2340,14 @@ class StoreTest < Minitest::Test
       FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS)))
+      store.put("aiden", vcard(served.sub(RENDERED_ADDRESS, RENDERED_EDITED_ADDRESS)))
 
-      assert_includes store.contact("znorth").vcard.to_s, EDITED_ADDRESS
+      assert_includes store.contact("znorth").vcard.to_s, RENDERED_EDITED_ADDRESS
       fanned = store.changes_of("znorth").first
       assert_equal "group", fanned.action
       assert_equal store.contact("znorth").etag, fanned.etag
-      assert_equal [EDITED_ADDRESS], fanned.diff.added
-      assert_equal [HOUSEHOLD_ADDRESS], fanned.diff.removed
+      assert_equal [RENDERED_EDITED_ADDRESS], fanned.diff.added
+      assert_equal [RENDERED_ADDRESS], fanned.diff.removed
       assert_equal "put", store.changes_of("aiden").first.action
     end
   end
@@ -2371,12 +2359,12 @@ class StoreTest < Minitest::Test
       FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", vcard(served.sub("#{HOUSEHOLD_ADDRESS}\r\n", "")))
+      store.put("aiden", vcard(served.sub("#{RENDERED_ADDRESS}\r\n", "")))
 
       assert_equal ZED, store.contact("znorth").vcard.to_s
       fanned = store.changes_of("znorth").first
       assert_equal "group", fanned.action
-      assert_equal [HOUSEHOLD_ADDRESS], fanned.diff.removed
+      assert_equal [RENDERED_ADDRESS], fanned.diff.removed
       assert_empty fanned.diff.added
     end
   end
@@ -2410,10 +2398,10 @@ class StoreTest < Minitest::Test
 
       ProTacts::Store.connect(path) do |store|
         served = store.contact("aiden").vcard.to_s
-        submitted = vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS))
+        submitted = vcard(served.sub(RENDERED_ADDRESS, RENDERED_EDITED_ADDRESS))
 
         assert_raises(RuntimeError) { FailingLog.new(database(store)).put("aiden", submitted) }
-        assert_equal [HOUSEHOLD_ADDRESS], lent_lines(store, group)
+        assert_equal [RENDERED_ADDRESS], lent_lines(store, group)
         assert_equal served, store.contact("aiden").vcard.to_s
       end
     end
@@ -2421,26 +2409,24 @@ class StoreTest < Minitest::Test
 
   ## What propagation refuses
 
-  # An edit into a shape no group may hold stays on the member: an
-  # address type Contacts cannot model comes back as a property group
-  # with its label beside it, which reads as an edit and which
-  # group_properties refuses. Propagating it would be an exception on
-  # an ordinary sync, so the member keeps the line — serving it twice,
-  # which is what the report is for
-  # (docs/plans/2026-09-09-group-edits-propagate.md, "The line a group
-  # cannot hold").
-  def test_an_edit_the_group_cannot_hold_stays_on_the_member
-    labeled = HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "item1.ADR:") + "\r\nitem1.X-ABLabel:dom"
+  # The refusal the line shape forced is gone: an edit arriving under
+  # an `item` group with its label beside it — the spelling Contacts
+  # gives a type it cannot model — is an edit like any other, and the
+  # label column carries it to the group
+  # (docs/plans/2026-10-25-contacts-on-entities.md, "A group's address
+  # carries a label like a card's").
+  def test_an_edit_under_a_label_reaches_the_group
+    labeled = ["item1.ADR:;;8 Calculus Close;London;England;NW1 1AB;United Kingdom", "item1.X-ABLabel:dom"]
 
     with_store({"aiden" => AIDEN}) do |store|
       group = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, labeled)))
+      store.put("aiden", vcard(served.sub(RENDERED_ADDRESS, labeled.join("\r\n"))))
 
-      assert_equal [HOUSEHOLD_ADDRESS], lent_lines(store, group)
-      assert_includes card_row(store, "aiden").fetch(:vcard), labeled
-      assert_equal 1, sentry_messages.length
+      assert_equal labeled, lent_lines(store, group)
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_empty sentry_messages
     end
   end
 
@@ -2456,46 +2442,49 @@ class StoreTest < Minitest::Test
       other = FixtureData.seed_group(store, members: ["aiden"], lines: [OWN_ADDRESS])
       served = store.contact("aiden").vcard.to_s
 
-      store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS)))
+      store.put("aiden", vcard(served.sub(RENDERED_ADDRESS, RENDERED_EDITED_ADDRESS)))
 
-      assert_equal [EDITED_ADDRESS], lent_lines(store, household)
+      assert_equal [RENDERED_EDITED_ADDRESS], lent_lines(store, household)
       assert_equal [OWN_ADDRESS], lent_lines(store, other)
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       assert_empty sentry_messages
     end
   end
 
-  # Two lines of the lent name, neither of them its bytes: the edit
-  # cannot be told from the addition, so the card is stored as it
-  # arrived and the ambiguity is reported rather than guessed at.
+  # Two addresses of the lent name, neither of them what it says: the
+  # edit cannot be told from the addition, so both stay the member's
+  # own — an edit is never lost — and the ambiguity is reported rather
+  # than guessed at.
   def test_two_candidates_for_one_lent_line_are_stored_and_reported
     with_store({"aiden" => AIDEN}) do |store|
-      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      group = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
-      submitted = served.sub(HOUSEHOLD_ADDRESS, "#{EDITED_ADDRESS}\r\n#{OWN_ADDRESS}")
+      submitted = served.sub(RENDERED_ADDRESS, "#{RENDERED_EDITED_ADDRESS}\r\n#{OWN_ADDRESS}")
 
       store.put("aiden", vcard(submitted))
 
-      assert_equal submitted, card_row(store, "aiden").fetch(:vcard)
+      assert_equal [RENDERED_ADDRESS], lent_lines(store, group)
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_equal 2, store.contact("aiden").addresses.length
       assert_equal 1, sentry_messages.length
     end
   end
 
-  # A member whose own card spells a line exactly as its group does
-  # keeps one copy of it: the stored lines are struck against the
-  # submission before anything is attributed to a group, so what is
-  # left over is the lent copy and only that one goes.
+  # A member whose entity holds the address its group lends keeps one
+  # copy of it: the untouched lent copy is struck before anything is
+  # attributed, so the member's own component is what is left over and
+  # only the group's copy goes back to it.
   def test_a_line_the_member_and_its_group_both_spell_keeps_one_copy
-    own = AIDEN.sub("END:VCARD\r\n", "#{HOUSEHOLD_ADDRESS}\r\nEND:VCARD\r\n")
-
-    with_store({"aiden" => own}) do |store|
-      FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+    with_store({"aiden" => AIDEN}) do |store|
+      store.put("aiden", vcard(AIDEN.sub("END:VCARD\r\n", "#{HOUSEHOLD_ADDRESS}\r\nEND:VCARD\r\n")))
+      group = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
-      assert_equal 2, served.scan(HOUSEHOLD_ADDRESS).length
+      assert_equal 2, served.scan(RENDERED_ADDRESS).length
 
       store.put("aiden", vcard(served))
 
-      assert_equal own, card_row(store, "aiden").fetch(:vcard)
+      assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+      assert_equal [HOUSEHOLD], store.contact("aiden").addresses
       assert_equal served, store.contact("aiden").vcard.to_s
     end
   end
@@ -2520,7 +2509,7 @@ class StoreTest < Minitest::Test
         assert_empty store.changes
 
         store.put("aiden", vcard(AIDEN))
-        store.save_edit("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")), birthday: nil)
+        store.save_edit("aiden", vcard(AIDEN.sub("FN:Aiden", "FN:Aiden Smith")), birthday: nil, addresses: [], note: nil)
         change = store.changes.last
         assert_equal %w[aiden edit], [change.card_id, change.action]
         assert_equal 2, change.sequence
@@ -2531,10 +2520,11 @@ class StoreTest < Minitest::Test
   # The group rebuild carries all three tables, and the hazard it is
   # written around is this one: dropping the old groups table with
   # foreign keys on runs an implicit DELETE FROM, and the members and
-  # the properties would cascade away behind it. So the members and
-  # the properties are asserted across the upgrade, and both cascades
-  # asserted still to fire on the far side — a rebuild that forgot to
-  # redeclare them would pass the first half of this alone.
+  # the lent lines would cascade away behind it. So the members and
+  # the lent lines — components, since 018 — are asserted across the
+  # upgrade, and both cascades asserted still to fire on the far side
+  # — a rebuild that forgot to redeclare them would pass the first
+  # half of this alone.
   def test_the_migration_carries_a_group_with_its_members_and_properties
     Dir.mktmpdir do |dir|
       path = Pathname.new(dir) / "contacts.db"
@@ -2548,15 +2538,16 @@ class StoreTest < Minitest::Test
 
       ProTacts::Store.connect(path) do |store|
         contact = store.contact("aiden")
-        assert_includes contact.vcard.to_s, HOUSEHOLD_ADDRESS
+        assert_includes contact.vcard.to_s, RENDERED_ADDRESS
         nous = group_named(store, "Booles").id
-        assert_equal nous, contact.addresses.fetch(0).lent_by&.id
+        assert_equal nous, contact.served_addresses.fetch(0).lent_by&.id
 
         database(store)[:cards].where(id: "aiden").delete
         assert_empty database(store)[:group_members].all
 
-        database(store)[:groups].where(id: nous).delete
-        assert_empty database(store)[:group_properties].all
+        database(store)[:entities].where(id: nous).delete
+        assert_empty database(store)[:addresses].all
+        assert_empty database(store)[:notes].all
       end
     end
   end
@@ -2624,13 +2615,13 @@ class StoreTest < Minitest::Test
         db = database(store)
         nous = group_named(store, "Booles").id
         assert_match(/\A[k-z]{12}\z/, nous)
-        assert_equal [HOUSEHOLD_ADDRESS], store.group(nous).lines
+        assert_equal [HOUSEHOLD], store.group(nous).addresses
         assert_equal %w[aiden], store.group(nous).members
         assert_equal %w[create], store.group_changes_of(nous).map(&:action)
         moved = db[:group_changes].select_map(:group_id)
         assert_empty moved & %w[nous zzzz]
         assert moved.all? { it.match?(/\A[k-z]{12}\z/) }
-        tables = %i[groups group_properties group_members group_photos]
+        tables = %i[groups addresses group_members group_photos]
         tables.each { assert_equal 1, db[it].count, it }
 
         db[:entities].where(id: nous).delete
@@ -2714,15 +2705,15 @@ class StoreTest < Minitest::Test
       ProTacts::Store.connect(path) do |store|
         joined = AIDEN.sub("END:VCARD\r\n", "NOTE:First.\\n\\nSecond.\r\nEND:VCARD\r\n")
         assert_equal joined, store.contact("aiden").vcard.to_s
+        assert_equal "First.\n\nSecond.", store.contact("aiden").note
 
         assert_equal(
-          [HOUSEHOLD_ADDRESS, "NOTE:Gate code 1854.\\n\\nBins on Tuesday."],
-          group_named(store, "Booles").lines,
+          [HOUSEHOLD, "Gate code 1854.\n\nBins on Tuesday."],
+          [group_named(store, "Booles").addresses.fetch(0), group_named(store, "Booles").note],
         )
         served = ZED.sub(
           "END:VCARD\r\n",
-          "NOTE:One only.\\n\\nShared · Booles:\\nGate code 1854.\\n\\nBins on Tuesday.\r\n" \
-          "#{HOUSEHOLD_ADDRESS}\r\nEND:VCARD\r\n",
+          "#{RENDERED_ADDRESS}\r\nNOTE:One only.\\n\\nShared · Booles:\\nGate code 1854.\\n\\nBins on Tuesday.\r\nEND:VCARD\r\n",
         )
         assert_equal served, store.contact("znorth").vcard.to_s
       end
@@ -2785,7 +2776,7 @@ class StoreTest < Minitest::Test
     rule(:edit) do |tc|
       id = tc.draw(sampled_from(IDS))
       tc.assume(@store.contact(id))
-      @store.save_edit(id, card(tc, id), birthday: nil)
+      @store.save_edit(id, card(tc, id), birthday: nil, addresses: [], note: nil)
     end
 
     rule(:delete) do |tc|
