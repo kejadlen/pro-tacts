@@ -7,8 +7,11 @@ require "pro_tacts/admin/group_dialog"
 module ProTacts
   module Admin
     # GET /contacts/:id — a contact's card (ContactCard), read-only;
-    # its edit link opens ContactsEdit.
+    # its edit link opens ContactsEdit, and its delete asks first
+    # (#delete_dialog).
     class ContactsShow < Phlex::HTML
+      DELETE = "delete-contact" #: String
+
       # The groups come from the store beside the contact rather than
       # off it: a contact's card carries what its groups lend it, never
       # which groups those are (Store#groups_of). Required, and not
@@ -41,7 +44,12 @@ module ProTacts
           div(class: "record") do
             div(class: "record-nav") do
               a(href: "/", class: "type-label") { "‹ contacts" }
-              a(href: "/contacts/#{@contact.id}/edit", class: "btn", data_size: "sm") { "edit" }
+              # The groups row's edit/new pair (ContactCard#groups_row),
+              # the slash admin.css's.
+              div(role: "group", aria_label: "Contact") do
+                a(href: "/contacts/#{@contact.id}/edit", class: "btn", data_size: "sm") { "edit" }
+                button(type: "button", data_size: "sm", popovertarget: DELETE) { "delete" }
+              end
             end
             render ContactCard.new(contact: @contact, groups: @groups)
           end
@@ -78,10 +86,30 @@ module ProTacts
           # so the dialog is told which boxes to check rather than
           # reading every group's members to work it out.
           render GroupDialog.new(contact: @contact, groups: @all_groups, joined: @groups.map(&:id))
+          delete_dialog
         end
       end
 
       private
+
+      # The confirmation, a popover for ContactDialog's reasons: the
+      # question and the two answers, with no body between them. The
+      # form stands outside the dialog for that, the Delete reaching it
+      # by id; nothing in it shows. The etag rides along for the edit
+      # form's reason (Web#apply_delete).
+      #: () -> void
+      def delete_dialog
+        form(id: "#{DELETE}-form", action: "/contacts/#{@contact.id}/delete", method: "post") do
+          input(type: "hidden", name: "etag", value: @contact.etag)
+        end
+        dialog(id: DELETE, popover: "auto") do
+          header { "Delete #{@contact.name || @contact.id}?" }
+          footer do
+            button(type: "button", popovertarget: DELETE, popovertargetaction: "hide") { "Cancel" }
+            button(type: "submit", form: "#{DELETE}-form", data: {variant: "danger"}) { "Delete" }
+          end
+        end
+      end
 
       # One row per entry, on the record's own grid: the action in the
       # type column, because it is the kind of thing the row is, and

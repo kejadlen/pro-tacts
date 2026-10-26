@@ -49,11 +49,30 @@
   display: flex;
 }
 .record-nav .btn,
-.record-nav button {
+.record-nav button,
+.record-nav > [role="group"] {
   position: absolute;
   inset-block-start: 50%;
   inset-inline-end: 0;
   translate: 0 -50%;
+}
+/* A row with two actions pins them as one pair, drawn the way the
+   groups row draws its edit/new (below), so the pair inside stands
+   where it is put. */
+.record-nav > [role="group"] > * {
+  position: static;
+  translate: none;
+}
+/* The contact's delete in the color Gloss keeps for destructive, so
+   the pair says which of its two words cannot be taken back. */
+.record-nav [popovertarget="delete-contact"] {
+  color: var(--gl-color-danger);
+}
+/* A dialog that is only a question and its answers (the contact's
+   delete) has no body between Gloss's header and footer, and their
+   two hairlines would stack into one heavy rule; the header's stays. */
+dialog > header + footer {
+  border-top: 0;
 }
 
 /* A card's h1 carries no margin of its own — Gloss zeroes h3 in a
@@ -1292,14 +1311,17 @@ span.avatar[data-size="lg"] {
    beside it. The two give up their inner padding toward it, the mono
    glyph's own bearings being the space between them; the outer
    padding stays, so a hover still fills a box. */
-.detail-grid dd > [role="group"] {
+.detail-grid dd > [role="group"],
+.record-nav > [role="group"] {
   align-items: baseline;
 }
-.detail-grid dd > [role="group"] > :first-child {
+.detail-grid dd > [role="group"] > :first-child,
+.record-nav > [role="group"] > :first-child {
   order: 0;
   padding-inline-end: 0;
 }
-.detail-grid dd > [role="group"]::after {
+.detail-grid dd > [role="group"]::after,
+.record-nav > [role="group"]::after {
   content: "/" / "";
   order: 1;
   font-family: var(--gl-font-mono);
@@ -1307,11 +1329,13 @@ span.avatar[data-size="lg"] {
   line-height: 1.15;
   color: var(--gl-color-text-secondary);
 }
-.detail-grid dd > [role="group"] > :last-child {
+.detail-grid dd > [role="group"] > :last-child,
+.record-nav > [role="group"] > :last-child {
   order: 2;
   padding-inline-start: 0;
 }
-/* On a phone the group stacks and the slash goes, the line break
+/* On a phone the group stacks and the slash goes (the details
+   card's; the caption row has the width to keep its pair), the line break
    saying what it said: side by side the two take the tags' column
    down to a word. With nothing between them the two keep their whole
    padding, so their right edges stand together, and the two pads

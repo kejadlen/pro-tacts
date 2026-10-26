@@ -116,6 +116,13 @@ module ProTacts
           apply_new_group(r, id)
         end
 
+        # The details page's delete, once its dialog is confirmed
+        # (Admin::ContactsShow). Above the edit's POST, as the groups
+        # dialog's save is.
+        r.post "delete" do
+          apply_delete(r, id)
+        end
+
         r.post do
           apply_edit(r, id)
         end
@@ -236,6 +243,21 @@ module ProTacts
 
       store.save_edit(id, Admin::CardForm.contact_card(contact, company, first, middle, last, params), birthday:)
       r.redirect land || "/contacts/#{id}", 303
+    end
+
+    # The DAV DELETE's removal (Web#remove_card), under the edit's
+    # snapshot guard rather than an If-Match: a card changed since the
+    # page loaded is not the one its owner said yes to removing, so the
+    # refusal shows them the one there is now. Lands on the dashboard,
+    # where the details page's back link goes.
+    #: (untyped r, String id) -> String?
+    def apply_delete(r, id)
+      contact = store.contact(id)
+      return if contact.nil?
+      return contact_screen(contact, notice: "This contact changed since the page loaded; nothing was deleted.") if typecast_params.str!("etag") != contact.etag
+
+      store.delete(id)
+      r.redirect "/", 303
     end
 
     # The dialog's save as what it toggled rather than the set it shows:
