@@ -269,20 +269,81 @@ dialog > header + footer {
   color: var(--gl-color-danger);
 }
 
-/* A row's label field (Admin::ContactsEdit#label_field) sits in the
-   type column the caption held and the record card's key still holds,
-   and at rest it is that caption: Gloss's .field type, mono uppercase
-   at the step below the value, with no box around it — the row reads
-   as the record does (docs/DESIGN.md, "Alignment is the layout"). The
-   box comes back under the pointer, saying the word can be changed,
-   and stays while the field has focus, which a click gives it: editing
-   on click is the input's own behavior, and markup's job here (see
-   Admin::Layout). A word wider than the column ends in an ellipsis
-   until then. Lowercase rather than the captions' uppercase: the
-   field shows the word as it is stored and as it will be saved, and
-   an unlabeled row's placeholder, the kind, reads in the caption's
-   color rather than a hint's. */
-.card-body form.field-stack > .field > .row-type > .row-label {
+/* A row's type (Admin::ContactsEdit#label_field) sits in the type
+   column the caption held and the record card's key still holds, and
+   at rest it is that caption: Gloss's .field type, mono at the step
+   below the value, with no box around it, so the row reads as the
+   record does (docs/DESIGN.md, "Alignment is the layout"). A standing
+   row's is a button opening the popup that edits it; Gloss's quiet
+   button tint under the pointer is what says it can be clicked, its
+   padding pulled into the gutter so the word starts where the
+   captions above it do. A row the add dialog just made has no word
+   to read yet, so its label is the field itself, boxed under the
+   pointer and while it has focus. A word wider than the column ends
+   in an ellipsis. Lowercase rather than the captions' uppercase: the
+   type shows the word as it is stored and as it will be saved, and
+   an unlabeled row's kind reads in the caption's color rather than a
+   hint's. */
+.card-body form.field-stack > .field > .row-type {
+  min-width: 0;
+}
+.card-body form.field-stack > .field > .row-type > button {
+  display: block;
+  max-width: 100%;
+  padding-block: var(--gl-space-3xs);
+  padding-inline: var(--gl-space-3xs);
+  margin-inline-start: calc(-1 * var(--gl-space-3xs));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--2);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0.06em;
+  color: var(--gl-color-text-secondary);
+}
+/* The popup hangs below its caption, start-aligned with it, the
+   account menu's construction (.user-menu ul) at the size of one field
+   and the delete under it. The UA popover styles center it, which is
+   where it stays without anchor positioning: still over the page,
+   still dismissed by a click away. */
+.card-body form.field-stack .row-menu {
+  position: fixed;
+  inset: auto;
+  inset-block-start: calc(anchor(bottom) + var(--gl-space-3xs));
+  inset-inline-start: anchor(left);
+  width: 14rem;
+  margin: 0;
+  padding: var(--gl-space-2xs);
+  background: var(--gl-color-surface-card);
+  border: 1px solid var(--gl-color-border-hairline);
+  border-radius: var(--gl-radius-md);
+  box-shadow: var(--gl-shadow-float);
+  color: var(--gl-color-text-primary);
+}
+@supports not (anchor-name: --a) {
+  .card-body form.field-stack .row-menu {
+    inset: 0;
+    margin: auto;
+    height: fit-content;
+  }
+}
+.card-body form.field-stack .row-menu:popover-open {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--gl-space-2xs);
+}
+.card-body form.field-stack .row-menu > input {
+  width: 100%;
+  padding-block: var(--gl-space-3xs);
+}
+.card-body form.field-stack .row-menu > .row-delete {
+  color: var(--gl-color-danger);
+}
+.card-body form.field-stack > .field > .row-label {
   padding-block: var(--gl-space-3xs);
   padding-inline: 0;
   border-color: transparent;
@@ -296,61 +357,21 @@ dialog > header + footer {
   letter-spacing: 0.06em;
   color: var(--gl-color-text-secondary);
 }
-.card-body form.field-stack > .field > .row-type > .row-label::placeholder {
+.card-body form.field-stack > .field > .row-label::placeholder {
   color: var(--gl-color-text-secondary);
 }
-.card-body form.field-stack > .field > .row-type > .row-label:is(:hover, :focus) {
+.card-body form.field-stack > .field > .row-label:is(:hover, :focus) {
   padding-inline: calc(var(--gl-space-xs) - 1px);
   border-color: var(--gl-color-border-default);
   background: var(--gl-color-surface-card);
 }
-.card-body form.field-stack > .field > .row-type > .row-label:focus {
+.card-body form.field-stack > .field > .row-label:focus {
   border-color: var(--gl-color-accent);
 }
 /* Chrome's arrow for the list would take a third of a 6rem column
    from the word; the list still opens on a click or a keystroke. */
-.card-body form.field-stack > .field > .row-type > .row-label::-webkit-calendar-picker-indicator {
+.card-body form.field-stack > .field > .row-label::-webkit-calendar-picker-indicator {
   display: none !important;
-}
-/* The type column holds the label field and the row's delete
-   (Admin::ContactsEdit#label_field) in one box, so the row's baseline
-   is still the word's — a flex box's is its first item's — and the
-   delete can sit inside the field's end, centered on it whatever the
-   row's height. It shows only while the label or it has focus, the
-   click that edits the word being the click that offers it. Hidden
-   by opacity rather than visibility, which would make it unfocusable:
-   the label's Tab could not land on it, Chrome dropping the focus as
-   the label lets go. At rest it takes no pointer, so a click on the
-   word's end still reaches the field under it. The focused label
-   gives it room, so a long word ends in its ellipsis before the
-   icon. The removal register is the birthday's
-   remove control's: quiet at rest, danger on hover. */
-.card-body form.field-stack > .field > .row-type {
-  display: flex;
-  position: relative;
-  min-width: 0;
-}
-.card-body form.field-stack > .field > .row-type > .row-label {
-  flex: 1;
-  min-width: 0;
-}
-.card-body form.field-stack > .field > .row-type > .row-delete {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-end: 0;
-  margin-block: auto;
-  opacity: 0;
-  pointer-events: none;
-}
-.card-body form.field-stack > .field > .row-type:focus-within > .row-delete {
-  opacity: 1;
-  pointer-events: auto;
-}
-.card-body form.field-stack > .field > .row-type:has(> .row-delete) > .row-label:focus {
-  padding-inline-end: 1.75rem;
-}
-.card-body form.field-stack > .field > .row-type > .row-delete:hover {
-  color: var(--gl-color-danger);
 }
 
 /* The date line breaks in two when its row cannot hold a whole
@@ -473,10 +494,10 @@ dialog > header + footer {
    whitespace-only value hides the placeholder and the strike with
    it, while the save strips before it compares. */
 .field[data-blank-removes]:has(> input:placeholder-shown) > span,
-.field[data-blank-removes]:has(> input:placeholder-shown) > .row-type > .row-label,
+.field[data-blank-removes]:has(> input:placeholder-shown) > .row-type > button,
 .field[data-blank-removes]:has(> textarea:placeholder-shown) > span,
 .field[data-blank-removes]:has(> .field-stack):not(:has(> .field-stack > input:not(:placeholder-shown))) > span,
-.field[data-blank-removes]:has(> .field-stack):not(:has(> .field-stack > input:not(:placeholder-shown))) > .row-type > .row-label,
+.field[data-blank-removes]:has(> .field-stack):not(:has(> .field-stack > input:not(:placeholder-shown))) > .row-type > button,
 .field[data-blank-removes]:has(> .date-row):has(option[value=""]:checked):not(:has(input[type="number"]:not(:placeholder-shown))) > span {
   text-decoration: line-through;
   color: var(--gl-color-danger);
@@ -485,15 +506,6 @@ dialog > header + footer {
 .field[data-blank-removes]:has(> textarea:placeholder-shown) > textarea::placeholder {
   color: var(--gl-color-danger);
 }
-/* A label field's own placeholder is the kind it stands in for, and
-   is struck with the row. A pseudo-element answers no :is() above, so
-   it takes its own rule. */
-.field[data-blank-removes]:has(> input:placeholder-shown) > .row-type > .row-label::placeholder,
-.field[data-blank-removes]:has(> .field-stack):not(:has(> .field-stack > input:not(:placeholder-shown))) > .row-type > .row-label::placeholder {
-  text-decoration: line-through;
-  color: var(--gl-color-danger);
-}
-
 /* Gloss's field contract styles input and select but not textarea
    (base.css only resets it), and the editor's note field is one —
    multiline text beside a .field caption. The box mirrors field.css's

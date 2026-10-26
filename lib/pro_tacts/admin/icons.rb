@@ -18,9 +18,8 @@ module ProTacts
       # a check in it when the row is in the book;
       # chevron-down, the account menu's opening direction;
       # search, the glyph on the header's search button; house,
-      # the phone header's way home from the search page; image,
-      # a group tag's mark that the group has a photo; and trash, an
-      # editor row's delete. A tag
+      # the phone header's way home from the search page; and image,
+      # a group tag's mark that the group has a photo. A tag
       # per shape rather than a bare list of path data, because
       # calendar's frame is a rect and redrawing it as a path would
       # be this file copying something other than what Lucide ships.
@@ -57,11 +56,6 @@ module ProTacts
         house: [
           [:path, {d: "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"}],
           [:path, {d: "M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"}],
-        ],
-        trash: [
-          [:path, {d: "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"}],
-          [:path, {d: "M3 6h18"}],
-          [:path, {d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"}],
         ],
       } #: Hash[Symbol, Array[[Symbol, Hash[Symbol, untyped]]]]
 

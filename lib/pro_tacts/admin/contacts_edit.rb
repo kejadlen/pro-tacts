@@ -1,4 +1,5 @@
 require "date"
+require "json"
 
 require "pro_tacts/admin/phlex"
 
@@ -242,11 +243,11 @@ module ProTacts
                     input(type: "text", name: "nickname", value: @own.nickname,
                           placeholder: @own.nickname ? "removed on save" : nil)
                   end
-                  @own.phones.each { value_row("phone", it) }
-                  @own.emails.each { value_row("email", it) }
-                  @own.handles.each { value_row("handle", it) }
-                  @own.addresses.each do
-                    address_row(it)
+                  @own.phones.each_with_index { |row, i| value_row("phone", row, i) }
+                  @own.emails.each_with_index { |row, i| value_row("email", row, i) }
+                  @own.handles.each_with_index { |row, i| value_row("handle", row, i) }
+                  @own.addresses.each_with_index do |address, i|
+                    address_row(address, i)
                   end
                   birthday_row
                   added_rows
@@ -314,11 +315,9 @@ module ProTacts
               span("x-text": "kind")
             end
             template("x-if": "kind !== 'birthday'") do
-              span(class: "row-type") do
-                input(type: "text", class: "row-label", autocomplete: "off",
-                      ":name": "`new_${kind}[${i}][label]`", ":list": "`${kind}-labels`",
-                      ":placeholder": "kind", ":aria-label": "`${kind} label`")
-              end
+              input(type: "text", class: "row-label", autocomplete: "off",
+                    ":name": "`new_${kind}[${i}][label]`", ":list": "`${kind}-labels`",
+                    ":placeholder": "kind", ":aria-label": "`${kind} label`")
             end
             value_types = "{ #{VALUE_TYPES.map { |kind, type| "#{kind}: '#{type}'" }.join(", ")} }[kind]"
             template("x-if": value_types) do
@@ -356,47 +355,49 @@ module ProTacts
 
       # A row's label in the type column, where the record card shows it
       # (docs/plans/2026-10-22-a-row-edits-its-label.md, "The type
-      # column's field"): a free word, its kind's usual ones offered
-      # beside it (#label_words), and the kind as its placeholder, so an
-      # unlabeled row reads as it always has. Blanking it is a relabel to
-      # nothing, never a removal, so admin.css's removal state asks after
-      # the value beside it and only strikes this. `autocomplete` off so
-      # the browser's memory of past entries does not crowd the list out.
+      # column's field"): at rest the caption itself, a button reading
+      # the word as stored or, unlabeled, the kind. A click opens a
+      # popup under it holding the two things a type can have done to
+      # it, the label's field and the row's delete, so the column stays
+      # one word until it is asked for more. The field is a free word,
+      # its kind's usual ones offered beside it (#label_words), and the
+      # kind as its placeholder. Blanking it is a relabel to nothing,
+      # never a removal, so admin.css's removal state asks after the
+      # value beside it and only strikes the caption. `autocomplete` off
+      # so the browser's memory of past entries does not crowd the list
+      # out.
       #
-      # The click that edits the label also offers the row's delete
-      # (#delete_button), so the type column is where a row is both
-      # renamed and removed; the two share a span so admin.css can set
-      # the one inside the other's box. A row the form cannot remove
-      # (#address_row's po box) is not offered it. An added row's label
-      # (#added_rows) wears the span for the same styles and no delete:
-      # its blank is already nothing.
-      #: (String field, String name, String? value, ?deletable: bool) -> void
-      def label_field(field, name, value, deletable: true)
-        span(class: "row-type") do
-          input(type: "text", class: "row-label", name:, value:, autocomplete: "off",
-                list: "#{field}-labels", placeholder: field, aria_label: "#{field} label")
-          delete_button(field) if deletable
-        end
-      end
+      # The popup is the platform's: `popovertarget` opens it, light
+      # dismiss closes it, and opening it selects the field's word, so
+      # typing replaces it and the arrow keys keep it. It stays inside the row, and so inside the form,
+      # whose save posts the field from it like any other. `id` is the
+      # popup's, by the row's kind and place rather than its digest,
+      # which a pair of byte-identical lines share (#value_row), and it
+      # names the anchor admin.css hangs the popup from. Alpine keeps
+      # the caption reading what the field says; Enter, which would
+      # submit the form from a field, closes the popup instead.
+      #
+      # The delete is the blank rule's one-click spelling, as the
+      # birthday's remove control is (#birthday_row): it empties the
+      # row's values and leaves the label, the struck caption says the
+      # rest, and nothing is gone until Save. A row the form cannot
+      # remove (#address_row's po box) is not offered it.
+      #: (String field, String id, String name, String? value, ?deletable: bool) -> void
+      def label_field(field, id, name, value, deletable: true)
+        span(class: "row-type", style: "anchor-name: --#{id}", x_data: "{ label: #{JSON.generate(value.to_s)} }") do
+          button(type: "button", popovertarget: id,
+                 "x-text": "label || '#{field}'") { value || field }
+          div(id:, popover: "auto", class: "row-menu", style: "position-anchor: --#{id}",
+              "@toggle": "$event.newState === 'open' && $el.querySelector('input').select()") do
+            input(type: "text", name:, value:, autocomplete: "off",
+                  list: "#{field}-labels", placeholder: field, aria_label: "#{field} label",
+                  "x-model": "label", "@keydown.enter.prevent": "$el.closest('[popover]').hidePopover()")
+            next unless deletable
 
-      # A row's delete: blank is the rule that removes, and this is its
-      # one-click spelling, the birthday's remove control (#birthday_row)
-      # moved to where the label is edited. It empties the row's values
-      # and leaves the label, the struck caption says the rest, and
-      # nothing is gone until Save, so it asks no confirm(). admin.css
-      # shows it inside the label's box only while that has focus.
-      # `@mousedown.prevent` keeps the focus there through the click —
-      # Safari never focuses a clicked button, so the label would blur,
-      # the button hide, and the click land on nothing. The label then
-      # blurs on purpose, the row reading as the record again, struck.
-      #: (String field) -> void
-      def delete_button(field)
-        clear = "const row = $el.closest('.field'); " \
-                "row.querySelectorAll('input:not(.row-label)').forEach(el => el.value = ''); " \
-                "row.querySelector('.row-label').blur()"
-        button(type: "button", class: "icon-button row-delete", data_size: "sm",
-               aria_label: "Delete #{field}", "@mousedown.prevent": true, "@click": clear) do
-          render Icon.new(:trash, size: 14)
+            clear = "$el.closest('.field').querySelectorAll(':scope > input, :scope > .field-stack > input')" \
+                    ".forEach(el => el.value = ''); $el.closest('[popover]').hidePopover()"
+            button(type: "button", class: "row-delete", data_size: "sm", "@click": clear) { "delete #{field}" }
+          end
         end
       end
 
@@ -425,11 +426,11 @@ module ProTacts
       # value of a duplicated name — editing one of a pair of
       # byte-identical rows means blanking one, saving, then editing the
       # other.
-      #: (String field, Contact::Phone | Contact::Email | Contact::Handle row) -> void
-      def value_row(field, row)
+      #: (String field, Contact::Phone | Contact::Email | Contact::Handle row, Integer index) -> void
+      def value_row(field, row, index)
         name = "#{field}[#{row.line.digest}]"
         div(class: "field", data: {blank_removes: true}) do
-          label_field(field, "#{name}[label]", row.label)
+          label_field(field, "#{field}-#{index}-type", "#{name}[label]", row.label)
           input(type: VALUE_TYPES.fetch(field), name: "#{name}[value]", value: row.value,
                 placeholder: "removed on save", aria_label: field)
         end
@@ -565,10 +566,10 @@ module ProTacts
       # a line surviving by its po box alone cannot be removed from
       # this form at all — its row wears no state however blank it
       # renders.
-      #: (Contact::Address address) -> void
-      def address_row(address)
+      #: (Contact::Address address, Integer index) -> void
+      def address_row(address, index)
         div(class: "field", data: {blank_removes: address.po_box.nil?}) do
-          label_field("address", "address[#{address.line.digest}][label]", address.label,
+          label_field("address", "address-#{index}-type", "address[#{address.line.digest}][label]", address.label,
                       deletable: address.po_box.nil?)
           div(class: "field-stack") do
             ADDRESS_FIELDS.each do |component, label|
