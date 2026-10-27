@@ -148,11 +148,14 @@ dialog > header + footer {
    Everything else about the control stays the browser's: the two
    strings and the button-before-name order are not CSS's to change,
    and the generic input rule's focus ring still draws (a border
-   none only removes the line, not the shadow). */
+   none only removes the line, not the shadow). A click anywhere in
+   the well opens the picker, so the pointer is the well's, not only
+   the button's. */
 .card-body form input[type="file"] {
   padding: var(--gl-space-2xs);
   background: var(--gl-color-surface-fill);
   border: none;
+  cursor: pointer;
 }
 .card-body form input[type="file"]::file-selector-button {
   padding: var(--gl-space-2xs) var(--gl-space-xs);
@@ -191,9 +194,19 @@ dialog > header + footer {
 }
 /* The Company row's box has no text to share a baseline with, so the
    baseline rule above floats it over its caption; centred, the two
-   read as one row like every other. */
+   read as one row like every other. The box is shorter than a text
+   box, so the row also stands at a text row's height, written the
+   way the boxes' own height arrives — the block padding the rule
+   above sets them, one line of their type, and their border — so
+   the stack keeps one rhythm. The caption is a label for the box,
+   not around it (ContactsEdit), so it misses Gloss's pointer for a
+   wrapping label and asks for it here: clicking it ticks the box. */
 .card-body form.field-stack > .field:has(> input[type="checkbox"]) {
   align-items: center;
+  min-block-size: calc(2 * var(--gl-space-3xs) + 1.15 * var(--gl-step--1) + 2px);
+}
+.card-body form.field-stack > .field:has(> input[type="checkbox"]) > label {
+  cursor: pointer;
 }
 /* A row whose control is a stack of inputs — an address's component
    fields — holds the multi-line value's own lines in the value
@@ -226,6 +239,7 @@ dialog > header + footer {
 .card-body form.field-stack .field > .date-row > select {
   flex: 1 1 auto;
   padding-block: var(--gl-space-3xs);
+  cursor: pointer;
 }
 /* The two digit boxes by their type, not by being inputs: the row
    also holds the picker's date input, which is not a box anyone
