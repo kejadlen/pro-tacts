@@ -271,19 +271,16 @@ dialog > header + footer {
 
 /* A row's type (Admin::ContactsEdit#label_field) sits in the type
    column the caption held and the record card's key still holds, and
-   at rest it is that caption: Gloss's .field type, mono at the step
-   below the value, with no box around it, so the row reads as the
-   record does (docs/DESIGN.md, "Alignment is the layout"). A standing
-   row's is a button opening the popup that edits it; Gloss's quiet
-   button tint under the pointer is what says it can be clicked, its
-   padding pulled into the gutter so the word starts where the
-   captions above it do. A row the add dialog just made has no word
-   to read yet, so its label is the field itself, boxed under the
-   pointer and while it has focus. A word wider than the column ends
-   in an ellipsis. Lowercase rather than the captions' uppercase: the
-   type shows the word as it is stored and as it will be saved, and
-   an unlabeled row's kind reads in the caption's color rather than a
-   hint's. */
+   at rest it is that caption: a standing row's is a button opening
+   the popup that edits it, set in the .field caption type it sits
+   beside — mono, uppercase, the same step, tracking and color, all
+   inherited — so the column reads as the record does (docs/DESIGN.md,
+   "Alignment is the layout"). Gloss's quiet button tint under the
+   pointer is what says it can be clicked, its padding pulled into the
+   gutter so the word starts where the captions above it do. A word
+   wider than the column ends in an ellipsis. A row the add dialog
+   just made has no word to read yet, so its label is the field
+   itself, boxed under the pointer and while it has focus (below). */
 .card-body form.field-stack > .field > .row-type {
   min-width: 0;
 }
@@ -297,26 +294,33 @@ dialog > header + footer {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: start;
-  font-family: var(--gl-font-mono);
-  font-size: var(--gl-step--2);
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: 0.06em;
-  color: var(--gl-color-text-secondary);
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: inherit;
 }
-/* The popup hangs below its caption, start-aligned with it, the
-   account menu's construction (.user-menu ul) at the size of one field
-   and the delete under it. The UA popover styles center it, which is
-   where it stays without anchor positioning: still over the page,
-   still dismissed by a click away. */
+/* The popup opens over its caption, the field's word landing where
+   the caption's was, so the click reads as the caption turning
+   editable with the row's delete beneath it: the popup's start edge
+   sits back by its own padding and border and the field's, and its top
+   by the same down to the field's text. A card's construction, the
+   account menu's (.user-menu ul): surface, hairline, the float shadow.
+   The field is the caption's mono a step up, showing the word as it is
+   stored; the delete is a menu row under a hairline, in the danger
+   color the contact page's delete wears, with the quiet button's
+   hover tint. The UA popover styles center it, which is where it stays
+   without anchor positioning: still over the page, still dismissed by
+   a click away. */
 .card-body form.field-stack .row-menu {
+  --_pad: var(--gl-space-3xs);
+  --_inset: calc(var(--_pad) + var(--gl-space-xs) + 1px);
   position: fixed;
   inset: auto;
-  inset-block-start: calc(anchor(bottom) + var(--gl-space-3xs));
-  inset-inline-start: anchor(left);
-  width: 14rem;
+  inset-block-start: calc(anchor(top) - var(--_pad) - 2px);
+  inset-inline-start: calc(anchor(left) - var(--_inset));
+  width: 13rem;
   margin: 0;
-  padding: var(--gl-space-2xs);
+  padding: var(--_pad);
   background: var(--gl-color-surface-card);
   border: 1px solid var(--gl-color-border-hairline);
   border-radius: var(--gl-radius-md);
@@ -333,14 +337,33 @@ dialog > header + footer {
 .card-body form.field-stack .row-menu:popover-open {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--gl-space-2xs);
+  gap: var(--_pad);
 }
 .card-body form.field-stack .row-menu > input {
   width: 100%;
   padding-block: var(--gl-space-3xs);
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--1);
+}
+.card-body form.field-stack .row-menu > input::-webkit-calendar-picker-indicator {
+  display: none !important;
 }
 .card-body form.field-stack .row-menu > .row-delete {
+  display: block;
+  width: 100%;
+  padding: var(--gl-space-2xs) calc(var(--gl-space-xs) - 1px);
+  border: 0;
+  border-block-start: 1px solid var(--gl-color-border-hairline);
+  border-radius: 0 0 var(--gl-radius-sm) var(--gl-radius-sm);
+  text-align: start;
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-step--1);
+  color: var(--gl-color-danger);
+}
+/* Gloss's quiet hover sets the ink back to primary through a long
+   chain of :not()s; the attribute matches its weight so the delete
+   keeps its color under the pointer. */
+.card-body form.field-stack .row-menu > .row-delete[type="button"]:hover:not(:disabled):not([aria-disabled="true"]) {
   color: var(--gl-color-danger);
 }
 .card-body form.field-stack > .field > .row-label {
