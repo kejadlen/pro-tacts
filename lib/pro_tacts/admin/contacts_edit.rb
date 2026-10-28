@@ -356,8 +356,9 @@ module ProTacts
       # A row's label in the type column, where the record card shows it
       # (docs/plans/2026-10-22-a-row-edits-its-label.md, "The type
       # column's field"): at rest the caption itself, a button reading
-      # the word as stored or, unlabeled, the kind. A click opens a
-      # popup under it holding the two things a type can have done to
+      # the word or, unlabeled, the kind, in the captions' own type
+      # (admin.css). A click opens a popup over it holding, in the
+      # word's stored spelling, the two things a type can have done to
       # it, the label's field and the row's delete, so the column stays
       # one word until it is asked for more. The field is a free word,
       # its kind's usual ones offered beside it (#label_words), and the
