@@ -20,7 +20,7 @@ module ProTacts
       # @rbs @groups: Hash[String, String]
       # @rbs @named_groups: Array[String]
       # @rbs @arriving_notes: Array[String]
-      # @rbs @contact: Contact
+      # @rbs @contact: ContactDetails
       # @rbs @left: Array[VCard::Parser::Line]
 
       # What a contact holds many of: an arriving one joins the
@@ -38,7 +38,7 @@ module ProTacts
 
       # The contact the card is folded into, and the card: the staged
       # one, already pared to what this book reads (Vcf.read).
-      #: (Contact into, VCard card) -> void
+      #: (ContactDetails into, VCard card) -> void
       def initialize(into, card)
         @into = into
         @labels = labels(card)

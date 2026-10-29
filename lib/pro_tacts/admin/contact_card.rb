@@ -177,7 +177,7 @@ module ProTacts
       # than this contact's.
       #
       # `href` makes the value a link out (an address's map,
-      # Contact::Address#map_url), in a new tab so the record stays
+      # ContactDetails::Address#map_url), in a new tab so the record stays
       # open behind it.
       #: (String type, String | Array[String] value, ?Group? lent_by, ?href: String?) -> void
       def row(type, value, lent_by = nil, href: nil)

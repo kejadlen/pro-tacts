@@ -611,7 +611,7 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # An address opens in a map (Contact::Address#map_url), searched for the lines
+  # An address opens in a map (ContactDetails::Address#map_url), searched for the lines
   # the row shows: the contact's own and the one a group lends alike.
   def test_show_links_each_address_to_a_map
     with_contacts({"ada" => ADA}) do |store|
