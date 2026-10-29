@@ -42,7 +42,7 @@ class ImportMergeTest < Minitest::Test
   CARD
 
   def jane(card = STORED, birthday: nil)
-    ProTacts::Contact.of_card(id: "jane", card: ProTacts::VCard.new(card), birthday:)
+    ProTacts::ContactDetails.of_card(card: ProTacts::VCard.new(card), birthday:)
   end
 
   def merge(into = jane, arriving = ARRIVING) = Merge.new(into, ProTacts::VCard.new(arriving))
@@ -58,7 +58,6 @@ class ImportMergeTest < Minitest::Test
     end
     assert_equal "Met at work", merge.contact.note
     assert_includes merge.contact.vcard.to_s, "NOTE:Met at work\r\n"
-    assert_equal "jane", merge.contact.id
     refute_includes folded, "ABC-123"
   end
 

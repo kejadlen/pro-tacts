@@ -7,9 +7,9 @@ module ProTacts
     class AddressEdit
       attr_reader group_id: String
       attr_reader position: Integer
-      attr_reader address: Contact::Address?
+      attr_reader address: ContactDetails::Address?
 
-      def self.new: (group_id: String, position: Integer, address: Contact::Address?) -> instance
+      def self.new: (group_id: String, position: Integer, address: ContactDetails::Address?) -> instance
     end
 
     class NoteEdit
@@ -22,7 +22,7 @@ module ProTacts
     class Decomposed
       attr_reader stored: VCard
       attr_reader birthday: Birthday?
-      attr_reader addresses: Array[Contact::Address]
+      attr_reader addresses: Array[ContactDetails::Address]
       attr_reader note: String?
       attr_reader address_edits: Array[AddressEdit]
       attr_reader note_edits: Array[NoteEdit]
@@ -30,7 +30,7 @@ module ProTacts
       def self.new: (
         stored: VCard,
         birthday: Birthday?,
-        addresses: Array[Contact::Address],
+        addresses: Array[ContactDetails::Address],
         note: String?,
         address_edits: Array[AddressEdit],
         note_edits: Array[NoteEdit]

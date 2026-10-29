@@ -52,8 +52,8 @@ class EditedContactTest < Minitest::Test
   def address_line(address) = ProTacts::Contact.address_lines(ProTacts::VCard.new(AIDEN), address).join("\r\n")
 
   def before(stored = AIDEN, birthday: nil, addresses: [], note: nil, lent: [])
-    ProTacts::Contact.new(
-      id: "aiden", stored: ProTacts::VCard.new(stored), birthday:, addresses:, note:, lent:
+    ProTacts::ContactDetails.new(
+      stored: ProTacts::VCard.new(stored), birthday:, addresses:, note:, lent:
     )
   end
 

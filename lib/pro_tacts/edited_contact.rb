@@ -27,7 +27,7 @@ module ProTacts
   # AddressEdit, NoteEdit, and Decomposed's signatures are in
   # sig/pro_tacts/edited_contact.rbs, them being Data classes.
   class EditedContact
-    # @rbs @before: Contact?
+    # @rbs @before: ContactDetails?
     # @rbs @submitted: VCard
     # @rbs @decomposed: Decomposed
 
@@ -69,7 +69,7 @@ module ProTacts
     # `before` is the contact this write replaces, nil for one being
     # created: its stored card, its birthday, and the components its
     # groups lend it are what the submission is read against.
-    #: (VCard submitted, before: Contact?) -> void
+    #: (VCard submitted, before: ContactDetails?) -> void
     def initialize(submitted, before:)
       @before = before
       @submitted = submitted
@@ -209,7 +209,7 @@ module ProTacts
     #: (VCard vcard) -> [VCard, Array[AddressEdit]]
     def subtract_lent_addresses(vcard)
       lent = (@before&.lent || []).flat_map { |row|
-        row.addresses.map { |address| [row.group, address] } #: [Group, Contact::LentAddress]
+        row.addresses.map { |address| [row.group, address] } #: [Group, ContactDetails::LentAddress]
       }
       return [vcard, []] if lent.empty?
 
@@ -364,7 +364,7 @@ module ProTacts
     # the one label the way a reader shows them
     # (docs/plans/2026-10-25-contacts-on-entities.md, "Matching what
     # comes back").
-    #: (VCard::Parser::Line line, Array[VCard::Parser::Line] pool, Contact::Address address) -> bool
+    #: (VCard::Parser::Line line, Array[VCard::Parser::Line] pool, ContactDetails::Address address) -> bool
     def unedited_address?(line, pool, address)
       property = line.property
       return false if property.nil?
