@@ -44,7 +44,12 @@ lib/pro_tacts/
 │                   # a form back into a card
 ├── import/         # An uploaded .vcf: read, matched, and written
 ├── store.rb        # Sequel over SQLite, and every write
-├── contact.rb      # The one model of a contact
+├── contact.rb      # A contact: its details, with the entity
+│                   # behind them
+├── contact_details.rb # What a card says, with or without an
+│                   # entity: the composed card, and the
+│                   # ContactReadings both it and a listed
+│                   # contact read a card's lines through
 ├── edited_contact.rb # A submission read against the contact it
 │                   # replaces, for Store#put
 ├── vcard.rb        # A card: its bytes, and the writer's half

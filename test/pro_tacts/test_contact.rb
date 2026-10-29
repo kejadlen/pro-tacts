@@ -66,12 +66,14 @@ class ContactTest < Minitest::Test
     ProTacts::Contact.address_lines(ProTacts::VCard.new(CARD), address).join("\r\n")
   end
 
-  def contact(bytes = CARD, id: "aiden", birthday: nil, lent: [])
-    ProTacts::Contact.of_card(id:, card: ProTacts::VCard.new(bytes), birthday:, lent:)
+  # A card read into its parts — the entity-less shape, the way
+  # every arrival is read (ContactDetails.of_card).
+  def contact(bytes = CARD, birthday: nil, lent: [])
+    ProTacts::ContactDetails.of_card(card: ProTacts::VCard.new(bytes), birthday:, lent:)
   end
 
   # A contact whose entity holds the parts directly, over the stored
-  # bytes a decompose leaves.
+  # bytes a decompose leaves — the store's shape, id and all.
   def composed(bytes = STORED, id: "aiden", birthday: nil, lent: [], addresses: [ADDRESS], note: NOTE)
     ProTacts::Contact.new(
       id:, stored: ProTacts::VCard.new(bytes), birthday:, addresses:, note:, lent:
@@ -111,12 +113,15 @@ class ContactTest < Minitest::Test
   # The same card under two ids is two contacts with the same etag: the
   # etag is about the bytes a client downloads, and the id is not in them.
   def test_the_etag_ignores_the_id
-    assert_equal contact(id: "aiden").etag, contact(id: "znorth").etag
+    card = ProTacts::VCard.new(CARD)
+    make = ->(id) { ProTacts::Contact.new(id:, stored: card, birthday: nil, addresses: [], note: nil, lent: []) }
+
+    assert_equal make.("aiden").etag, make.("znorth").etag
   end
 
   def test_ids_outside_the_href_charset_raise
     ["John Smith", "../etc/passwd", "a/b", ""].each do |id|
-      error = assert_raises(ArgumentError) { contact(id:) }
+      error = assert_raises(ArgumentError) { composed(id:) }
 
       assert_equal "invalid contact id: #{id}", error.message
     end
@@ -124,7 +129,7 @@ class ContactTest < Minitest::Test
 
   def test_uuids_and_slugs_are_ids
     %w[AB12C345-6789-0DEF-1234-567890ABCDEF aiden znorth_2].each do |id|
-      assert_equal id, contact(id:).id
+      assert_equal id, composed(id:).id
     end
   end
 
@@ -132,7 +137,7 @@ class ContactTest < Minitest::Test
   # listings build a contact per row without reading structure, and a
   # card that will not parse is still served byte for byte.
   def test_making_a_contact_never_parses_the_card
-    assert_equal "aiden", contact("not a vCard at all").id
+    assert_equal "aiden", composed("not a vCard at all", addresses: [], note: nil).id
   end
 
   def test_reads_the_name
@@ -140,13 +145,15 @@ class ContactTest < Minitest::Test
   end
 
   def test_inspect_shows_the_id_and_name_and_not_the_card
-    assert_equal %(#<ProTacts::Contact id="aiden" name="Aiden">), contact.inspect
+    bare = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
+
+    assert_equal %(#<ProTacts::Contact id="aiden" name="Aiden">), composed(bare, addresses: [], note: nil).inspect
   end
 
   def test_inspect_without_a_name_shows_only_the_id
     bare = "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:none\r\nEND:VCARD\r\n"
 
-    assert_equal %(#<ProTacts::Contact id="aiden">), contact(bare).inspect
+    assert_equal %(#<ProTacts::Contact id="aiden">), composed(bare, addresses: [], note: nil).inspect
   end
 
   def test_reads_the_name_components

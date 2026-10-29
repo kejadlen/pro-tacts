@@ -216,7 +216,7 @@ module ProTacts
           groups: all_groups,
           group_photos: group_photos.order(:group_id).select_map(:group_id).to_h { |id|
             photo = group_photo(id.to_s) || raise("group #{id}'s photo went missing mid-snapshot")
-            [id.to_s, photo] #: [String, Contact::Photo]
+            [id.to_s, photo] #: [String, ContactDetails::Photo]
           },
           books: all_books,
         )
@@ -232,10 +232,9 @@ module ProTacts
       birthdays = birthdays_by_id
       own = components_by_card(ids)
       lent = lent_by_card(ids)
-      none = [[], nil] #: [Array[Contact::Address], String?]
       (ids ? cards.where(id: ids) : cards).order(:id).map {
         id = it.fetch(:id).to_s
-        addresses, note = own.fetch(id, none)
+        addresses, note = own.fetch(id, NO_COMPONENTS)
         contact_from(it, birthdays[id], addresses, note, lent.fetch(id, []))
       }
     end
@@ -480,7 +479,7 @@ module ProTacts
       # describes the card it downloads. Membership cannot move during
       # a put, so the components either side of it are the one read
       # above.
-      lent = before&.lent || [] #: Array[Contact::Lent]
+      lent = before&.lent || [] #: Array[ContactDetails::Lent]
       # Built before the transaction as well as inside it, because its
       # constructor is where an id that could not be served is refused
       # and a refusal from inside a transaction reaches the caller
@@ -542,7 +541,7 @@ module ProTacts
     # #put's reason: the editor spliced one to make this save, and
     # re-reading its bytes here would walk them again to reach what the
     # caller already had.
-    #: (String id, VCard vcard, birthday: Birthday?, addresses: Array[Contact::Address], note: String?) -> Contact
+    #: (String id, VCard vcard, birthday: Birthday?, addresses: Array[ContactDetails::Address], note: String?) -> Contact
     def save_edit(id, vcard, birthday:, addresses:, note:)
       before = contact(id)
       contact = Contact.new(id:, stored: vcard, birthday:, addresses:, note:, lent: lent_of(id))
@@ -742,7 +741,7 @@ module ProTacts
     # A rewrite that stores the same components in the same order
     # writes no entry, this log's own bargain against the cards' (the
     # plan's "One entry per primitive").
-    #: (String id, Array[Contact::Address] addresses, String? note) -> void
+    #: (String id, Array[ContactDetails::Address] addresses, String? note) -> void
     def set_group_components(id, addresses, note)
       @database.transaction do
         was = group_lines(id)
@@ -765,7 +764,7 @@ module ProTacts
     # The editor's whole save, as one transaction: a failure part-way
     # leaves the group as it was rather than half renamed. Membership
     # is #edit_members', the members screen's own save.
-    #: (String id, name: String?, addresses: Array[Contact::Address], note: String?) -> void
+    #: (String id, name: String?, addresses: Array[ContactDetails::Address], note: String?) -> void
     def edit_group(id, name:, addresses:, note:)
       refuse_sync_rename(id, name)
       @database.transaction do
@@ -790,7 +789,7 @@ module ProTacts
     # A group's photo, or nil for a group without one. The bytes were
     # judged on the way in (#set_group_photo), so a row that no longer
     # sniffs to an image is corruption to raise on, the birthdays' rule.
-    #: (String id) -> Contact::Photo?
+    #: (String id) -> ContactDetails::Photo?
     def group_photo(id)
       bytes = group_photos.where(group_id: id).get(:bytes)
       return if bytes.nil?
@@ -801,7 +800,7 @@ module ProTacts
     # Sets a group's photo, replacing any it had. Logged nowhere: the
     # picture is the admin's alone, and the dump is its backup
     # (docs/plans/2026-10-12-group-photos.md).
-    #: (String id, Contact::Photo photo) -> void
+    #: (String id, ContactDetails::Photo photo) -> void
     def set_group_photo(id, photo)
       group_photos
         .insert_conflict(target: :group_id, update: {bytes: Sequel[:excluded][:bytes]})
@@ -1151,7 +1150,7 @@ module ProTacts
     #: (Array[EditedContact::AddressEdit] edits) -> void
     def apply_address_edits(edits)
       edits.group_by(&:group_id).each do |group_id, group_edits|
-        list = addresses_of(group_id) #: Array[Contact::Address?]
+        list = addresses_of(group_id) #: Array[ContactDetails::Address?]
         group_edits.each { list[it.position] = it.address }
         write_addresses(group_id, list.compact)
       end
@@ -1252,8 +1251,7 @@ module ProTacts
     # #reid is handed an id its caller says exists.
     #: (String id) -> Contact
     def contact!(id)
-      none = [[], nil] #: [Array[Contact::Address], String?]
-      addresses, note = components_by_card([id]).fetch(id, none)
+      addresses, note = components_by_card([id]).fetch(id, NO_COMPONENTS)
       contact_from(cards.where(id:).sole, birthday_of(id), addresses, note, lent_of(id))
     end
 
@@ -1266,7 +1264,7 @@ module ProTacts
     # and the components already subtracted — beside the entity's own
     # addresses and note, which the search key reads, so the index
     # never sees a BDAY, ADR, or NOTE no stored card carries.
-    #: (String id, VCard vcard, addresses: Array[Contact::Address], note: String?) -> void
+    #: (String id, VCard vcard, addresses: Array[ContactDetails::Address], note: String?) -> void
     def reindex(id, vcard, addresses:, note:)
       # Before the parse, so that a card which has stopped parsing does
       # not keep the rows from when it did.
@@ -1300,7 +1298,7 @@ module ProTacts
       Sequel::Migrator.run(@database, MIGRATIONS.to_s)
     end
 
-    #: (Hash[Symbol, untyped] row, Birthday? birthday, Array[Contact::Address] addresses, String? note, Array[Contact::Lent] lent) -> Contact
+    #: (Hash[Symbol, untyped] row, Birthday? birthday, Array[ContactDetails::Address] addresses, String? note, Array[ContactDetails::Lent] lent) -> Contact
     def contact_from(row, birthday, addresses, note, lent)
       Contact.new(
         id: row.fetch(:id).to_s,
@@ -1345,7 +1343,7 @@ module ProTacts
 
     # The empty half of #components_by_card's answer, for the cards a
     # caller reads that hold neither an address nor a note.
-    NO_COMPONENTS = [[], nil] #: [Array[Contact::Address], String?]
+    NO_COMPONENTS = [[], nil] #: [Array[ContactDetails::Address], String?]
 
     # The index's reading of these cards, or of every card, keyed by id
     # in id order: each card written back out of its indexed lines with
@@ -1420,7 +1418,7 @@ module ProTacts
     # the same bytes every read. A group's addresses carry their
     # positions as their indices, the positions the writes keep
     # contiguous (#apply_address_edits).
-    #: (String id) -> Array[Contact::Lent]
+    #: (String id) -> Array[ContactDetails::Lent]
     def lent_of(id)
       lent_by_card([id]).fetch(id, [])
     end
@@ -1432,7 +1430,7 @@ module ProTacts
     # is what it means. Ordered by the group's id rather than its name,
     # because a rename must not move a member's components and change
     # every etag in the group.
-    #: (Array[String]? ids) -> Hash[String, Array[Contact::Lent]]
+    #: (Array[String]? ids) -> Hash[String, Array[ContactDetails::Lent]]
     def lent_by_card(ids)
       members = (ids ? group_members.where(card_id: ids) : group_members).order(:card_id, :group_id).all
       lenders = groups_by_id(members.map { it.fetch(:group_id).to_s })
@@ -1466,7 +1464,7 @@ module ProTacts
     # The addresses and note an entity holds, in one pair of reads —
     # a card's own components, read beside the row by the reads that
     # rebuild rather than compose (#rebuild_index).
-    #: (String entity_id) -> [Array[Contact::Address], String?]
+    #: (String entity_id) -> [Array[ContactDetails::Address], String?]
     def components_by_entity(entity_id)
       addresses = addresses_dataset.where(entity_id:).order(:position).all.map { address_from(it) }
       note = notes.where(entity_id:).get(:text)&.to_s
@@ -1477,7 +1475,7 @@ module ProTacts
     # whole-collection read makes once, rather than a pair of reads per
     # card. Only a card with an address appears in the first hash and
     # one with a note in the second; the absent key reads as none.
-    #: (Array[String]? ids) -> Hash[String, [Array[Contact::Address], String?]]
+    #: (Array[String]? ids) -> Hash[String, [Array[ContactDetails::Address], String?]]
     def components_by_card(ids)
       scope = ids ? cards.where(id: ids) : cards
       addresses = scope.join(:addresses, entity_id: :entity_id)
@@ -1494,7 +1492,7 @@ module ProTacts
       }
       scope.select_map(:id).to_h { |raw|
         id = raw.to_s
-        [id, [addresses.fetch(id, []), notes_by_card[id]]] #: [String, [Array[Contact::Address], String?]]
+        [id, [addresses.fetch(id, []), notes_by_card[id]]] #: [String, [Array[ContactDetails::Address], String?]]
       }
     end
 
@@ -1502,7 +1500,7 @@ module ProTacts
     # through the model on the way in, so a row that no longer reads
     # is corruption to raise on rather than quietly drop, the
     # birthdays' rule.
-    #: (Hash[Symbol, untyped] row) -> Contact::Address
+    #: (Hash[Symbol, untyped] row) -> ContactDetails::Address
     def address_from(row)
       Contact::Address.new(
         po_box: row.fetch(:po_box).to_s,
@@ -1530,13 +1528,13 @@ module ProTacts
     # own entity (#put, #save_edit) and a group's
     # (#set_group_components). A nil note is the row gone: the note is
     # one or none, never emptied.
-    #: (String entity_id, Array[Contact::Address] addresses, String? note) -> void
+    #: (String entity_id, Array[ContactDetails::Address] addresses, String? note) -> void
     def write_components(entity_id, addresses, note)
       write_addresses(entity_id, addresses)
       write_note(entity_id, note)
     end
 
-    #: (String entity_id, Array[Contact::Address] addresses) -> void
+    #: (String entity_id, Array[ContactDetails::Address] addresses) -> void
     def write_addresses(entity_id, addresses)
       addresses_dataset.where(entity_id:).delete
       addresses.each.with_index do |address, position|
@@ -1568,7 +1566,7 @@ module ProTacts
 
     # An entity's addresses in order — the list an AddressEdit's
     # positions name (#apply_address_edits).
-    #: (String entity_id) -> Array[Contact::Address]
+    #: (String entity_id) -> Array[ContactDetails::Address]
     def addresses_of(entity_id)
       addresses_dataset.where(entity_id:).order(:position).all.map { address_from(it) }
     end

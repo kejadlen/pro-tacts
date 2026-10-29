@@ -1,10 +1,10 @@
-# Contact::Phone, ::Email, ::Handle, ::Lent, ::LentAddress, ::Photo,
-# and ::Address are Data classes, whose members the inline parser cannot read: Data.define
-# leaves them no constant super class. Each is marked `@rbs skip` in
-# contact.rb and signed here; Contact itself is a plain class and
-# carries its signature inline.
+# ContactDetails' Data classes, whose members the inline parser cannot
+# read: Data.define leaves them no constant super class. Each is marked
+# `@rbs skip` in contact_details.rb and signed here; ContactDetails
+# itself is a plain class and carries its signature inline, as does
+# ContactReadings.
 module ProTacts
-  class Contact
+  class ContactDetails
     # The repeatable rows' classes, which the editor walks alike
     # (Admin::CardForm.edited_rows). An alias the inline syntax has no
     # spelling for.

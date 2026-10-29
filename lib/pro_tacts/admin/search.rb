@@ -47,7 +47,7 @@ module ProTacts
       end
 
       # A contact's key, off its own card and components alone.
-      #: (Contact contact) -> Key
+      #: (ContactDetails contact) -> Key
       def self.key(contact)
         Key.new(
           texts: text_fields(contact).map { Format.search_key(it) },
@@ -122,7 +122,7 @@ module ProTacts
       # street. The contact is the stored one (Store#reindex's), so its
       # addresses and note are the entity's own; what a group lends is
       # added at search time (#group_key).
-      #: (Contact contact) -> Array[String]
+      #: (ContactDetails contact) -> Array[String]
       def self.text_fields(contact)
         [
           contact.name,

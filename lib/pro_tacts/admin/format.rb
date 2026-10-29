@@ -71,7 +71,7 @@ module ProTacts
       # after it — the shape the design's own address rows settled on,
       # and one shape for a contact's card and a group's alike.
       # Presentation: the components themselves are Contact's.
-      #: (Contact::Address address) -> Array[String]
+      #: (ContactDetails::Address address) -> Array[String]
       def self.address_lines(address)
         [
           [address.street, address.extended].compact.join(" "),

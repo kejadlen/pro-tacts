@@ -562,15 +562,15 @@ module ProTacts
     # Only a card's one BDAY moves (EditedContact#split_birthday): a
     # card carrying several keeps every one of them in the card, where
     # taking the first into the model would drop the rest from it.
-    #: (VCard card, Integer index) -> Contact
+    #: (VCard card, Integer index) -> ContactDetails
     def import_contact(card, index)
       bdays, rest = card.extract("BDAY")
       property = bdays.fetch(0).property if bdays.length == 1
       birthday = property && Birthday.from_property(property)
-      Contact.of_card(id: index.to_s, card: birthday ? rest : card, birthday:)
+      ContactDetails.of_card(card: birthday ? rest : card, birthday:)
     end
 
-    #: (Contact contact) -> bool
+    #: (ContactDetails contact) -> bool
     def carries_own_bday?(contact)
       contact.stored.lines.any? { it.names?("BDAY") }
     end

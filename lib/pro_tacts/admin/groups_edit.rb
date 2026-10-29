@@ -132,7 +132,7 @@ module ProTacts
       # ContactsEdit#address_row, over a group's component — the label
       # field included, a group's address carrying a label like a
       # card's (the class comment's plan).
-      #: (Contact::Address address, Integer index) -> void
+      #: (ContactDetails::Address address, Integer index) -> void
       def address_row(address, index)
         div(class: "field", data: {blank_removes: address.po_box.empty?}) do
           input(type: "text", class: "row-label", name: "address[#{index}][label]", value: address.label,

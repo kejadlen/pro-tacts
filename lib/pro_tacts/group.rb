@@ -26,7 +26,7 @@ module ProTacts
     # An address or a note is the exception, not the rule, so a group
     # built without saying is one holding neither, and without a photo
     # one.
-    #: (?addresses: Array[Contact::Address], ?note: String?, ?photo: bool, **untyped) -> void
+    #: (?addresses: Array[ContactDetails::Address], ?note: String?, ?photo: bool, **untyped) -> void
     def initialize(addresses: [], note: nil, photo: false, **)
       super
     end
@@ -65,7 +65,7 @@ module ProTacts
     # The rendering half of #composed_lines over components a write is
     # about to hold, the way Contact.address_lines renders one address
     # at a time over the card composed so far.
-    #: (Array[Contact::Address] addresses, String? note) -> Array[String]
+    #: (Array[ContactDetails::Address] addresses, String? note) -> Array[String]
     def self.composed_lines(addresses, note)
       card = VCard.new("BEGIN:VCARD\r\nVERSION:3.0\r\nEND:VCARD\r\n")
       lines = [] #: Array[String]

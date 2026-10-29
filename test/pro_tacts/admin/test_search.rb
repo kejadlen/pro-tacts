@@ -12,7 +12,7 @@ class SearchTest < Minitest::Test
   # Store#search_keys_by_recency hands them over.
   def row(id, name, *lines)
     bytes = ["BEGIN:VCARD", "VERSION:3.0", "FN:#{name}", "UID:#{id}", *lines, "END:VCARD", ""].join("\r\n")
-    contact = ProTacts::Contact.of_card(id:, card: ProTacts::VCard.new(bytes), birthday: nil)
+    contact = ProTacts::ContactDetails.of_card(card: ProTacts::VCard.new(bytes), birthday: nil)
     [id, ProTacts::Admin::Search.key(contact)]
   end
 

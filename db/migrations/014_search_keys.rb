@@ -4,7 +4,7 @@
 # filled here through the app's own Search.key, since what it must
 # agree with is the search that reads it.
 require "pro_tacts/admin/search"
-require "pro_tacts/contact"
+require "pro_tacts/contact_details"
 require "pro_tacts/vcard"
 
 Sequel.migration do
@@ -16,7 +16,7 @@ Sequel.migration do
 
     self[:cards].order(:id).each do |row|
       id = row.fetch(:id)
-      contact = ProTacts::Contact.of_card(id:, card: ProTacts::VCard.new(row.fetch(:vcard)), birthday: nil)
+      contact = ProTacts::ContactDetails.of_card(card: ProTacts::VCard.new(row.fetch(:vcard)), birthday: nil)
       self[:search_keys].insert(card_id: id, key: ProTacts::Admin::Search.key(contact).to_json)
     end
   end

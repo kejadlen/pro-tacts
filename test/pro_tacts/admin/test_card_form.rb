@@ -84,7 +84,7 @@ class CardFormTest < Minitest::Test
         },
       ]
       stored = ["BEGIN:VCARD#{eol}", "VERSION:3.0#{eol}", *lines, "UID:aiden#{eol}", "END:VCARD#{eol}"].join
-      contact = ProTacts::Contact.of_card(id: "aiden", card: ProTacts::VCard.new(stored), birthday: nil)
+      contact = ProTacts::ContactDetails.of_card(card: ProTacts::VCard.new(stored), birthday: nil)
       params = untouched(contact)
 
       saved = ProTacts::Admin::CardForm.contact_card(
@@ -112,7 +112,7 @@ class CardFormTest < Minitest::Test
         ["#{group && "#{group}."}#{header}:+1-555-010#{index}\r\n", *(label ? ["#{group}.X-ABLabel:#{label}\r\n"] : [])]
       }.flatten
       stored = ["BEGIN:VCARD\r\n", "VERSION:3.0\r\n", "N:Lovelace;Ada;;;\r\n", "FN:Ada Lovelace\r\n", *lines, "UID:aiden\r\n", "END:VCARD\r\n"].join
-      contact = ProTacts::Contact.of_card(id: "aiden", card: ProTacts::VCard.new(stored), birthday: nil)
+      contact = ProTacts::ContactDetails.of_card(card: ProTacts::VCard.new(stored), birthday: nil)
       field, rows = tc.draw(sampled_from([["phone", :phones], ["email", :emails]].select { contact.public_send(it[1]).any? }))
       row = tc.draw(sampled_from(contact.public_send(rows)))
       label = tc.draw(sampled_from(["", "home", "Work", "cell", "other", "Google Voice", "home, work", "lab, too"]))
@@ -120,7 +120,7 @@ class CardFormTest < Minitest::Test
       params[field] = params.fetch(field).merge(row.line.digest => {"label" => label, "value" => row.value})
 
       saved = ProTacts::Admin::CardForm.contact_card(contact, false, "Ada", "", "Lovelace", params)
-      after = ProTacts::Contact.of_card(id: "aiden", card: saved, birthday: nil)
+      after = ProTacts::ContactDetails.of_card(card: saved, birthday: nil)
       relabelled = after.public_send(rows).find { it.value == row.value }
 
       expected = {"" => nil, "Work" => "work", "other" => "Other"}.fetch(label, label)
