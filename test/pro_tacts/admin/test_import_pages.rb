@@ -1233,7 +1233,7 @@ class AdminImportPagesTest < Minitest::Test
       save(id, 0, first: "Jane", last: "Booles", "note" => "Likes jigsaws.")
 
       jane = store.contacts.fetch(0)
-      assert_equal ["Likes jigsaws."], jane.notes.map(&:value)
+      assert_equal "Likes jigsaws.", jane.note
       assert_equal [jane.id], store.all_groups.find { it.name == "monica" }.members
     end
   end

@@ -20,14 +20,19 @@ class AdminGroupsPagesTest < Minitest::Test
   end
 
   ADDRESS = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom" #: String
+  RENDERED_ADDRESS = "ADR;TYPE=HOME:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom" #: String
   NOTE = "NOTE:Gate code 1854." #: String
+  HOUSEHOLD = ProTacts::Contact::Address.new(
+    po_box: "", extended: "", street: "7 Calculus Close", locality: "London", region: "England",
+    postal_code: "NW1 1AB", country: "United Kingdom", label: "home"
+  ) #: ProTacts::Contact::Address
 
   # Contacts by id and name, each a bare card.
   def with_contacts(names, &) = super(names.to_h { |id, name| [id, card(id, name)] }, &)
 
   def household(store, members: %w[george mary])
     id = store.create_group(name: "Booles")
-    store.set_group_lines(id, [ADDRESS, NOTE])
+    store.set_group_components(id, [HOUSEHOLD], "Gate code 1854.")
     members.each { store.add_member(id, it) }
     id
   end
@@ -249,7 +254,7 @@ class AdminGroupsPagesTest < Minitest::Test
       assert_equal 303, last_response.status
       saved = store.group(id)
       assert_equal "The Booles", saved.name
-      assert_equal [ADDRESS, "NOTE:Gate code 1912."], saved.lines
+      assert_equal [RENDERED_ADDRESS, "NOTE:Gate code 1912."], saved.composed_lines
       assert_equal %w[george mary], saved.members
       assert_equal "group", store.changes_of("mary").first.action
     end
@@ -259,16 +264,18 @@ class AdminGroupsPagesTest < Minitest::Test
     with_contacts(BOOLES) do |store|
       id = household(store)
       group = store.group(id)
-      digest = group.reading.addresses.fetch(0).line.digest
 
       post "/groups/#{id}", version: group.version, note: "Gate code 1854.",
-                            address: {digest => {street: "8 Calculus Close", locality: "London",
-                                                 region: "England", postal_code: "NW1 1AB",
-                                                 country: "United Kingdom"}},
+                            address: {"0" => {street: "8 Calculus Close", locality: "London",
+                                               region: "England", postal_code: "NW1 1AB",
+                                               country: "United Kingdom"}},
                             new_address: {"0" => {street: "1 Long Road"}}
 
-      assert_equal [ADDRESS.sub("7 Calculus", "8 Calculus"), NOTE, "ADR:;;1 Long Road;;;;"],
-                   store.group(id).lines
+      edited = HOUSEHOLD.with(street: "8 Calculus Close")
+      added = ProTacts::Contact::Address.new(
+        po_box: "", extended: "", street: "1 Long Road", locality: "", region: "", postal_code: "", country: ""
+      )
+      assert_equal [edited, added], store.group(id).addresses
     end
   end
 
@@ -340,7 +347,7 @@ class AdminGroupsPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
       assert_equal ProTacts::Group::EVERYONE, store.group(id).name
-      assert_equal ["NOTE:Gate code 1854."], store.group(id).lines
+      assert_equal ["NOTE:Gate code 1854."], store.group(id).composed_lines
     end
   end
 
@@ -615,7 +622,7 @@ class AdminGroupsPagesTest < Minitest::Test
       body = last_response.body
       assert_equal 200, last_response.status
       assert_includes body, "change log"
-      assert_includes body, "+#{ADDRESS}"
+      assert_includes body, "+#{RENDERED_ADDRESS}"
       assert_includes body, "+#{NOTE}"
       assert_match %r{<a href="/contacts/mary">Mary Boole</a>}, body
       assert_match %r{<a href="/contacts/george">George Boole</a>}, body

@@ -18,13 +18,14 @@ module ProTacts
       # a standing row posts under and, prefixed `new_`, the one an
       # added row does, each reading back into the row class that
       # writes it (#edited_rows). Public for the route's shape checks
-      # (Web#card_form_params) and the editor's rows.
+      # (Web#card_form_params) and the editor's rows. The address is
+      # not among them: it is a component rather than a card line, and
+      # its rows save through #addresses.
       ROWS = {
         "phone" => Contact::Phone,
         "email" => Contact::Email,
         "handle" => Contact::Handle,
-        "address" => Contact::Address,
-      }.freeze #: Hash[String, Contact::row_class]
+      }.freeze #: Hash[String, ContactDetails::row_class]
 
       # A created contact's card: the envelope RFC 2426 section 4
       # requires — BEGIN, VERSION, and the N and FN that section makes
@@ -62,14 +63,17 @@ module ProTacts
 
       # The contact editor's save, spliced into the stored card. Where
       # each kind keeps its name, and the switch between the two, is
-      # docs/plans/2026-10-07-switching-company-and-person.md.
-      #: (Contact contact, bool company, String first, String middle, String last, Hash[String, untyped] params) -> VCard
+      # docs/plans/2026-10-07-switching-company-and-person.md. The
+      # addresses and the note are the entity's components, not card
+      # lines: they save through #addresses and #note, which the route
+      # hands to Store#save_edit beside the card this returns.
+      #: (ContactDetails contact, bool company, String first, String middle, String last, Hash[String, untyped] params) -> VCard
       def self.contact_card(contact, company, first, middle, last, params)
         # The rows are read off the contact's own card, the one the form
         # rendered (Admin::ContactsEdit) and the one this save splices:
         # a line a group lends is on neither, so no digest here can name
         # one and no save can copy a group's value onto its member
-        # (Contact#own).
+        # (ContactDetails#own).
         own = contact.own
 
         vcard = contact.stored
@@ -80,27 +84,93 @@ module ProTacts
             person_name(contact, vcard, first, middle, last, params["organization"]&.strip)
           end
         vcard = edited_text(vcard, "NICKNAME", params["nickname"], own.nickname)
-        vcard = edited_text(vcard, "NOTE", params["note"], note_of(own))
         vcard = edited_rows(own.phones, "phone", vcard, params)
         vcard = edited_rows(own.emails, "email", vcard, params)
-        vcard = edited_rows(own.handles, "handle", vcard, params)
-        edited_rows(own.addresses, "address", vcard, params)
+        edited_rows(own.handles, "handle", vcard, params)
       end
 
-      # The group editor's save: the note replaced and the contact
-      # editor's own address splice over the group's lines read as a
-      # card (Group#reading), then back into the lines a group
-      # holds — each unfolded and shorn of its terminator, the unit
-      # CardDiff records a write in and group_properties stores.
-      #: (Group group, Hash[String, untyped] params) -> Array[String]
-      def self.group_lines(group, params)
-        reading = group.reading
-        card = edited_text(reading.stored, "NOTE", params["note"], note_of(reading))
-        card = edited_rows(reading.addresses, "address", card, params)
-        card.lines.filter_map {
-          line = it.content
-          line unless line.empty?
+      # The address rows the editor posts, as the entity's whole new
+      # address list: the standing rows by their position — a blank one
+      # removed, a missing one kept, any other rewritten, and the po
+      # box preserved, no field editing it — then the added ones
+      # (Admin::ContactsEdit#added_rows), in submission order
+      # (docs/plans/2026-10-25-contacts-on-entities.md, "Matching what
+      # comes back", which gives a PUT's unclaimed addresses the same
+      # rule). `rows` are the contact's own or the group's, the two
+      # editors' rows alike; a group's address carries a label like a
+      # card's (that plan, "A group's address carries a label like a
+      # card's").
+      #: (Array[ContactDetails::Address] rows, Hash[String, untyped] params) -> Array[ContactDetails::Address]
+      def self.addresses(rows, params)
+        edits = hash_field(params, "address").sort_by { |key, _| key.to_i }.map { |_, fields| fields }
+        standing = rows.zip(edits).filter_map { |row, submitted|
+          next row if submitted.nil?
+
+          address_of(submitted, row)
         }
+        added = hash_field(params, "new_address").values.filter_map { |fields| address_of(fields) }
+        [*standing, *added]
+      end
+
+      # One address row's fields, as the editor posts them, read back
+      # into the component: the six components by name, the label
+      # beside them — a blank label is no label, an absent one the row's
+      # own, for a form that renders no label field — and the po box
+      # preserved from the row it replaces, no field editing it.
+      # Fields that arrive blank read as absent, and a row blank
+      # throughout, po box included, is no address at all, the
+      # blank-equals-absent rule; `over` is nil for an added row,
+      # whose po box is empty.
+      #: (Hash[String, untyped] fields, ?ContactDetails::Address? over) -> ContactDetails::Address?
+      def self.address_of(fields, over = nil)
+        components = Contact::ADDRESS_COMPONENTS.to_h { |name|
+          pair = [name, fields[name].to_s.strip] #: [String, String]
+          pair
+        }
+        label = fields.key?("label") ? fields["label"].to_s.strip : over&.label.to_s
+        blank = over&.po_box.to_s.empty? && components.values.all?(&:empty?)
+        return if blank
+
+        ContactDetails::Address.new(
+          po_box: over&.po_box.to_s,
+          extended: components.fetch("extended"),
+          street: components.fetch("street"),
+          locality: components.fetch("locality"),
+          region: components.fetch("region"),
+          postal_code: components.fetch("postal_code"),
+          country: components.fetch("country"),
+          label: label.empty? ? nil : label
+        )
+      end
+
+      # The group editor's save: the group's whole new components,
+      # the same rows the contact editor posts (#addresses, #note).
+      #: (Group group, Hash[String, untyped] params) -> [Array[ContactDetails::Address], String?]
+      def self.group_components(group, params)
+        [addresses(group.addresses, params), note(params["note"], group.note)]
+      end
+
+      # Components composed back into a card as lines, for the one
+      # write path a create has — Store#put, which takes them back off
+      # it through the same reading the form's rows came from
+      # (ContactDetails.take_addresses, ContactDetails.take_note). The import's Save
+      # over a staged card, which has no entity yet to write components
+      # against.
+      #: (VCard card, Array[ContactDetails::Address] addresses, String? note) -> VCard
+      def self.composed_card(card, addresses, note)
+        addresses.each { card = card.insert(Contact.address_lines(card, it)) }
+        note ? card.insert(["NOTE:#{VCard.escape(note)}"]) : card
+      end
+
+      # The note field's save: the submitted text with a textarea's
+      # line breaks normalized, or nil where it reads blank — blank is
+      # absent, the whole-property rule. The comparison against what
+      # the form rendered is the editor's own; nothing byte-level
+      # stands behind a note, which is a component.
+      #: (untyped submitted, String? rendered) -> String?
+      def self.note(submitted, rendered)
+        value = submitted.to_s.gsub(/\r\n?/, "\n").strip
+        value.empty? ? nil : value
       end
 
       # The birthday row's parse: each blank component is an absence
@@ -132,16 +202,12 @@ module ProTacts
         Birthday.new(year:, month:, day:)
       end
 
-      # The note the editor renders: every NOTE the member's own card
-      # carries, joined the way composition joins them
-      # (Contact#composed_note), so a card from before the one-note
-      # invariant shows its second note rather than losing it to a save
-      # that wrote only the first (docs/plans/2026-09-25-one-note-per-
-      # contact.md). Nil for none, the row's blank-removes cue.
-      #: (Contact contact) -> String?
+      # The note the editor renders: the member's own, the component
+      # the entity holds (Contact#own#note). Nil for none, the row's
+      # blank-removes cue.
+      #: (ContactDetails contact) -> String?
       def self.note_of(contact)
-        notes = contact.notes.map(&:value)
-        notes.join("\n\n") unless notes.empty?
+        contact.own.note
       end
 
       # A text property's half of the surgical save: the lines stay as
@@ -178,7 +244,7 @@ module ProTacts
       # Rack refuses a key after an empty one — so they arrive as a
       # hash of hashes and read out by their values, landing as bare
       # lines before END:VCARD. A blank one inserts nothing.
-      #: (Array[Contact::Phone | Contact::Email | Contact::Handle | Contact::Address] rows, String field, VCard vcard, Hash[String, untyped] params) -> VCard
+      #: (Array[ContactDetails::Phone | ContactDetails::Email | ContactDetails::Handle] rows, String field, VCard vcard, Hash[String, untyped] params) -> VCard
       def self.edited_rows(rows, field, vcard, params)
         kind = ROWS.fetch(field)
         edits = hash_field(params, field)
@@ -200,7 +266,7 @@ module ProTacts
         vcard
       end
 
-      #: (Contact::row_class kind, Hash[String, untyped] submitted) -> Hash[String, String]
+      #: (ContactDetails::row_class kind, Hash[String, untyped] submitted) -> Hash[String, String]
       def self.submitted_fields(kind, submitted)
         kind.field_names.to_h {
           field = [it, submitted[it].to_s.strip] #: [String, String]
@@ -268,7 +334,7 @@ module ProTacts
       # (exchange b5ce7eaebe0e). ORG is the person's employer, written
       # from the same field as a company's name; a POST without that
       # field leaves it be, the birthday group's posture.
-      #: (Contact contact, VCard vcard, String first, String middle, String last, String? organization) -> VCard
+      #: (ContactDetails contact, VCard vcard, String first, String middle, String last, String? organization) -> VCard
       def self.person_name(contact, vcard, first, middle, last, organization)
         line = n_line(vcard, first, middle, last)
         vcard = vcard.replace("N", [line]) if line
@@ -313,7 +379,7 @@ module ProTacts
       # name is stale. A card carrying no FN is the other case: the
       # property is mandatory (section 4), so a save fills it in rather
       # than leaving the absence it found.
-      #: (Contact contact, VCard vcard, String first, String middle, String last) -> VCard
+      #: (ContactDetails contact, VCard vcard, String first, String middle, String last) -> VCard
       def self.edited_fn(contact, vcard, first, middle, last)
         family, given, additional = contact.name_components || []
         named = !vcard.property("FN").nil?
@@ -369,7 +435,7 @@ module ProTacts
       end
 
       private_class_method :edited_rows, :submitted_fields, :hash_field, :birthday_component, :text_lines, :edited_text, :edited_fn, :display_name,
-                           :n_line, :company_name, :person_name, :edited_organization
+                           :n_line, :company_name, :person_name, :edited_organization, :address_of
     end
   end
 end

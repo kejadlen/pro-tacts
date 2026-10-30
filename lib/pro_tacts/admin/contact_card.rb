@@ -85,46 +85,43 @@ module ProTacts
 
       # Every row hands over the group that lends it, nil where the
       # card's own — provenance carried on the row
-      # (Contact::Phone#lent_by and kin), not re-derived from the
-      # composed bytes. The birthday hands over none: it is the model
-      # beside the card, and a group holds only addresses and notes
-      # anyway (see db/migrations/004_groups.rb).
+      # (Contact::Address#lent_by), not re-derived from the composed
+      # bytes. The birthday hands over none: it is the model beside the
+      # card, and a group holds only addresses and notes anyway
+      # (see db/migrations/004_groups.rb).
       def rows
         groups_row
         @contact.phones.each do |phone|
-          row(phone.label || "phone", phone.value, phone.lent_by)
+          row(phone.label || "phone", phone.value)
         end
         @contact.emails.each do |email|
-          row(email.label || "email", email.value, email.lent_by)
+          row(email.label || "email", email.value)
         end
         @contact.handles.each do |handle|
-          row(handle.label || "handle", handle.value, handle.lent_by)
+          row(handle.label || "handle", handle.value)
         end
-        @contact.addresses.each do |address|
+        @contact.served_addresses.each do |address|
           row(address.label || "address", Format.address_lines(address), address.lent_by)
         end
         row("birthday", @birthday) if @birthday
         note_rows
       end
 
-      # The notes read as the editors do — the member's own card and
-      # the inheritance — and not out of the one value the client is
+      # The notes read as the editors do — the member's own and the
+      # inheritance — and not out of the one value the client is
       # served: a group's note keeps its own row and its group beside
       # it, the same standing every other lent row has
       # (docs/plans/2026-09-25-one-note-per-contact.md, "What the
       # admin screens read").
       #: () -> void
       def note_rows
-        @contact.own.notes.each do |note|
-          row("notes", note.value)
-        end
-        @contact.inherited.each do |lent|
-          next unless lent.line[/\A[^;:]*/].to_s.casecmp?("NOTE") == true
+        row("notes", @contact.own.note) if @contact.own.note
+        @contact.lent.each do |lent|
+          next if lent.note.nil?
 
-          text = Contact.lent_text(lent)
           dt(class: "type-label") { "notes" }
           dd(class: "type-body-sm") do
-            div(style: "white-space: pre-wrap;") { text }
+            div(style: "white-space: pre-wrap;") { lent.note }
             render GroupTag.new(group: listed(lent.group))
           end
         end

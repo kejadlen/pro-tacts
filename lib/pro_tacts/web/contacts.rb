@@ -92,7 +92,7 @@ module ProTacts
           # not_found handler fills in, same as the page below.
           if contact
             response["Content-Type"] = "text/html; charset=utf-8"
-            Admin::ContactsEdit.call(contact:, login: @login, back: edit_back(contact))
+            Admin::ContactsEdit.call(contact:, login: @login, action: "/contacts/#{contact.id}", back: edit_back(contact))
           end
         end
 
@@ -160,7 +160,7 @@ module ProTacts
     # than the card's etag, so an edit to a phone number keeps the
     # picture a browser holds. Roda's caching plugin answers the 304,
     # halting before the bytes are sent.
-    #: (Contact::Photo photo) -> String
+    #: (ContactDetails::Photo photo) -> String
     def serve_photo(photo)
       response["Content-Type"] = photo.mime_type
       response.cache_control(private: true, no_cache: true)
@@ -241,7 +241,13 @@ module ProTacts
         return refuse.call(contact, notice: "This contact's card carries its own birthday spelling; nothing was saved.")
       end
 
-      store.save_edit(id, Admin::CardForm.contact_card(contact, company, first, middle, last, params), birthday:)
+      store.save_edit(
+        id,
+        Admin::CardForm.contact_card(contact, company, first, middle, last, params),
+        birthday:,
+        addresses: Admin::CardForm.addresses(contact.own.addresses, params),
+        note: Admin::CardForm.note(params["note"], Admin::CardForm.note_of(contact))
+      )
       r.redirect land || "/contacts/#{id}", 303
     end
 
@@ -345,7 +351,7 @@ module ProTacts
     #: (Contact contact, ?notice: String) -> String
     def edit_screen(contact, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
-      Admin::ContactsEdit.call(contact:, login: @login, notice:, back: edit_back(contact))
+      Admin::ContactsEdit.call(contact:, login: @login, action: "/contacts/#{contact.id}", notice:, back: edit_back(contact))
     end
 
     # The edit's way back, named by the route rather than left to the

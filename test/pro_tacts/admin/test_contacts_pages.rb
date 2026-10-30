@@ -1105,8 +1105,9 @@ class AdminContactsPagesTest < Minitest::Test
   # the action for, rendered here.
   def test_the_change_log_leads_with_the_latest_entry
     with_contacts({"ada" => ADA}) do |store|
+      contact = store.contact("ada")
       store.save_edit("ada", ProTacts::VCard.new(ADA.sub("Ada Lovelace", "Ada L.")),
-                      birthday: store.contact("ada").birthday)
+                      birthday: contact.birthday, addresses: contact.addresses, note: contact.note)
 
       get "/contacts/ada"
 
@@ -1137,8 +1138,9 @@ class AdminContactsPagesTest < Minitest::Test
   # and signed rather than only colored.
   def test_the_change_log_shows_what_each_write_moved
     with_contacts({"ada" => ADA}) do |store|
+      contact = store.contact("ada")
       store.save_edit("ada", ProTacts::VCard.new(ADA.sub("FN:Ada Lovelace", "FN:Ada L.")),
-                      birthday: store.contact("ada").birthday)
+                      birthday: contact.birthday, addresses: contact.addresses, note: contact.note)
 
       get "/contacts/ada"
 
@@ -1787,7 +1789,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
                                company: "0", etag: contact.etag,
-                               address: {lent.line.digest => {"street" => "9 Elsewhere Lane"}}
+                               address: {"1" => {"street" => "9 Elsewhere Lane"}}
 
       assert_equal 303, last_response.status
       after = store.contact("ada")
@@ -1845,9 +1847,9 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => po}) do |store|
       get "/contacts/ada/edit"
 
-      digest = store.contact("ada").addresses.first.line.digest
+      row = "0"
       assert_includes last_response.body,
-        '<div class="field">' + type_menu("address", 0, digest, "home", deletable: false) + '<div class="field-stack">'
+        '<div class="field">' + type_menu("address", 0, row, "home", deletable: false) + '<div class="field-stack">'
     end
   end
 
@@ -1884,7 +1886,7 @@ class AdminContactsPagesTest < Minitest::Test
       assert_includes card, "NOTE:First programmer."
       assert_includes card, "TEL;TYPE=mobile:+1-555-0100\r\n"
       assert_includes card, "EMAIL;TYPE=home:ada@example.com\r\n"
-      assert_includes card, "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
+      assert_includes card, "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
       assert_includes card, "UID:ada\r\n"
       # The birthday is model state the edit never touched, composed
       # back into the served card.
@@ -2156,9 +2158,15 @@ class AdminContactsPagesTest < Minitest::Test
   # rendered: the save writes the new word and leaves the value's bytes.
   def relabel(store, field, label)
     contact = store.contact("ada")
-    row = contact.own.public_send({"phone" => :phones, "email" => :emails, "address" => :addresses}.fetch(field)).first
-    post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: contact.etag,
-                             field => {row.line.digest => {"label" => label, **row.fields}}
+    kind = {"phone" => :phones, "email" => :emails, "address" => :addresses}.fetch(field)
+    row = contact.own.public_send(kind).first
+    posted =
+      if kind == :addresses
+        {field => {"0" => {"label" => label, **row.fields}}}
+      else
+        {field => {row.line.digest => {"label" => label, **row.fields}}}
+      end
+    post "/contacts/ada", {first: "Ada", last: "Lovelace", company: "0", etag: contact.etag}.merge(posted)
     assert_equal 303, last_response.status
     store.contact("ada").vcard.to_s
   end
@@ -2314,23 +2322,21 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # An unchanged row never rewrites its line, and the whole save
-  # leaves the stored card byte for byte as it lay.
+  # leaves the stored card byte for byte as it lay — the address a
+  # component that comes back the same and rewrites nothing by it.
   def test_an_unchanged_email_and_address_leave_the_stored_card_byte_identical
     with_contacts({"ada" => ADA}) do |store|
       before = store.contact("ada").stored.to_s
+      address = store.contact("ada").own.addresses.first
       email_digest = store.contact("ada").emails.first.line.digest
-      address_digest = store.contact("ada").addresses.first.line.digest
-      post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
-                               company: "0", etag: store.contact("ada").etag, new_email: {"0" => {"value" => ""}},
+      post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
+                               new_email: {"0" => {"value" => ""}},
                                email: {email_digest => {"value" => "ada@example.com"}},
-                               address: {address_digest => {
-                                 "street" => "12 Analytical Way", "locality" => "London",
-                                 "region" => "England", "postal_code" => "NW1 1AA",
-                                 "country" => "United Kingdom",
-                               }}
+                               address: {"0" => {"label" => address.label.to_s, **address.fields}}
 
       assert_equal 303, last_response.status
       assert_equal before, store.contact("ada").stored.to_s
+      assert_equal store.contact("ada").addresses, [address]
     end
   end
 
@@ -2346,7 +2352,9 @@ class AdminContactsPagesTest < Minitest::Test
       card = store.contact("ada").vcard.to_s
       assert_equal ["ada@example.com", "lovelace@example.com", "countess@example.com"],
         store.contact("ada").emails.map(&:value)
-      assert_includes card, "EMAIL:countess@example.com\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n"
+      assert_includes card,
+        "EMAIL:countess@example.com\r\nADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+        "BDAY:1985-12-10\r\nEND:VCARD\r\n"
     end
   end
 
@@ -2472,7 +2480,8 @@ class AdminContactsPagesTest < Minitest::Test
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s,
         "IMPP;X-SERVICE-TYPE=signal:x-apple:ada.42\r\n" \
-        "IMPP;X-SERVICE-TYPE=WhatsApp:x-apple:+1-555-0100\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n"
+        "IMPP;X-SERVICE-TYPE=WhatsApp:x-apple:+1-555-0100\r\n" \
+        "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n"
       assert_equal [["signal", "ada.42"], ["WhatsApp", "+1-555-0100"]],
         store.contact("ada").handles.map { [it.service, it.value] }
     end
@@ -2493,26 +2502,27 @@ class AdminContactsPagesTest < Minitest::Test
   ## Editing addresses
 
   # An address row: the label field and a stack of component
-  # fields in the value column, each named by the row's digest and
-  # its component — and no po box field, which the save preserves
-  # raw rather than letting a form near it.
+  # fields in the value column, each named by the row's position in
+  # the entity's list and its component — and no po box field, which
+  # the save preserves rather than letting a form near it. An absent
+  # component posts back as the empty string it renders.
   def test_the_edit_screen_renders_component_fields_per_address
     with_contacts({"ada" => ADA}) do |store|
       get "/contacts/ada/edit"
 
-      digest = store.contact("ada").addresses.first.line.digest
+      row = "0"
       body = last_response.body
       assert_includes body,
         '<div class="field" data-blank-removes>' +
-        type_menu("address", 0, digest, "home") +
+        type_menu("address", 0, row, "home") +
         '<div class="field-stack">' \
-        '<input type="text" name="address[' + digest + '][street]" value="12 Analytical Way" placeholder="street" aria-label="street">' \
-        '<input type="text" name="address[' + digest + '][extended]" placeholder="street 2" aria-label="street 2">' \
-        '<input type="text" name="address[' + digest + '][locality]" value="London" placeholder="city" aria-label="city">'
+        '<input type="text" name="address[' + row + '][street]" value="12 Analytical Way" placeholder="street" aria-label="street">' \
+        '<input type="text" name="address[' + row + '][extended]" value="" placeholder="street 2" aria-label="street 2">' \
+        '<input type="text" name="address[' + row + '][locality]" value="London" placeholder="city" aria-label="city">'
       assert_includes body,
-        'name="address[' + digest + '][postal_code]" value="NW1 1AA" placeholder="postal code"'
+        'name="address[' + row + '][postal_code]" value="NW1 1AA" placeholder="postal code"'
       assert_includes body,
-        'name="address[' + digest + '][country]" value="United Kingdom" placeholder="country"'
+        'name="address[' + row + '][country]" value="United Kingdom" placeholder="country"'
       refute_includes body, "po_box"
     end
   end
@@ -2522,9 +2532,9 @@ class AdminContactsPagesTest < Minitest::Test
   # stored card stands untouched.
   def test_saving_a_changed_address_replaces_only_its_line
     with_contacts({"ada" => ADA}) do |store|
-      digest = store.contact("ada").addresses.first.line.digest
+      row = "0"
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               address: {digest => {
+                               address: {row => {
                                  "street" => "5 Analytical Way", "locality" => "London",
                                  "region" => "England", "postal_code" => "NW1 1AA",
                                  "country" => "United Kingdom",
@@ -2532,7 +2542,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
-      assert_includes card, "ADR;TYPE=home:;;5 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
+      assert_includes card, "ADR;TYPE=HOME:;;5 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
       assert_includes card, "TEL;TYPE=mobile:+1-555-0100\r\n"
       assert_includes card, "EMAIL;TYPE=home:ada@example.com\r\n"
 
@@ -2547,8 +2557,8 @@ class AdminContactsPagesTest < Minitest::Test
   def test_an_address_field_in_a_shape_the_form_never_sends_is_a_400
     with_contacts({"ada" => ADA}) do |store|
       contact = store.contact("ada")
-      digest = contact.addresses.first.line.digest
-      [{address: {digest => "5 Analytical Way"}},
+      row = "0"
+      [{address: {row => "5 Analytical Way"}},
        {address: "5 Analytical Way"},
        {new_address: ["5 Analytical Way"]},
        {phone: "+1-555-0199"}].each do |field|
@@ -2601,16 +2611,19 @@ class AdminContactsPagesTest < Minitest::Test
 
   # The header is the line's own, kept byte for byte — the phones'
   # own rule, over the parameters an ADR line can carry.
-  def test_a_saved_address_keeps_its_lines_own_parameters
+  # The label is what an edit keeps: the parameters a line carried are
+  # the card's business and the component holds none
+  # (docs/plans/2026-10-25-contacts-on-entities.md), so an edited
+  # address renders in the store's own spelling, its label beside it.
+  def test_a_saved_address_keeps_its_label_through_the_canonical_render
     apple = ADA.sub(
       "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
       "ADR;type=HOME;type=pref:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
     )
 
     with_contacts({"ada" => apple}) do |store|
-      digest = store.contact("ada").addresses.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               address: {digest => {
+                               address: {"0" => {
                                    "street" => "5 Analytical Way", "locality" => "London",
                                    "region" => "England", "postal_code" => "NW1 1AA",
                                    "country" => "United Kingdom",
@@ -2618,7 +2631,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s,
-        "ADR;type=HOME;type=pref:;;5 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
+        "ADR;TYPE=HOME:;;5 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
     end
   end
 
@@ -2626,9 +2639,9 @@ class AdminContactsPagesTest < Minitest::Test
   # included, removes the line.
   def test_an_address_row_blank_throughout_removes_the_line
     with_contacts({"ada" => ADA}) do |store|
-      digest = store.contact("ada").addresses.first.line.digest
+      row = "0"
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               address: {digest => {
+                               address: {row => {
                                    "street" => " ", "extended" => "", "locality" => "",
                                    "region" => "", "postal_code" => "", "country" => "",
                                  }}
@@ -2642,33 +2655,33 @@ class AdminContactsPagesTest < Minitest::Test
   # empty components, the reader's own rule in the other direction.
   def test_a_partially_blanked_address_keeps_the_line
     with_contacts({"ada" => ADA}) do |store|
-      digest = store.contact("ada").addresses.first.line.digest
+      row = "0"
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               address: {digest => {
+                               address: {row => {
                                    "street" => "12 Analytical Way", "locality" => "London",
                                    "region" => "", "postal_code" => "", "country" => "",
                                  }}
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s,
-        "ADR;TYPE=home:;;12 Analytical Way;London;;;\r\n"
+        "ADR;TYPE=HOME:;;12 Analytical Way;London;;;\r\n"
     end
   end
 
-  # The po box and any component the form left alone keep their own
-  # bytes — n_line's splice rule at the component grain, where a
-  # rebuild through unescape and re-escape is not byte-stable (the
-  # unrecognized `\\q` escape would come back doubled).
-  def test_the_addresss_untouched_components_are_preserved_byte_for_byte
+  # The po box keeps its bytes — no field edits it — and the
+  # components render re-escaped, the reading and not the bytes: an
+  # escape the writer spelled that the grammar does not name (`\q`)
+  # normalizes on the write, the one byte-level loss a component
+  # round trip carries (VCard.split_raw_components' own reason).
+  def test_the_addresss_po_box_keeps_its_bytes_and_components_reescape
     po_box = ADA.sub(
       "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
       "ADR;TYPE=home:P.O. Box 5;Apt \\q;12 Way\\, West;London;England;NW1 1AA;United Kingdom",
     )
 
     with_contacts({"ada" => po_box}) do |store|
-      digest = store.contact("ada").addresses.first.line.digest
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               address: {digest => {
+                               address: {"0" => {
                                    "street" => "12 Way, West", "extended" => "Apt \\q",
                                    "locality" => "Manchester", "region" => "England",
                                    "postal_code" => "NW1 1AA", "country" => "United Kingdom",
@@ -2676,7 +2689,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s,
-        "ADR;TYPE=home:P.O. Box 5;Apt \\q;12 Way\\, West;Manchester;England;NW1 1AA;United Kingdom\r\n"
+        "ADR;TYPE=HOME:P.O. Box 5;Apt \\\\q;12 Way\\, West;Manchester;England;NW1 1AA;United Kingdom\r\n"
     end
   end
 
@@ -2684,9 +2697,9 @@ class AdminContactsPagesTest < Minitest::Test
   # escapes in the written line (RFC 2426 section 2.4.2).
   def test_address_punctuation_escapes_in_the_written_line
     with_contacts({"ada" => ADA}) do |store|
-      digest = store.contact("ada").addresses.first.line.digest
+      row = "0"
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
-                               address: {digest => {
+                               address: {row => {
                                    "street" => "12 Way, East; Annexe", "locality" => "London",
                                    "region" => "England", "postal_code" => "NW1 1AA",
                                    "country" => "United Kingdom",
@@ -2694,7 +2707,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s,
-        "ADR;TYPE=home:;;12 Way\\, East\\; Annexe;London;England;NW1 1AA;United Kingdom\r\n"
+        "ADR;TYPE=HOME:;;12 Way\\, East\\; Annexe;London;England;NW1 1AA;United Kingdom\r\n"
     end
   end
 
@@ -2712,8 +2725,9 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
-      assert_includes card, "ADR:;Apt 9;5 Analytical Way;London;;;United Kingdom\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n"
-      assert_includes card, "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
+      assert_includes card,
+        "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+        "ADR:;Apt 9;5 Analytical Way;London;;;United Kingdom\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n"
     end
   end
 
@@ -3136,7 +3150,9 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
-      assert_includes card, "TEL:+1 (555) 020-0700\\, x9\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n"
+      assert_includes card,
+        "TEL:+1 (555) 020-0700\\, x9\r\nADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+        "BDAY:1985-12-10\r\nEND:VCARD\r\n"
       assert_includes card, "TEL;TYPE=mobile:+1-555-0100\r\n"
     end
   end
@@ -3153,19 +3169,22 @@ class AdminContactsPagesTest < Minitest::Test
 
   # The addresses and emails come from the contact, never the
   # request: a doctored digest names no row and touches nothing, where
-  # a doctored index into a list would have rewritten some other line.
+  # a doctored index into a list would have rewritten some other
+  # line. An address is named by its position, so there is no key a
+  # form never rendered: what the request posts is the entity's new
+  # list, whatever keys it invents, and the digest rule is the card
+  # lines' own.
   def test_a_digest_the_card_never_had_is_ignored
     with_contacts({"ada" => ADA}) do |store|
       post "/contacts/ada", first: "Ada", last: "Lovelace", company: "0", etag: store.contact("ada").etag,
                                phone: {"0" * 64 => {"value" => "+1-555-9999"}},
-                               email: {"1" * 64 => {"value" => "x@example.com"}},
-                               address: {"2" * 64 => {"street" => "nowhere"}}
+                               email: {"1" * 64 => {"value" => "x@example.com"}}
 
       assert_equal 303, last_response.status
       card = store.contact("ada").vcard.to_s
       assert_includes card, "TEL;TYPE=mobile:+1-555-0100\r\n"
       assert_includes card, "EMAIL;TYPE=home:ada@example.com\r\n"
-      assert_includes card, "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
+      assert_includes card, "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
     end
   end
 

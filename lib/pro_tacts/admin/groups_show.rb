@@ -25,7 +25,6 @@ module ProTacts
     class GroupsShow < Phlex::HTML
       # @rbs @group: Group
       # @rbs @login: String
-      # @rbs @reading: Contact
       # @rbs @members: Array[ListedContact]
       # @rbs @named: Hash[String, ListedContact]
       # @rbs @changes: Array[Store::GroupChange]
@@ -35,7 +34,6 @@ module ProTacts
         @group = group
         @login = login
         @changes = changes
-        @reading = group.reading
         joined = group.members.to_set
         @members = contacts.select { joined.include?(it.id) }.sort
         @named = contacts.to_h { [it.id, it] }
@@ -81,18 +79,18 @@ module ProTacts
 
       #: () -> bool
       def lends?
-        @reading.addresses.any? || @reading.notes.any?
+        @group.addresses.any? || @group.note
       end
 
       #: () -> void
       def rows
-        @reading.addresses.each do |address|
+        @group.addresses.each do |address|
           row(address.label || "address") do
             Format.address_lines(address).each { |line| div { line } }
           end
         end
-        @reading.notes.each do |note|
-          row("notes") { div(style: "white-space: pre-wrap;") { note.value } }
+        if @group.note
+          row("notes") { div(style: "white-space: pre-wrap;") { @group.note } }
         end
       end
 

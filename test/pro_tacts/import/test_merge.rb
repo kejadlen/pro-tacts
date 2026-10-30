@@ -42,19 +42,22 @@ class ImportMergeTest < Minitest::Test
   CARD
 
   def jane(card = STORED, birthday: nil)
-    ProTacts::Contact.new(id: "jane", stored: ProTacts::VCard.new(card), birthday:, inherited: [])
+    ProTacts::ContactDetails.of_card(card: ProTacts::VCard.new(card), birthday:)
   end
 
   def merge(into = jane, arriving = ARRIVING) = Merge.new(into, ProTacts::VCard.new(arriving))
 
-  # The contact's own card is the base, byte for byte.
+  # The contact's own card is the base, byte for byte — the note
+  # among it, which the entity holds as a component and serves
+  # composed at the end rather than in the card's own lines.
   def test_the_contact_keeps_every_line_it_had
     folded = merge.contact.stored.to_s
 
-    STORED.each_line.reject { it.start_with?("END:") }.each do |line|
+    STORED.each_line.reject { |line| line.start_with?("END:", "NOTE:") }.each do |line|
       assert_includes folded, line
     end
-    assert_equal "jane", merge.contact.id
+    assert_equal "Met at work", merge.contact.note
+    assert_includes merge.contact.vcard.to_s, "NOTE:Met at work\r\n"
     refute_includes folded, "ABC-123"
   end
 
@@ -91,7 +94,7 @@ class ImportMergeTest < Minitest::Test
     folded = merge.contact
 
     assert_equal "Jane Booles", folded.name
-    assert_equal ["Met at work"], folded.notes.map(&:value)
+    assert_equal "Met at work", folded.note
     assert_equal "JB", folded.nickname
   end
 
@@ -112,8 +115,9 @@ class ImportMergeTest < Minitest::Test
     CARD
     folded = merge(jane(STORED.sub("NOTE:Met at work\r\n", "")), bare).contact
 
-    assert_equal ["From the school list\n\nChair of the residents' association"], folded.notes.map(&:value)
-    assert_includes folded.stored.to_s, "NOTE:From the school list\\n\\nChair of the residents' association\r\n"
+    assert_equal "From the school list\n\nChair of the residents' association", folded.note
+    assert_includes folded.vcard.to_s,
+      "NOTE:From the school list\\n\\nChair of the residents' association\r\n"
   end
 
   # A birthday the contact has none of goes into the model, the split
@@ -141,7 +145,11 @@ class ImportMergeTest < Minitest::Test
   def test_folding_in_the_same_card_changes_nothing
     same = merge(jane, STORED)
 
-    assert_equal STORED, same.contact.stored.to_s
+    # The stored card keeps every line but the note's — the entity
+    # holds the note, and folding nothing in leaves it standing as
+    # the member's own.
+    assert_equal STORED.sub("NOTE:Met at work\r\n", ""), same.contact.stored.to_s
+    assert_equal "Met at work", same.contact.note
     assert_empty same.left
   end
 

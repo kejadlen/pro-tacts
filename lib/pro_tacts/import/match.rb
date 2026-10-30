@@ -25,7 +25,7 @@ module ProTacts
       PHONE_DIGITS = 10 #: Integer
 
       # The contacts `arriving` might be, most alike first.
-      #: (Contact arriving, Array[ListedContact] contacts) -> Array[ListedContact]
+      #: (ContactDetails arriving, Array[ListedContact] contacts) -> Array[ListedContact]
       def self.candidates(arriving, contacts)
         scored = contacts.filter_map { |contact|
           fields = likeness(arriving, contact)
@@ -39,7 +39,7 @@ module ProTacts
 
       # How alike the two are in each of the three, from 0 for nothing
       # alike to 1 for a value they share.
-      #: (Contact arriving, ListedContact stored) -> Array[Float]
+      #: (ContactDetails arriving, ListedContact stored) -> Array[Float]
       def self.likeness(arriving, stored)
         [
           closest(names(arriving), names(stored)),
@@ -95,13 +95,13 @@ module ProTacts
       # The name as its words, sorted: "Booles, Jane" and "Jane
       # Booles" are one name written two ways, and an edit distance
       # over the two spellings would call them strangers.
-      #: (Contact | ListedContact contact) -> Array[String]
+      #: (ContactDetails | ListedContact contact) -> Array[String]
       def self.names(contact)
         [contact.name.to_s.downcase.scan(/[[:alnum:]]+/).sort.join(" ")].reject(&:empty?)
       end
 
       # An address's case is no part of it.
-      #: (Contact | ListedContact contact) -> Array[String]
+      #: (ContactDetails | ListedContact contact) -> Array[String]
       def self.emails(contact)
         contact.emails.map { it.value.strip.downcase }.reject(&:empty?)
       end
@@ -118,7 +118,7 @@ module ProTacts
         }.max || 0.0
       end
 
-      #: (Contact | ListedContact contact) -> Array[String]
+      #: (ContactDetails | ListedContact contact) -> Array[String]
       def self.phones(contact)
         contact.phones.map { phone(it.value) }.reject(&:empty?)
       end

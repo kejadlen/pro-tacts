@@ -14,6 +14,12 @@ module ProTacts
     # Store#reid draw at it; #minted? measures ids against it.
     CONTACT_LENGTH = 12 #: Integer
 
+    # The length every entity's id is minted at, a card's and a group's
+    # alike; the entities' CHECK holds it
+    # (db/migrations/016_entities.rb). Equal to CONTACT_LENGTH but not
+    # the same fact: that one is an href's width, this an entity's.
+    ENTITY_LENGTH = 12 #: Integer
+
     # SecureRandom rather than rand: the draws have to be independent of
     # anything a caller can observe or seed.
     #: (Integer length) -> String
