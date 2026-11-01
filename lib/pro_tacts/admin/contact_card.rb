@@ -101,7 +101,7 @@ module ProTacts
           row(handle.label || "handle", handle.value, handle.lent_by)
         end
         @contact.addresses.each do |address|
-          row(address.label || "address", Format.address_lines(address), address.lent_by)
+          row(address.label || "address", Format.address_lines(address), address.lent_by, href: Format.map_url(address))
         end
         row("birthday", @birthday) if @birthday
         note_rows
@@ -178,11 +178,19 @@ module ProTacts
       # (docs/DESIGN.md, "Alignment is the layout"), and a mark on
       # the value is what says this address is the household's rather
       # than this contact's.
-      #: (String type, String | Array[String] value, ?Group? lent_by) -> void
-      def row(type, value, lent_by = nil)
+      #
+      # `href` makes the value a link out (an address's map,
+      # Format.map_url), in a new tab so the record stays open behind
+      # it.
+      #: (String type, String | Array[String] value, ?Group? lent_by, ?href: String?) -> void
+      def row(type, value, lent_by = nil, href: nil)
         dt(class: "type-label") { type }
         dd(class: "type-body-sm") do
-          render_value(value)
+          if href
+            a(href:, target: "_blank", rel: "noreferrer") { render_value(value) }
+          else
+            render_value(value)
+          end
           # The groups row's own tag, pinned to this row's first line
           # at the right edge of the value column (admin.css) — under
           # the value it could be read as marking the row below.

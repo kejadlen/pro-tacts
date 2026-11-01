@@ -145,7 +145,7 @@ class AdminGroupsPagesTest < Minitest::Test
 
       body = last_response.body
       assert_equal 200, last_response.status
-      assert_includes body, "7 Calculus Close"
+      assert_includes body, %(<a href="https://maps.apple.com/?address=7+Calculus+Close%2C+London%2C+England%2C+NW1+1AB%2C+United+Kingdom" target="_blank" rel="noreferrer"><div>7 Calculus Close</div>)
       assert_includes body, "Gate code 1854."
       assert_includes body, "members (2)"
       assert_match %r{<a href="/contacts/george">.*?George Boole</div>}, body

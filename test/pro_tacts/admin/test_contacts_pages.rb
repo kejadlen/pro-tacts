@@ -611,6 +611,19 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # An address opens in a map (Format.map_url), searched for the lines
+  # the row shows: the contact's own and the one a group lends alike.
+  def test_show_links_each_address_to_a_map
+    with_contacts({"ada" => ADA}) do |store|
+      FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
+
+      get "/contacts/ada"
+
+      assert_includes last_response.body, %(<a href="https://maps.apple.com/?address=12+Analytical+Way%2C+London%2C+England%2C+NW1+1AA%2C+United+Kingdom" target="_blank" rel="noreferrer"><div>12 Analytical Way</div>)
+      assert_includes last_response.body, %(<a href="https://maps.apple.com/?address=7+Calculus+Close%2C+London%2C+England%2C+NW1+1AB%2C+United+Kingdom" target="_blank" rel="noreferrer"><div>7 Calculus Close</div>)
+    end
+  end
+
   # A row a group lends is marked with a tag opening the group, and the
   # contact's own rows are not: Ada carries an address and a note of
   # her own beside the household's two, and only the household's are
