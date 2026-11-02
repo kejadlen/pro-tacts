@@ -119,7 +119,7 @@ module ProTacts
                 render ListItem.new(
                   href: "/contacts/#{member.id}",
                   avatar: Avatar.new(contact: member, size: "lg"),
-                ) { Format.name_label(member) }
+                ) { member.name_label }
               end
             end
           end
@@ -209,7 +209,7 @@ module ProTacts
         id = detail.fetch("card").to_s
         contact = @named[id]
         if contact
-          a(href: "/contacts/#{id}") { Format.name_label(contact) }
+          a(href: "/contacts/#{id}") { contact.name_label }
         else
           div { id }
         end

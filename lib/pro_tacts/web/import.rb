@@ -153,7 +153,7 @@ module ProTacts
     #: (VCard card, Integer index, Integer losses) -> Import::Staged::Row
     def import_row(card, index, losses)
       contact = import_contact(card, index)
-      Import::Staged::Row.new(label: Admin::Format.name_label(contact), sort_key: contact.sort_key, losses:)
+      Import::Staged::Row.new(label: contact.name_label, sort_key: contact.sort_key, losses:)
     end
 
     # The rows' places in the file, in the order the list shows them:

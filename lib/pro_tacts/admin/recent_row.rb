@@ -23,7 +23,7 @@ module ProTacts
           href: "/contacts/#{@row.contact.id}",
           avatar: Avatar.new(contact: @row.contact, size: "lg"),
           trailing: Format.time_ago(@row.updated_at),
-        ) { Format.name_label(@row.contact) }
+        ) { @row.contact.name_label }
       end
     end
   end

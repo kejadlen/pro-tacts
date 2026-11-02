@@ -62,16 +62,16 @@ module ProTacts
               ul(class: "card", x_ref: "options") do
                 @contacts.each do |contact|
                   # The row's label is the name the lists show
-                  # (Format.name_label), nickname and all, because
+                  # (Contact#name_label), nickname and all, because
                   # that is the name a person filters by; the row
                   # itself is the li, so the cap hides the whole of
                   # it and not the box alone (Admin::GroupFilter).
-                  li(**GroupFilter.row(Format.name_label(contact),
+                  li(**GroupFilter.row(contact.name_label,
                                        capped: @capped.include?(contact.id))) do
                     label do
                       input(type: "checkbox", name: "members[]", value: contact.id, checked: ticked.include?(contact.id))
                       render Avatar.new(contact:, size: "lg")
-                      div(style: "flex: 1; min-width: 0; font-weight: 550;") { Format.name_label(contact) }
+                      div(style: "flex: 1; min-width: 0; font-weight: 550;") { contact.name_label }
                     end
                     input(type: "hidden", name: "was[]", value: contact.id) if was.include?(contact.id)
                   end

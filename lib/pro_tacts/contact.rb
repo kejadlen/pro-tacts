@@ -680,8 +680,49 @@ module ProTacts
       text_of(vcard.property("NICKNAME"))
     end
 
+    # The name a listing row shows: "Name (Nickname)" when the card
+    # carries a NICKNAME — the formal name, the one someone is
+    # known by kept beside it — and the plain name otherwise. The
+    # card holds the two facts independently, and other screens (the
+    # detail card, the birthdays column) show the plain name.
+    #: () -> String
+    def name_label
+      return "#{name} (#{nickname})" if nickname && name
+
+      nickname || name || id
+    end
+
+    # A contact's initials. N's given and family names (RFC 2426
+    # section 3.1.2) are structured data and the real answer to "what
+    # are this contact's initials" — falling back, when the card
+    # carries no N (an organization's own entry, say, with a name but
+    # no person to split in two), to one first letter of FN rather
+    # than a guess at where a first/last split would fall in free
+    # text, and of the id when the card carries no name at all.
+    #: () -> String
+    def initials
+      family, given = name_components || []
+      letters = [given, family].filter_map { it[0] if it }
+      return letters.join.upcase unless letters.empty?
+
+      (name || id).to_s.strip[0].to_s.upcase
+    end
+
+    # The birthday, for display: the model's, including the shapes no
+    # client is sent, then a BDAY still in the card — read the way a
+    # write reads one, else shown raw. The prose is Birthday#to_s.
+    #: () -> String?
+    def birthday_label
+      return birthday.to_s if birthday
+
+      property = properties.find { it.name.casecmp?("BDAY") }
+      return nil if property.nil?
+
+      Birthday.from_property(property)&.to_s || property.value
+    end
+
     # The order a contact lists under: N's family name (RFC 2426
-    # section 3.1.2), falling back the way Admin::Format.initials does
+    # section 3.1.2), falling back the way #initials does
     # — FN for a card with no N, the id for a card with no name at all
     # — and case-insensitive, so the card's spelling of a family name
     # does not move it.

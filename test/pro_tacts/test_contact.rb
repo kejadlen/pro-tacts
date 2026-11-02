@@ -377,11 +377,141 @@ class ContactTest < Minitest::Test
 
   # A BDAY in a spelling the model does not recompose stays in the card
   # verbatim; the reader answers nil over it, and showing it as stored
-  # is the substrate's job (Format.birthday).
+  # is the substrate's job (Contact#birthday_label).
   def test_an_unmodeled_birthday_spelling_reads_nil
     unmodeled = STRUCTURED.sub("END:VCARD\r\n", "BDAY:not-a-date\r\nEND:VCARD\r\n")
 
     assert_nil contact(unmodeled).birthday
+  end
+
+  ## Display
+
+  # Initials come from the structured N property (given + family),
+  # not a guess at word boundaries in the free-text FN.
+  def test_initials_come_from_the_structured_name
+    assert_equal "AL", contact(STRUCTURED).initials
+  end
+
+  # A card with no N at all — an organization's own entry, say — falls
+  # back to one first letter of FN.
+  def test_initials_fall_back_to_the_display_name_with_no_n_property
+    no_n = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Riverside Elementary\r\nUID:office\r\nEND:VCARD\r\n"
+
+    assert_equal "R", contact(no_n).initials
+  end
+
+  def test_initials_fall_back_to_the_id_when_there_is_no_name_at_all
+    bare = "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:zz9\r\nEND:VCARD\r\n"
+
+    assert_equal "Z", contact(bare, id: "znorth").initials
+  end
+
+  # A blank FN is no name — empty values read as absent (see
+  # Contact) — so initials fall back to the id like any nameless card.
+  def test_initials_of_a_blank_name_fall_back_to_the_id
+    blank = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:\r\nUID:b\r\nEND:VCARD\r\n"
+
+    assert_equal "A", contact(blank).initials
+  end
+
+  # N with only one of given/family present (a mononym, or a card that
+  # only bothered with a family name) still gives one initial rather
+  # than raising on the missing half.
+  def test_initials_from_a_partial_n_property
+    family_only = STRUCTURED.sub("N:Lovelace;Ada;;;", "N:Lovelace;;;;")
+
+    assert_equal "L", contact(family_only).initials
+  end
+
+  def test_labels_the_birthday
+    birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
+
+    assert_equal "December 10, 1985", contact(STRUCTURED, birthday:).birthday_label
+  end
+
+  # RFC 2426 section 3.1.5 lets BDAY carry a date-time, and a client is
+  # free to send one; the display reads only the date part of a bare
+  # value it meets — the same drop the write path makes on the way in
+  # (Birthday.from_property).
+  def test_a_birthday_with_a_time_component_still_formats
+    with_time = STRUCTURED.sub("END:VCARD\r\n", "BDAY:1985-12-10T00:00:00Z\r\nEND:VCARD\r\n")
+
+    assert_equal "December 10, 1985", contact(with_time).birthday_label
+  end
+
+  # Apple's 1604-sentinel spelling for "no year on file" (see
+  # ProTacts::Birthday), the model shape the served card carries.
+  def test_a_birthday_with_no_year_omits_one
+    birthday = ProTacts::Birthday.new(month: 12, day: 10)
+
+    assert_equal "December 10", contact(STRUCTURED, birthday:).birthday_label
+  end
+
+  # A month-day spelling still in a card rather than the model: a write
+  # moves it out, and display reads it the way a write would
+  # (Birthday::MONTH_AND_DAY), not as the stored string.
+  def test_a_reduced_no_year_birthday_displays_its_day
+    reduced = STRUCTURED.sub("END:VCARD\r\n", "BDAY:--12-10\r\nEND:VCARD\r\n")
+
+    assert_equal "December 10", contact(reduced).birthday_label
+  end
+
+  # The undashed variant of the reduced spelling.
+  def test_an_undashed_reduced_no_year_birthday_displays_its_day
+    basic = STRUCTURED.sub("END:VCARD\r\n", "BDAY:--1210\r\nEND:VCARD\r\n")
+
+    assert_equal "December 10", contact(basic).birthday_label
+  end
+
+  # Calendar-nonsense in the reduced spelling, rendered as the day it
+  # names like the modeled one below.
+  def test_a_calendar_nonsense_reduced_no_year_birthday_renders_its_components
+    nonsense = STRUCTURED.sub("END:VCARD\r\n", "BDAY:--02-30\r\nEND:VCARD\r\n")
+
+    assert_equal "February 30", contact(nonsense).birthday_label
+  end
+
+  # A line stored before the model read VALUE=date still carries it,
+  # and displays as the date it names.
+  def test_a_stored_value_date_birthday_displays_its_date
+    stored = STRUCTURED.sub("END:VCARD\r\n", "BDAY;value=date:1985-12-10\r\nEND:VCARD\r\n")
+
+    assert_equal "December 10, 1985", contact(stored).birthday_label
+  end
+
+  def test_a_birthday_that_will_not_parse_is_shown_as_stored
+    unparseable = STRUCTURED.sub("END:VCARD\r\n", "BDAY:not-a-date\r\nEND:VCARD\r\n")
+
+    assert_equal "not-a-date", contact(unparseable).birthday_label
+  end
+
+  # Well-shaped but calendar-nonsense: the model checks component
+  # ranges, not the calendar, and rendering is calendar-free — the
+  # prose names the day it says rather than refusing to display.
+  def test_a_calendar_nonsense_birthday_renders_its_components
+    nonsense = ProTacts::Birthday.new(year: 1985, month: 2, day: 30)
+
+    assert_equal "February 30, 1985", contact(STRUCTURED, birthday: nonsense).birthday_label
+  end
+
+  # The partial shapes no client renders still display: every form
+  # the grammar admits has Birthday#to_s's one prose.
+  def test_the_partial_shapes_display_their_components
+    year_month = STRUCTURED.sub("END:VCARD\r\n", "BDAY:1985-10\r\nEND:VCARD\r\n")
+    year = STRUCTURED.sub("END:VCARD\r\n", "BDAY:1985\r\nEND:VCARD\r\n")
+    month = STRUCTURED.sub("END:VCARD\r\n", "BDAY:--07\r\nEND:VCARD\r\n")
+    day = STRUCTURED.sub("END:VCARD\r\n", "BDAY:---04\r\nEND:VCARD\r\n")
+
+    assert_equal "October 1985", contact(year_month).birthday_label
+    assert_equal "1985", contact(year).birthday_label
+    assert_equal "July", contact(month).birthday_label
+    assert_equal "4", contact(day).birthday_label
+  end
+
+  def test_a_card_with_no_birthday_labels_none
+    bare = "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:bare\r\nEND:VCARD\r\n"
+
+    assert_nil contact(bare).birthday_label
   end
 
   ## Inherited lines

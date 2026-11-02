@@ -56,7 +56,7 @@ module ProTacts
       #: (Store::UpcomingBirthday upcoming) -> String
       def date_line(upcoming)
         birthday = upcoming.contact.birthday
-        text = Format.birthday(upcoming.contact).to_s
+        text = upcoming.contact.birthday_label.to_s
         return text if birthday.nil? || birthday.year.nil?
 
         "#{text} (turns #{upcoming.occurs_on.year - birthday.year})"

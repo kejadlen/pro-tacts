@@ -1,28 +1,13 @@
 require "time"
 
-require "pro_tacts/birthday"
 require "pro_tacts/vcard/parser"
 
 module ProTacts
   module Admin
-    # Small display helpers shared by the admin views. Presentation, not
-    # structure: these read a Contact but decide only how it looks.
+    # Small display helpers shared by the admin views, over plain
+    # values: a time, an etag, a card's line. What reads one model
+    # lives on that model (Contact#name_label, Contact::Address#map_url).
     module Format
-      # The name a listing row shows: "Name (Nickname)" when the card
-      # carries a NICKNAME — the formal name, the one someone is
-      # known by kept beside it — and the plain name otherwise. The
-      # composition is the listing screens', not Contact's: the card
-      # holds the two facts independently, and other screens (the
-      # detail card, the birthdays column) show the plain name.
-      #: (Contact | ListedContact contact) -> String
-      def self.name_label(contact)
-        nickname = contact.nickname
-        name = contact.name
-        return "#{name} (#{nickname})" if nickname && name
-
-        nickname || name || contact.id
-      end
-
       # The string a search compares on: the query and the value it
       # is matched against both lowercased and accents folded to the
       # letters they sit on, so "munoz" finds "Muñoz". NFD plus
@@ -35,36 +20,6 @@ module ProTacts
       #: (String value) -> String
       def self.search_key(value)
         value.downcase.unicode_normalize(:nfd).gsub(/\p{Mn}+/, "")
-      end
-
-      # A contact's initials. N's given and family names (RFC 2426
-      # section 3.1.2) are structured data and the real answer to "what
-      # are this contact's initials" — falling back, when the card
-      # carries no N (an organization's own entry, say, with a name but
-      # no person to split in two), to one first letter of FN rather
-      # than a guess at where a first/last split would fall in free
-      # text, and of the id when the card carries no name at all.
-      #: (Contact | ListedContact contact) -> String
-      def self.initials(contact)
-        family, given = contact.name_components || []
-        letters = [given, family].filter_map { it[0] if it }
-        return letters.join.upcase unless letters.empty?
-
-        (contact.name || contact.id).to_s.strip[0].to_s.upcase
-      end
-
-      # A contact's birthday, for display: the model's, including the
-      # shapes no client is sent, then a BDAY still in the card — read the
-      # way a write reads one, else shown raw. The prose is Birthday#to_s.
-      #: (Contact | ListedContact contact) -> String?
-      def self.birthday(contact)
-        birthday = contact.birthday
-        return birthday.to_s if birthday
-
-        property = contact.properties.find { it.name.casecmp?("BDAY") }
-        return nil if property.nil?
-
-        Birthday.from_property(property)&.to_s || property.value
       end
 
       # A value — a property's or a parameter's — at or under this many

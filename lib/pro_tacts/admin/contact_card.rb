@@ -39,7 +39,7 @@ module ProTacts
         @contact = contact
         @groups = groups
         @walk = walk
-        @birthday = Format.birthday(contact)
+        @birthday = contact.birthday_label
       end
 
       def view_template

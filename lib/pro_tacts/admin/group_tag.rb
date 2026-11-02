@@ -30,7 +30,7 @@ module ProTacts
           end
           # Not a ul, which Gloss's .card-body ul sets as prose.
           ol(role: "tooltip") do
-            shown.each { |contact| li { Format.name_label(contact) } }
+            shown.each { |contact| li { contact.name_label } }
             li { "and #{rest} more" } if rest.positive?
           end
         end
