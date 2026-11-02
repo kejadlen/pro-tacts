@@ -40,6 +40,10 @@ Two things were taken from the capture rather than left as recorded:
   Step 05's card ends at `END:VCARD`, the same shortfall the macOS PUT
   steps carry.
 
-Step 05's `If-Match` needed no rewrite, unlike the macOS PUT steps':
-`rake dev` seeds from `test/fixtures/cards`, so the etag the phone sent
-back is the one the replay's seed card hashes to.
+Step 05's `If-Match` needed no rewrite at first, unlike the macOS PUT
+steps': `rake dev` seeds from `test/fixtures/cards`, so the etag the
+phone sent back was the one the replay's seed card hashed to. When the
+addresses and notes became components of the entities
+(docs/plans/2026-10-25-contacts-on-entities.md) the same seed card
+began hashing to a new etag, and the rewrite the macOS steps had
+taken became this one's too.

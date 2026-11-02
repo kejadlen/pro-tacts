@@ -13,25 +13,71 @@ class ContactTest < Minitest::Test
 
   CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nEND:VCARD\r\n"
 
+  # A card whose ADR and NOTE arrive in its bytes, as a client's do:
+  # the builder below reads them off as components, the way every
+  # arrival is read (Contact.of_card), so the accessors answer from
+  # the entity's own components and the served card composes them.
   STRUCTURED = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada Lovelace\r\nN:Lovelace;Ada;;;\r\n" \
     "TEL;TYPE=mobile:+1-555-0100\r\nTEL;TYPE=work:+1-555-0199\r\n" \
     "EMAIL;TYPE=home:ada@example.com\r\n" \
-    "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+    "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
     "NOTE:Countess\\, mathematician.\r\nUID:ada\r\nEND:VCARD\r\n"
+
+  # The card without its ADR and NOTE — the bytes that stay stored
+  # once the components are read off.
+  STORED = STRUCTURED
+    .sub("ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n", "")
+    .sub("NOTE:Countess\\, mathematician.\r\n", "")
+
+  ADDRESS = ProTacts::Contact::Address.new(
+    po_box: "", extended: "", street: "12 Analytical Way", locality: "London", region: "England",
+    postal_code: "NW1 1AA", country: "United Kingdom", label: "home"
+  ) #: ProTacts::Contact::Address
+  NOTE = "Countess, mathematician." #: String
 
   # The production shapes (see the class comment): a modeled birthday
   # passes a BDAY-free card beside a Birthday, a fallback case
   # passes a card carrying an unmodeled BDAY beside nil — no stored
-  # card ever carries a BDAY the model recomposes — and inheritance
-  # defaults to none, the shape of every contact in no group.
-  # Inherited lines are given as bare strings and lent by GROUP, the
-  # group a composed row is marked with; a test that needs a second
-  # lender passes its own.
-  GROUP = ProTacts::Group.new(id: "nous", name: "Booles", label: "Booles", lines: [], members: ["aiden"]) #: ProTacts::Group
+  # card ever carries a BDAY the model recomposes — and lending
+  # defaults to none, the shape of every contact in no group. Lent
+  # addresses and notes are components lent by GROUP, the group a
+  # composed row is marked with; a test that needs a second lender
+  # passes its own.
+  GROUP = ProTacts::Group.new(id: "nous", name: "Booles", label: "Booles", members: ["aiden"]) #: ProTacts::Group
 
-  def contact(bytes = CARD, id: "aiden", birthday: nil, inherited: [], group: GROUP)
-    lent = inherited.each_with_index.map { |line, position| ProTacts::Contact::Inherited.new(group:, position:, line:) }
-    ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(bytes), birthday:, inherited: lent)
+  def lending(group: GROUP, addresses: [], note: nil)
+    ProTacts::Contact::Lent.new(
+      group:,
+      addresses: addresses.each_with_index.map { |address, position|
+        ProTacts::Contact::LentAddress.new(position:, address:)
+      },
+      note:,
+    )
+  end
+
+  def lent_address
+    ProTacts::Contact::Address.new(
+      po_box: "", extended: "", street: "7 Calculus Close", locality: "London", region: "England",
+      postal_code: "NW1 1AB", country: "United Kingdom", label: "home"
+    )
+  end
+
+  def lent_line(address = lent_address)
+    ProTacts::Contact.address_lines(ProTacts::VCard.new(CARD), address).join("\r\n")
+  end
+
+  # A card read into its parts — the entity-less shape, the way
+  # every arrival is read (ContactDetails.of_card).
+  def contact(bytes = CARD, birthday: nil, lent: [])
+    ProTacts::ContactDetails.of_card(card: ProTacts::VCard.new(bytes), birthday:, lent:)
+  end
+
+  # A contact whose entity holds the parts directly, over the stored
+  # bytes a decompose leaves — the store's shape, id and all.
+  def composed(bytes = STORED, id: "aiden", birthday: nil, lent: [], addresses: [ADDRESS], note: NOTE)
+    ProTacts::Contact.new(
+      id:, stored: ProTacts::VCard.new(bytes), birthday:, addresses:, note:, lent:
+    )
   end
 
   # The decode's refusal reports (see #photo); the transport this pins
@@ -67,12 +113,15 @@ class ContactTest < Minitest::Test
   # The same card under two ids is two contacts with the same etag: the
   # etag is about the bytes a client downloads, and the id is not in them.
   def test_the_etag_ignores_the_id
-    assert_equal contact(id: "aiden").etag, contact(id: "znorth").etag
+    card = ProTacts::VCard.new(CARD)
+    make = ->(id) { ProTacts::Contact.new(id:, stored: card, birthday: nil, addresses: [], note: nil, lent: []) }
+
+    assert_equal make.("aiden").etag, make.("znorth").etag
   end
 
   def test_ids_outside_the_href_charset_raise
     ["John Smith", "../etc/passwd", "a/b", ""].each do |id|
-      error = assert_raises(ArgumentError) { contact(id:) }
+      error = assert_raises(ArgumentError) { composed(id:) }
 
       assert_equal "invalid contact id: #{id}", error.message
     end
@@ -80,7 +129,7 @@ class ContactTest < Minitest::Test
 
   def test_uuids_and_slugs_are_ids
     %w[AB12C345-6789-0DEF-1234-567890ABCDEF aiden znorth_2].each do |id|
-      assert_equal id, contact(id:).id
+      assert_equal id, composed(id:).id
     end
   end
 
@@ -88,7 +137,7 @@ class ContactTest < Minitest::Test
   # listings build a contact per row without reading structure, and a
   # card that will not parse is still served byte for byte.
   def test_making_a_contact_never_parses_the_card
-    assert_equal "aiden", contact("not a vCard at all").id
+    assert_equal "aiden", composed("not a vCard at all", addresses: [], note: nil).id
   end
 
   def test_reads_the_name
@@ -96,13 +145,15 @@ class ContactTest < Minitest::Test
   end
 
   def test_inspect_shows_the_id_and_name_and_not_the_card
-    assert_equal %(#<ProTacts::Contact id="aiden" name="Aiden">), contact.inspect
+    bare = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
+
+    assert_equal %(#<ProTacts::Contact id="aiden" name="Aiden">), composed(bare, addresses: [], note: nil).inspect
   end
 
   def test_inspect_without_a_name_shows_only_the_id
     bare = "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:none\r\nEND:VCARD\r\n"
 
-    assert_equal %(#<ProTacts::Contact id="aiden">), contact(bare).inspect
+    assert_equal %(#<ProTacts::Contact id="aiden">), composed(bare, addresses: [], note: nil).inspect
   end
 
   def test_reads_the_name_components
@@ -186,15 +237,17 @@ class ContactTest < Minitest::Test
     assert_equal %w[mobile work], contact(grouped).phones.map(&:label)
   end
 
-  # Emails and addresses read the label beside them as a phone does,
-  # and Apple's wrapped vocabulary reads as its word
-  # (docs/plans/2026-10-22-a-row-edits-its-label.md).
+  # Emails read the label beside them as a phone does, and Apple's
+  # wrapped vocabulary reads as its word
+  # (docs/plans/2026-10-22-a-row-edits-its-label.md). An address's
+  # label reads the same way, off the `X-ABLabel` paired to its group
+  # when it arrived (Contact.take_addresses).
   def test_an_email_and_an_address_read_their_labels
     labeled = STRUCTURED
       .sub(/^EMAIL[^\r]*/) { "item3.#{it}\r\nitem3.X-ABLabel:_$!<Other>!$_" }
       .sub(/^ADR[^\r]*/) { "item4.#{it}\r\nitem4.X-ABLabel:lab" }
-    contact = contact(labeled)
 
+    contact = contact(labeled)
     assert_equal "Other", contact.emails.fetch(0).label
     assert_equal "lab", contact.addresses.fetch(0).label
   end
@@ -279,68 +332,74 @@ class ContactTest < Minitest::Test
     assert_empty contact(bare).handles
   end
 
+  ## The addresses and the note
+
+  # The ADR the card carried reads as the entity's component: seven
+  # components, an absent one the empty string, and the label the one
+  # word a reader shows — the types, where the line carried no
+  # X-ABLabel.
   def test_reads_an_address_as_its_seven_components
     address = contact(STRUCTURED).addresses.fetch(0)
-    assert_nil address.po_box
-    assert_nil address.extended
-    assert_equal "12 Analytical Way", address.street
-    assert_equal "London", address.locality
-    assert_equal "England", address.region
-    assert_equal "NW1 1AA", address.postal_code
-    assert_equal "United Kingdom", address.country
-    assert_equal ["home"], address.types
+
+    assert_equal ADDRESS, address
+    assert_equal "home", address.label
+    assert_nil address.lent_by
   end
 
-  def test_an_address_keeps_every_type_but_pref
-    apple = STRUCTURED.sub("ADR;TYPE=home:", "ADR;type=HOME;type=pref;type=POSTAL:")
-
-    assert_equal %w[home postal], contact(apple).addresses.fetch(0).types
-  end
-
-  def test_every_address_carries_the_line_it_was_read_from
-    address = contact(STRUCTURED).addresses.fetch(0)
-
-    assert_equal "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",
-      address.line.verbatim
-    assert_equal Digest::SHA256.hexdigest(
-      "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",
-    ), address.line.digest
-  end
-
-  def test_an_adr_line_that_would_not_read_is_no_address
-    broken = STRUCTURED.sub(
-      "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",
-      "ADR;=;:;;12 Analytical Way\r\n",
+  # An ADR with an X-ABLabel paired to its group reads that label:
+  # the pairing take_addresses reads, the same one a phone's label
+  # uses.
+  def test_an_address_label_reads_off_its_pairing
+    labeled = STRUCTURED.sub(
+      "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",
+      "item1.ADR;type=HOME;type=pref:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+      "item1.X-ABLabel:Summer house\r\n",
     )
 
-    assert_empty contact(broken).addresses
-    assert contact(broken).vcard.lines.any? { it.names?("ADR") && it.property.nil? }
+    assert_equal "Summer house", contact(labeled).addresses.fetch(0).label
+  end
+
+  def test_a_types_only_address_reads_its_types_as_its_label
+    postal = contact(STRUCTURED.sub("ADR;TYPE=HOME:", "ADR;type=HOME;type=pref;type=POSTAL:"))
+
+    assert_equal "home, postal", postal.addresses.fetch(0).label
+  end
+
+  def test_an_adr_line_that_will_not_read_stays_in_the_card
+    broken = STRUCTURED.sub(
+      "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",
+      "ADR;=;:;;12 Analytical Way\r\n",
+    )
+    contact = contact(broken)
+
+    assert_empty contact.addresses
+    assert contact.vcard.lines.any? { it.names?("ADR") && it.property.nil? }
   end
 
   # A blank position and one past the end of the value read the same:
   # neither says anything the card did not.
-  def test_address_components_beyond_the_value_are_nil
-    short = STRUCTURED.sub(
-      "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
+  def test_address_components_beyond_the_value_are_empty
+    short = contact(STRUCTURED.sub(
+      "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
       "ADR:;;12 Analytical Way",
-    )
-    address = contact(short).addresses.fetch(0)
+    ))
+    address = short.addresses.fetch(0)
 
-    assert_nil address.locality
-    assert_nil address.region
-    assert_nil address.postal_code
-    assert_nil address.country
+    assert_equal(
+      ["", "", "12 Analytical Way", "", "", "", ""],
+      [address.po_box, address.extended, address.street, address.locality, address.region, address.postal_code,
+       address.country]
+    )
   end
 
-  # An empty value carries nothing a missing property would not, so
-  # the accessors read one as the other: FN:, NOTE:, TEL:, and EMAIL:
-  # come back absent, and an ADR blank throughout is no address.
+  # An ADR blank throughout is no address — the reader's own rule —
+  # and an empty NOTE is no note: blank is absent in both directions.
   def test_empty_values_read_as_absent
     empty = STRUCTURED.sub("FN:Ada Lovelace", "FN:")
       .sub("TEL;TYPE=mobile:+1-555-0100", "TEL;TYPE=mobile:")
       .sub("TEL;TYPE=work:+1-555-0199", "TEL;TYPE=work:")
       .sub("EMAIL;TYPE=home:ada@example.com", "EMAIL;TYPE=home:")
-      .sub("ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom", "ADR;TYPE=home:;")
+      .sub("ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom", "ADR;TYPE=home:;")
       .sub("NOTE:Countess\\, mathematician.", "NOTE:")
 
     contact = contact(empty)
@@ -348,7 +407,16 @@ class ContactTest < Minitest::Test
     assert_empty contact.phones
     assert_empty contact.emails
     assert_empty contact.addresses
-    assert_empty contact.notes
+    assert_nil contact.note
+  end
+
+  def test_the_note_is_the_one_the_entity_holds
+    assert_equal NOTE, contact(STRUCTURED).note
+    assert_nil contact(CARD).note
+  end
+
+  def test_the_note_unescapes
+    assert_equal "Countess, mathematician.", contact(STRUCTURED).note
   end
 
   # The birthday is the model held beside the card, not a parse of
@@ -359,20 +427,36 @@ class ContactTest < Minitest::Test
     assert_equal birthday, contact(STRUCTURED, birthday:).birthday
   end
 
-  # Immediately before END:VCARD.
-  def test_the_served_card_composes_the_birthday_in
+  # The served card composes the entity's components and the birthday
+  # immediately before END:VCARD — the card's own lines, then its
+  # addresses, then its note, then the birthday — so the card a client
+  # downloads carries everything in one fixed order.
+  def test_the_served_card_composes_the_components_in
     birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
-    composed = STRUCTURED.sub("END:VCARD\r\n", "BDAY:1985-12-10\r\nEND:VCARD\r\n")
-
-    assert_equal composed, contact(STRUCTURED, birthday:).vcard.to_s
+    assert_equal(
+      STORED.sub(
+        "END:VCARD\r\n",
+        "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+        "NOTE:Countess\\, mathematician.\r\n" \
+        "BDAY:1985-12-10\r\nEND:VCARD\r\n",
+      ),
+      composed(birthday:).vcard.to_s,
+    )
   end
 
   # A birthday with no wire form — the shapes no client renders —
-  # composes nothing, and the stored card serves exactly as it is.
-  def test_a_birthday_with_no_wire_form_leaves_the_card_as_stored
+  # composes nothing; the components compose as they would without it.
+  def test_a_birthday_with_no_wire_form_composes_the_components_alone
     year_alone = ProTacts::Birthday.new(year: 1985)
 
-    assert_equal STRUCTURED, contact(STRUCTURED, birthday: year_alone).vcard.to_s
+    assert_equal(
+      STORED.sub(
+        "END:VCARD\r\n",
+        "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+        "NOTE:Countess\\, mathematician.\r\nEND:VCARD\r\n",
+      ),
+      composed(birthday: year_alone).vcard.to_s,
+    )
   end
 
   # A BDAY in a spelling the model does not recompose stays in the card
@@ -384,72 +468,56 @@ class ContactTest < Minitest::Test
     assert_nil contact(unmodeled).birthday
   end
 
-  ## Inherited lines
+  ## The lent components
 
-  # The group's lines land between the stored card and the composed
-  # birthday — stored + inherited + birthday — so the card a client
-  # downloads carries everything in one fixed order.
-  def test_the_served_card_composes_inherited_lines_before_the_birthday
+  # The group's addresses land between the member's own and the
+  # composed note and birthday, so the card a client downloads carries
+  # everything in one fixed order.
+  def test_the_served_card_composes_lent_addresses_before_the_note_and_birthday
     birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
-    composed = STRUCTURED.sub(
-      "END:VCARD\r\n",
-      "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom\r\n" \
-      "TEL;TYPE=home:+44 20 5555 0100\r\n" \
-      "BDAY:1985-12-10\r\nEND:VCARD\r\n",
-    )
-
+    lent = [lending(addresses: [lent_address], note: "Gate code 1854.")]
     assert_equal(
-      composed,
-      contact(
-        STRUCTURED,
-        birthday:,
-        inherited: [
-          "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
-          "TEL;TYPE=home:+44 20 5555 0100",
-        ],
-      ).vcard.to_s,
+      STORED.sub(
+        "END:VCARD\r\n",
+        "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+        "ADR;TYPE=HOME:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom\r\n" \
+        "NOTE:Countess\\, mathematician.\\n\\nShared · Booles:\\nGate code 1854.\r\n" \
+        "BDAY:1985-12-10\r\nEND:VCARD\r\n",
+      ),
+      composed(birthday:, lent:).vcard.to_s,
     )
   end
 
-  # An empty inheritance is insert's own no-op.
+  # A labeled lent address composes under an `item` group of its own,
+  # numbered past every group the stored card names, so a lent label
+  # can never pair with a member's own line.
+  def test_a_labeled_lent_address_composes_under_its_own_group
+    labelled = lent_address.with(label: "summer house")
+    lent = [lending(addresses: [labelled])]
+    assert_equal(
+      STORED.sub(
+        "END:VCARD\r\n",
+        "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+        "item1.ADR:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom\r\n" \
+        "item1.X-ABLabel:summer house\r\n" \
+        "NOTE:Countess\\, mathematician.\r\nEND:VCARD\r\n",
+      ),
+      composed(lent:).vcard.to_s,
+    )
+  end
+
+  # An empty lending is insert's own no-op.
   def test_a_contact_in_no_group_serves_its_stored_bytes_and_etag
-    card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
-
-    assert_equal card, contact(card, inherited: []).vcard.to_s
-    assert_equal ProTacts::Contact.etag_for(ProTacts::VCard.new(card)), contact(card).etag
+    assert_equal CARD, contact(CARD).vcard.to_s
+    assert_equal ProTacts::Contact.etag_for(ProTacts::VCard.new(CARD)), contact(CARD).etag
   end
 
-  # Inherited lines are card contents like any other: a group's number
-  # is a phone on the member's card.
-  def test_the_accessors_read_inherited_lines
-    card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
-
-    assert_equal "+44 20 5555 0100", contact(card, inherited: ["TEL;TYPE=home:+44 20 5555 0100"]).phones.first&.value
-  end
-
-  # Which lines a group lends is the composed card's own question:
-  # a row a screen marks as shared asks it per line, and a line the
-  # stored card carries answers nil however much it looks inherited.
-  def test_a_line_names_the_group_that_lends_it
-    lent = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
-    contact = contact(STRUCTURED, inherited: [lent])
-    addresses = contact.addresses
-
-    assert_equal 2, addresses.size
-    assert_nil addresses.fetch(0).lent_by
-    assert_equal GROUP, addresses.fetch(1).lent_by
-  end
-
-  # The member's own spelling of a line its group also lends — an
-  # address already on the card when its holder joined: the stored
-  # copy reads as the member's own and only the composed one names
-  # the group, where a match on bytes named the group over both and
-  # the member's own address read as the group's.
-  def test_a_line_the_stored_card_spells_as_its_group_does_reads_as_its_own_first
-    lent = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
-    same = STRUCTURED.sub("ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom", lent)
-    contact = contact(same, inherited: [lent])
-    addresses = contact.addresses
+  # The served addresses are the entity's own first and then each
+  # group's, each carrying the group that lends it — the row a screen
+  # marks as shared asks it per component.
+  def test_an_address_names_the_group_that_lends_it
+    contact = composed(lent: [lending(addresses: [lent_address])])
+    addresses = contact.served_addresses
 
     assert_equal 2, addresses.size
     assert_nil addresses.fetch(0).lent_by
@@ -460,100 +528,76 @@ class ContactTest < Minitest::Test
   # served card carries one NOTE, not two, because macOS keeps only
   # the last of two and a PUT would store the truncation
   # (docs/plans/2026-09-25-one-note-per-contact.md). The member's own
-  # text first, the group's as a section after it, at the member's own
-  # NOTE position.
+  # text first, the group's as a section after it.
   def test_a_lent_note_composes_into_the_members_own
-    composed = contact(STRUCTURED, inherited: ["NOTE:Gate code 1854."]).vcard.to_s
+    lent = [lending(note: "Gate code 1854.")]
 
     assert_equal(
-      STRUCTURED.sub(
-        "NOTE:Countess\\, mathematician.\r\n",
-        "NOTE:Countess\\, mathematician.\\n\\nShared · Booles:\\nGate code 1854.\r\n",
+      STORED.sub(
+        "END:VCARD\r\n",
+        "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+        "NOTE:Countess\\, mathematician.\\n\\nShared · Booles:\\nGate code 1854.\r\nEND:VCARD\r\n",
       ),
-      composed,
+      composed(lent:).vcard.to_s,
     )
   end
 
-  # Every write that stores a lent line reads it first, so one that
-  # will not read is a broken assumption to raise on rather than a
-  # section to skip as though the group lent nothing.
-  def test_a_lent_note_that_will_not_read_raises
-    error = assert_raises(RuntimeError) { contact(STRUCTURED, inherited: ["NOTE;=;:"]).vcard }
-
-    assert_equal "group nous lends a line that will not read", error.message
-  end
-
-  # A member with no note of its own serves the section alone, the
-  # one NOTE inserted before END:VCARD the way a lent line is.
+  # A member with no note of its own serves the section alone.
   def test_a_member_with_no_note_of_its_own_serves_the_section_alone
-    composed = contact(CARD, inherited: ["NOTE:Gate code 1854."]).vcard.to_s
+    lent = [lending(note: "Gate code 1854.")]
 
     assert_equal(
       CARD.sub("END:VCARD\r\n", "NOTE:Shared · Booles:\\nGate code 1854.\r\nEND:VCARD\r\n"),
-      composed,
+      contact(CARD, lent:).vcard.to_s,
     )
   end
 
-  # Nothing lent that is a note, and the member's own NOTE serves as
-  # its bytes lie — the editor's whole safety, and the reason #composed_note
-  # answers nil over an empty one. What else the group lends composes
-  # as lines around it.
-  def test_a_contact_whose_groups_lend_no_note_serves_its_own_note_bytes
-    composed = contact(STRUCTURED, inherited: ["TEL;TYPE=home:+44 20 5555 0100"]).vcard.to_s
-
+  # Nothing lent that is a note, and the member's own note serves as
+  # the model holds it; what else the group lends composes as lines
+  # around it.
+  def test_a_contact_whose_groups_lend_no_note_serves_its_own_note
     assert_equal(
-      STRUCTURED.sub("END:VCARD\r\n", "TEL;TYPE=home:+44 20 5555 0100\r\nEND:VCARD\r\n"),
-      composed,
-    )
-    assert_includes composed, "NOTE:Countess\\, mathematician.\r\n"
-  end
-
-  # The composed NOTE stands at the member's own NOTE position — a
-  # lent line's position is insert's, before END:VCARD, and the
-  # birthday lands after everything else.
-  def test_the_composed_note_lands_at_the_members_own_note_position
-    birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
-    composed = STRUCTURED.sub(
-      "NOTE:Countess\\, mathematician.\r\n",
-      "NOTE:Countess\\, mathematician.\\n\\nShared · Booles:\\nGate code 1854.\r\n",
-    ).sub(
-      "END:VCARD\r\n",
-      "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom\r\n" \
-      "BDAY:1985-12-10\r\nEND:VCARD\r\n",
-    )
-
-    assert_equal(
-      composed,
-      contact(
-        STRUCTURED,
-        birthday:,
-        inherited: [
-          "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
-          "NOTE:Gate code 1854.",
-        ],
-      ).vcard.to_s,
+      STORED.sub(
+        "END:VCARD\r\n",
+        "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+        "ADR;TYPE=HOME:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom\r\n" \
+        "NOTE:Countess\\, mathematician.\r\nEND:VCARD\r\n",
+      ),
+      composed(lent: [lending(addresses: [lent_address])]).vcard.to_s,
     )
   end
 
-  # The joined line matches nothing by bytes — neither the member's
-  # own nor what a group lends — so a screen marking a note's
-  # provenance reads the stored card and the inheritance, not the
-  # composed value (Admin::ContactCard's note rows; a Note carries no
-  # lent_by for the asking).
-  def test_the_composed_note_names_no_group
-    contact = contact(STRUCTURED, inherited: ["NOTE:Gate code 1854."])
-    notes = contact.notes
+  # Own: the same contact with nothing its groups lend it — the
+  # editor's subject, holding the member's own components.
+  def test_own_holds_the_members_components_without_the_lent_ones
+    contact = composed(lent: [lending(addresses: [lent_address], note: "Gate code.")])
 
-    assert_equal 1, notes.size
-    assert_equal ["Countess, mathematician."], contact.own.notes.map { it.value }
+    assert_equal [ADDRESS], contact.own.addresses
+    assert_equal NOTE, contact.own.note
+    assert_empty contact.own.lent
+    assert_equal GROUP, contact.served_addresses.fetch(1).lent_by
   end
 
-  def test_unescapes_notes
-    assert_equal ["Countess, mathematician."], contact(STRUCTURED).notes.map { it.value }
+  # With: the same contact over another card and birthday, still lent
+  # what its groups lend it — the import's proposal, the card read
+  # back into components the way a save will write them.
+  # With: the same contact over another card and birthday and
+  # components, still lent what its groups lend it — the import's
+  # proposal, holding what the fold took in behind the member's own.
+  def test_with_takes_the_proposal_whole
+    contact = composed(lent: [lending(addresses: [lent_address])])
+    arrival = ProTacts::VCard.new(STORED.sub("FN:Ada Lovelace", "Ada King"))
+    address = ADDRESS.with(street: "14 Analytical Way")
+    with = contact.with(stored: arrival, birthday: nil, addresses: [address], note: "Countess of Lovelace.")
+
+    assert_equal STORED.sub("FN:Ada Lovelace", "Ada King"), with.stored.to_s
+    assert_equal [address], with.addresses
+    assert_equal "Countess of Lovelace.", with.note
+    assert_equal contact.lent, with.lent
   end
 
   def test_properties_are_the_parsed_card
-    properties = contact(STRUCTURED).properties
+    properties = composed.properties
 
     assert_equal "BEGIN", properties.fetch(0).name
     assert properties.any? { it.name.casecmp?("TEL") }
@@ -569,7 +613,7 @@ class ContactTest < Minitest::Test
     assert_empty bare.emails
     assert_empty bare.addresses
     assert_nil bare.birthday
-    assert_empty bare.notes
+    assert_nil bare.note
   end
 
   # A card that will not read is still a contact: the bytes are what

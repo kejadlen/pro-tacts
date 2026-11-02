@@ -43,10 +43,21 @@ namespace :db do
       dump_file(dump / "birthdays.yml", YAML.dump(birthdays))
 
       # A photo beside its group's YAML, named by the type its bytes
-      # sniffed to, so the dump opens as the picture it is.
+      # sniffed to, so the dump opens as the picture it is. The
+      # components as the group holds them, not the lines a card
+      # composes — the dump holds what the store cannot rebuild.
       photos = snapshot.group_photos.to_h { |id, photo| ["#{id}.#{photo.mime_type.delete_prefix("image/")}", photo.bytes] }
       dump_directory(groups, snapshot.groups.to_h { |group|
-        ["#{group.id}.yml", YAML.dump({"name" => group.name, "lines" => group.lines, "members" => group.members})]
+        ["#{group.id}.yml", YAML.dump({
+          "name" => group.name,
+          "addresses" => group.addresses.map { |address|
+            {"po_box" => address.po_box, "extended" => address.extended, "street" => address.street,
+             "locality" => address.locality, "region" => address.region, "postal_code" => address.postal_code,
+             "country" => address.country, "label" => address.label}.compact
+          },
+          "note" => group.note,
+          "members" => group.members,
+        }.compact)]
       }.merge(photos))
 
       dump_file(dump / "books.yml", YAML.dump(snapshot.books))

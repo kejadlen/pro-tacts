@@ -78,14 +78,14 @@ module ProTacts
       # groups dialog moves them: `joins` and `leaves` are what the
       # boxes beside it changed, `named` the groups they asked to be
       # made.
-      #: (Store store, String id, VCard card, birthday: Birthday?, ?joins: Array[String], ?leaves: Array[String], ?named: Array[String]) -> Contact
-      def self.update(store, id, card, birthday:, joins: [], leaves: [], named: [])
-        new(store).update(id, card, birthday, joins, leaves, named)
+      #: (Store store, String id, VCard card, birthday: Birthday?, addresses: Array[ContactDetails::Address], note: String?, ?joins: Array[String], ?leaves: Array[String], ?named: Array[String]) -> Contact
+      def self.update(store, id, card, birthday:, addresses:, note:, joins: [], leaves: [], named: [])
+        new(store).update(id, card, birthday, addresses, note, joins, leaves, named)
       end
 
-      #: (String id, VCard card, Birthday? birthday, Array[String] chosen, Array[String] leaving, Array[String] named) -> Contact
-      def update(id, card, birthday, chosen, leaving, named)
-        @store.save_edit(id, card, birthday:)
+      #: (String id, VCard card, Birthday? birthday, Array[ContactDetails::Address] addresses, String? note, Array[String] chosen, Array[String] leaving, Array[String] named) -> Contact
+      def update(id, card, birthday, addresses, note, chosen, leaving, named)
+        @store.save_edit(id, card, birthday:, addresses:, note:)
 
         join = [*chosen, *named.map { group_id(it) }]
         @store.regroup(id, join: join.uniq, leave: leaving) unless join.empty? && leaving.empty?

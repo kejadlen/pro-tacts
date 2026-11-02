@@ -60,10 +60,15 @@ class CardFormTest < Minitest::Test
 
   # A save that changed nothing changes no byte, however the card spells
   # what the form shows: parameters and groups the form never modeled,
-  # folds, LF terminators, escapes the writer spells another way,
-  # whitespace the fields strip, and a legacy card's second NOTE. The
-  # surgical save's whole promise (docs/plans/2026-09-05-web-card-editor.md),
-  # and a sync's: every rewritten byte moves the etag a client holds.
+  # folds, LF terminators, escapes the writer spells another way, and
+  # whitespace the fields strip. The addresses and the note are
+  # components rather than card lines
+  # (docs/plans/2026-10-25-contacts-on-entities.md), so the card this
+  # splices carries none and the surgical promise covers the kinds it
+  # holds; the components' own round trip is test_edited_contact's. The
+  # surgical save's whole promise
+  # (docs/plans/2026-09-05-web-card-editor.md), and a sync's: every
+  # rewritten byte moves the etag a client holds.
   def test_an_untouched_save_keeps_every_byte
     Hegel.test(test_cases: 1_000) do |tc|
       eol = tc.draw(sampled_from(["\r\n", "\n"]))
@@ -72,20 +77,14 @@ class CardFormTest < Minitest::Test
         line(tc, ["FN"], "Ada Lovelace", eol),
         *(tc.draw(booleans) ? [line(tc, ["NICKNAME", "NICKNAME;LANGUAGE=en"], value(tc), eol)] : []),
         *Array.new(tc.draw(integers(min_value: 0, max_value: 2))) {
-          line(tc, ["NOTE", "NOTE;LANGUAGE=en"], value(tc, [*PIECES, "\\n", "\\N"]), eol)
-        },
-        *Array.new(tc.draw(integers(min_value: 0, max_value: 2))) {
           line(tc, ["TEL", "TEL;TYPE=cell", "item2.TEL"], value(tc, [" ", "+1", "555", "0100"]), eol)
         },
         *Array.new(tc.draw(integers(min_value: 0, max_value: 1))) {
           line(tc, ["EMAIL", "EMAIL;TYPE=INTERNET"], value(tc, [" ", "ada", "@", "example.com"]), eol)
         },
-        *Array.new(tc.draw(integers(min_value: 0, max_value: 2))) {
-          line(tc, ["ADR", "ADR;TYPE=home"], components(tc, 8), eol)
-        },
       ]
       stored = ["BEGIN:VCARD#{eol}", "VERSION:3.0#{eol}", *lines, "UID:aiden#{eol}", "END:VCARD#{eol}"].join
-      contact = ProTacts::Contact.new(id: "aiden", stored: ProTacts::VCard.new(stored), birthday: nil, inherited: [])
+      contact = ProTacts::ContactDetails.of_card(card: ProTacts::VCard.new(stored), birthday: nil)
       params = untouched(contact)
 
       saved = ProTacts::Admin::CardForm.contact_card(
@@ -113,7 +112,7 @@ class CardFormTest < Minitest::Test
         ["#{group && "#{group}."}#{header}:+1-555-010#{index}\r\n", *(label ? ["#{group}.X-ABLabel:#{label}\r\n"] : [])]
       }.flatten
       stored = ["BEGIN:VCARD\r\n", "VERSION:3.0\r\n", "N:Lovelace;Ada;;;\r\n", "FN:Ada Lovelace\r\n", *lines, "UID:aiden\r\n", "END:VCARD\r\n"].join
-      contact = ProTacts::Contact.new(id: "aiden", stored: ProTacts::VCard.new(stored), birthday: nil, inherited: [])
+      contact = ProTacts::ContactDetails.of_card(card: ProTacts::VCard.new(stored), birthday: nil)
       field, rows = tc.draw(sampled_from([["phone", :phones], ["email", :emails]].select { contact.public_send(it[1]).any? }))
       row = tc.draw(sampled_from(contact.public_send(rows)))
       label = tc.draw(sampled_from(["", "home", "Work", "cell", "other", "Google Voice", "home, work", "lab, too"]))
@@ -121,7 +120,7 @@ class CardFormTest < Minitest::Test
       params[field] = params.fetch(field).merge(row.line.digest => {"label" => label, "value" => row.value})
 
       saved = ProTacts::Admin::CardForm.contact_card(contact, false, "Ada", "", "Lovelace", params)
-      after = ProTacts::Contact.new(id: "aiden", stored: saved, birthday: nil, inherited: [])
+      after = ProTacts::ContactDetails.of_card(card: saved, birthday: nil)
       relabelled = after.public_send(rows).find { it.value == row.value }
 
       expected = {"" => nil, "Work" => "work", "other" => "Other"}.fetch(label, label)

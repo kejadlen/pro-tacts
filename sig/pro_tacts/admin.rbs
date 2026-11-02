@@ -14,7 +14,7 @@ module ProTacts
     # ships no signatures and the views are ignored (see the
     # Steepfile).
     class ContactsEdit
-      def self.call: (contact: Contact, login: String, ?notice: String?, ?action: String?, ?back: [String, String]?, ?aside: untyped, ?fields: untyped, ?lead: untyped, ?sidebar: untyped, ?save: String?) -> String
+      def self.call: (contact: ContactDetails, login: String, action: String, ?notice: String?, ?back: [String, String]?, ?aside: untyped, ?fields: untyped, ?lead: untyped, ?sidebar: untyped, ?save: String?) -> String
     end
 
     class Dashboard
@@ -82,7 +82,7 @@ module ProTacts
     end
 
     class ImportTarget
-      def self.new: (row: String, matches: Array[Contact | ListedContact], into: Contact?) -> instance
+      def self.new: (row: String, matches: Array[ContactDetails | ListedContact], into: Contact?) -> instance
     end
 
     class ImportSidebar
@@ -96,7 +96,7 @@ module ProTacts
     # Its name_label is the import's list rows' (Web#import_row), and
     # its search_key is the fold Search matches on.
     module Format
-      def self.name_label: (Contact | ListedContact contact) -> String
+      def self.name_label: (ContactDetails | ListedContact contact) -> String
       def self.search_key: (String value) -> String
     end
 

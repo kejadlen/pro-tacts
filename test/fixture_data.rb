@@ -2,6 +2,7 @@
 require "fileutils"
 require "pathname"
 
+require "pro_tacts/contact"
 require "pro_tacts/store"
 require "pro_tacts/vcard"
 
@@ -162,15 +163,32 @@ module FixtureData
   # A group, seeded without a change-log entry for any member it moves
   # (see MEMBERS for why). The group's own log — which nothing replays
   # or syncs from — keeps the create's entry, which is true: the group
-  # really was created; its lines and members land unlogged. Tests
-  # seed theirs here too, so the cards' change log they assert on holds
-  # only what the test wrote.
+  # really was created; its components and members land unlogged.
+  # Tests seed theirs here too, so the cards' change log they assert on
+  # holds only what the test wrote. The lines seed through the app's
+  # own reading (Contact.take_addresses, Contact.take_note), so what
+  # lands is what a write through the store would land.
   #: (ProTacts::Store store, ?name: String?, ?lines: Array[String], ?members: Array[String]) -> String
   def self.seed_group(store, name: nil, lines: [], members: [])
     group_id = store.create_group(name:)
-    lines.each.with_index do |line, position|
-      database(store)[:group_properties].insert(group_id:, position:, line:)
+    card = ProTacts::VCard.new(lines.map { "#{it}\r\n" }.join)
+    addresses, = ProTacts::Contact.take_addresses(card)
+    note, = ProTacts::Contact.take_note(card)
+    addresses.each.with_index do |address, position|
+      database(store)[:addresses].insert(
+        entity_id: group_id,
+        position:,
+        po_box: address.po_box,
+        extended: address.extended,
+        street: address.street,
+        locality: address.locality,
+        region: address.region,
+        postal_code: address.postal_code,
+        country: address.country,
+        label: address.label
+      )
     end
+    database(store)[:notes].insert(entity_id: group_id, text: note) if note
     members.each do |card_id|
       database(store)[:group_members].insert(group_id:, card_id:)
     end

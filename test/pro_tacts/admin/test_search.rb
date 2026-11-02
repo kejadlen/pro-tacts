@@ -12,11 +12,19 @@ class SearchTest < Minitest::Test
   # Store#search_keys_by_recency hands them over.
   def row(id, name, *lines)
     bytes = ["BEGIN:VCARD", "VERSION:3.0", "FN:#{name}", "UID:#{id}", *lines, "END:VCARD", ""].join("\r\n")
-    contact = ProTacts::Contact.new(id:, stored: ProTacts::VCard.new(bytes), birthday: nil, inherited: [])
+    contact = ProTacts::ContactDetails.of_card(card: ProTacts::VCard.new(bytes), birthday: nil)
     [id, ProTacts::Admin::Search.key(contact)]
   end
 
-  def search(rows, query, groups: [])
+# A lent address as the group holds it: enough components for a key.
+def address(street, locality, country)
+  ProTacts::Contact::Address.new(
+    po_box: "", extended: "", street:, locality:, region: "", postal_code: "", country:
+  )
+end
+
+def search(rows, query, groups: [])
+
     ProTacts::Admin::Search.contacts(rows.to_h, query:, groups:)
   end
 
@@ -57,7 +65,7 @@ class SearchTest < Minitest::Test
 
   def test_the_groups_a_contact_is_in_find_it
     ada = row("ada", "Ada Lovelace")
-    math = ProTacts::Group.new(id: "math", name: "Mathematicians", label: "Mathematicians", lines: [], members: ["ada"])
+    math = ProTacts::Group.new(id: "math", name: "Mathematicians", label: "Mathematicians", members: ["ada"])
 
     assert_equal ["ada"], search([ada], "mathematicians", groups: [math])
   end
@@ -68,8 +76,8 @@ class SearchTest < Minitest::Test
   def test_what_a_group_lends_finds_its_members
     ada = row("ada", "Ada Lovelace")
     grace = row("grace", "Grace Hopper")
-    home = ProTacts::Group.new(id: "home", name: "Home", label: "Home",
-                               lines: ["ADR:;;12 St James Sq;London;;;UK", "NOTE:Gate code 7946"], members: ["ada"])
+    home = ProTacts::Group.new(id: "home", name: "Home", label: "Home", members: ["ada"],
+                               addresses: [address("12 St James Sq", "London", "UK")], note: "Gate code 7946")
 
     assert_equal ["ada"], search([ada, grace], "james sq", groups: [home])
     assert_equal ["ada"], search([ada, grace], "gate code", groups: [home])
@@ -80,7 +88,7 @@ class SearchTest < Minitest::Test
   def test_a_group_label_is_not_a_name_hit
     ada = row("ada", "Ada Lovelace")
     grace = row("grace", "Grace Hopper")
-    graces = ProTacts::Group.new(id: "graces", name: "Graces", label: "Graces", lines: [], members: ["ada"])
+    graces = ProTacts::Group.new(id: "graces", name: "Graces", label: "Graces", members: ["ada"])
 
     assert_equal ["grace", "ada"], search([ada, grace], "grace", groups: [graces])
   end

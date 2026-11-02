@@ -430,6 +430,8 @@ module ProTacts
       end
 
       edited = Admin::CardForm.contact_card(contact, company, first, middle, last, params)
+      addresses = Admin::CardForm.addresses(contact.own.addresses, params)
+      note = Admin::CardForm.note(params["note"], Admin::CardForm.note_of(contact))
       if target
         # A stored contact, whose birthday the model holds: the contact
         # editor's own save (#apply_edit), down to its one refusal.
@@ -440,13 +442,21 @@ module ProTacts
         end
 
         written = span("import.write") {
-          Import::Write.update(store, target.id, edited, birthday:, joins: ticked - was, leaves: was - ticked, named: wanted)
+          Import::Write.update(store, target.id, edited, birthday:, addresses:, note:, joins: ticked - was,
+                               leaves: was - ticked, named: wanted)
         }
         # Staged after the write, unlike a new contact's below
         # (docs/plans/2026-09-23-merging-on-import.md, "The Save").
         span("import.restage") { restage(upload, index, edited, rows) }
         return walk_on(r, upload, index, written, saved, rows)
       end
+
+      # A new contact is written by #put, the one path a create has:
+      # the address and note rows compose back into the card as lines
+      # for the put to take apart again, so the form's components and
+      # a client's submitted card land in the store through the same
+      # reading (Contact.take_addresses, Contact.take_note).
+      edited = Admin::CardForm.composed_card(edited, addresses, note)
 
       # The birthday goes back into the card, an import having no
       # model to hold one until it is written. Skipped for a card carrying
@@ -552,15 +562,15 @@ module ProTacts
     # Only a card's one BDAY moves (EditedContact#split_birthday): a
     # card carrying several keeps every one of them in the card, where
     # taking the first into the model would drop the rest from it.
-    #: (VCard card, Integer index) -> Contact
+    #: (VCard card, Integer index) -> ContactDetails
     def import_contact(card, index)
       bdays, rest = card.extract("BDAY")
       property = bdays.fetch(0).property if bdays.length == 1
       birthday = property && Birthday.from_property(property)
-      Contact.new(id: index.to_s, stored: birthday ? rest : card, birthday:, inherited: [])
+      ContactDetails.of_card(card: birthday ? rest : card, birthday:)
     end
 
-    #: (Contact contact) -> bool
+    #: (ContactDetails contact) -> bool
     def carries_own_bday?(contact)
       contact.stored.lines.any? { it.names?("BDAY") }
     end

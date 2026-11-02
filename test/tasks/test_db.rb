@@ -20,7 +20,7 @@ class DbTasksTest < Minitest::Test
     with_store do |store, root|
       store.put("aiden", vcard(AIDEN.sub("END:VCARD\r\n", "BDAY:1985-04\r\nEND:VCARD\r\n")))
       group = store.create_group(name: "Booles")
-      store.set_group_lines(group, ["NOTE:a household"])
+      store.set_group_components(group, [], "a household")
       store.add_member(group, "aiden")
       store.name_book("alpha@example.com", "Alpha Chen")
 
@@ -28,8 +28,10 @@ class DbTasksTest < Minitest::Test
 
       assert_equal AIDEN, (root / "dump" / "cards" / "aiden.vcf").binread
       assert_equal({"aiden" => {"year" => 1985, "month" => 4}}, YAML.safe_load((root / "dump" / "birthdays.yml").read))
-      assert_equal({"name" => "Booles", "lines" => ["NOTE:a household"], "members" => ["aiden"]},
-        YAML.safe_load((root / "dump" / "groups" / "#{group}.yml").read))
+      assert_equal(
+        {"name" => "Booles", "addresses" => [], "note" => "a household", "members" => ["aiden"]},
+        YAML.safe_load((root / "dump" / "groups" / "#{group}.yml").read)
+      )
       assert_equal({"alpha@example.com" => "Alpha Chen"}, YAML.safe_load((root / "dump" / "books.yml").read))
     end
   end
