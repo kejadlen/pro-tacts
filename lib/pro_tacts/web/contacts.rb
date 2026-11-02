@@ -332,10 +332,16 @@ module ProTacts
     #: (Contact contact, ?notice: String) -> String
     def contact_screen(contact, notice: nil)
       response["Content-Type"] = "text/html; charset=utf-8"
+      groups = store.listed_groups_of(contact.id, first: Admin::GroupTag::SHOWN)
+      # The other members of the contact's family-sized groups
+      # (Group#family_sized?), each once however many of those groups
+      # they share, read as a list reads them.
+      related = groups.select(&:family_sized?).flat_map(&:members).uniq - [contact.id]
       Admin::ContactsShow.call(
         contact:,
         login: @login,
-        groups: store.listed_groups_of(contact.id, first: Admin::GroupTag::SHOWN),
+        groups:,
+        related: store.listed_contacts(related),
         all_groups: store.group_choices,
         changes: store.changes_of(contact.id),
         notice:,

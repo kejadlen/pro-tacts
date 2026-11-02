@@ -1,8 +1,10 @@
 require "pro_tacts/admin/phlex"
 
+require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/contact_card"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/group_dialog"
+require "pro_tacts/admin/list_item"
 
 module ProTacts
   module Admin
@@ -21,11 +23,15 @@ module ProTacts
       # one: a card with no entries is a card whose history was lost,
       # and an empty default would render that as an ordinary quiet
       # record. Every group is the groups dialog's (GroupDialog).
-      #: (Contact contact, String login, Array[ListedGroup] groups, Array[Store::GroupChoice] all_groups, Array[Store::Change] changes, ?notice: String?) -> void
-      def initialize(contact:, login:, groups:, all_groups:, changes:, notice: nil)
+      # `related` is who shares a family-sized group with the contact
+      # (Group#family_sized?), the route's to choose, required for the
+      # groups' reason.
+      #: (Contact contact, String login, Array[ListedGroup] groups, Array[ListedContact] related, Array[Store::GroupChoice] all_groups, Array[Store::Change] changes, ?notice: String?) -> void
+      def initialize(contact:, login:, groups:, related:, all_groups:, changes:, notice: nil)
         @contact = contact
         @login = login
         @groups = groups
+        @related = related.sort
         @all_groups = all_groups
         @changes = changes
         @notice = notice
@@ -53,6 +59,7 @@ module ProTacts
             end
             render ContactCard.new(contact: @contact, groups: @groups)
           end
+          related_list
           # The stored card in its own card under the record, collapsed
           # (docs/DESIGN.md, "The stored card is reachable"). Native
           # <details>, because a disclosure needs no script (see
@@ -91,6 +98,32 @@ module ProTacts
       end
 
       private
+
+      # The contact's people, under the record and above the two
+      # collapsed cards: a group's members list (GroupsShow#members_list)
+      # in its shape, gathered across the households the contact is in
+      # and leaving the contact out, so the page answers "who are
+      # theirs?" without a trip through each group. Which group joins
+      # them is the groups row's to say, the tags right above. No
+      # members means no section (docs/DESIGN.md, "Empty attributes do
+      # not render"); it holds no action, membership being edited from
+      # the groups row.
+      #: () -> void
+      def related_list
+        return if @related.empty?
+
+        section do
+          h2(class: "type-label") { "related" }
+          ul(class: "card") do
+            @related.each do |member|
+              render ListItem.new(
+                href: "/contacts/#{member.id}",
+                avatar: Avatar.new(contact: member, size: "lg"),
+              ) { Format.name_label(member) }
+            end
+          end
+        end
+      end
 
       # The confirmation, a popover for ContactDialog's reasons: the
       # question and the two answers, with no body between them. The

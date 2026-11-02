@@ -704,6 +704,43 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # Who shares a household with the contact is listed under the
+  # record, each linking to their card: once however many households
+  # they share, in a list's order, and never the contact themselves.
+  def test_show_lists_who_shares_a_family_sized_group
+    cards = %w[Grey Abel Cole].to_h { [it.downcase, card(it.downcase, "Sam #{it}")] }
+
+    with_contacts(cards) do |store|
+      FixtureData.seed_group(store, name: "Household", members: %w[grey abel cole])
+      FixtureData.seed_group(store, members: %w[grey abel])
+
+      get "/contacts/grey"
+      related = last_response.body[%r{<h2 class="type-label">related</h2>(.*?)</section>}m, 1].to_s
+
+      assert_equal [["abel", "Sam Abel"], ["cole", "Sam Cole"]],
+                   related.scan(%r{<a href="/contacts/([^"]*)">.*?<div[^>]*>([^<]*)</div>}m)
+    end
+  end
+
+  # A group past ProTacts::Group::FAMILY_SIZE is a club, and a `sync:`
+  # group is a book however small: sharing either says nothing about
+  # who someone is to the contact, so neither lists anyone, and a
+  # contact with no one to list gets no section at all.
+  def test_show_lists_no_one_from_a_club_or_a_book
+    names = %w[Grey Abel Cole Drew Eddy Fox Hale]
+    cards = names.to_h { [it.downcase, card(it.downcase, "Sam #{it}")] }
+
+    with_contacts(cards) do |store|
+      FixtureData.seed_group(store, name: "Club", members: cards.keys)
+      FixtureData.seed_group(store, name: "sync:sam", members: %w[grey abel])
+
+      get "/contacts/grey"
+
+      assert_equal ProTacts::Group::FAMILY_SIZE + 1, cards.size
+      refute_includes last_response.body, ">related<"
+    end
+  end
+
   # The row holds the way to join a group or start one, so it renders
   # before any group exists.
   def test_show_offers_the_groups_dialog_before_any_group_exists

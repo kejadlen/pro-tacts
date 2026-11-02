@@ -57,6 +57,22 @@ module ProTacts
       Group.sync_name?(name)
     end
 
+    # The most members a group can hold and still read as a household
+    # rather than a club: two parents and four children. A guess at
+    # what "family" means in a book where a group says nothing about
+    # what kind it is, made a number so it is one place to move.
+    FAMILY_SIZE = 6 #: Integer
+
+    # Whether the group's members are this contact's people, for the
+    # contact page's related list (Admin::ContactsShow#related_list):
+    # a household's, small enough that sharing it says something. A
+    # `sync:` group is a book, however few it holds — sharing one says
+    # who syncs a card, not who someone is to them.
+    #: () -> bool
+    def family_sized?
+      !sync? && members.length <= FAMILY_SIZE
+    end
+
     # The order every listing of groups reads in: the `sync:` groups
     # — the books a client syncs, the store's own rather than
     # anything a person made — first, then the rest alphabetically,
