@@ -1,6 +1,7 @@
 require "base64"
 require "digest"
 require "sentry-ruby"
+require "uri"
 
 require "pro_tacts/birthday"
 require "pro_tacts/note_sections"
@@ -326,6 +327,33 @@ module ProTacts
     class Address
       #: () -> Array[String]
       def self.label_words = Contact.typed_words("ADR")
+
+      # The components as the screens show them — street, then
+      # everything after it — the shape the design's own address rows
+      # settled on, and one shape for a contact's card and a group's
+      # alike. Not `lines`: an address's `line` is the vCard line it
+      # was read from.
+      #: () -> Array[String]
+      def display_lines
+        [
+          [street, extended].compact.join(" "),
+          [locality, region, postal_code].compact.join(", "),
+          country,
+        ].compact.reject { it.empty? }
+      end
+
+      # Where an address row opens: Apple Maps, searched for the lines
+      # the row shows. The book syncs to Apple's clients, so on a phone
+      # or a Mac the link hands off to the Maps app, and anywhere else
+      # maps.apple.com is a web map — one URL rather than a guess at
+      # the device. The query is the displayed lines rather than the
+      # raw components, so the place searched is the place read; the
+      # post office box, which no screen shows, finds nothing on a map
+      # anyway.
+      #: () -> String
+      def map_url
+        "https://maps.apple.com/?" + URI.encode_www_form(address: display_lines.join(", "))
+      end
 
       #: () -> Array[String]
       def self.field_names = ADDRESS_COMPONENTS

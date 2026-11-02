@@ -101,7 +101,7 @@ module ProTacts
           row(handle.label || "handle", handle.value, handle.lent_by)
         end
         @contact.addresses.each do |address|
-          row(address.label || "address", Format.address_lines(address), address.lent_by, href: Format.map_url(address))
+          row(address.label || "address", address.display_lines, address.lent_by, href: address.map_url)
         end
         row("birthday", @birthday) if @birthday
         note_rows
@@ -180,8 +180,8 @@ module ProTacts
       # than this contact's.
       #
       # `href` makes the value a link out (an address's map,
-      # Format.map_url), in a new tab so the record stays open behind
-      # it.
+      # Contact::Address#map_url), in a new tab so the record stays
+      # open behind it.
       #: (String type, String | Array[String] value, ?Group? lent_by, ?href: String?) -> void
       def row(type, value, lent_by = nil, href: nil)
         dt(class: "type-label") { type }

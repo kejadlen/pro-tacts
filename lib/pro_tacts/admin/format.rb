@@ -1,5 +1,4 @@
 require "time"
-require "uri"
 
 require "pro_tacts/birthday"
 require "pro_tacts/vcard/parser"
@@ -66,32 +65,6 @@ module ProTacts
         return nil if property.nil?
 
         Birthday.from_property(property)&.to_s || property.value
-      end
-
-      # ADR's components as display lines — street, then everything
-      # after it — the shape the design's own address rows settled on,
-      # and one shape for a contact's card and a group's alike.
-      # Presentation: the components themselves are Contact's.
-      #: (Contact::Address address) -> Array[String]
-      def self.address_lines(address)
-        [
-          [address.street, address.extended].compact.join(" "),
-          [address.locality, address.region, address.postal_code].compact.join(", "),
-          address.country,
-        ].compact.reject { it.empty? }
-      end
-
-      # Where an address row opens: Apple Maps, searched for the lines
-      # the row shows. The book syncs to Apple's clients, so on a phone
-      # or a Mac the link hands off to the Maps app, and anywhere else
-      # maps.apple.com is a web map — one URL rather than a guess at
-      # the device. The query is the displayed lines rather than the
-      # raw components, so the place searched is the place read; the
-      # post office box, which no screen shows, finds nothing on a map
-      # anyway.
-      #: (Contact::Address address) -> String
-      def self.map_url(address)
-        "https://maps.apple.com/?" + URI.encode_www_form(address: address_lines(address).join(", "))
       end
 
       # A value — a property's or a parameter's — at or under this many

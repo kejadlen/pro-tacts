@@ -88,8 +88,8 @@ module ProTacts
       def rows
         @reading.addresses.each do |address|
           row(address.label || "address") do
-            a(href: Format.map_url(address), target: "_blank", rel: "noreferrer") do
-              Format.address_lines(address).each { |line| div { line } }
+            a(href: address.map_url, target: "_blank", rel: "noreferrer") do
+              address.display_lines.each { |line| div { line } }
             end
           end
         end
