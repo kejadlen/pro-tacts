@@ -503,26 +503,31 @@ class WebTest < Minitest::Test
     end
   end
 
-  # And where the member edited the line its group lends: the group
-  # takes the edit and composes it back in, so the resource serves the
-  # submitted bytes again and the tag is honest
-  # (docs/plans/2026-09-09-group-edits-propagate.md).
-  def test_a_members_edit_to_a_lent_line_keeps_the_strong_etag
+  # And where the member edited the line its group lends: the edit
+  # reaches the group, and the marker moves with the rows it versions,
+  # so the card now served is not the bytes submitted — no strong etag
+  # is honest there (RFC 6352 section 6.3.2.3) and the client refetches
+  # once (docs/plans/2026-09-09-group-edits-propagate.md,
+  # docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md).
+  def test_an_edit_to_a_lent_line_moves_the_marker_and_answers_no_strong_etag
     address = "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
 
     with_contacts({"aiden" => "Aiden"}) do |store|
       FixtureData.seed_group(store, name: "Booles", lines: [address], members: ["aiden"])
 
       get "/dav/addressbook/aiden.vcf"
-      edited = last_response.body.sub("7 Calculus", "8 Calculus")
+      served = last_response.body
+      edited = served.sub("7 Calculus", "8 Calculus")
 
       put_request "aiden", edited, "CONTENT_TYPE" => VCARD
 
       assert_equal 204, last_response.status
-      assert_equal %("#{Digest::SHA256.hexdigest(edited)}"), last_response["ETag"]
+      assert_nil last_response["ETag"]
 
       get "/dav/addressbook/aiden.vcf"
-      assert_equal edited, last_response.body
+      assert_includes last_response.body, "8 Calculus Close"
+      assert_includes last_response.body, store.contact("aiden").lent_markers.fetch(0)
+      refute_includes last_response.body, served[/X-PT-LENT:\S+/]
     end
   end
 

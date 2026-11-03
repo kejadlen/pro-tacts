@@ -77,7 +77,7 @@ module ProTacts
     def decomposed
       return @decomposed if defined?(@decomposed)
 
-      birthday, rest = split_birthday
+      birthday, rest = split_birthday(shed_markers(@submitted))
       stored, group_edits = subtract_inherited(rest)
       @decomposed = [stored, birthday, group_edits]
     end
@@ -88,6 +88,18 @@ module ProTacts
     #: () -> VCard?
     def stored_before
       @before&.stored
+    end
+
+    # The card without its X-PT-LENT markers: the marker is composed
+    # like the lines it versions and never stored, so every arrival
+    # sheds it before anything reads the card — a client's PUT and an
+    # import alike, both of which reach the store through here
+    # (docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md,
+    # "Arrival") — including a marker for a group that no longer
+    # lends, which composes nothing here to pair with it.
+    #: (VCard vcard) -> VCard
+    def shed_markers(vcard)
+      vcard.extract(Contact::LENT_MARKER).fetch(1)
     end
 
     # The birthday half (docs/plans/2026-09-11-every-birthday-in-the-model.md):
@@ -104,18 +116,18 @@ module ProTacts
     # case/when rather than case/in, BirthdayLine's own rule: Steep
     # does not check the bodies of case/in branches, and these are the
     # ones worth checking — which is what the last arm is for.
-    #: () -> [Birthday?, VCard]
-    def split_birthday
-      bdays, rest = @submitted.extract("BDAY")
+    #: (VCard card) -> [Birthday?, VCard]
+    def split_birthday(card)
+      bdays, rest = card.extract("BDAY")
       if bdays.empty?
         report_lost_bday_lines
         existing = @before&.birthday
-        return [existing && !existing.served? ? existing : nil, @submitted]
+        return [existing && !existing.served? ? existing : nil, card]
       end
 
       if bdays.length > 1
         report_many_bday_lines(bdays.length)
-        return [nil, @submitted]
+        return [nil, card]
       end
 
       line = BirthdayLine.read(bdays.fetch(0))
@@ -124,9 +136,9 @@ module ProTacts
         [line.birthday, rest]
       when BirthdayLine::Unrecognized
         report_unrecognized_bday_line
-        [nil, @submitted]
+        [nil, card]
       when BirthdayLine::Unreadable
-        [nil, @submitted]
+        [nil, card]
       else
         raise "no arm for #{line.class}"
       end

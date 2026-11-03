@@ -103,6 +103,17 @@ class EditedContactTest < Minitest::Test
     assert_equal [submitted, nil, []], decompose(submitted, before: before)
   end
 
+  # The marker is composed like the lines it versions and never
+  # stored: a submission carrying one sheds it before anything is
+  # read, exactly as its lent lines are struck — a marker naming a
+  # group that lends nothing here included
+  # (docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md,
+  # "Arrival").
+  def test_a_submission_sheds_its_version_markers
+    assert_equal [AIDEN, nil, []], decompose(with_lines(HOUSEHOLD_ADDRESS, "X-PT-LENT:Household:abc123"), before: before(inherited: LENT))
+    assert_equal [AIDEN, nil, []], decompose(with_lines("X-PT-LENT:Gone:abc123"), before: nil)
+  end
+
   def test_an_untouched_lent_line_is_subtracted_and_asks_nothing
     assert_equal [AIDEN, nil, []], decompose(with_lines(HOUSEHOLD_ADDRESS), before: before(inherited: LENT))
     assert_empty sentry_messages

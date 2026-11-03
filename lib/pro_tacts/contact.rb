@@ -114,6 +114,13 @@ module ProTacts
       :lent_by,
     )
 
+    # The property name a group's version marker composes under, and
+    # every arrival sheds: the marker is composed like the lines it
+    # versions and never stored
+    # (docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md,
+    # "The marker" and "Arrival").
+    LENT_MARKER = "X-PT-LENT" #: String
+
     # An ADR's editable components, in the order the value spells them
     # (RFC 2426 section 3.2.1). The post office box heads that value
     # and is not among them — no screen shows one, and a save
@@ -448,6 +455,22 @@ module ProTacts
       "#{VCard.header_of(property)}x-apple:#{VCard.escape(value)}"
     end
 
+    # The version of the lines one group lends: a SHA-256 over each
+    # line as the group stores it, in lending order, then the group's
+    # label, which heads the note section a client reads back. A group
+    # lends bare lines (db/migrations/004_groups.rb) that compose byte
+    # for byte into every member's card, so the stored lines are the
+    # state every member was sent. NUL, which no card text can carry
+    # (VCard.text?), separates them unambiguously. Stored nowhere, the
+    # etag's own posture; it moves when a line or the label moves and
+    # nothing else
+    # (docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md,
+    # "The marker").
+    #: (Group group, Array[String] lines) -> String
+    def self.lent_version(group, lines)
+      Digest::SHA256.hexdigest([*lines, group.label].join("\0"))
+    end
+
     #: (VCard vcard) -> String
     def self.etag_for(vcard)
       %("#{Digest::SHA256.hexdigest(vcard.to_s)}")
@@ -492,12 +515,43 @@ module ProTacts
     # shared line from a line of its own (EditedContact).
     attr_reader :inherited
 
-    # The card to serve: the stored one with the inherited lines and the
-    # birthday composed back in, in that order, each immediately before
-    # END:VCARD — stored + inherited + birthday, the card a client
-    # downloads. A lent NOTE is the one exception: it composes as a
-    # labeled section inside the member's single NOTE, not as a second
-    # line (docs/plans/2026-09-25-one-note-per-contact.md). A birthday
+    # Each lending group and the version of the lines it lends this
+    # contact (Contact.lent_version), in the order the inheritance
+    # first names them.
+    #: () -> Array[[Group, String]]
+    def lent_versions
+      @inherited.group_by { it.group.id }.values.map { |rows|
+        group = rows.fetch(0).group
+        [group, Contact.lent_version(group, rows.map(&:line))] #: [Group, String]
+      }
+    end
+
+    # The marker lines composition writes, one per lending group: the
+    # marker name, the group's label, and the version of its lines.
+    # The label rather than the id names the group — it is the word
+    # the card already carries, the note section's header, unique like
+    # a name (db/migrations/008_group_names.rb) and stable across a
+    # seed, where a minted id is not — and the value splits back on its
+    # last colon, a label being a person's words and the version hex.
+    # Escaped as a text value, so a label's comma or semicolon reads
+    # back as the label (EditedContact#take_markers).
+    #: () -> Array[String]
+    def lent_markers
+      lent_versions.map { |group, version| "#{LENT_MARKER}:#{VCard.escape("#{group.label}:#{version}")}" }
+    end
+
+    # The card to serve: the stored one with the inherited lines, the
+    # birthday, and one version marker per lending group composed back
+    # in, in that order, each immediately before END:VCARD — stored +
+    # inherited + birthday, the card a client downloads. A lent NOTE is
+    # the one exception: it composes as a labeled section inside the
+    # member's single NOTE, not as a second line
+    # (docs/plans/2026-09-25-one-note-per-contact.md). The marker names
+    # the version of the group's lines the card was composed from, and
+    # a submission's deletions and edits of those lines are decided
+    # against it
+    # (docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md).
+    # A birthday
     # with no wire form, or none at all, and an empty inheritance leave
     # their halves as they lie, and an empty inheritance is #insert's
     # own no-op — the same card object — so a contact in no group serves
@@ -513,8 +567,10 @@ module ProTacts
       with_inherited = @stored.insert(lent_lines.map { it.line })
       composed = composed_note(lent_notes)
       with_note = composed ? with_inherited.replace("NOTE", [composed]) : with_inherited
-      line = @birthday && @birthday.to_line
-      @vcard = line ? with_note.insert([line]) : with_note
+      line = @birthday&.to_line
+      inserted = lent_markers
+      inserted.unshift(line) if line
+      @vcard = with_note.insert(inserted)
     end
 
     # The same contact with nothing its groups lend it: the editor's
@@ -652,9 +708,11 @@ module ProTacts
     end
 
     # The substrate the typed accessors sit on, and the read for what
-    # none of them models.
+    # none of them models. The version marker is not among them: it is
+    # the server's own punctuation, not a fact about the contact, and
+    # no screen or import must read it as one.
     #: () -> Array[VCard::Parser::Property]
-    def properties = vcard.properties
+    def properties = vcard.properties.reject { it.name.casecmp?(LENT_MARKER) == true }
 
     # FN's value (RFC 2426 section 3.1.1), in text form.
     #: () -> String?

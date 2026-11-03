@@ -124,7 +124,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/household-alicia.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"7fd819264a8b5948cf6c3481f699487325dcc06ef87bfb7c05b304072bcbf6a9"</d:getetag>
+        <d:getetag>"ac41deef160924d5aed32b7a3b2f02485b10a8aee49608e389e931d6bac81e56"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
@@ -133,7 +133,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/household-george.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"202b79645f5a7e59f8c4b1f7e6a8c4c7ca5713a31ad063a544d590d31f9b3469"</d:getetag>
+        <d:getetag>"1442812f9be9c130e2d5b549e3604fa3f5964e51ab030a9239ad93a5f6129c9e"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
@@ -142,7 +142,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/household-mary.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"fa2728b04e39109658e54bad8c2eb086099b560cef4ae3dafbd713461e585ee6"</d:getetag>
+        <d:getetag>"5195757744dc9b9ca517224a3b560dc5715e2472262e708e64c82140d900daf7"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
