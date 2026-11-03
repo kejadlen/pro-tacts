@@ -521,24 +521,67 @@ class ContactTest < Minitest::Test
   # downloads carries everything in one fixed order.
   def test_the_served_card_composes_inherited_lines_before_the_birthday
     birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
+    lent = [
+      "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
+      "TEL;TYPE=home:+44 20 5555 0100",
+    ]
     composed = STRUCTURED.sub(
       "END:VCARD\r\n",
       "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom\r\n" \
       "TEL;TYPE=home:+44 20 5555 0100\r\n" \
-      "BDAY:1985-12-10\r\nEND:VCARD\r\n",
+      "BDAY:1985-12-10\r\n" \
+      "X-PT-LENT:Booles:#{ProTacts::Contact.lent_version(GROUP, lent)}\r\n" \
+      "END:VCARD\r\n",
     )
 
+    assert_equal composed, contact(STRUCTURED, birthday:, inherited: lent).vcard.to_s
+  end
+
+  # The version names the lines and the group's label, not the
+  # group's id: two groups lending the same lines under one label
+  # version alike — the marker must name the same state from every
+  # member — and it moves when a line or the label moves
+  # (docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md,
+  # "The marker").
+  def test_a_lent_version_names_the_lines_and_label_not_the_group
+    lines = ["ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom", "NOTE:Gate code 1854."]
+    version = ProTacts::Contact.lent_version(GROUP, lines)
+
+    assert_equal version, ProTacts::Contact.lent_version(GROUP.with(id: "zzzz"), lines)
+    refute_equal version, ProTacts::Contact.lent_version(GROUP, [lines.fetch(0), "NOTE:Gate code 9999."])
+    refute_equal version, ProTacts::Contact.lent_version(GROUP, lines.reverse)
+    refute_equal version, ProTacts::Contact.lent_version(GROUP.with(name: "Boolean", label: "Boolean"), lines)
+  end
+
+  # One marker per lending group, however many lines it lends, and
+  # the label escaped as a text value so that a person's comma reads
+  # back as theirs.
+  def test_one_marker_per_lending_group_escapes_its_label
+    other = GROUP.with(id: "dogs", name: "Walks, Sundays", label: "Walks, Sundays")
+    lent = [
+      ProTacts::Contact::Inherited.new(group: GROUP, position: 0, line: "TEL;TYPE=home:+44 20 5555 0100"),
+      ProTacts::Contact::Inherited.new(group: GROUP, position: 1, line: "NOTE:Gate code 1854."),
+      ProTacts::Contact::Inherited.new(group: other, position: 0, line: "NOTE:Sunday mornings."),
+    ]
+    contact = ProTacts::Contact.new(id: "aiden", stored: ProTacts::VCard.new(CARD), birthday: nil, inherited: lent)
+
     assert_equal(
-      composed,
-      contact(
-        STRUCTURED,
-        birthday:,
-        inherited: [
-          "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
-          "TEL;TYPE=home:+44 20 5555 0100",
-        ],
-      ).vcard.to_s,
+      [
+        "X-PT-LENT:Booles:#{ProTacts::Contact.lent_version(GROUP, lent.first(2).map(&:line))}",
+        "X-PT-LENT:Walks\\, Sundays:#{ProTacts::Contact.lent_version(other, ["NOTE:Sunday mornings."])}",
+      ],
+      contact.lent_markers,
     )
+  end
+
+  # The marker is the server's punctuation, not a fact about the
+  # contact: the composed card carries it, and nothing that reads the
+  # card's properties — a screen, an import's comparison — sees it.
+  def test_properties_leave_out_the_version_marker
+    contact = contact(CARD, inherited: ["TEL;TYPE=home:+44 20 5555 0100"])
+
+    assert_includes contact.vcard.to_s, "X-PT-LENT:"
+    refute contact.properties.any? { it.name.casecmp?("X-PT-LENT") }
   end
 
   # An empty inheritance is insert's own no-op.
@@ -593,14 +636,14 @@ class ContactTest < Minitest::Test
   # text first, the group's as a section after it, at the member's own
   # NOTE position.
   def test_a_lent_note_composes_into_the_members_own
-    composed = contact(STRUCTURED, inherited: ["NOTE:Gate code 1854."]).vcard.to_s
+    contact = contact(STRUCTURED, inherited: ["NOTE:Gate code 1854."])
 
     assert_equal(
       STRUCTURED.sub(
         "NOTE:Countess\\, mathematician.\r\n",
         "NOTE:Countess\\, mathematician.\\n\\nShared · Booles:\\nGate code 1854.\r\n",
-      ),
-      composed,
+      ).sub("END:VCARD\r\n", "#{contact.lent_markers.fetch(0)}\r\nEND:VCARD\r\n"),
+      contact.vcard.to_s,
     )
   end
 
@@ -616,11 +659,14 @@ class ContactTest < Minitest::Test
   # A member with no note of its own serves the section alone, the
   # one NOTE inserted before END:VCARD the way a lent line is.
   def test_a_member_with_no_note_of_its_own_serves_the_section_alone
-    composed = contact(CARD, inherited: ["NOTE:Gate code 1854."]).vcard.to_s
+    contact = contact(CARD, inherited: ["NOTE:Gate code 1854."])
 
     assert_equal(
-      CARD.sub("END:VCARD\r\n", "NOTE:Shared · Booles:\\nGate code 1854.\r\nEND:VCARD\r\n"),
-      composed,
+      CARD.sub(
+        "END:VCARD\r\n",
+        "NOTE:Shared · Booles:\\nGate code 1854.\r\n#{contact.lent_markers.fetch(0)}\r\nEND:VCARD\r\n",
+      ),
+      contact.vcard.to_s,
     )
   end
 
@@ -629,10 +675,14 @@ class ContactTest < Minitest::Test
   # answers nil over an empty one. What else the group lends composes
   # as lines around it.
   def test_a_contact_whose_groups_lend_no_note_serves_its_own_note_bytes
-    composed = contact(STRUCTURED, inherited: ["TEL;TYPE=home:+44 20 5555 0100"]).vcard.to_s
+    contact = contact(STRUCTURED, inherited: ["TEL;TYPE=home:+44 20 5555 0100"])
+    composed = contact.vcard.to_s
 
     assert_equal(
-      STRUCTURED.sub("END:VCARD\r\n", "TEL;TYPE=home:+44 20 5555 0100\r\nEND:VCARD\r\n"),
+      STRUCTURED.sub(
+        "END:VCARD\r\n",
+        "TEL;TYPE=home:+44 20 5555 0100\r\n#{contact.lent_markers.fetch(0)}\r\nEND:VCARD\r\n",
+      ),
       composed,
     )
     assert_includes composed, "NOTE:Countess\\, mathematician.\r\n"
@@ -643,26 +693,19 @@ class ContactTest < Minitest::Test
   # birthday lands after everything else.
   def test_the_composed_note_lands_at_the_members_own_note_position
     birthday = ProTacts::Birthday.new(year: 1985, month: 12, day: 10)
+    lent = ["ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom", "NOTE:Gate code 1854."]
     composed = STRUCTURED.sub(
       "NOTE:Countess\\, mathematician.\r\n",
       "NOTE:Countess\\, mathematician.\\n\\nShared · Booles:\\nGate code 1854.\r\n",
     ).sub(
       "END:VCARD\r\n",
       "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom\r\n" \
-      "BDAY:1985-12-10\r\nEND:VCARD\r\n",
+      "BDAY:1985-12-10\r\n" \
+      "X-PT-LENT:Booles:#{ProTacts::Contact.lent_version(GROUP, lent)}\r\n" \
+      "END:VCARD\r\n",
     )
 
-    assert_equal(
-      composed,
-      contact(
-        STRUCTURED,
-        birthday:,
-        inherited: [
-          "ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
-          "NOTE:Gate code 1854.",
-        ],
-      ).vcard.to_s,
-    )
+    assert_equal composed, contact(STRUCTURED, birthday:, inherited: lent).vcard.to_s
   end
 
   # The joined line matches nothing by bytes — neither the member's
