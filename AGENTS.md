@@ -167,6 +167,9 @@ no `sync:*` group; a test that needs everyone's book makes it.
   `def self.` on the module whose vocabulary it uses (`CardDiff`,
   `Birthday`, `Admin::Format`). If no name fits, ask whether the thing
   should exist at all.
+- A helper that reads one model is that model's method, even when
+  only a screen asks (`Contact#name_label`, `Contact::Address#map_url`);
+  `Admin::Format` keeps what formats plain values (times, etags, lines).
 - A screen or button that only restates another page is deleted, and
   the flow lands on the real thing (docs/DESIGN.md).
 - Comments carry the reasoning, never a restatement of the line below

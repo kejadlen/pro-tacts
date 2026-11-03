@@ -10,7 +10,7 @@ module ProTacts
     # GET /contacts — every contact in one list, sorted by last name:
     # the one screen that browses the whole contact set (docs/DESIGN.md,
     # "The core idea"), in Contact#<=>'s order. Rows carry the
-    # label the dashboard's rows do (Format.name_label) and the
+    # label the dashboard's rows do (Contact#name_label) and the
     # contact's groups as chips under it.
     #
     # Nothing on the page narrows the list. Finding a contact is the
@@ -70,7 +70,7 @@ module ProTacts
         li(class: "linked-row") do
           render Avatar.new(contact:, size: "lg")
           div(style: "flex: 1; min-width: 0;") do
-            a(href: "/contacts/#{contact.id}", class: "row-link") { Format.name_label(contact) }
+            a(href: "/contacts/#{contact.id}", class: "row-link") { contact.name_label }
             groups = @groups_of[contact.id]
             if groups
               div(class: "tag-set", style: "margin-top: var(--gl-space-3xs);") do

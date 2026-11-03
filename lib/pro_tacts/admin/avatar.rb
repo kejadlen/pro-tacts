@@ -33,7 +33,7 @@ module ProTacts
         if @contact.photo?
           img(class: "avatar", src: "/contacts/#{@contact.id}/photo", alt: "", loading: "lazy", **attributes)
         else
-          span(class: "avatar", **attributes) { Format.initials(@contact) }
+          span(class: "avatar", **attributes) { @contact.initials }
         end
       end
 

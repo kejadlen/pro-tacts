@@ -38,6 +38,12 @@ module ProTacts
     #: () -> String?
     def nickname = @contact.nickname
 
+    #: () -> String
+    def name_label = @contact.name_label
+
+    #: () -> String
+    def initials = @contact.initials
+
     # Kept, since a sort asks at every comparison; nothing writes
     # through a listed contact to change it.
     #: () -> String
@@ -56,6 +62,9 @@ module ProTacts
 
     #: () -> Birthday?
     def birthday = @contact.birthday
+
+    #: () -> String?
+    def birthday_label = @contact.birthday_label
 
     #: () -> Array[VCard::Parser::Property]
     def properties = @contact.properties

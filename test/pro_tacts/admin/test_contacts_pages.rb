@@ -106,7 +106,7 @@ class AdminContactsPagesTest < Minitest::Test
 
   # Sorted by N's family name whatever its case, and a card with no N
   # under its FN — the fallback chain the avatar's initials walk too
-  # (Format.initials). Seeded out of order to prove the sort.
+  # (Contact#initials). Seeded out of order to prove the sort.
   def test_contacts_lists_every_contact_sorted_by_last_name
     boole = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:George Boole\r\nN:Boole;George;;;\r\nUID:boole\r\nEND:VCARD\r\n"
     shelley = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Mary Shelley\r\nN:shelley;Mary;;;\r\nUID:shelley\r\nEND:VCARD\r\n"
@@ -180,7 +180,7 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # The row shows the same composition the dashboard's rows do
-  # (Format.name_label).
+  # (Contact#name_label).
   def test_contacts_lists_a_nicknamed_contact_as_name_and_nickname
     red = ADA.sub("FN:Ada Lovelace", "FN:Sarah\r\nNICKNAME:Red").sub("UID:ada", "UID:red")
 
