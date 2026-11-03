@@ -1,8 +1,6 @@
 require "pro_tacts/admin/phlex"
 
-require "pro_tacts/admin/avatar"
-require "pro_tacts/admin/format"
-require "pro_tacts/admin/group_tag"
+require "pro_tacts/admin/contact_row"
 require "pro_tacts/admin/layout"
 
 module ProTacts
@@ -48,7 +46,7 @@ module ProTacts
                   section do
                     h3(class: "type-label") { letter }
                     ul(class: "card") do
-                      rows.each { render_row(it) }
+                      rows.each { render ContactRow.new(contact: it, groups: @groups_of.fetch(it.id, [])) }
                     end
                   end
                 end
@@ -59,27 +57,6 @@ module ProTacts
       end
 
       private
-
-      #: (ListedContact contact) -> void
-      def render_row(contact)
-        # Not a ListItem, whose one anchor wraps the whole row, because
-        # the chips are links too and an anchor cannot hold one. The
-        # name is the row's link and stretches over the row
-        # (.linked-row in admin.css); the chips, each a link to its
-        # group's page as on the record page, sit above that stretch.
-        li(class: "linked-row") do
-          render Avatar.new(contact:, size: "lg")
-          div(style: "flex: 1; min-width: 0;") do
-            a(href: "/contacts/#{contact.id}", class: "row-link") { contact.name_label }
-            groups = @groups_of[contact.id]
-            if groups
-              div(class: "tag-set", style: "margin-top: var(--gl-space-3xs);") do
-                groups.each { |group| render GroupTag.new(group:) }
-              end
-            end
-          end
-        end
-      end
 
       # The rows cut at each first letter of Contact#sort_key, the way
       # a phone's contacts list is: a contact files under the letter

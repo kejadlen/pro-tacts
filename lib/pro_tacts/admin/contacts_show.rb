@@ -1,10 +1,9 @@
 require "pro_tacts/admin/phlex"
 
-require "pro_tacts/admin/avatar"
 require "pro_tacts/admin/contact_card"
+require "pro_tacts/admin/contact_row"
 require "pro_tacts/admin/format"
 require "pro_tacts/admin/group_dialog"
-require "pro_tacts/admin/list_item"
 
 module ProTacts
   module Admin
@@ -100,26 +99,24 @@ module ProTacts
       private
 
       # The contact's people, under the record and above the two
-      # collapsed cards: a group's members list (GroupsShow#members_list)
-      # in its shape, gathered across the households the contact is in
-      # and leaving the contact out, so the page answers "who are
-      # theirs?" without a trip through each group. Which group joins
-      # them is the groups row's to say, the tags right above. No
-      # members means no section (docs/DESIGN.md, "Empty attributes do
+      # collapsed cards: everyone in the households the contact is in
+      # (Group#family_sized?), the contact left out, each once with the
+      # households they share as chips — /contacts' row (ContactRow),
+      # so a person here reads as they do there, and the page answers
+      # "who are theirs, and how?" without a trip through each group.
+      # No one means no section (docs/DESIGN.md, "Empty attributes do
       # not render"); it holds no action, membership being edited from
       # the groups row.
       #: () -> void
       def related_list
         return if @related.empty?
 
+        families = @groups.select(&:family_sized?)
         section do
           h2(class: "type-label") { "related" }
           ul(class: "card") do
             @related.each do |member|
-              render ListItem.new(
-                href: "/contacts/#{member.id}",
-                avatar: Avatar.new(contact: member, size: "lg"),
-              ) { Format.name_label(member) }
+              render ContactRow.new(contact: member, groups: families.select { it.members.include?(member.id) })
             end
           end
         end

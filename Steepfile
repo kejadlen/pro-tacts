@@ -20,7 +20,7 @@ target :lib do
   # `check ... inline: true`. A bare `ignore` feeds the other list and
   # the files stay checked.
   ignore(*%w[
-    avatar contact_card contact_dialog contacts_edit contacts_index contacts_show dashboard device_setup format
+    avatar contact_card contact_dialog contact_row contacts_edit contacts_index contacts_show dashboard device_setup format
     group_dialog group_filter group_label group_tag groups_edit groups_index groups_members groups_new groups_show icons import_groups import_original import_saved import_sidebar
     import_target import_upload layout list_item member_picker phlex recent_row record_card search_dialog search_field search_page search_results upcoming_birthdays
   ].map { "lib/pro_tacts/admin/#{it}.rb" }, inline: true)

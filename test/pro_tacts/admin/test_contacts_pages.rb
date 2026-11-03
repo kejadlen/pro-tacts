@@ -705,20 +705,26 @@ class AdminContactsPagesTest < Minitest::Test
   end
 
   # Who shares a household with the contact is listed under the
-  # record, each linking to their card: once however many households
-  # they share, in a list's order, and never the contact themselves.
+  # record, each linking to their card with the households they share
+  # as chips: once however many they share, in a list's order, and
+  # never the contact themselves. A book they share is no household,
+  # so it is no chip either.
   def test_show_lists_who_shares_a_family_sized_group
     cards = %w[Grey Abel Cole].to_h { [it.downcase, card(it.downcase, "Sam #{it}")] }
 
     with_contacts(cards) do |store|
-      FixtureData.seed_group(store, name: "Household", members: %w[grey abel cole])
-      FixtureData.seed_group(store, members: %w[grey abel])
+      household = FixtureData.seed_group(store, name: "Household", members: %w[grey abel cole])
+      pair = FixtureData.seed_group(store, members: %w[grey abel])
+      FixtureData.seed_group(store, name: "sync:sam", members: %w[grey abel])
 
       get "/contacts/grey"
       related = last_response.body[%r{<h2 class="type-label">related</h2>(.*?)</section>}m, 1].to_s
+      rows = related.split('<li class="linked-row">').drop(1).map { |row|
+        [row[%r{<a href="/contacts/([^"]*)" class="row-link">([^<]*)</a>}, 1], row[/class="row-link">([^<]*)</, 1],
+         row.scan(%r{<a href="/groups/([^"]*)" class="tag">}).flatten.sort]
+      }
 
-      assert_equal [["abel", "Sam Abel"], ["cole", "Sam Cole"]],
-                   related.scan(%r{<a href="/contacts/([^"]*)">.*?<div[^>]*>([^<]*)</div>}m)
+      assert_equal [["abel", "Sam Abel", [household, pair].sort], ["cole", "Sam Cole", [household]]], rows
     end
   end
 
