@@ -43,6 +43,15 @@ class EditedContactTest < Minitest::Test
     ProTacts::Contact.new(id: "aiden", stored: ProTacts::VCard.new(stored), birthday:, inherited:)
   end
 
+  # The card a synced client submits: what it changed, with the marker
+  # lines the contact it downloaded carries — naming the version of
+  # the lines it was sent — in place of any it had
+  # (Contact#lent_markers).
+  def synced(card, contact)
+    _, rest = ProTacts::VCard.new(card).extract("X-PT-LENT")
+    rest.insert(contact.lent_markers).to_s
+  end
+
   # The parts with the card as its bytes, so a test compares strings.
   def decompose(bytes, before: nil)
     stored, birthday, group_edits = ProTacts::EditedContact.new(ProTacts::VCard.new(bytes), before:).decomposed
@@ -103,8 +112,22 @@ class EditedContactTest < Minitest::Test
     assert_equal [submitted, nil, []], decompose(submitted, before: before)
   end
 
+  # The marker is composed like the lines it versions and never
+  # stored: a submission carrying one sheds it before anything is
+  # read, exactly as its lent lines are struck — a marker naming a
+  # group that lends nothing here included
+  # (docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md,
+  # "Arrival").
+  def test_a_submission_sheds_its_version_markers
+    assert_equal [AIDEN, nil, []],
+                 decompose(with_lines(HOUSEHOLD_ADDRESS, "X-PT-LENT:Household:abc123"), before: before(inherited: LENT))
+    assert_equal [AIDEN, nil, []], decompose(with_lines("X-PT-LENT:Gone:abc123"), before: nil)
+  end
+
   def test_an_untouched_lent_line_is_subtracted_and_asks_nothing
-    assert_equal [AIDEN, nil, []], decompose(with_lines(HOUSEHOLD_ADDRESS), before: before(inherited: LENT))
+    contact = before(inherited: LENT)
+
+    assert_equal [AIDEN, nil, []], decompose(synced(with_lines(HOUSEHOLD_ADDRESS), contact), before: contact)
     assert_empty sentry_messages
   end
 
@@ -120,26 +143,66 @@ class EditedContactTest < Minitest::Test
   end
 
   def test_an_edited_lent_line_is_an_edit_of_its_row
+    contact = before(inherited: LENT)
+
     assert_equal [AIDEN, nil, [group_edit(EDITED_ADDRESS)]],
-                 decompose(with_lines(EDITED_ADDRESS), before: before(inherited: LENT))
+                 decompose(synced(with_lines(EDITED_ADDRESS), contact), before: contact)
   end
 
   def test_a_deleted_lent_line_is_a_removal_of_its_row
-    assert_equal [AIDEN, nil, [group_edit(nil)]], decompose(AIDEN, before: before(inherited: LENT))
+    contact = before(inherited: LENT)
+
+    assert_equal [AIDEN, nil, [group_edit(nil)]], decompose(synced(AIDEN, contact), before: contact)
+  end
+
+  # The incident's own shape: a phone re-pushing its local book after
+  # an OS update, holding a member card from before the group had its
+  # address. No marker names the group's current lines, so the
+  # missing line is not read as a deletion — the group keeps what it
+  # lends — and the report is the diagnostic the silent wipe never had
+  # (docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md).
+  def test_a_markerless_card_cannot_delete_a_lent_line
+    assert_equal [AIDEN, nil, []], decompose(AIDEN, before: before(inherited: LENT))
+    assert_equal ["a submitted card was not composed from the current lines of 1 of its groups; " \
+                  "nothing was attributed to them"],
+                 sentry_messages
+  end
+
+  # A stale marker is the same refusal, and the edit is not lost: the
+  # line the card did carry stays in the member's own card, where an
+  # unattributable line already lands, until a synced client
+  # reconciles them.
+  def test_a_stale_marker_leaves_the_edit_in_the_card
+    submitted = with_lines(EDITED_ADDRESS, "X-PT-LENT:Household:stale")
+
+    assert_equal [with_lines(EDITED_ADDRESS), nil, []], decompose(submitted, before: before(inherited: LENT))
+  end
+
+  # A marker reads back through its escapes: a label with a comma is
+  # the label, and the card it rode in on may edit the group's lines.
+  def test_a_marker_for_a_label_with_a_comma_is_current
+    group = HOUSEHOLD.with(name: "Booles, the", label: "Booles, the")
+    contact = before(inherited: [LENT.fetch(0).with(group:)])
+
+    assert_includes contact.lent_markers.fetch(0), "Booles\\, the:"
+    assert_equal [AIDEN, nil, [group_edit(nil)]], decompose(synced(AIDEN, contact), before: contact)
   end
 
   def test_two_candidates_for_one_lent_line_stay_in_the_card_and_are_reported
+    contact = before(inherited: LENT)
     submitted = with_lines(EDITED_ADDRESS, OWN_ADDRESS)
 
-    assert_equal [submitted, nil, []], decompose(submitted, before: before(inherited: LENT))
-    assert_equal 1, sentry_messages.length
+    assert_equal [submitted, nil, []], decompose(synced(submitted, contact), before: contact)
+    assert_equal ["a submitted card left 1 inherited line(s) with more than one line of that name to attribute them to"],
+                 sentry_messages
   end
 
   def test_an_edit_no_group_may_hold_stays_in_the_card_and_is_reported
+    contact = before(inherited: LENT)
     submitted = with_lines(HOUSEHOLD_ADDRESS.sub("ADR;TYPE=home:", "item1.ADR:"), "item1.X-ABLabel:dom")
 
-    assert_equal [submitted, nil, []], decompose(submitted, before: before(inherited: LENT))
-    assert_equal 1, sentry_messages.length
+    assert_equal [submitted, nil, []], decompose(synced(submitted, contact), before: contact)
+    assert_equal ["a submitted card edited 1 inherited line(s) into a shape no group may hold"], sentry_messages
   end
 
   def test_the_birthday_and_the_lent_lines_leave_together
@@ -165,9 +228,10 @@ class EditedContactTest < Minitest::Test
   # stands on, and the one a client that touched nothing makes.
   def test_the_served_note_round_trips
     stored = note_card("Own note.")
-    served = note_card("Own note.\n\nShared · Neighbours:\n#{NOTE_TEXT}")
+    contact = before(stored, inherited: LENT_NOTE)
+    served = synced(note_card("Own note.\n\nShared · Neighbours:\n#{NOTE_TEXT}"), contact)
 
-    assert_equal [stored, nil, []], decompose(served, before: before(stored, inherited: LENT_NOTE))
+    assert_equal [stored, nil, []], decompose(served, before: contact)
     assert_empty sentry_messages
   end
 
@@ -183,23 +247,32 @@ class EditedContactTest < Minitest::Test
 
   def test_an_edited_section_is_an_edit_of_its_row
     stored = note_card("Own note.")
+    contact = before(stored, inherited: LENT_NOTE)
+    served = synced(note_card("Own note.\n\nShared · Neighbours:\nBins go out on Tuesday."), contact)
+
+    assert_equal [stored, nil, [neighbour_edit("NOTE:Bins go out on Tuesday.")]], decompose(served, before: contact)
+  end
+
+  # A refused group's edited section: the text cannot reach the group
+  # and cannot be spliced into the member's own note without writing
+  # section grammar into it, so the whole value stays on the member —
+  # the mangle bargain, duplication rather than loss.
+  def test_an_edited_section_of_a_refused_group_stays_whole_on_the_member
     served = note_card("Own note.\n\nShared · Neighbours:\nBins go out on Tuesday.")
 
-    assert_equal(
-      [stored, nil, [neighbour_edit("NOTE:Bins go out on Tuesday.")]],
-      decompose(served, before: before(stored, inherited: LENT_NOTE)),
-    )
+    assert_equal [served, nil, []], decompose(served, before: before(note_card("Own note."), inherited: LENT_NOTE))
   end
 
   # The row receives a text value's escapes, the unit group_properties
   # holds — the same writer the editors use.
   def test_an_edited_section_escapes_what_the_row_receives
     stored = note_card("Own note.")
-    served = note_card("Own note.\n\nShared · Neighbours:\nDog, friendly; goose, not.")
+    contact = before(stored, inherited: LENT_NOTE)
+    served = synced(note_card("Own note.\n\nShared · Neighbours:\nDog, friendly; goose, not."), contact)
 
     assert_equal(
       [stored, nil, [neighbour_edit("NOTE:Dog\\, friendly\\; goose\\, not.")]],
-      decompose(served, before: before(stored, inherited: LENT_NOTE)),
+      decompose(served, before: contact),
     )
   end
 
@@ -231,10 +304,12 @@ class EditedContactTest < Minitest::Test
       ProTacts::Contact::Inherited.new(group: DOGWALKERS, position: 2, line: "NOTE:Sunday mornings."),
     ]
 
+    contact = before(stored, inherited: lent)
+
     assert_equal(
       [stored, nil,
        [ProTacts::EditedContact::GroupEdit.new(group_id: "dddd", position: 2, line: nil)]],
-      decompose(served, before: before(stored, inherited: lent)),
+      decompose(synced(served, contact), before: contact),
     )
   end
 
@@ -243,19 +318,28 @@ class EditedContactTest < Minitest::Test
   # header was taken apart — the mangle, which propagates nothing
   # rather than guess a deletion.
   def test_a_note_left_as_the_members_own_alone_stays_whole
-    served = note_card("Own note.")
+    stored = note_card("Own note.")
+    contact = before(stored, inherited: LENT_NOTE)
 
-    assert_equal [served, nil, []], decompose(served, before: before(served, inherited: LENT_NOTE))
+    assert_equal [stored, nil, []], decompose(synced(stored, contact), before: contact)
     assert_equal 1, sentry_messages.length
   end
 
   # The cleared field: no NOTE came back at all, and every lent row
-  # goes with the member's own text.
+  # goes with the member's own text — believed of a client that
+  # carried the marker naming the lines it was sent.
   def test_a_cleared_note_removes_every_lent_row
-    assert_equal(
-      [AIDEN, nil, [neighbour_edit(nil)]],
-      decompose(AIDEN, before: before(note_card("Own note."), inherited: LENT_NOTE)),
-    )
+    contact = before(note_card("Own note."), inherited: LENT_NOTE)
+
+    assert_equal [AIDEN, nil, [neighbour_edit(nil)]], decompose(synced(AIDEN, contact), before: contact)
+  end
+
+  # The same cleared field from a card no marker vouches for: the
+  # member's own text goes — that is the card's own, and an
+  # unconditional PUT means it — but the group's section is not
+  # believed deleted by a client that never held it.
+  def test_a_markerless_cleared_note_keeps_the_lent_rows
+    assert_equal [AIDEN, nil, []], decompose(AIDEN, before: before(note_card("Own note."), inherited: LENT_NOTE))
   end
 
   # A client of the two-line shape sending back what macOS truncated
@@ -263,10 +347,9 @@ class EditedContactTest < Minitest::Test
   # value with no header is exactly the lent text, which reads as that
   # section present and the member's own gone.
   def test_a_truncated_note_reads_as_the_kept_section
-    assert_equal(
-      [AIDEN, nil, []],
-      decompose(note_card(NOTE_TEXT), before: before(note_card("Own note."), inherited: LENT_NOTE)),
-    )
+    contact = before(note_card("Own note."), inherited: LENT_NOTE)
+
+    assert_equal [AIDEN, nil, []], decompose(synced(note_card(NOTE_TEXT), contact), before: contact)
     assert_empty sentry_messages
   end
 
@@ -275,8 +358,9 @@ class EditedContactTest < Minitest::Test
   # and the arrival report says so.
   def test_an_unreadable_note_stays_whole_on_the_member_and_is_reported
     served = note_card("whatever a person typed")
+    contact = before(note_card("Own note."), inherited: LENT_NOTE)
 
-    assert_equal [served, nil, []], decompose(served, before: before(note_card("Own note."), inherited: LENT_NOTE))
+    assert_equal [served, nil, []], decompose(synced(served, contact), before: contact)
     assert_equal ["a submitted NOTE could not be read back into its sections; it stays on the member"],
                  sentry_messages
   end
@@ -285,14 +369,17 @@ class EditedContactTest < Minitest::Test
   # and two sections claim one label.
   def test_two_sections_of_one_label_stay_whole_and_are_reported
     served = note_card("Shared · Neighbours:\nfirst\n\nShared · Neighbours:\n#{NOTE_TEXT}")
+    contact = before(note_card("Own note."), inherited: LENT_NOTE)
 
-    assert_equal [served, nil, []], decompose(served, before: before(note_card("Own note."), inherited: LENT_NOTE))
+    assert_equal [served, nil, []], decompose(synced(served, contact), before: contact)
     assert_equal 1, sentry_messages.length
   end
 
   # A nameless group's label is its id, and a group named the same
   # lends under it too: a section read under that label cannot say
-  # which lent it, so nothing is attributed.
+  # which lent it, so nothing is attributed. The collision starves
+  # the markers too — one label cannot key two — so the refusal
+  # report speaks alongside the labels one.
   def test_two_groups_lending_under_one_label_are_not_attributed
     same_label = ProTacts::Group.new(
       id: "Neighbours", name: nil, label: "Neighbours", lines: ["NOTE:other"], members: ["aiden"],
@@ -301,7 +388,10 @@ class EditedContactTest < Minitest::Test
     served = note_card("Own note.\n\nShared · Neighbours:\n#{NOTE_TEXT}")
 
     assert_equal [served, nil, []], decompose(served, before: before(note_card("Own note."), inherited: lent))
-    assert_equal ["two of a contact's groups share a label, so its submitted NOTE cannot be attributed"],
+    assert_equal [
+      "a submitted card was not composed from the current lines of 2 of its groups; nothing was attributed to them",
+      "two of a contact's groups share a label, so its submitted NOTE cannot be attributed",
+    ],
                  sentry_messages
   end
 
@@ -387,7 +477,7 @@ class EditedContactTest < Minitest::Test
       lent = [*LENT_NOTE, *tc.draw(optional(just(LENT.fetch(0))))]
       contact = before(stored, inherited: lent)
       edited = ProTacts::Contact::Inherited.new(group: NEIGHBOURS, position: 1, line: "NOTE:#{ProTacts::VCard.escape(text)}")
-      submitted = before(stored, inherited: [edited, *lent.drop(1)]).vcard.to_s
+      submitted = synced(before(stored, inherited: [edited, *lent.drop(1)]).vcard.to_s, contact)
 
       assert_equal [stored, nil, [neighbour_edit(edited.line)]], decompose(submitted, before: contact)
     end

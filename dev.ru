@@ -18,6 +18,7 @@ ProTacts.config = ProTacts::Config.new({
   "PRO_TACTS_INSTANCE_NAME" => "pro-tacts (dev)",
   "PRO_TACTS_FAVICON" => "/favicon-dev.svg",
   "PRO_TACTS_ACCENT" => "ink-blue",
+  "PRO_TACTS_DEBUG" => "1",
   "VERSION" => change,
 }.merge(ENV))
 

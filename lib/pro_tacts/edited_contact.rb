@@ -77,8 +77,11 @@ module ProTacts
     def decomposed
       return @decomposed if defined?(@decomposed)
 
-      birthday, rest = split_birthday
-      stored, group_edits = subtract_inherited(rest)
+      markers, card = take_markers(@submitted)
+      birthday, rest = split_birthday(card)
+      stale = stale_groups(markers)
+      report_stale_groups(stale.length)
+      stored, group_edits = subtract_inherited(rest, stale)
       @decomposed = [stored, birthday, group_edits]
     end
 
@@ -88,6 +91,62 @@ module ProTacts
     #: () -> VCard?
     def stored_before
       @before&.stored
+    end
+
+    # The submission's X-PT-LENT lines as the version each names,
+    # keyed by the group label that names it, and the card without
+    # them: the reading half of Contact#lent_markers, split on the
+    # value's last colon, a label being a person's words and the
+    # version hex. The marker is composed like the lines it versions
+    # and never stored, so every arrival sheds it before anything reads
+    # the card — a client's PUT and an import alike, both of which
+    # reach the store through here
+    # (docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md,
+    # "Arrival") — including a marker for a group that no longer
+    # lends, which composes nothing here to pair with it. A line that
+    # will not read is no marker at all: the group reads as one never
+    # sent current lines, the safe reading.
+    #: (VCard vcard) -> [Hash[String, String], VCard]
+    def take_markers(vcard)
+      taken, card = vcard.extract(Contact::LENT_MARKER)
+      markers = taken.filter_map { |line|
+        text = line.property&.text
+        next if text.nil?
+
+        label, colon, version = text.rpartition(":")
+        [label, version] unless colon.empty? #: [String, String]?
+      }.to_h
+      [markers, card]
+    end
+
+    # The lending groups a submission may not edit: the ids of those it
+    # carries no current marker for. A card composed by this server
+    # carries the marker naming the version of each group's lines it
+    # was sent, so a current marker is a client that downloaded what
+    # it submits against and may delete or edit what it was sent — and
+    # an absent, stale, or unreadable one is a card composed from
+    # something else, whose missing lines cannot be read as deletions
+    # (docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md,
+    # "The guard").
+    #: (Hash[String, String] markers) -> Array[String]
+    def stale_groups(markers)
+      (@before&.lent_versions || []).filter_map { |group, version|
+        group.id if markers[group.label] != version
+      }
+    end
+
+    # The refusal report, the one the incident lacked: the wipe was
+    # silent, a successful PUT leaving no exchange entry
+    # (docs/plans/2026-09-13-failed-exchanges-only.md) and the deletion
+    # path raising nothing. The count carries no card content.
+    #: (Integer count) -> void
+    def report_stale_groups(count)
+      return if count.zero?
+
+      Sentry.capture_message(
+        "a submitted card was not composed from the current lines of #{count} of its groups; nothing was attributed to them",
+        level: :warning,
+      )
     end
 
     # The birthday half (docs/plans/2026-09-11-every-birthday-in-the-model.md):
@@ -104,18 +163,18 @@ module ProTacts
     # case/when rather than case/in, BirthdayLine's own rule: Steep
     # does not check the bodies of case/in branches, and these are the
     # ones worth checking — which is what the last arm is for.
-    #: () -> [Birthday?, VCard]
-    def split_birthday
-      bdays, rest = @submitted.extract("BDAY")
+    #: (VCard card) -> [Birthday?, VCard]
+    def split_birthday(card)
+      bdays, rest = card.extract("BDAY")
       if bdays.empty?
         report_lost_bday_lines
         existing = @before&.birthday
-        return [existing && !existing.served? ? existing : nil, @submitted]
+        return [existing && !existing.served? ? existing : nil, card]
       end
 
       if bdays.length > 1
         report_many_bday_lines(bdays.length)
-        return [nil, @submitted]
+        return [nil, card]
       end
 
       line = BirthdayLine.read(bdays.fetch(0))
@@ -124,9 +183,9 @@ module ProTacts
         [line.birthday, rest]
       when BirthdayLine::Unrecognized
         report_unrecognized_bday_line
-        [nil, @submitted]
+        [nil, card]
       when BirthdayLine::Unreadable
-        [nil, @submitted]
+        [nil, card]
       else
         raise "no arm for #{line.class}"
       end
@@ -184,6 +243,14 @@ module ProTacts
     # untouched line is struck first, and only what is left is
     # attributed.
     #
+    # Pass two decides only for a group whose marker the submission
+    # carries current (#stale_groups for what that means): a group it
+    # does not is refused, its rows stay lent, and the lines that would
+    # have been attributed its edit stay in the member's own card,
+    # where an unattributable line already lands. Pass one runs for
+    # every group, marker or no marker: a line saying what a group
+    # lends is struck rather than duplicated onto the member.
+    #
     # The taken lines leave by identity rather than through #extract
     # and #insert, which would move a member's own lines of the same
     # name to the card's end, or #substitute, which takes the first
@@ -195,8 +262,8 @@ module ProTacts
     # strong etag (RFC 6352 section 6.3.2.3). The pool is the
     # submission's own lines (#unaccounted_lines), so each taken line
     # is one of them.
-    #: (VCard vcard) -> [VCard, Array[GroupEdit]]
-    def subtract_inherited(vcard)
+    #: (VCard vcard, Array[String] stale) -> [VCard, Array[GroupEdit]]
+    def subtract_inherited(vcard, stale)
       lent = @before&.inherited || [] #: Array[Contact::Inherited]
       note_rows, line_rows = lent.partition { |row| property_name(row.line).casecmp?("NOTE") == true }
 
@@ -226,6 +293,8 @@ module ProTacts
         ambiguous = 0
         unshareable = 0
         moved.each do |row|
+          next if stale.include?(row.group.id)
+
           case classify(row, unaccounted, taken)
           in GroupEdit => edit then edits << edit
           in :ambiguous then ambiguous += 1
@@ -238,7 +307,7 @@ module ProTacts
         struck = VCard.new(vcard.lines.reject { |line| taken.any? { it.equal?(line) } }.map(&:verbatim).join)
       end
 
-      card, note_edits = subtract_notes(struck, note_rows)
+      card, note_edits = subtract_notes(struck, note_rows, stale)
       [card, edits + note_edits]
     end
 
@@ -257,8 +326,14 @@ module ProTacts
     # last NOTE, which that shape put last (docs/apple-contacts.md,
     # "Only the last of two notes survives"). It reads as that note
     # present and every other one gone.
-    #: (VCard vcard, Array[Contact::Inherited] rows) -> [VCard, Array[GroupEdit]]
-    def subtract_notes(vcard, rows)
+    #
+    # A group the submission may not edit (#stale_groups) is refused
+    # per section: an absent section of its is not believed a
+    # deletion, and an edited one cannot be kept without writing
+    # section grammar into the member's own note, which takes the
+    # whole value to the mangle bargain below.
+    #: (VCard vcard, Array[Contact::Inherited] rows, Array[String] stale) -> [VCard, Array[GroupEdit]]
+    def subtract_notes(vcard, rows, stale)
       notes = vcard.lines.select { it.names?("NOTE") }
       return [members_own(vcard, notes), []] if rows.empty?
 
@@ -270,9 +345,10 @@ module ProTacts
 
       # No NOTE at all is every section deleted — the cleared field,
       # which takes the member's own text with it (the plan's "The
-      # split").
-      deletions = rows.map { |row|
-        GroupEdit.new(group_id: row.group.id, position: row.position, line: nil)
+      # split") — each deletion believed only of a group whose current
+      # lines the submission was composed from.
+      deletions = rows.filter_map { |row|
+        GroupEdit.new(group_id: row.group.id, position: row.position, line: nil) unless stale.include?(row.group.id)
       }
       return [vcard, deletions] if notes.empty?
 
@@ -292,8 +368,8 @@ module ProTacts
         unless kept.nil?
           return [
             vcard.replace("NOTE", []),
-            rows.reject { it.equal?(kept) }.map { |row|
-              GroupEdit.new(group_id: row.group.id, position: row.position, line: nil)
+            rows.reject { it.equal?(kept) }.filter_map { |row|
+              GroupEdit.new(group_id: row.group.id, position: row.position, line: nil) unless stale.include?(row.group.id)
             },
           ]
         end
@@ -310,7 +386,20 @@ module ProTacts
       texts = split.sections.to_h {
         [it.label, it.text] #: [String, String]
       }
+      # A refused group's edited section: the text cannot land on the
+      # group and cannot be spliced into the member's own note, so the
+      # whole value stays on the member — duplication rather than
+      # loss, visible beside what the groups keep lending, the mangle
+      # bargain (#report_unreadable_sections').
+      refused_edit = rows.any? { |row|
+        said = texts[row.group.label]
+        stale.include?(row.group.id) && !said.nil? && said != Contact.lent_text(row)
+      }
+      return [members_own(vcard, notes), []] if refused_edit
+
       edits = rows.filter_map { |row|
+        next if stale.include?(row.group.id)
+
         text = texts[row.group.label]
         case text
         when nil

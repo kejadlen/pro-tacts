@@ -1187,9 +1187,11 @@ class StoreTest < Minitest::Test
 
     with_store({"aiden" => born, "znorth" => ZED}) do |store|
       id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      marker = store.contact("aiden").lent_markers.fetch(0)
       composed = AIDEN.sub(
         "END:VCARD\r\n",
-        "#{HOUSEHOLD_ADDRESS}\r\nNOTE:Shared · #{id}:\\nGate code 1854.\r\nBDAY:1985-12-10\r\nEND:VCARD\r\n",
+        "#{HOUSEHOLD_ADDRESS}\r\nNOTE:Shared · #{id}:\\nGate code 1854.\r\nBDAY:1985-12-10\r\n" \
+        "#{marker}\r\nEND:VCARD\r\n",
       )
 
       assert_equal composed, store.contact("aiden").vcard.to_s
@@ -1271,9 +1273,10 @@ class StoreTest < Minitest::Test
       first, second = lent.keys.sort
       text = -> gid { lent.fetch(gid).split(":", 2).fetch(1) }
       value = "Shared · #{first}:\n#{text.(first)}\n\nShared · #{second}:\n#{text.(second)}"
+      markers = store.contact("aiden").lent_markers.join("\r\n")
       composed = AIDEN.sub(
         "END:VCARD\r\n",
-        "NOTE:#{ProTacts::VCard.escape(value)}\r\nEND:VCARD\r\n",
+        "NOTE:#{ProTacts::VCard.escape(value)}\r\n#{markers}\r\nEND:VCARD\r\n",
       )
       assert_equal composed, store.contact("aiden").vcard.to_s
     end
@@ -1559,7 +1562,8 @@ class StoreTest < Minitest::Test
         change = store.changes_of(member).first
         assert_equal "group", change.action
         assert_equal store.contact(member).etag, change.etag
-        assert_equal [EDITED_ADDRESS, "NOTE:Shared · #{id}:\\nGate code 1854."], change.diff.added
+        assert_equal [EDITED_ADDRESS, "NOTE:Shared · #{id}:\\nGate code 1854.",
+                      store.contact(member).lent_markers.fetch(0)], change.diff.added
       end
     end
   end
@@ -1599,24 +1603,27 @@ class StoreTest < Minitest::Test
 
       assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
       assert_equal %w[group put], store.changes_of("aiden").map(&:action)
-      assert_equal [HOUSEHOLD_ADDRESS], store.changes_of("aiden").first.diff.added
+      assert_equal [HOUSEHOLD_ADDRESS, store.contact("aiden").lent_markers.fetch(0)],
+                   store.changes_of("aiden").first.diff.added
     end
   end
 
   def test_a_leaving_member_stops_serving_the_group_and_is_logged
     with_store({"aiden" => AIDEN}) do |store|
       id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
+      marker = store.contact("aiden").lent_markers.fetch(0)
 
       store.remove_member(id, "aiden")
 
       assert_equal AIDEN, store.contact("aiden").vcard.to_s
-      assert_equal [HOUSEHOLD_ADDRESS], store.changes_of("aiden").first.diff.removed
+      assert_equal [HOUSEHOLD_ADDRESS, marker], store.changes_of("aiden").first.diff.removed
     end
   end
 
   def test_a_deleted_group_takes_its_membership_and_lent_lines_away
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       id = FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
+      marker = store.contact("aiden").lent_markers.fetch(0)
 
       assert store.delete_group(id)
 
@@ -1626,7 +1633,7 @@ class StoreTest < Minitest::Test
         change = store.changes_of(member).first
         assert_equal "group", change.action
         assert_equal store.contact(member).etag, change.etag
-        assert_equal [HOUSEHOLD_ADDRESS], change.diff.removed
+        assert_equal [HOUSEHOLD_ADDRESS, marker], change.diff.removed
       end
     end
   end
@@ -2299,6 +2306,7 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
+      marker = store.contact("aiden").lent_markers.fetch(0)
 
       store.put("aiden", vcard(served.sub(HOUSEHOLD_ADDRESS, EDITED_ADDRESS)))
 
@@ -2306,8 +2314,8 @@ class StoreTest < Minitest::Test
       fanned = store.changes_of("znorth").first
       assert_equal "group", fanned.action
       assert_equal store.contact("znorth").etag, fanned.etag
-      assert_equal [EDITED_ADDRESS], fanned.diff.added
-      assert_equal [HOUSEHOLD_ADDRESS], fanned.diff.removed
+      assert_equal [EDITED_ADDRESS, store.contact("znorth").lent_markers.fetch(0)], fanned.diff.added
+      assert_equal [HOUSEHOLD_ADDRESS, marker], fanned.diff.removed
       assert_equal "put", store.changes_of("aiden").first.action
     end
   end
@@ -2318,14 +2326,35 @@ class StoreTest < Minitest::Test
     with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
       FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
+      marker = store.contact("aiden").lent_markers.fetch(0)
 
       store.put("aiden", vcard(served.sub("#{HOUSEHOLD_ADDRESS}\r\n", "")))
 
       assert_equal ZED, store.contact("znorth").vcard.to_s
       fanned = store.changes_of("znorth").first
       assert_equal "group", fanned.action
-      assert_equal [HOUSEHOLD_ADDRESS], fanned.diff.removed
+      assert_equal [HOUSEHOLD_ADDRESS, marker], fanned.diff.removed
       assert_empty fanned.diff.added
+    end
+  end
+
+  # The incident the marker answers: a phone re-pushing its local
+  # book after an iOS update, holding the member's card from before
+  # the group had its address. No marker vouches for the group's
+  # rows, so the missing line is not believed a deletion — the
+  # household keeps its address, no other member's card moves, and
+  # the arrival report says what was refused
+  # (docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md).
+  def test_a_markerless_put_cannot_delete_the_groups_address
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
+
+      store.put("aiden", vcard(AIDEN))
+
+      assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
+      assert_includes store.contact("znorth").vcard.to_s, HOUSEHOLD_ADDRESS
+      assert_equal %w[put], store.changes_of("znorth").map(&:action)
+      assert_equal %w[put put], store.changes_of("aiden").map(&:action)
     end
   end
 
@@ -2415,16 +2444,18 @@ class StoreTest < Minitest::Test
 
   # Two lines of the lent name, neither of them its bytes: the edit
   # cannot be told from the addition, so the card is stored as it
-  # arrived and the ambiguity is reported rather than guessed at.
+  # arrived, less the marker no stored card carries, and the ambiguity
+  # is reported rather than guessed at.
   def test_two_candidates_for_one_lent_line_are_stored_and_reported
     with_store({"aiden" => AIDEN}) do |store|
       FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS])
       served = store.contact("aiden").vcard.to_s
+      marker = store.contact("aiden").lent_markers.fetch(0)
       submitted = served.sub(HOUSEHOLD_ADDRESS, "#{EDITED_ADDRESS}\r\n#{OWN_ADDRESS}")
 
       store.put("aiden", vcard(submitted))
 
-      assert_equal submitted, card_row(store, "aiden").fetch(:vcard)
+      assert_equal submitted.sub("#{marker}\r\n", ""), card_row(store, "aiden").fetch(:vcard)
       assert_equal 1, sentry_messages.length
     end
   end
@@ -2587,10 +2618,11 @@ class StoreTest < Minitest::Test
           [HOUSEHOLD_ADDRESS, "NOTE:Gate code 1854.\\n\\nBins on Tuesday."],
           store.group("nous").lines,
         )
+        marker = store.contact("znorth").lent_markers.fetch(0)
         served = ZED.sub(
           "END:VCARD\r\n",
           "NOTE:One only.\\n\\nShared · Booles:\\nGate code 1854.\\n\\nBins on Tuesday.\r\n" \
-          "#{HOUSEHOLD_ADDRESS}\r\nEND:VCARD\r\n",
+          "#{HOUSEHOLD_ADDRESS}\r\n#{marker}\r\nEND:VCARD\r\n",
         )
         assert_equal served, store.contact("znorth").vcard.to_s
       end
