@@ -2338,6 +2338,26 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # The incident the marker answers: a phone re-pushing its local
+  # book after an iOS update, holding the member's card from before
+  # the group had its address. No marker vouches for the group's
+  # rows, so the missing line is not believed a deletion — the
+  # household keeps its address, no other member's card moves, and
+  # the arrival report says what was refused
+  # (docs/plans/2026-11-03-a-version-marker-guards-lent-lines.md).
+  def test_a_markerless_put_cannot_delete_the_groups_address
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
+
+      store.put("aiden", vcard(AIDEN))
+
+      assert_includes store.contact("aiden").vcard.to_s, HOUSEHOLD_ADDRESS
+      assert_includes store.contact("znorth").vcard.to_s, HOUSEHOLD_ADDRESS
+      assert_equal %w[put], store.changes_of("znorth").map(&:action)
+      assert_equal %w[put put], store.changes_of("aiden").map(&:action)
+    end
+  end
+
   # A member returning what it downloaded moves no group line, so
   # nobody else is told anything: an entry per member of the group
   # rather than per member the edit moved would have every client
