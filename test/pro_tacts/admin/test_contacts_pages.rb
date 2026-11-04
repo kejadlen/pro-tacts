@@ -1839,7 +1839,6 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => ADA}) do |store|
       FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
       contact = store.contact("ada")
-      lent = contact.addresses.find { it.lent_by }
 
       post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
                                company: "0", etag: contact.etag,
