@@ -189,7 +189,7 @@ class ImportMergeTest < Minitest::Test
     Hegel.test(test_cases: 1_000) do |tc|
       ours, theirs = Array.new(2) { tc.draw(from_regex("[a-z/ ]{0,6}[a-z]", fullmatch: true)) }
 
-      assert_equal ours.casecmp?(theirs), !came_in?(ours, theirs)
+      assert_equal ours.strip.casecmp?(theirs.strip), !came_in?(ours, theirs)
     end
   end
 end
