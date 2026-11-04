@@ -13,15 +13,17 @@ require "pro_tacts/warnings"
 # element methods re-register over SGML's, one redefined-method
 # warning per tag.
 #
-# Two warnings survive on purpose: sgml.rb passes &block to
-# before_template and after_template, which ignore it, and Ruby warns
-# once per process at the first render carrying a content block. The
-# only way to spend that render inside the silence is a throwaway
-# component redefining view_template at require time, which costs more
-# than the two lines of noise it saves.
+# The last two warnings are spent here rather than at the first real
+# render: sgml.rb passes &block to before_template and after_template,
+# which ignore it, and Ruby warns once per process at the first render
+# carrying a content block. The anonymous component renders once,
+# carrying one, so both call sites warn inside the silence and never
+# again.
 ProTacts.silence_warnings do
   require "phlex"
   require "phlex/html"
   require "phlex/svg"
   require "phlex/sgml/state"
+
+  Class.new(Phlex::HTML) { def view_template = nil }.new.call { nil }
 end
