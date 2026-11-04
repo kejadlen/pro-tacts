@@ -9,6 +9,11 @@ require "yaml"
 require "pro_tacts/store"
 require "pro_tacts/vcard"
 
+# Loaded once rather than per test: loading db.rake again redefines the
+# class, and a redefinition is the warning noise this suite shed. The
+# task it sits beside runs in the wiring test below.
+load (Pathname.new(__dir__).parent.parent / "tasks" / "db.rake").to_s unless defined?(Db::Dump)
+
 class DbTasksTest < Minitest::Test
   AIDEN = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
 
@@ -24,7 +29,7 @@ class DbTasksTest < Minitest::Test
       store.add_member(group, "aiden")
       store.name_book("alpha@example.com", "Alpha Chen")
 
-      dump(root)
+      dump(store, root)
 
       assert_equal AIDEN, (root / "dump" / "cards" / "aiden.vcf").binread
       assert_equal({"aiden" => {"year" => 1985, "month" => 4}}, YAML.safe_load((root / "dump" / "birthdays.yml").read))
@@ -42,11 +47,11 @@ class DbTasksTest < Minitest::Test
       bytes = "\x89PNG\r\n\x1A\n\x00\xFF".b
       store.set_group_photo(group, ProTacts::Contact.photo_of(bytes))
 
-      dump(root)
+      dump(store, root)
       assert_equal bytes, (root / "dump" / "groups" / "#{group}.png").binread
 
       store.remove_group_photo(group)
-      dump(root)
+      dump(store, root)
       assert_equal ["#{group}.yml"], (root / "dump" / "groups").children.map { it.basename.to_s }
     end
   end
@@ -57,7 +62,7 @@ class DbTasksTest < Minitest::Test
     with_store do |store, root|
       store.put("aiden", vcard(AIDEN))
 
-      dump(root)
+      dump(store, root)
 
       assert_equal({}, YAML.safe_load((root / "dump" / "books.yml").read))
     end
@@ -72,7 +77,7 @@ class DbTasksTest < Minitest::Test
       (root / "dump" / "cards" / "gone.vcf").write("stale")
       (root / "dump" / "README").write("mine")
 
-      dump(root)
+      dump(store, root)
 
       assert_equal ["aiden.vcf"], (root / "dump" / "cards").children.map { it.basename.to_s }
       assert_equal "mine", (root / "dump" / "README").read
@@ -86,7 +91,7 @@ class DbTasksTest < Minitest::Test
     with_store do |store, root|
       store.put("aiden", vcard(AIDEN))
 
-      dump(root)
+      dump(store, root)
 
       assert_includes tracked(root / "dump"), "cards/aiden.vcf"
       assert_equal 1, subjects(root / "dump").size
@@ -99,9 +104,9 @@ class DbTasksTest < Minitest::Test
   def test_a_dump_that_moved_nothing_adds_no_commit
     with_store do |store, root|
       store.put("aiden", vcard(AIDEN))
-      dump(root)
+      dump(store, root)
 
-      dump(root)
+      dump(store, root)
 
       assert_equal 1, subjects(root / "dump").size
     end
@@ -112,12 +117,32 @@ class DbTasksTest < Minitest::Test
   def test_the_commit_drops_what_left_the_store
     with_store do |store, root|
       store.put("aiden", vcard(AIDEN))
-      dump(root)
+      dump(store, root)
       store.delete("aiden")
 
-      dump(root)
+      dump(store, root)
 
       refute_includes tracked(root / "dump"), "cards/aiden.vcf"
+    end
+  end
+
+  # The class above is the dump; this runs the task that wires it —
+  # config and DUMP read at invoke, the store connected for it, the run
+  # said on stdout.
+  def test_the_task_dumps_the_data_directory
+    with_store do |store, root|
+      store.put("aiden", vcard(AIDEN))
+      config = ProTacts.config
+      overridden = ENV.delete("DUMP")
+
+      ProTacts.config = ProTacts::Config.new("PRO_TACTS_DATA_DIR" => root.to_s)
+      out, = capture_subprocess_io { Rake.application["db:dump"].invoke }
+
+      assert_equal AIDEN, (root / "dump" / "cards" / "aiden.vcf").binread
+      assert_match(/\Adumped .+ into .+\z/, out.lines(chomp: true).last)
+    ensure
+      ProTacts.config = config
+      ENV["DUMP"] = overridden
     end
   end
 
@@ -132,22 +157,10 @@ class DbTasksTest < Minitest::Test
 
   def vcard(bytes) = ProTacts::VCard.new(bytes)
 
-  # Runs db:dump in a Rake application of its own, configured with root
-  # as the data directory, so the database is root's and the default
-  # dump lands in root/dump.
-  def dump(root)
-    config = ProTacts.config
-    application = Rake.application
-    overridden = ENV.delete("DUMP")
-
-    ProTacts.config = ProTacts::Config.new("PRO_TACTS_DATA_DIR" => root.to_s)
-    Rake.application = Rake::Application.new
-    load (Pathname.new(__dir__).parent.parent / "tasks" / "db.rake").to_s
-    capture_subprocess_io { Rake.application["db:dump"].invoke }
-  ensure
-    ProTacts.config = config
-    Rake.application = application
-    ENV["DUMP"] = overridden
+  # The dump straight from the class it lives in; what varies per test
+  # is exactly what the constructor takes.
+  def dump(store, root)
+    capture_subprocess_io { Db::Dump.new(store:, dump: root / "dump").call }
   end
 
   def tracked(dump) = git(dump, "ls-files")
