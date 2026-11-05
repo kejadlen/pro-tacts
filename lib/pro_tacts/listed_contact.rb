@@ -67,9 +67,6 @@ module ProTacts
     def properties = @contact.properties
 
     #: () -> Array[ContactDetails::Address]
-    def addresses = @contact.served_addresses
-
-    #: () -> Array[ContactDetails::Address]
     def served_addresses = @contact.served_addresses
 
     #: () -> String?
