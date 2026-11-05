@@ -56,9 +56,12 @@ module ProTacts
       attr_reader postal_code: String
       attr_reader country: String
       attr_reader label: String?
+      attr_reader parameters: Array[[String, String]]
+      attr_reader companions: Array[String]
       attr_reader lent_by: Group?
 
-      def self.new: (po_box: String, extended: String, street: String, locality: String, region: String, postal_code: String, country: String, ?label: String?, ?lent_by: Group?) -> instance
+      def self.new: (po_box: String, extended: String, street: String, locality: String, region: String, postal_code: String, country: String, ?label: String?, ?parameters: Array[[String, String]], ?companions: Array[String], ?lent_by: Group?) -> instance
+      def with: (?po_box: String, ?extended: String, ?street: String, ?locality: String, ?region: String, ?postal_code: String, ?country: String, ?label: String?, ?parameters: Array[[String, String]], ?companions: Array[String], ?lent_by: Group?) -> instance
     end
 
     class LentAddress

@@ -1488,7 +1488,8 @@ module ProTacts
       scope = ids ? cards.where(id: ids) : cards
       addresses = scope.join(:addresses, entity_id: :entity_id)
         .order(Sequel[:cards][:id], :position)
-        .select(Sequel[:cards][:id], :po_box, :extended, :street, :locality, :region, :postal_code, :country, :label)
+        .select(Sequel[:cards][:id], :po_box, :extended, :street, :locality, :region, :postal_code, :country, :label,
+                :parameters, :companions)
         .all
         .group_by { it.fetch(:id).to_s }
         .transform_values { |rows| rows.map { address_from(it) } }
@@ -1519,6 +1520,8 @@ module ProTacts
         postal_code: row.fetch(:postal_code).to_s,
         country: row.fetch(:country).to_s,
         label: row[:label]&.to_s,
+        parameters: JSON.parse(row.fetch(:parameters).to_s),
+        companions: JSON.parse(row.fetch(:companions).to_s),
       )
     end
 
@@ -1557,6 +1560,8 @@ module ProTacts
           postal_code: address.postal_code,
           country: address.country,
           label: address.label,
+          parameters: address.parameters.to_json,
+          companions: address.companions.to_json,
         )
       end
     end

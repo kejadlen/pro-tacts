@@ -185,6 +185,35 @@ class EditedContactTest < Minitest::Test
     assert_empty parts.address_edits
   end
 
+  # The companion a client wrote beside a lent address leaves with it,
+  # rather than staying on the member naming a line that left.
+  def test_a_lent_address_takes_its_companion_with_it
+    submitted = with_lines(
+      "item1.ADR;type=HOME;type=pref:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
+      "item1.X-ABADR:gb",
+    )
+    parts = decompose(submitted, before: before(lent: LENT))
+
+    assert_equal AIDEN, parts.stored.to_s
+    assert_empty parts.address_edits
+  end
+
+  # An edit reaches the group as what the member changed: the
+  # `pref` and companion the client wrote stay off the group's row.
+  def test_an_edited_lent_address_keeps_the_groups_parameters
+    submitted = synced(
+      with_lines(
+        "item1.ADR;type=HOME;type=pref:;;8 Calculus Close;London;England;NW1 1AB;United Kingdom",
+        "item1.X-ABADR:gb",
+      ),
+      LENT.fetch(0),
+    )
+    parts = decompose(submitted, before: before(lent: LENT))
+
+    assert_equal [address_edit(EDITED_ADDRESS)], parts.address_edits
+    assert_equal AIDEN, parts.stored.to_s
+  end
+
   def test_a_renumbered_lent_address_is_still_untouched
     renumbered = "item3.ADR;TYPE=home:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom"
     parts = decompose(with_lines(renumbered), before: before(lent: LENT))

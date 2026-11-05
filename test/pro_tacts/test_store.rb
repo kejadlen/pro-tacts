@@ -2768,6 +2768,33 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # An Apple address moves onto the entity whole: its `pref` and the
+  # X-ABADR beside it ride on the row, no line is left behind in the
+  # stored card, and the served card carries both again.
+  def test_the_migration_carries_an_addresses_parameters_and_companions
+    apple = AIDEN.sub(
+      "END:VCARD\r\n",
+      "item1.ADR;type=HOME;type=pref:;;7 Calculus Close;London;;;\r\nitem1.X-ABADR:gb\r\nEND:VCARD\r\n",
+    )
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 17)
+        db[:entities].insert(id: "kkkkllllmmmm")
+        db[:cards].insert(id: "aiden", vcard: apple, entity_id: "kkkkllllmmmm")
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        address = store.contact("aiden").addresses.fetch(0)
+
+        assert_equal [[%w[type pref]], ["X-ABADR:gb"]], [address.parameters, address.companions]
+        assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+        assert_includes store.contact("aiden").vcard.to_s,
+                        "item1.ADR;type=pref;TYPE=HOME:;;7 Calculus Close;London;;;\r\nitem1.X-ABADR:gb\r\n"
+      end
+    end
+  end
+
   def test_the_migration_joins_several_notes_into_one
     two_notes = AIDEN.sub("END:VCARD\r\n", "NOTE:First.\r\nNOTE:Second.\r\nEND:VCARD\r\n")
     Dir.mktmpdir do |dir|

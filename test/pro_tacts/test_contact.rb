@@ -365,6 +365,43 @@ class ContactTest < Minitest::Test
     assert_equal "home, postal", postal.addresses.fetch(0).label
   end
 
+  # What the reading does not say rides with the address rather than
+  # being dropped or left behind: Apple's `pref` on the line, and the
+  # X-ABADR sharing its group, which composes back beside its ADR
+  # under the group the composition numbers — and reads back as the
+  # same address.
+  def test_an_address_keeps_its_parameters_and_companions
+    apple = STRUCTURED.sub(
+      "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",
+      "item1.ADR;type=HOME;type=pref:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+      "item1.X-ABADR:gb\r\n",
+    )
+    contact = contact(apple)
+    address = contact.addresses.fetch(0)
+
+    assert_equal [%w[type pref]], address.parameters
+    assert_equal ["X-ABADR:gb"], address.companions
+    refute_includes contact.stored.to_s, "X-ABADR"
+    assert_includes contact.vcard.to_s,
+                    "item1.ADR;type=pref;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+                    "item1.X-ABADR:gb\r\n"
+    assert_equal [address], ProTacts::ContactDetails.take_addresses(contact.vcard).fetch(0)
+  end
+
+  # Only an `X-` line rides with an address: a phone a client grouped
+  # with one stays in the card, read where phones are.
+  def test_a_modeled_line_sharing_an_addresses_group_stays_in_the_card
+    grouped = STRUCTURED.sub(
+      "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",
+      "item1.ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+      "item1.TEL:+1-555-0199\r\n",
+    )
+    contact = contact(grouped)
+
+    assert_empty contact.addresses.fetch(0).companions
+    assert_includes contact.stored.to_s, "item1.TEL:+1-555-0199\r\n"
+  end
+
   def test_an_adr_line_that_will_not_read_stays_in_the_card
     broken = STRUCTURED.sub(
       "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",

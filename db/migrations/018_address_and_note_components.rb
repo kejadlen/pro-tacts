@@ -13,8 +13,12 @@
 # arrival takes from that day on: the label of an address is
 # Contact.label_of's reading of it, and a line that would not read
 # stays in the card's bytes, the parser's own posture. The X-ABLabel
-# paired to an ADR goes with it; one pairing with a phone's group
-# stays.
+# paired to an ADR goes with it, and so do the `X-` lines sharing its
+# group, such as Apple's X-ABADR; one pairing with a phone's group
+# stays. What the reading does not say rides on the row as JSON:
+# the line's parameters less the types its label stands for, `pref`
+# among them, and those companion lines, so that the move keeps them
+# with the address they belong to (Contact::Address).
 #
 # The index rows hold positions into the card's lines, and taking
 # lines out moves the positions behind them, so each card whose bytes
@@ -32,6 +36,8 @@
 #
 # `text: true` and the length not read from the code, for the reasons
 # 001 and 016 record.
+require "json"
+
 require "pro_tacts/contact"
 require "pro_tacts/vcard"
 
@@ -48,6 +54,8 @@ Sequel.migration do
       String :postal_code, text: true, null: false
       String :country, text: true, null: false
       String :label, text: true
+      String :parameters, text: true, null: false
+      String :companions, text: true, null: false
       primary_key [:entity_id, :position]
     end
 
@@ -75,6 +83,8 @@ Sequel.migration do
           postal_code: address.postal_code,
           country: address.country,
           label: address.label,
+          parameters: address.parameters.to_json,
+          companions: address.companions.to_json,
         )
       end
       self[:notes].insert(entity_id:, text: note) if note
@@ -117,6 +127,8 @@ Sequel.migration do
           postal_code: address.postal_code,
           country: address.country,
           label: address.label,
+          parameters: address.parameters.to_json,
+          companions: address.companions.to_json,
         )
       end
       self[:notes].insert(entity_id: id, text: note) if note

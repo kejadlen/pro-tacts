@@ -2665,12 +2665,10 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The header is the line's own, kept byte for byte — the phones'
-  # own rule, over the parameters an ADR line can carry.
-  # The label is what an edit keeps: the parameters a line carried are
-  # the card's business and the component holds none
-  # (docs/plans/2026-10-25-contacts-on-entities.md), so an edited
-  # address renders in the store's own spelling, its label beside it.
+  # An edit keeps the label and the parameters the line carried,
+  # Contacts' `pref` among them (ContactDetails::Address), rendered in
+  # the store's own spelling: the kept parameters, then the label's
+  # types, the way a relabelled phone writes them.
   def test_a_saved_address_keeps_its_label_through_the_canonical_render
     apple = ADA.sub(
       "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
@@ -2687,7 +2685,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s,
-        "ADR;TYPE=HOME:;;5 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
+        "ADR;type=pref;TYPE=HOME:;;5 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
     end
   end
 
