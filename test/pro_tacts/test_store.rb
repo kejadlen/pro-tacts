@@ -1988,6 +1988,35 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # Everyone's book holds every card and lends nothing, so reading one
+  # contact reads nothing of it — not its row, and not its members.
+  def test_reading_a_contact_does_not_load_a_group_that_lends_nothing
+    with_store({"aiden" => AIDEN}) do |store|
+      everyone = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: ["aiden"])
+      log = QueryLog.new
+      FixtureData.database(store).loggers << log
+
+      store.contact("aiden")
+
+      refute(log.queries.any? { it.include?(everyone) }, log.queries.join("\n"))
+    end
+  end
+
+  # Everything Sequel logs, which is how the reads themselves are
+  # inspected.
+  class QueryLog
+    attr_reader :queries
+
+    def initialize
+      @queries = []
+    end
+
+    def info(message)
+      @queries << message
+    end
+    alias_method :error, :info
+  end
+
   # A `sync:` group can lend lines like any other, and the logged etag
   # is the card as the book serves it.
   def test_a_client_create_is_logged_as_its_book_serves_it

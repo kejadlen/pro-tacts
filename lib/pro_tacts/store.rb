@@ -1430,15 +1430,20 @@ module ProTacts
     # is what it means. Ordered by the group's id rather than its name,
     # because a rename must not move a member's components and change
     # every etag in the group.
+    #
+    # The memberships are narrowed to groups holding a component before
+    # any group loads, because a group loads whole, members and all, and
+    # `sync:*` holds every card and lends nothing: loaded, it would make
+    # each contact's read a read of the whole book's membership.
     #: (Array[String]? ids) -> Hash[String, Array[ContactDetails::Lent]]
     def lent_by_card(ids)
-      members = (ids ? group_members.where(card_id: ids) : group_members).order(:card_id, :group_id).all
+      lending = addresses_dataset.select(:entity_id).union(notes.select(:entity_id))
+      members = (ids ? group_members.where(card_id: ids) : group_members)
+        .where(group_id: lending).order(:card_id, :group_id).all
       lenders = groups_by_id(members.map { it.fetch(:group_id).to_s })
       members.group_by { it.fetch(:card_id).to_s }.transform_values { |rows|
-        rows.filter_map { |row|
+        rows.map { |row|
           group = lenders.fetch(row.fetch(:group_id).to_s)
-          next if group.addresses.empty? && group.note.nil?
-
           Contact::Lent.new(
             group:,
             addresses: group.addresses.each_with_index.map { |address, position|
