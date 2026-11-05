@@ -20,26 +20,28 @@ Sequel.extension :migration
 
 module ProTacts
   # The transactional store: one SQLite database holding each contact's
-  # card exactly as it was submitted.
+  # card as it was submitted, less the birthday and the addresses and
+  # note that its entity holds beside it.
   #
-  # Eight kinds of state live here and they are not equally precious.
-  # Only the entities, the cards, the change log, the birthdays, the
-  # groups, the books, the group change log, and the group photos
-  # cannot be rebuilt, and each is argued where it was decided: the
-  # entities in db/migrations/016_entities.rb, the cards and the log in
-  # docs/plans/2026-08-25-sqlite-schema.md,
-  # "What the tables are for", the birthdays in
+  # Ten kinds of state live here and they are not equally precious.
+  # Only the entities, the cards, the addresses, the notes, the change
+  # log, the birthdays, the groups, the books, the group change log,
+  # and the group photos cannot be rebuilt, and each is argued where it
+  # was decided: the entities in db/migrations/016_entities.rb, the
+  # cards and the log in docs/plans/2026-08-25-sqlite-schema.md,
+  # "What the tables are for", the addresses and the notes in
+  # docs/plans/2026-10-25-contacts-on-entities.md, the birthdays in
   # docs/plans/2026-08-31-partial-birthdays.md, the groups in
   # docs/plans/2026-08-24-vcard-storage-and-groups.md, the books in
   # docs/plans/2026-09-19-books-in-the-dump.md, the group change log
   # in docs/plans/2026-09-23-group-change-log.md, the group photos in
-  # docs/plans/2026-10-12-group-photos.md. Everything else
-  # is an index derived from the cards, and #rebuild_index will make
-  # it again from nothing.
+  # docs/plans/2026-10-12-group-photos.md. Everything else is an index
+  # derived from the cards and the components beside them, and
+  # #rebuild_index will make it again from nothing.
   #
   # Every Contact this store hands out is composed, never the stored
-  # card alone: a birthday and the lines a contact inherits from its
-  # groups are both subtracted out of a card on the way in
+  # card alone: a birthday, the contact's own components, and what its
+  # groups lend it are all subtracted out of a card on the way in
   # (EditedContact), and Contact composes them back in on read — so
   # the vcard and the etag a caller sees, and the etag the change log
   # records, describe the card a client downloads, not the bytes on
