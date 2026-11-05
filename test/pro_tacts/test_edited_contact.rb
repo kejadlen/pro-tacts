@@ -215,6 +215,27 @@ class EditedContactTest < Minitest::Test
     assert_equal [address_edit(nil)], parts.address_edits
   end
 
+  # The member's own address, sent back as it was, is not the one
+  # candidate left for the lent address the member deleted.
+  def test_a_deleted_lent_address_beside_an_own_one_is_still_a_removal
+    parts = decompose(synced(with_lines(address_line(OWN_ADDRESS)), LENT.fetch(0)),
+                      before: before(addresses: [OWN_ADDRESS], lent: LENT))
+
+    assert_equal [address_edit(nil)], parts.address_edits
+    assert_equal [OWN_ADDRESS], parts.addresses
+  end
+
+  # Nor is it a second candidate that makes a lent address's edit
+  # ambiguous.
+  def test_an_edited_lent_address_beside_an_own_one_is_still_an_edit
+    submitted = synced(with_lines(address_line(OWN_ADDRESS), address_line(EDITED_ADDRESS)), LENT.fetch(0))
+    parts = decompose(submitted, before: before(addresses: [OWN_ADDRESS], lent: LENT))
+
+    assert_equal [address_edit(EDITED_ADDRESS)], parts.address_edits
+    assert_equal [OWN_ADDRESS], parts.addresses
+    assert_empty sentry_messages
+  end
+
   # The incident's own shape: a phone re-pushing its local book after
   # an OS update, holding a member card from before the group had its
   # address. No marker names the group's current rows, so the missing

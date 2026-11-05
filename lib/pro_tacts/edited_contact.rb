@@ -267,6 +267,10 @@ module ProTacts
     # carries current (#stale_groups for what that means): a group it
     # does not is refused, its rows stay lent, and the lines that would
     # have been attributed its edit land among the member's own.
+    #
+    # Both passes draw from #unaccounted_lines, so a member's own
+    # address that came back as it was sent is never a candidate for a
+    # lent one.
     #: (VCard vcard, Set[String] stale) -> [VCard, Array[AddressEdit]]
     def subtract_lent_addresses(vcard, stale)
       lent = (@before&.lent || []).flat_map { |row|
@@ -274,7 +278,7 @@ module ProTacts
       }
       return [vcard, []] if lent.empty?
 
-      pool = vcard.lines
+      pool = unaccounted_lines(vcard)
       taken = [] #: Array[VCard::Parser::Line]
       edits = [] #: Array[AddressEdit]
 
@@ -462,6 +466,26 @@ module ProTacts
       ] == components
 
       Contact.label_of(label_of(line, pool), property.types) == address.label
+    end
+
+    # The submission's lines less one ADR, and its label, for each of
+    # the member's own addresses that came back saying what it says:
+    # what the groups lent plus whatever the client wrote beside it, the
+    # pool a lent address is attributed from. One line per address, so
+    # an entity that holds one of something and submits two leaves one
+    # over. The lines set aside stay in the card, being the member's own.
+    #: (VCard vcard) -> Array[VCard::Parser::Line]
+    def unaccounted_lines(vcard)
+      pool = vcard.lines.dup
+      (@before&.addresses || []).each do |address|
+        line = pool.find { it.names?("ADR") && unedited_address?(it, pool, address) }
+        next if line.nil?
+
+        label = label_of(line, pool)
+        strike(pool, line)
+        strike(pool, label) if label
+      end
+      pool
     end
 
     # The line out of the pool, so no second lent line is attributed
