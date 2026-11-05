@@ -102,8 +102,9 @@ module ProTacts
       # card's").
       #: (Array[ContactDetails::Address] rows, Hash[String, untyped] params) -> Array[ContactDetails::Address]
       def self.addresses(rows, params)
-        edits = hash_field(params, "address").sort_by { |key, _| key.to_i }.map { |_, fields| fields }
-        standing = rows.zip(edits).filter_map { |row, submitted|
+        edits = hash_field(params, "address")
+        standing = rows.each_with_index.filter_map { |row, index|
+          submitted = edits[index.to_s]
           next row if submitted.nil?
 
           address_of(submitted, row)
