@@ -947,9 +947,10 @@ module ProTacts
         card_properties.delete
         search_keys.delete
         sort_keys.delete
+        own = components_by_card(nil)
         cards.order(:id).all.each do
           id = it.fetch(:id).to_s
-          addresses, note = components_by_entity(it.fetch(:entity_id).to_s)
+          addresses, note = own.fetch(id)
           reindex(id, VCard.new(it.fetch(:vcard).to_s), addresses:, note:)
         end
       end
@@ -1467,8 +1468,8 @@ module ProTacts
     end
 
     # The addresses and note an entity holds, in one pair of reads —
-    # a card's own components, read beside the row by the reads that
-    # rebuild rather than compose (#rebuild_index).
+    # a card's own components, read beside the row by a write that
+    # reindexes one card rather than composing it (#reid).
     #: (String entity_id) -> [Array[ContactDetails::Address], String?]
     def components_by_entity(entity_id)
       addresses = addresses_dataset.where(entity_id:).order(:position).all.map { address_from(it) }
