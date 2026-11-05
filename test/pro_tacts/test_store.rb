@@ -2575,6 +2575,29 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # The sort keys 015 writes are the ones a rebuild writes. A blank
+  # family name reads as none, so the id stands in for it just as it
+  # does for a card with no name at all.
+  def test_the_sort_key_migration_agrees_with_a_rebuild
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 14)
+        db[:cards].insert(id: "jane", vcard: "BEGIN:VCARD\r\nVERSION:3.0\r\nN:;Jane;;;\r\nUID:jane\r\nEND:VCARD\r\n")
+        db[:cards].insert(id: "nameless", vcard: "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:nameless\r\nEND:VCARD\r\n")
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        sort_keys = -> { FixtureData.database(store)[:sort_keys].order(:card_id).select_map([:card_id, :sort_key]) }
+        migrated = sort_keys.()
+        store.rebuild_index
+
+        assert_equal [["jane", "jane"], ["nameless", "nameless"]], migrated
+        assert_equal migrated, sort_keys.()
+      end
+    end
+  end
+
   # The group rebuild carries all three tables, and the hazard it is
   # written around is this one: dropping the old groups table with
   # foreign keys on runs an implicit DELETE FROM, and the members and
