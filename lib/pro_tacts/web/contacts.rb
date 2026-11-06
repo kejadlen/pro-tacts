@@ -62,11 +62,12 @@ module ProTacts
         end
       end
 
-      # The whole book as one multi-vCard file: every stored card's
-      # bytes in id order, the same read rake db:dump makes
-      # (Store#snapshot), joined with nothing between — each card is
-      # stored ending in its final newline, so one card's END:VCARD
-      # never rides against the next one's BEGIN. Above `r.on String`,
+      # The whole book as one multi-vCard file: every contact as a
+      # client downloads it, in id order (ContactDetails#exported) — the
+      # stored bytes alone carry no birthday, address, or note — joined
+      # with nothing between, each card ending in its final newline so
+      # one card's END:VCARD never rides against the next one's BEGIN.
+      # Above `r.on String`,
       # which would otherwise take the segment for a contact id. An
       # attachment disposition, because a download is the point here
       # where the profile's own route leaves it off for its install
@@ -74,7 +75,7 @@ module ProTacts
       r.get "export.vcf" do
         response["Content-Type"] = "text/vcard; charset=utf-8"
         response["Content-Disposition"] = 'attachment; filename="contacts.vcf"'
-        store.snapshot.cards.values.join
+        store.contacts.map { it.exported.to_s }.join
       end
 
       r.on String do |id|

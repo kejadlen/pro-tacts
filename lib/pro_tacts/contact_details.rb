@@ -955,6 +955,16 @@ module ProTacts
       ContactDetails.new(stored:, birthday:, addresses:, note:, lent: @lent)
     end
 
+    # The served card less its version markers: the contact as another
+    # address book should take it in. A marker names a version of this
+    # server's group rows, which means nothing anywhere else
+    # (#LENT_MARKER).
+    #: () -> VCard
+    def exported
+      _, card = vcard.extract(LENT_MARKER)
+      card
+    end
+
     #: () -> String
     def etag
       return @etag if defined?(@etag)

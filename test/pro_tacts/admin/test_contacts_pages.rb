@@ -236,12 +236,11 @@ class AdminContactsPagesTest < Minitest::Test
     assert_includes last_response.body, "No contacts yet."
   end
 
-  # The link's answer: every stored card's bytes in id order — the
-  # same read rake db:dump makes (Store#snapshot) — joined whole, each
-  # card ending in its own final newline so the cards never run
-  # together. The stored bytes are the assertion's truth, not the
-  # input: a write composes the modeled BDAY back in.
-  def test_the_export_serves_every_stored_card_as_one_vcard_file
+  # The link's answer: every contact as a client downloads it, in id
+  # order, joined whole, each card ending in its own final newline so
+  # the cards never run together — the birthday, the addresses, and
+  # the note composed back in, since the stored bytes carry none.
+  def test_the_export_serves_every_contact_as_one_vcard_file
     grace = ADA.sub("Ada Lovelace", "Grace Hopper").sub("UID:ada", "UID:grace")
 
     with_contacts({"grace" => grace, "ada" => ADA}) do |store|
@@ -250,8 +249,24 @@ class AdminContactsPagesTest < Minitest::Test
       assert_equal 200, last_response.status
       assert_equal "text/vcard; charset=utf-8", last_response["Content-Type"]
       assert_equal 'attachment; filename="contacts.vcf"', last_response["Content-Disposition"]
-      assert_equal store.snapshot.cards.values.join, last_response.body
+      assert_equal store.contacts.map { it.vcard.to_s }.join, last_response.body
       assert_equal 2, last_response.body.scan("BEGIN:VCARD").length
+      assert_equal 2, last_response.body.scan(/^ADR/).length
+    end
+  end
+
+  # What a group lends is in the export, as it is in a client's book,
+  # and the version marker beside it is not: it names this server's
+  # rows, which mean nothing to another address book.
+  def test_the_export_carries_what_a_group_lends_without_its_marker
+    with_contacts({"ada" => ADA}) do |store|
+      FixtureData.seed_group(store, name: "Lovelaces", lines: ["NOTE:Gate code 1854."], members: ["ada"])
+
+      get "/contacts/export.vcf"
+
+      assert_includes last_response.body, "Gate code 1854."
+      refute_includes last_response.body, ProTacts::ContactDetails::LENT_MARKER
+      assert_includes store.contact("ada").vcard.to_s, ProTacts::ContactDetails::LENT_MARKER
     end
   end
 
