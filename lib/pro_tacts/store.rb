@@ -101,11 +101,12 @@ module ProTacts
     # @rbs skip
     UpcomingBirthday = Data.define(:contact, :occurs_on)
 
-    # stored cards by id, the birthdays by card id, the groups, their
+    # What cannot be rebuilt, read whole: the stored cards by id, the
+    # birthdays, addresses, and notes by card id, the groups, their
     # photos by group id, and the books — the name each named one goes
     # by, keyed by login. What `rake db:dump` writes (tasks/db.rake).
     # @rbs skip
-    Snapshot = Data.define(:cards, :birthdays, :groups, :group_photos, :books)
+    Snapshot = Data.define(:cards, :birthdays, :addresses, :notes, :groups, :group_photos, :books)
 
     # A group as a picker names it: enough to show it and to submit it,
     # and no more. A Group carries the lines it lends and the ids of
@@ -210,11 +211,16 @@ module ProTacts
     #: () -> Snapshot
     def snapshot
       @database.transaction(mode: :deferred) do
+        own = components_by_card(nil)
         Snapshot.new(
           cards: cards.order(:id).all.to_h {
             [it.fetch(:id).to_s, it.fetch(:vcard).to_s] #: [String, String]
           },
           birthdays: birthdays_by_id,
+          addresses: own.transform_values(&:first).reject { |_, addresses| addresses.empty? },
+          notes: own.filter_map { |id, (_, note)|
+            [id, note] if note #: [String, String]?
+          }.to_h,
           groups: all_groups,
           group_photos: group_photos.order(:group_id).select_map(:group_id).to_h { |id|
             photo = group_photo(id.to_s) || raise("group #{id}'s photo went missing mid-snapshot")

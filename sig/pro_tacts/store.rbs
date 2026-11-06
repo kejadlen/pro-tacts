@@ -51,11 +51,13 @@ module ProTacts
     class Snapshot
       attr_reader cards: Hash[String, String]
       attr_reader birthdays: Hash[String, Birthday]
+      attr_reader addresses: Hash[String, Array[ContactDetails::Address]]
+      attr_reader notes: Hash[String, String]
       attr_reader groups: Array[Group]
       attr_reader group_photos: Hash[String, ContactDetails::Photo]
       attr_reader books: Hash[String, String]
 
-      def self.new: (cards: Hash[String, String], birthdays: Hash[String, Birthday], groups: Array[Group], group_photos: Hash[String, ContactDetails::Photo], books: Hash[String, String]) -> instance
+      def self.new: (cards: Hash[String, String], birthdays: Hash[String, Birthday], addresses: Hash[String, Array[ContactDetails::Address]], notes: Hash[String, String], groups: Array[Group], group_photos: Hash[String, ContactDetails::Photo], books: Hash[String, String]) -> instance
     end
   end
 end

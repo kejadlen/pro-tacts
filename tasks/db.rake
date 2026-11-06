@@ -1,6 +1,7 @@
 # A readable copy of what the store cannot rebuild: each stored card as
-# its bytes, the birthdays, the groups and their photos, and the books,
-# split the way the store splits them
+# its bytes, the birthdays, addresses, and notes beside the cards, the
+# groups and their photos, and the books, split the way the store splits
+# them
 # (docs/plans/2026-09-12-database-dump.md,
 # docs/plans/2026-09-19-books-in-the-dump.md,
 # docs/plans/2026-10-12-group-photos.md). cards/ and groups/ are made
@@ -36,6 +37,13 @@ module Db
       }
       dump_file(@dump / "birthdays.yml", YAML.dump(birthdays))
 
+      # The components a card's entity holds, keyed by card id like the
+      # birthdays: the stored bytes carry none of them
+      # (docs/plans/2026-10-25-contacts-on-entities.md).
+      addresses = snapshot.addresses.sort_by { |id, _| id }.to_h { |id, rows| [id, rows.map { address_fields(it) }] }
+      dump_file(@dump / "addresses.yml", YAML.dump(addresses))
+      dump_file(@dump / "notes.yml", YAML.dump(snapshot.notes.sort_by { |id, _| id }.to_h))
+
       # A photo beside its group's YAML, named by the type its bytes
       # sniffed to, so the dump opens as the picture it is. The
       # components as the group holds them, not the lines a card
@@ -44,11 +52,7 @@ module Db
       dump_directory(groups, snapshot.groups.to_h { |group|
         ["#{group.id}.yml", YAML.dump({
           "name" => group.name,
-          "addresses" => group.addresses.map { |address|
-            {"po_box" => address.po_box, "extended" => address.extended, "street" => address.street,
-             "locality" => address.locality, "region" => address.region, "postal_code" => address.postal_code,
-             "country" => address.country, "label" => address.label}.compact
-          },
+          "addresses" => group.addresses.map { address_fields(it) },
           "note" => group.note,
           "members" => group.members,
         }.compact)]
@@ -64,6 +68,17 @@ module Db
     def cards = @dump / "cards"
 
     def groups = @dump / "groups"
+
+    # An address as the dump writes it, a card's and a group's alike:
+    # what the row holds, leaving out a label, parameters, or companions
+    # it has none of.
+    def address_fields(address)
+      {"po_box" => address.po_box, "extended" => address.extended, "street" => address.street,
+       "locality" => address.locality, "region" => address.region, "postal_code" => address.postal_code,
+       "country" => address.country, "label" => address.label,
+       "parameters" => address.parameters, "companions" => address.companions}
+        .reject { |_, value| value.nil? || value == [] }
+    end
 
     # A directory holding exactly these files, so what left the store
     # leaves the dump.
