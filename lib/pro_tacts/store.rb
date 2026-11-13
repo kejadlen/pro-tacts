@@ -1487,8 +1487,8 @@ module ProTacts
 
     # #components_by_entity over cards, keyed by card id: the joins a
     # whole-collection read makes once, rather than a pair of reads per
-    # card. Only a card with an address appears in the first hash and
-    # one with a note in the second; the absent key reads as none.
+    # card. Every card in scope has a pair: no addresses read as an
+    # empty list, and no note as nil.
     #: (Array[String]? ids) -> Hash[String, [Array[ContactDetails::Address], String?]]
     def components_by_card(ids)
       scope = ids ? cards.where(id: ids) : cards
