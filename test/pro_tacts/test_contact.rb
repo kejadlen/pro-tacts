@@ -429,6 +429,12 @@ class ContactTest < Minitest::Test
     )
   end
 
+  def test_an_address_searches_as_its_fields_without_the_po_box
+    address = ADDRESS.with(po_box: "PO Box 42", extended: "Flat 3")
+
+    assert_equal "Flat 3 12 Analytical Way London England NW1 1AA United Kingdom", address.search_text
+  end
+
   # An ADR blank throughout is no address — the reader's own rule —
   # and an empty NOTE is no note: blank is absent in both directions.
   def test_empty_values_read_as_absent

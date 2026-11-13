@@ -393,6 +393,11 @@ module ProTacts
           pair
         }
       end
+
+      # The text a search matches the address against: its fields, so
+      # the po box no screen shows finds nothing (ADDRESS_COMPONENTS).
+      #: () -> String
+      def search_text = fields.values.join(" ")
     end
 
     # What one group lends a contact: its addresses at their positions
