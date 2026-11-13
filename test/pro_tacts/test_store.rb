@@ -14,6 +14,7 @@ require "pro_tacts/store"
 require "pro_tacts/vcard"
 
 class StoreTest < Minitest::Test
+  include Hegel::Syntax::Methods
   include Sentry::TestHelper
   include SentryMessages
   include AddressGenerators
@@ -2884,6 +2885,127 @@ class StoreTest < Minitest::Test
           "#{marker}\r\nEND:VCARD\r\n",
         )
         assert_equal served, store.contact("znorth").vcard.to_s
+      end
+    end
+  end
+
+  # 018 changes what a client downloads for a card holding an address
+  # or a note, or lent one, so each such card is logged at the etag
+  # the store now serves — the ctag and a sync token's delta are the
+  # log — and a card holding neither serves its bytes as before and is
+  # not. Each card's history opens on the card as it served at 017,
+  # spelled out here, so a history replaying to the card served now
+  # shows the logged diff starts where the client was left.
+  def test_the_component_migration_logs_each_card_whose_served_card_moved
+    own = AIDEN.sub("UID:aiden", "ADR:;;1 Long Road;;;;\r\nUID:aiden")
+    xavi = ZED.gsub("znorth", "xavi").sub("FN:Zed", "FN:Xavi")
+    version = Digest::SHA256.hexdigest([HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE, "Booles"].join("\0"))
+    stored = {"aiden" => own, "xavi" => xavi, "znorth" => ZED}
+    served = stored.merge(
+      "xavi" => xavi.sub(
+        "END:VCARD\r\n",
+        "#{HOUSEHOLD_ADDRESS}\r\nNOTE:Shared · Booles:\\nGate code 1854.\r\nX-PT-LENT:Booles:#{version}\r\nEND:VCARD\r\n",
+      ),
+    )
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 17)
+        stored.each.with_index do |(id, card), index|
+          entity = %w[k l m].fetch(index) * 12
+          db[:entities].insert(id: entity)
+          db[:cards].insert(id:, vcard: card, entity_id: entity)
+          db[:changes].insert(
+            card_id: id,
+            action: "put",
+            etag: ProTacts::ContactDetails.etag_for(vcard(served.fetch(id))),
+            diff: ProTacts::CardDiff.between(nil, vcard(served.fetch(id))).to_json,
+          )
+        end
+        {"nnnnnnnnnnnn" => "Booles", "oooooooooooo" => "Bowls"}.each do |id, name|
+          db[:entities].insert(id:)
+          db[:groups].insert(id:, name:)
+        end
+        db[:group_properties].insert(group_id: "nnnnnnnnnnnn", position: 0, line: HOUSEHOLD_ADDRESS)
+        db[:group_properties].insert(group_id: "nnnnnnnnnnnn", position: 1, line: HOUSEHOLD_NOTE)
+        db[:group_members].insert(group_id: "nnnnnnnnnnnn", card_id: "xavi")
+        # A group lending nothing, which moves no member's card.
+        db[:group_members].insert(group_id: "oooooooooooo", card_id: "znorth")
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        logged = store.changes(after: 3)
+
+        assert_equal %w[aiden xavi], logged.map(&:card_id)
+        logged.each { assert_equal ["put", store.contact(it.card_id).etag], [it.action, it.etag] }
+        assert_equal "5", store.ctag
+        assert_equal store.changes_of("znorth").fetch(0).etag, store.contact("znorth").etag
+        stored.each_key do |id|
+          rebuilt = Hash.new(0)
+          store.changes_of(id).reverse_each do |change|
+            change.diff.removed.each { rebuilt[it] -= 1 }
+            change.diff.added.each { rebuilt[it] += 1 }
+          end
+          lines = ProTacts::CardDiff.between(nil, store.contact(id).vcard).added
+          assert_equal lines.tally, rebuilt.reject { |_, count| count.zero? }, id
+        end
+      end
+    end
+  end
+
+  # The example above over generated books: whatever each card holds
+  # of its own and whichever groups lend it what, a card whose served
+  # card the move changes — one holding an address or a note above its
+  # UID, where the composition will not put it back, or a member of a
+  # group lending either — is logged once at the etag it now serves,
+  # and any other card is not logged and serves the card stored at 017.
+  # Each case builds on a copy of one database migrated to 017, the
+  # change log test's own economy.
+  def test_the_component_migration_logs_exactly_the_cards_it_moved
+    ids = %w[ada bob cy]
+    groups = {"nnnnnnnnnnnn" => "Booles", "oooooooooooo" => nil}
+    Dir.mktmpdir do |dir|
+      template = Pathname.new(dir) / "template.db"
+      Sequel.connect("sqlite://#{template}") { Sequel::Migrator.run(it, ProTacts::Store::MIGRATIONS.to_s, target: 17) }
+      runs = 0
+      Hegel.test(test_cases: 50) do |tc|
+        path = Pathname.new(dir) / "#{runs += 1}.db"
+        FileUtils.cp(template, path)
+        lends = groups.keys.to_h { [it, tc.draw(sets(sampled_from([HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE]))).to_a] }
+        books = ids.to_h { |id|
+          own = tc.draw(sets(sampled_from(["ADR:;;1 Long Road;;;;", "NOTE:Own note."]))).map { "#{it}\r\n" }
+          card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:#{id}\r\n#{own.join}UID:#{id}\r\nEND:VCARD\r\n"
+          birthday = tc.draw(optional(just(ProTacts::Birthday.new(year: 1985, month: 4, day: 12))))
+          [id, [card, birthday, tc.draw(sets(sampled_from(groups.keys))).to_a]]
+        }
+        Sequel.connect("sqlite://#{path}") do |db|
+          groups.each do |id, name|
+            db[:entities].insert(id:)
+            db[:groups].insert(id:, name:)
+            lends.fetch(id).each.with_index { |line, position| db[:group_properties].insert(group_id: id, position:, line:) }
+          end
+          books.each.with_index do |(id, (card, birthday, member_of)), index|
+            entity = %w[k l m].fetch(index) * 12
+            db[:entities].insert(id: entity)
+            db[:cards].insert(id:, vcard: card, entity_id: entity)
+            db[:birthdays].insert(card_id: id, **birthday.to_h) if birthday
+            member_of.each { db[:group_members].insert(group_id: it, card_id: id) }
+          end
+        end
+        moved = books.select { |_, (card, _, member_of)|
+          card.match?(/^(ADR|NOTE):/) || member_of.any? { !lends.fetch(it).empty? }
+        }.keys
+
+        ProTacts::Store.connect(path) do |store|
+          assert_equal moved, store.changes.map(&:card_id)
+          store.changes.each { assert_equal store.contact(it.card_id).etag, it.etag }
+          assert_equal moved.length.to_s, store.ctag
+          (ids - moved).each do |id|
+            card, birthday, = books.fetch(id)
+            expected = birthday ? card.sub("END:VCARD\r\n", "#{birthday.to_line}\r\nEND:VCARD\r\n") : card
+            assert_equal expected, store.contact(id).vcard.to_s
+          end
+        end
       end
     end
   end
