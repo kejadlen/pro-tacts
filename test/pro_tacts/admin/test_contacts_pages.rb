@@ -1856,11 +1856,11 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => ADA}) do |store|
       FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
       contact = store.contact("ada")
-      lent = contact.addresses.find { it.lent_by }
+      lent = contact.served_addresses.index { it.lent_by } or flunk "the group lends no address"
 
       post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
                                company: "0", etag: contact.etag,
-                               address: {"1" => {"street" => "9 Elsewhere Lane"}}
+                               address: {lent.to_s => {"street" => "9 Elsewhere Lane"}}
 
       assert_equal 303, last_response.status
       after = store.contact("ada")

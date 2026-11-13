@@ -2543,6 +2543,7 @@ class StoreTest < Minitest::Test
 
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       assert_equal [HOUSEHOLD], store.contact("aiden").addresses
+      assert_equal [RENDERED_ADDRESS], lent_lines(store, group)
       assert_equal served, store.contact("aiden").vcard.to_s
     end
   end
