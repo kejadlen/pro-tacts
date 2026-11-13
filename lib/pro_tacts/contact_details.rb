@@ -1146,10 +1146,9 @@ module ProTacts
     # outranks go with it, Contacts showing the label alone.
     #: (VCard::Parser::Property property, VCard::Parser::Line? label_line, ?Array[String] companions) -> Address?
     def self.address_of(property, label_line, companions = [])
-      components = property.components
+      components = address_components(property)
       return if components.all?(&:empty?)
 
-      components << "" while components.length < 7
       types = property.types
       Address.new(
         po_box: components.fetch(0), extended: components.fetch(1), street: components.fetch(2),
@@ -1159,6 +1158,16 @@ module ProTacts
         parameters: property.parameters.reject { |name, value| name.casecmp?("TYPE") && types.include?(value.downcase) },
         companions:,
       )
+    end
+
+    # The seven components an ADR says (RFC 2426 section 3.2.1),
+    # unescaped: a line that stops short leaves the rest blank, and one
+    # past the seventh is no part of the address. What #address_of
+    # holds and Import::Merge compares, so a short line and the
+    # composed one #address_lines spells in full read as one address.
+    #: (VCard::Parser::Property property) -> Array[String]
+    def self.address_components(property)
+      [*property.components, *Array.new(7, "")].first(7)
     end
   end
 end

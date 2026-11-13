@@ -200,4 +200,141 @@ class ImportMergeTest < Minitest::Test
       assert_equal ours.strip.casecmp?(theirs.strip), !came_in?(ours, theirs)
     end
   end
+
+  ## Which addresses the contact already has
+
+  ADDRESS_FIELDS = %i[po_box extended street locality region postal_code country].freeze #: Array[Symbol]
+
+  HOUSEHOLD = ProTacts::Group.new(id: "kkkk", name: "Household", label: "Household", members: ["jane"])
+
+  def arriving_lines(*lines) = "BEGIN:VCARD\r\nVERSION:3.0\r\n#{lines.map { "#{it}\r\n" }.join}END:VCARD\r\n"
+
+  # Jane holding `address`: as her entity's own, lent by a group, or
+  # not at all.
+  def holding(address, how)
+    own = how == :own ? [address] : []
+    lent = how == :lent ? [lent_by_household(address)] : []
+    ProTacts::ContactDetails.new(stored: jane.stored, birthday: nil, addresses: own, note: jane.note, lent:)
+  end
+
+  def lent_by_household(address)
+    ProTacts::Contact::Lent.new(
+      group: HOUSEHOLD,
+      addresses: [ProTacts::Contact::LentAddress.new(position: 0, address:)],
+      note: nil,
+    )
+  end
+
+  # The composed line always spells all seven components
+  # (ContactDetails.address_lines); a card from elsewhere may stop
+  # short, and the address it means is the same one.
+  def test_an_address_it_has_spelt_short_does_not_come_in_again
+    short = "ADR;TYPE=HOME:;;1 Main St;Town"
+    into = jane(STORED.sub("UID:", "#{short}\r\nUID:"))
+
+    assert_equal into.addresses, merge(into, arriving_lines(short)).contact.addresses
+  end
+
+  # A component may carry the separator itself, so the comparison
+  # cannot be the components joined back up: these two spell the
+  # same string that way and are two addresses.
+  def test_addresses_a_separator_apart_are_two
+    into = jane(STORED.sub("UID:", "ADR:;;a\\;b;;c;;\r\nUID:"))
+
+    assert_equal 2, merge(into, arriving_lines("ADR:;;a;b\\;;c;;")).contact.addresses.length
+  end
+
+  # Text an address's components carry, awkward for a line to spell:
+  # its separators, its escape, a line break, case, and space. Case
+  # compares by #downcase, so no piece folds differently (`ß`).
+  ADDRESS_PIECES = ["", "a", "B", "é", "Main St", ",", ";", "\\", " ", "\n"].freeze #: Array[String]
+
+  # Blank half the time, since a blank component is the one a line
+  # may leave off and an address blank throughout is no address.
+  def address_text = one_of(just(""), arrays(sampled_from(ADDRESS_PIECES), max_size: 3).map(&:join))
+
+  def address(tc, label)
+    components = ADDRESS_FIELDS.to_h { [it, tc.draw(address_text)] }
+    ProTacts::Contact::Address.new(**components, label:)
+  end
+
+  # A label as a card carries one: none, a type word, or Apple's own.
+  def label(tc) = tc.draw(sampled_from([nil, "home", "Cabin"]))
+
+  # The ADR a card might carry `address` in: each component in any
+  # case with space around it, the trailing blank ones sometimes left
+  # off or a stray one past the seventh added, and the label as TYPE
+  # or an X-ABLabel beside it.
+  def address_spelling(tc, address, label)
+    components = ADDRESS_FIELDS.map { |field|
+      text = address.public_send(field)
+      next text if text.empty?
+
+      text = text.public_send(tc.draw(sampled_from(%i[itself upcase downcase])))
+      " " * tc.draw(integers(min_value: 0, max_value: 1)) + text + " " * tc.draw(integers(min_value: 0, max_value: 1))
+    }
+    blank = components.reverse.take_while(&:empty?).length
+    components.pop(tc.draw(integers(min_value: 0, max_value: [blank, 6].min)))
+    components.concat(tc.draw(arrays(address_text, max_size: 1))) if components.length == 7
+    value = components.map { ProTacts::VCard.escape(it) }.join(";")
+    case label
+    when nil then ["ADR:#{value}"]
+    when "home" then ["ADR;TYPE=HOME:#{value}"]
+    else ["item1.ADR:#{value}", "item1.X-ABLabel:#{label}"]
+    end
+  end
+
+  # What an address says, as two spellings of it compare.
+  def reading(address) = ADDRESS_FIELDS.map { address.public_send(it).strip.downcase }
+
+  # An arriving ADR joins the contact's addresses exactly when it says
+  # something no address the contact serves says — its own or one a
+  # group lends it, #held?'s reading — however the card spells it.
+  def test_an_address_comes_in_exactly_when_the_contact_serves_none_like_it
+    Hegel.test(test_cases: 1_000) do |tc|
+      label = label(tc)
+      held = address(tc, label)
+      tc.assume(reading(held).any? { !it.empty? })
+      arriving = tc.draw(booleans) ? held : address(tc, label)
+      tc.assume(reading(arriving).any? { !it.empty? })
+      into = holding(held, tc.draw(sampled_from(%i[own lent])))
+      card = arriving_lines(*address_spelling(tc, arriving, label))
+
+      added = merge(into, card).contact.addresses.length - into.addresses.length
+
+      assert_equal reading(held) == reading(arriving) ? 0 : 1, added, card.inspect
+    end
+  end
+
+  # An ADR blank throughout is no address (ContactDetails.address_of),
+  # and a component past the seventh is no part of one: whatever a
+  # card spells, an address it brings in says something.
+  def test_an_address_that_comes_in_says_something
+    Hegel.test(test_cases: 1_000) do |tc|
+      label = label(tc)
+      card = arriving_lines(*address_spelling(tc, address(tc, label), label))
+
+      merge(jane, card).contact.addresses.each do |address|
+        assert ADDRESS_FIELDS.any? { !address.public_send(it).empty? }, card.inspect
+      end
+    end
+  end
+
+  # Folding a card in twice is folding it in once: whatever addresses
+  # the first fold brings in, the second finds them held.
+  def test_folding_an_address_in_twice_is_folding_it_in_once
+    Hegel.test(test_cases: 1_000) do |tc|
+      label = label(tc)
+      held = address(tc, label)
+      tc.assume(reading(held).any? { !it.empty? })
+      arriving = tc.draw(booleans) ? held : address(tc, label)
+      into = holding(held, tc.draw(sampled_from(%i[own lent none])))
+      card = arriving_lines(*address_spelling(tc, arriving, label))
+
+      once = merge(into, card).contact
+      twice = merge(once, card).contact
+
+      assert_equal once.served_addresses, twice.served_addresses, card.inspect
+    end
+  end
 end
