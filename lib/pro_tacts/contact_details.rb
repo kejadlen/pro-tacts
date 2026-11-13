@@ -312,7 +312,8 @@ module ProTacts
     # An address the entity holds: ADR's seven components (RFC 2426
     # section 3.2.1 — a component the entity left blank is "", which
     # reads as absent) and its label, the one word a reader shows
-    # (#label_of's reading — an X-ABLabel's text, or the types joined),
+    # (#label_of's reading — an X-ABLabel's text, or the types joined)
+    # in the one spelling that reading gives back (.canonical_label),
     # nil where the address carries none. The component is the record:
     # #address_lines renders it into a card and #take_addresses reads
     # one back, so what moves between cards and components is the
@@ -351,11 +352,38 @@ module ProTacts
     class Address
       #: (?label: String?, ?parameters: Array[[String, String]], ?companions: Array[String], ?lent_by: Group?, **untyped) -> void
       def initialize(label: nil, parameters: [], companions: [], lent_by: nil, **)
+        label = Address.canonical_label(label)
         super
       end
 
       #: () -> Array[String]
       def self.label_words = ContactDetails.typed_words("ADR")
+
+      # A label as the word it reads back as once #address_lines renders
+      # it and #take_addresses reads it again: type words as the types
+      # read (`Home,WORK` is `home, work`), Apple's Other unwrapped as
+      # #label_of unwraps it (`other` is `Other`), any other wrapping
+      # off, and a blank label nil. The constructor holds every address
+      # to it — a form's, a store row's, a card's — so one word has one
+      # spelling and a lent address served and put back matches itself
+      # (EditedContact#unedited_address?).
+      #: (String? label) -> String?
+      def self.canonical_label(label)
+        text = label.to_s.gsub(/\r\n?/, "\n").strip
+        # A reading unwraps once, so a label wrapped twice would read
+        # differently on each trip; the word that stays put is the one
+        # with no wrapping left.
+        loop do
+          unwrapped = VCard.unwrap(text).strip
+          break if unwrapped == text
+
+          text = unwrapped
+        end
+        types = ContactDetails.label_types("ADR", text)
+        return types.empty? ? nil : types.map(&:downcase).uniq.join(", ") if types
+
+        text.casecmp?("other") ? VCard.unwrap(OTHER) : text
+      end
 
       # The components as the screens show them — street, then
       # everything after it — the shape the design's own address rows
@@ -593,11 +621,9 @@ module ProTacts
     #: (VCard card, VCard::Parser::Property property, Array[String] shown, String value, String label) -> Array[String]
     def self.labeled_lines(card, property, shown, value, label)
       kept = property.parameters.reject { |name, type| name.casecmp?("TYPE") && shown.include?(type.downcase) }
-      words = label.split(",").map(&:strip).reject(&:empty?)
-      none = {} #: Hash[String, String]
-      types = TYPE_WORDS.fetch(property.name.upcase, none)
-      if words.all? { types.key?(it.downcase) }
-        typed = words.map { ["TYPE", types.fetch(it.downcase)] } #: Array[[String, String]]
+      types = label_types(property.name, label)
+      if types
+        typed = types.map { ["TYPE", it] } #: Array[[String, String]]
         line = VCard::Parser::Property.new(group: property.group, name: property.name, parameters: [*kept, *typed], value:)
         return ["#{VCard.header_of(line)}#{value}"]
       end
@@ -609,6 +635,19 @@ module ProTacts
     end
 
     private_class_method :labeled_lines
+
+    # The TYPE values a label goes into a `name` line as, in Contacts'
+    # spelling (#TYPE_WORDS), where every comma-separated word of it is
+    # a type word — none for a label of no words — and nil where it is
+    # a custom label. The one rule #labeled_lines renders by and
+    # Address.canonical_label reads it back by.
+    #: (String name, String label) -> Array[String]?
+    def self.label_types(name, label)
+      words = label.split(",").map(&:strip).reject(&:empty?)
+      none = {} #: Hash[String, String]
+      types = TYPE_WORDS.fetch(name.upcase, none)
+      words.map { types.fetch(it.downcase) } if words.all? { types.key?(it.downcase) }
+    end
 
     # The card's ADRs as components, and the card without them — the
     # reading half of #address_lines, and the one walk every arrival
@@ -668,12 +707,14 @@ module ProTacts
       }
     end
 
-    # A companion as the component holds it: its line without the
-    # group in front or the terminator behind.
+    # A companion as the component holds it: its line unfolded, without
+    # the group in front or the terminator behind. Unfolded, because a
+    # fold inside the group would leave the prefix undeleted and the
+    # line rendered under two groups (VCard::Parser::Line#content).
     #: (VCard::Parser::Line line) -> String
     def self.companion_text(line)
       group = line.property&.group.to_s
-      line.verbatim.chomp.delete_prefix("#{group}.")
+      line.content.delete_prefix("#{group}.")
     end
 
     # The card's NOTEs as the one note the model holds, and the card

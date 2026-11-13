@@ -450,9 +450,11 @@ module ProTacts
     # card it touches") — with the types and the X-ABLabel folded into
     # the one label the way a reader shows them
     # (docs/plans/2026-10-25-contacts-on-entities.md, "Matching what
-    # comes back"). The address's parameters and companions are not
-    # read: Contacts adds a `pref` to every line it rewrites, which no
-    # member meant as an edit of the group's address.
+    # comes back"), spelled as an address holds one
+    # (Address.canonical_label) so a word compares as itself. The
+    # address's parameters and companions are not read: Contacts adds a
+    # `pref` to every line it rewrites, which no member meant as an edit
+    # of the group's address.
     #: (VCard::Parser::Line line, Array[VCard::Parser::Line] pool, ContactDetails::Address address) -> bool
     def unedited_address?(line, pool, address)
       property = line.property
@@ -465,7 +467,8 @@ module ProTacts
         address.region, address.postal_code, address.country,
       ] == components
 
-      Contact.label_of(label_of(line, pool), property.types) == address.label
+      label = Contact.label_of(label_of(line, pool), property.types)
+      Contact::Address.canonical_label(label) == address.label
     end
 
     # The submission's lines less one ADR, and its label, for each of

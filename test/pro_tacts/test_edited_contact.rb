@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require_relative "../address_generators"
 
 require "hegel"
 
@@ -16,7 +17,7 @@ require "pro_tacts/vcard"
 class EditedContactTest < Minitest::Test
   include Sentry::TestHelper
   include SentryMessages
-  include Hegel::Syntax::Methods
+  include AddressGenerators
 
   AIDEN = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
   APRIL_12 = ProTacts::Birthday.new(year: 1985, month: 4, day: 12)
@@ -212,6 +213,20 @@ class EditedContactTest < Minitest::Test
 
     assert_equal [address_edit(EDITED_ADDRESS)], parts.address_edits
     assert_equal AIDEN, parts.stored.to_s
+  end
+
+  # A label respelled as an X-ABLabel of the same word says what the
+  # type said (Address.canonical_label).
+  def test_a_respelled_lent_label_is_still_untouched
+    respelled = with_lines(
+      "item1.ADR:;;7 Calculus Close;London;England;NW1 1AB;United Kingdom",
+      "item1.X-ABLabel:Home",
+    )
+    parts = decompose(synced(respelled, LENT.fetch(0)), before: before(lent: LENT))
+
+    assert_equal AIDEN, parts.stored.to_s
+    assert_empty parts.addresses
+    assert_empty parts.address_edits
   end
 
   def test_a_renumbered_lent_address_is_still_untouched
@@ -551,20 +566,27 @@ class EditedContactTest < Minitest::Test
   # the card Contact#vcard composes, PUT back untouched, decomposes to
   # the parts it was composed from and asks nothing of any group: the
   # no-op a syncing client makes on every pass, which must not move the
-  # etag or log a change (RFC 6352 section 6.3.2.3).
+  # etag or log a change (RFC 6352 section 6.3.2.3). The addresses,
+  # own and lent, are any an entity or a group can hold
+  # (AddressGenerators), labels in every spelling among them.
   def test_a_served_card_put_back_decomposes_to_its_parts
-    address = ProTacts::Contact::Address.new(
-      po_box: "", extended: "", street: "1 Long Road", locality: "", region: "", postal_code: "", country: ""
-    )
     Hegel.test(test_cases: 1_000) do |tc|
       note = tc.draw(optional(arrays(sampled_from(NOTE_PIECES), max_size: 6).map(&:join)))
       # A note of nothing but blank lines is no note, the split's own
       # trimming (NoteSections.trimmed) — normalize the draw to the
       # reading that comes back.
       note = nil if note.to_s.strip.empty?
-      own_addresses = tc.draw(arrays(just(address), max_size: 2))
+      own_addresses = tc.draw(arrays(addresses, max_size: 2))
       birthday = tc.draw(optional(just(APRIL_12)))
-      lent = tc.draw(sets(sampled_from([*LENT, *LENT_NOTE]), max_size: 2)).to_a
+      lent_addresses = tc.draw(arrays(addresses, max_size: 3))
+      household = ProTacts::Contact::Lent.new(
+        group: HOUSEHOLD.with(addresses: lent_addresses),
+        addresses: lent_addresses.each_with_index.map { |address, position|
+          ProTacts::Contact::LentAddress.new(position:, address:)
+        },
+        note: nil,
+      )
+      lent = [*(lent_addresses.empty? ? [] : [household]), *tc.draw(sets(sampled_from(LENT_NOTE), max_size: 1))]
       contact = before(AIDEN, birthday:, addresses: own_addresses, note:, lent:)
 
       parts = decompose(contact.vcard.to_s, before: contact)

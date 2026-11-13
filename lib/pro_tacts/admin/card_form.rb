@@ -121,11 +121,13 @@ module ProTacts
       # no field editing them. Fields that arrive blank read as absent,
       # and a row blank throughout, po box included, is no address at
       # all, the blank-equals-absent rule; `over` is nil for an added
-      # row, whose po box is empty.
+      # row, whose po box is empty. A line break takes the one spelling
+      # a card's escape writes back, as #note's does, so the component
+      # reads back as itself (VCard.escape).
       #: (Hash[String, untyped] fields, ?ContactDetails::Address? over) -> ContactDetails::Address?
       def self.address_of(fields, over = nil)
         components = Contact::ADDRESS_COMPONENTS.to_h { |name|
-          pair = [name, fields[name].to_s.strip] #: [String, String]
+          pair = [name, fields[name].to_s.gsub(/\r\n?/, "\n").strip] #: [String, String]
           pair
         }
         label = fields.key?("label") ? fields["label"].to_s.strip : over&.label.to_s

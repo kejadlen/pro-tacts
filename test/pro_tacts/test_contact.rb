@@ -1,8 +1,11 @@
 require_relative "../test_helper"
+require_relative "../address_generators"
 require_relative "../photo_card"
 
 require "base64"
 require "digest"
+
+require "hegel"
 
 require "pro_tacts/contact"
 require "pro_tacts/vcard"
@@ -10,6 +13,7 @@ require "pro_tacts/vcard"
 class ContactTest < Minitest::Test
   include Sentry::TestHelper
   include SentryMessages
+  include AddressGenerators
 
   CARD = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nEND:VCARD\r\n"
 
@@ -388,6 +392,21 @@ class ContactTest < Minitest::Test
     assert_equal [address], ProTacts::ContactDetails.take_addresses(contact.vcard).fetch(0)
   end
 
+  # A client may fold a companion anywhere, its group included; the
+  # address holds it unfolded and composes it back under one group.
+  def test_a_companion_folded_inside_its_group_rides_unfolded
+    folded = STRUCTURED.sub(
+      "ADR;TYPE=HOME:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n",
+      "item1.ADR:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n" \
+      "ite\r\n m1.X-ABADR:gb\r\n",
+    )
+    contact = contact(folded)
+    address = contact.addresses.fetch(0)
+
+    assert_equal ["X-ABADR:gb"], address.companions
+    assert_equal [address], ProTacts::ContactDetails.take_addresses(contact.vcard).fetch(0)
+  end
+
   # Only an `X-` line rides with an address: a phone a client grouped
   # with one stays in the card, read where phones are.
   def test_a_modeled_line_sharing_an_addresses_group_stays_in_the_card
@@ -411,6 +430,34 @@ class ContactTest < Minitest::Test
 
     assert_empty contact.addresses
     assert contact.vcard.lines.any? { it.names?("ADR") && it.property.nil? }
+  end
+
+  # The component is the record (ContactDetails::Address): whatever an
+  # address holds and however its label was spelled, the lines
+  # #address_lines renders read back through #take_addresses as an
+  # equal address, so a served address put back is the address it was.
+  def test_a_rendered_address_reads_back_as_itself
+    Hegel.test(test_cases: 1_000) do |tc|
+      address = tc.draw(addresses)
+      card = ProTacts::VCard.new(CARD)
+
+      read, = ProTacts::ContactDetails.take_addresses(card.insert(ProTacts::Contact.address_lines(card, address)))
+
+      assert_equal [address], read
+    end
+  end
+
+  # Each spelling of a label is held as the one word it reads back as.
+  def test_an_address_holds_its_label_as_the_word_it_reads_back_as
+    {
+      "Home" => "home", " HOME " => "home", "home,WORK" => "home, work", "home,,home" => "home",
+      "other" => "Other", "OTHER" => "Other", "_$!<Other>!$_" => "Other", "_$!<Home>!$_" => "home",
+      "Summer house" => "Summer house", "home, postal" => "home, postal", "," => nil, " " => nil, nil => nil,
+    }.each do |label, held|
+      address = ADDRESS.with(label:)
+
+      held.nil? ? assert_nil(address.label, label) : assert_equal(held, address.label, label)
+    end
   end
 
   # A blank position and one past the end of the value read the same:

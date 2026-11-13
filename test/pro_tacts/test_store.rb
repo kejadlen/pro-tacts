@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require_relative "../address_generators"
 require_relative "../photo_card"
 
 require "digest"
@@ -15,6 +16,7 @@ require "pro_tacts/vcard"
 class StoreTest < Minitest::Test
   include Sentry::TestHelper
   include SentryMessages
+  include AddressGenerators
 
   AIDEN = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
   # The no-year birthday line as macOS writes it — the shape the
@@ -2189,6 +2191,61 @@ class StoreTest < Minitest::Test
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       assert_equal [own], store.contact("aiden").addresses
       assert_equal served, store.contact("aiden").vcard.to_s
+    end
+  end
+
+  # A group's labels as the editor takes them — `other` is a word it
+  # offers (Address.label_words) — come back from a member's untouched
+  # PUT as the addresses they were lent as, however often the client
+  # syncs: nothing lands on the member, the group keeps its words, and
+  # the etag holds (Address.canonical_label).
+  def test_lent_labels_survive_repeated_untouched_puts
+    lent = [["1 Main St", "other"], ["2 Side St", "Home"]].map { |street, label|
+      ProTacts::Contact::Address.new(
+        po_box: "", extended: "", street:, locality: "", region: "", postal_code: "", country: "", label:
+      )
+    }
+
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      group = store.create_group(name: "House", members: %w[aiden znorth])
+      store.set_group_components(group, lent, nil)
+      etag = store.contact("aiden").etag
+
+      3.times do
+        after = store.put("aiden", vcard(store.contact("aiden").vcard.to_s), client: true)
+
+        assert_empty after.addresses
+        assert_equal etag, after.etag
+      end
+      assert_equal %w[Other home], store.group(group).addresses.map(&:label)
+      assert_empty sentry_messages
+    end
+  end
+
+  # The same through the rows: whatever addresses a member and its
+  # group hold, the group's come back from the store as they went in,
+  # and the served card put back untouched leaves both and the etag
+  # where they were (EditedContactTest holds the decomposition alone).
+  def test_an_untouched_put_of_any_served_card_changes_nothing
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      group = store.create_group(name: "House", members: %w[aiden znorth])
+      Hegel.test(test_cases: 200) do |tc|
+        own = tc.draw(arrays(addresses, max_size: 2))
+        lent = tc.draw(arrays(addresses, max_size: 3))
+        # Nothing lent while the member's own go in, or an own address
+        # equal to a lent one would be read as the group's.
+        store.set_group_components(group, [], nil)
+        store.put("aiden", ProTacts::Admin::CardForm.composed_card(vcard(AIDEN), own, nil))
+        store.set_group_components(group, lent, nil)
+        served = store.contact("aiden")
+
+        after = store.put("aiden", served.vcard, client: true)
+
+        assert_equal lent, store.group(group).addresses
+        assert_equal own, after.addresses
+        assert_equal served.etag, after.etag
+        assert_empty sentry_messages
+      end
     end
   end
 
