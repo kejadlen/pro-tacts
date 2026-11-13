@@ -1768,8 +1768,8 @@ class StoreTest < Minitest::Test
   end
 
   # Nothing a client downloads moved, so nothing is logged: a group
-  # that lends nothing composes nothing into a new member, and a name
-  # is on no card.
+  # that lends nothing composes nothing into a new member, its name
+  # included.
   def test_writes_that_move_no_served_card_log_nothing
     with_store({"aiden" => AIDEN}) do |store|
       id = FixtureData.seed_group(store, members: [], lines: [])
@@ -1780,6 +1780,26 @@ class StoreTest < Minitest::Test
 
       assert_equal ["put"], store.changes_of("aiden").map(&:action)
       assert_equal id, store.group(id).label
+    end
+  end
+
+  # A lending group's label heads its note section and names its
+  # version marker on every member's card, so a rename moves each one.
+  def test_renaming_a_lending_group_logs_every_member
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      marker = store.contact("aiden").lent.fetch(0).marker_line
+      sequence = store.latest_sequence
+
+      store.rename_group(id, name: "Booles")
+
+      assert_equal sequence + 1, store.latest_sequence
+      change = store.changes_of("aiden").first
+      assert_equal "group", change.action
+      assert_equal store.contact("aiden").etag, change.etag
+      assert_equal ["NOTE:Shared · #{id}:\\nGate code 1854.", marker], change.diff.removed
+      assert_equal ["NOTE:Shared · Booles:\\nGate code 1854.", store.contact("aiden").lent.fetch(0).marker_line],
+                   change.diff.added
     end
   end
 
@@ -3042,6 +3062,9 @@ class StoreTest < Minitest::Test
       # first is a client that has never synced.
       @tokens = Hegel::Stateful::Pool.new(tc)
       @tokens.add([0, {}])
+      # Every card exists from the start, so a group has members to
+      # lend to within a step or two rather than only after the puts.
+      IDS.each { @store.put(it, card(tc, it)) }
     end
 
     # A card a write might carry: any name, and a TEL or two that may
@@ -3102,8 +3125,107 @@ class StoreTest < Minitest::Test
       raise "#{id}'s history rebuilds #{rebuilt}, not #{lines}" unless rebuilt.reject { |_, count| count.zero? } == lines.tally
     end
 
+    # The groups' writes, which move cards nobody wrote to: names that
+    # collide, a book's among them, and components the member edits
+    # below can find in a served card.
+    GROUP_NAMES = [nil, "Booles", "Curies", "sync:Alpha Chen"].freeze #: Array[String?]
+    ADDRESSES = [HOUSEHOLD, HOUSEHOLD.with(street: "9 Calculus Close", label: "work")].freeze #: Array[ProTacts::Contact::Address]
+    NOTES = ["Gate code 1854.", "Gate code 1912."].freeze #: Array[String]
+
+    # A member's edits to what its groups lend, as the substitution a
+    # client makes in the served card: a street rewritten, an address
+    # deleted, a note section rewritten or emptied.
+    MEMBER_EDITS = [
+      ["7 Calculus Close", "8 Calculus Close"],
+      ["9 Calculus Close", "8 Calculus Close"],
+      ["8 Calculus Close", "7 Calculus Close"],
+      ["#{RENDERED_ADDRESS}\r\n", ""],
+      ["Gate code 1854.", "Gate code 1912."],
+      ["Gate code 1912.", ""],
+    ].freeze #: Array[[String, String]]
+
+    def a_group(tc)
+      groups = @store.all_groups
+      tc.assume(!groups.empty?)
+      tc.draw(sampled_from(groups))
+    end
+
+    def a_card(tc)
+      ids = @store.contact_ids
+      tc.assume(!ids.empty?)
+      tc.draw(sampled_from(ids))
+    end
+
+    # The names no group holds, and nameless, which any number may be.
+    def free_names = (GROUP_NAMES - @store.all_groups.map(&:name)) | [nil]
+
+    def set_components(tc, id)
+      @store.set_group_components(
+        id, tc.draw(arrays(sampled_from(ADDRESSES), max_size: 2)), tc.draw(optional(sampled_from(NOTES)))
+      )
+    end
+
+    # Created with members and components, the admin's two saves in a
+    # row, so a lending group is one step away rather than three. At
+    # least one member where there is a card: an empty group is the
+    # draw's favourite, and moves no card.
+    rule(:create_group) do |tc|
+      ids = @store.contact_ids
+      members = ids.empty? ? [] : tc.draw(sets(sampled_from(ids), min_size: 1, max_size: 3)).to_a
+      id = @store.create_group(name: tc.draw(sampled_from(free_names)), members:)
+      set_components(tc, id)
+    end
+
+    # Any rename #rename_group takes: a book's group keeps its name,
+    # and a name is one group's.
+    rule(:rename_group) do |tc|
+      group = a_group(tc)
+      tc.assume(!group.sync?)
+      @store.rename_group(group.id, name: tc.draw(sampled_from(free_names)))
+    end
+
+    rule(:set_group_components) do |tc|
+      set_components(tc, a_group(tc).id)
+    end
+
+    rule(:join) do |tc|
+      @store.add_member(a_group(tc).id, a_card(tc))
+    end
+
+    rule(:leave) do |tc|
+      @store.remove_member(a_group(tc).id, a_card(tc))
+    end
+
+    rule(:delete_group) do |tc|
+      group = a_group(tc)
+      tc.assume(group.name != ProTacts::Group::EVERYONE)
+      @store.delete_group(group.id)
+    end
+
+    # A member PUTs its served card back with one lent component
+    # edited, the marker vouching for it, so the edit reaches the group.
+    rule(:member_put) do |tc|
+      members = @store.contacts.reject { it.lent.empty? }
+      tc.assume(!members.empty?)
+      member = tc.draw(sampled_from(members))
+      served = member.vcard.to_s
+      edits = MEMBER_EDITS.select { served.include?(it.first) }
+      tc.assume(!edits.empty?)
+      from, to = tc.draw(sampled_from(edits))
+      @store.put(member.id, ProTacts::VCard.new(served.sub(from, to)))
+    end
+
     invariant(:the_ctag_is_the_last_entry) do
       raise "the ctag is #{@store.ctag}" unless @store.ctag == (@store.changes.last&.sequence || 0).to_s
+    end
+
+    # The log never misses a served change: whatever wrote a card's
+    # bytes, the card's last entry carries what it serves now.
+    invariant(:every_card_serves_its_last_entry) do
+      @store.contacts.each do |contact|
+        logged = @store.changes_of(contact.id).first&.etag
+        raise "#{contact.id} serves #{contact.etag}, but its last entry is #{logged}" unless logged == contact.etag
+      end
     end
   end
 

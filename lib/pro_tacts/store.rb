@@ -1089,27 +1089,40 @@ module ProTacts
     end
 
     # The rename itself, with no refusal: #name_book's way of renaming
-    # the one group #rename_group will not. A name is on no card, so no
-    # member's bytes move, but a `sync:` name is what puts a card in a
-    # book: a rename into, out of, or between them moves every member
-    # between books and logs each one (#fan_out's `moved`). Logged in
-    # the group's own log only where the name moved, the log recording
-    # what happened rather than that a save was asked
-    # (docs/plans/2026-09-23-group-change-log.md, "One entry per
-    # primitive").
+    # the one group #rename_group will not. A lending group's label is
+    # on every member's card — its note section's header and its
+    # version marker (Contact::Lent#marker_line) — so a rename moves
+    # each member's bytes, and #fan_out logs them. A group that lends
+    # nothing is composed into no card (#lent_by_card), so its rename
+    # skips reading every member twice to learn that, `sync:*` holding
+    # them all. A `sync:` name is what puts a card in a book, though:
+    # a rename into, out of, or between them moves every member
+    # between books and logs each one whatever its bytes did
+    # (#fan_out's `moved`). Logged in the group's own log only where
+    # the name moved, the log recording what happened rather than
+    # that a save was asked (docs/plans/2026-09-23-group-change-log.md,
+    # "One entry per primitive").
     #: (String id, String? name) -> void
     def rename(id, name)
       name = group_name(name)
       @database.transaction do
         was = groups.where(id:).sole.fetch(:name)&.to_s
-        if was != name && (Group.sync_name?(was) || Group.sync_name?(name))
-          members = member_ids([id])
-          fan_out(members, moved: members) { groups.where(id:).update(name:) }
-        else
-          groups.where(id:).update(name:)
+        if was != name
+          books = Group.sync_name?(was) || Group.sync_name?(name)
+          members = [] #: Array[String]
+          members = member_ids([id]) if books || lends?(id)
+          fan_out(members, moved: books ? members : []) { groups.where(id:).update(name:) }
+          record_group_change(id, action: GroupAction::RENAME, detail: {"was" => was, "name" => name})
         end
-        record_group_change(id, action: GroupAction::RENAME, detail: {"was" => was, "name" => name}) if was != name
       end
+    end
+
+    # Whether a group holds a component to lend — the narrowing
+    # #lent_by_card makes before composing any member, asked of one
+    # group.
+    #: (String id) -> bool
+    def lends?(id)
+      !addresses_dataset.where(entity_id: id).empty? || !notes.where(entity_id: id).empty?
     end
 
     # A name as a group stores it: a blank is NULL, nameless's one
