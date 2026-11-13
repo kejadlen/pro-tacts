@@ -1906,6 +1906,36 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # A member's PUT that rewrites what its group lends is a write to the
+  # group like the admin's, logged as #set_group_components logs one:
+  # its address and its note in one entry, the PUT being one write.
+  def test_a_members_edit_of_what_its_group_lends_is_logged
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub(RENDERED_ADDRESS, RENDERED_EDITED_ADDRESS).sub("1854", "1912")))
+
+      entries = store.group_changes_of(id)
+      assert_equal %w[lines create], entries.map(&:action)
+      assert_equal({"added" => [RENDERED_EDITED_ADDRESS, "NOTE:Gate code 1912."],
+                    "removed" => [RENDERED_ADDRESS, HOUSEHOLD_NOTE]}, entries.first.detail)
+    end
+  end
+
+  # A PUT of what the member downloaded edits nothing, and a markerless
+  # one is refused the group's rows: neither moves a line to log.
+  def test_a_members_put_that_moves_no_lent_line_logs_nothing_of_the_group
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+
+      store.put("aiden", vcard(store.contact("aiden").vcard.to_s))
+      store.put("aiden", vcard(AIDEN))
+
+      assert_equal %w[create], store.group_changes_of(id).map(&:action)
+    end
+  end
+
   # A group id and not a foreign key, the card log's reason: the
   # history outlives the group and ends in its tombstone.
   def test_a_deleted_groups_changes_still_read
@@ -3062,6 +3092,9 @@ class StoreTest < Minitest::Test
       # first is a client that has never synced.
       @tokens = Hegel::Stateful::Pool.new(tc)
       @tokens.add([0, {}])
+      # Each group's lines and how many `lines` entries its log held at
+      # the last check, for the step that moves them to be measured by.
+      @groups = {}
       # Every card exists from the start, so a group has members to
       # lend to within a step or two rather than only after the puts.
       IDS.each { @store.put(it, card(tc, it)) }
@@ -3225,6 +3258,47 @@ class StoreTest < Minitest::Test
       @store.contacts.each do |contact|
         logged = @store.changes_of(contact.id).first&.etag
         raise "#{contact.id} serves #{contact.etag}, but its last entry is #{logged}" unless logged == contact.etag
+      end
+    end
+
+    # The group log's counterpart: a step that moved a group's lines
+    # logged one `lines` entry for it, and a step that moved none
+    # logged none (docs/plans/2026-09-23-group-change-log.md, "One
+    # entry per primitive"). No rule writes one group's lines twice,
+    # and a group made this step started from none.
+    invariant(:a_group_logs_each_move_of_its_lines) do
+      now = @store.all_groups.to_h { |group|
+        logged = @store.group_changes_of(group.id).count { it.action == ProTacts::Store::GroupAction::LINES }
+        [group.id, [group.composed_lines, logged]]
+      }
+      now.each do |id, (lines, logged)|
+        was, was_logged = @groups.fetch(id, [[], 0])
+        moved = was == lines ? 0 : 1
+        raise "#{id}'s lines went #{was} to #{lines} over #{logged - was_logged} entries" unless logged - was_logged == moved
+      end
+      @groups = now
+    end
+
+    # And what the entries carry: a group's history, replayed oldest
+    # first, rebuilds the name it goes by and the lines it lends —
+    # #read_history's promise, in the group log's spelling.
+    invariant(:a_groups_history_rebuilds_it) do
+      @store.all_groups.each do |group|
+        name = nil
+        lines = Hash.new(0)
+        @store.group_changes_of(group.id).reverse_each do |change|
+          case change.action
+          when ProTacts::Store::GroupAction::CREATE, ProTacts::Store::GroupAction::RENAME
+            name = change.detail.fetch("name")
+          when ProTacts::Store::GroupAction::LINES
+            change.detail.fetch("removed").each { lines[it] -= 1 }
+            change.detail.fetch("added").each { lines[it] += 1 }
+          end
+        end
+        lines = lines.reject { |_, count| count.zero? }
+        unless name == group.name && lines == group.composed_lines.tally
+          raise "#{group.id}'s history rebuilds #{name.inspect} lending #{lines}, not #{group.name.inspect} lending #{group.composed_lines}"
+        end
       end
     end
   end

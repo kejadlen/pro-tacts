@@ -505,8 +505,10 @@ module ProTacts
         unless parts.address_edits.empty? && parts.note_edits.empty?
           groups = (parts.address_edits.map(&:group_id) + parts.note_edits.map(&:group_id)).uniq
           fan_out(member_ids(groups), except: id) {
-            apply_address_edits(parts.address_edits)
-            apply_note_edits(parts.note_edits)
+            log_lines(groups) {
+              apply_address_edits(parts.address_edits)
+              apply_note_edits(parts.note_edits)
+            }
           }
           contact = Contact.new(
             id:, stored: parts.stored, birthday: parts.birthday, addresses: parts.addresses, note: parts.note,
@@ -741,30 +743,16 @@ module ProTacts
     # Replaces what a group lends, wholesale: its entity's whole
     # address list at positions from zero, and its note. Every member
     # serves the new components from here on, so every member whose
-    # served card moved is logged (#fan_out), and the group's own log
-    # carries the lines the write moved in CardDiff's spelling
-    # (Group#composed_lines). A pure reorder is an entry with an empty
-    # diff — the multiset difference cannot see it, but the lending
-    # order moved every member's composed card, so it is a real write.
-    # A rewrite that stores the same components in the same order
-    # writes no entry, this log's own bargain against the cards' (the
-    # plan's "One entry per primitive").
+    # served card moved is logged (#fan_out), and so is the group
+    # (#log_lines).
     #: (String id, Array[ContactDetails::Address] addresses, String? note) -> void
     def set_group_components(id, addresses, note)
       @database.transaction do
-        was = group_lines(id)
-        lines = Group.composed_lines(addresses, note)
-        diff = CardDiff.between_lines(was, lines)
         fan_out(member_ids([id])) do
-          write_addresses(id, addresses)
-          write_note(id, note)
-        end
-        if was != lines
-          record_group_change(
-            id,
-            action: GroupAction::LINES,
-            detail: {"added" => diff.added, "removed" => diff.removed},
-          )
+          log_lines([id]) do
+            write_addresses(id, addresses)
+            write_note(id, note)
+          end
         end
       end
     end
@@ -1130,6 +1118,34 @@ module ProTacts
     #: (String? name) -> String?
     def group_name(name)
       name unless name.to_s.strip.empty?
+    end
+
+    # The block's writes to these groups' components, bracketed by a
+    # read of each group's lines either side, and a `lines` entry in
+    # its own log wherever the two differ, carrying the lines the write
+    # moved in CardDiff's spelling (Group#composed_lines) — one entry
+    # per group however many of its components moved, whether the
+    # admin's save or a member's PUT wrote them. A pure reorder is an
+    # entry with an empty diff — the multiset difference cannot see it,
+    # but the lending order moved every member's composed card, so it
+    # is a real write. A rewrite that stores the same components in the
+    # same order writes no entry, this log's own bargain against the
+    # cards' (docs/plans/2026-09-23-group-change-log.md, "One entry per
+    # primitive").
+    #: (Array[String] group_ids) { () -> void } -> void
+    def log_lines(group_ids)
+      before = group_ids.to_h {
+        [it, group_lines(it)] #: [String, Array[String]]
+      }
+      yield
+      group_ids.each do |id|
+        was = before.fetch(id)
+        lines = group_lines(id)
+        next if was == lines
+
+        diff = CardDiff.between_lines(was, lines)
+        record_group_change(id, action: GroupAction::LINES, detail: {"added" => diff.added, "removed" => diff.removed})
+      end
     end
 
     # The block's group writes, bracketed by a read of every member
@@ -1604,9 +1620,8 @@ module ProTacts
     end
 
     # A group's components as the lines a member's card composes them
-    # in, read off the store's rows for the group as it stands — the
-    # `was` a #set_group_components write is measured against and a
-    # tombstone's detail carries (Group#composed_lines' own shape).
+    # in, read off the store's rows for the group as it stands — what
+    # #log_lines measures a write by (Group#composed_lines' own shape).
     #: (String id) -> Array[String]
     def group_lines(id)
       load_groups([labeled_groups.where(id:).sole]).fetch(0).composed_lines
