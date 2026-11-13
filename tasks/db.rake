@@ -127,7 +127,7 @@ module Db
 end
 
 namespace :db do
-  desc "Dump the cards, birthdays, groups, and books into the data directory's dump/ and commit them there (DUMP=path to move it)"
+  desc "Dump the cards, their addresses and notes, birthdays, groups, and books into the data directory's dump/ and commit them there (DUMP=path to move it)"
   task :dump do
     require "pro_tacts/store"
 
