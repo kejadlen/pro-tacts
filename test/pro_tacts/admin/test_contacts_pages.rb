@@ -236,12 +236,11 @@ class AdminContactsPagesTest < Minitest::Test
     assert_includes last_response.body, "No contacts yet."
   end
 
-  # The link's answer: every stored card's bytes in id order — the
-  # same read rake db:dump makes (Store#snapshot) — joined whole, each
-  # card ending in its own final newline so the cards never run
-  # together. The stored bytes are the assertion's truth, not the
-  # input: a write composes the modeled BDAY back in.
-  def test_the_export_serves_every_stored_card_as_one_vcard_file
+  # The link's answer: every contact as a client downloads it, in id
+  # order, joined whole, each card ending in its own final newline so
+  # the cards never run together — the birthday, the addresses, and
+  # the note composed back in, since the stored bytes carry none.
+  def test_the_export_serves_every_contact_as_one_vcard_file
     grace = ADA.sub("Ada Lovelace", "Grace Hopper").sub("UID:ada", "UID:grace")
 
     with_contacts({"grace" => grace, "ada" => ADA}) do |store|
@@ -250,8 +249,24 @@ class AdminContactsPagesTest < Minitest::Test
       assert_equal 200, last_response.status
       assert_equal "text/vcard; charset=utf-8", last_response["Content-Type"]
       assert_equal 'attachment; filename="contacts.vcf"', last_response["Content-Disposition"]
-      assert_equal store.snapshot.cards.values.join, last_response.body
+      assert_equal store.contacts.map { it.vcard.to_s }.join, last_response.body
       assert_equal 2, last_response.body.scan("BEGIN:VCARD").length
+      assert_equal 2, last_response.body.scan(/^ADR/).length
+    end
+  end
+
+  # What a group lends is in the export, as it is in a client's book,
+  # and the version marker beside it is not: it names this server's
+  # rows, which mean nothing to another address book.
+  def test_the_export_carries_what_a_group_lends_without_its_marker
+    with_contacts({"ada" => ADA}) do |store|
+      FixtureData.seed_group(store, name: "Lovelaces", lines: ["NOTE:Gate code 1854."], members: ["ada"])
+
+      get "/contacts/export.vcf"
+
+      assert_includes last_response.body, "Gate code 1854."
+      refute_includes last_response.body, ProTacts::ContactDetails::LENT_MARKER
+      assert_includes store.contact("ada").vcard.to_s, ProTacts::ContactDetails::LENT_MARKER
     end
   end
 
@@ -1841,11 +1856,11 @@ class AdminContactsPagesTest < Minitest::Test
     with_contacts({"ada" => ADA}) do |store|
       FixtureData.seed_group(store, name: "Booles", members: ["ada"], lines: HOUSEHOLD)
       contact = store.contact("ada")
-      lent = contact.addresses.find { it.lent_by }
+      lent = contact.served_addresses.index { it.lent_by } or flunk "the group lends no address"
 
       post "/contacts/ada", first: "Ada", last: "Lovelace", note: "Countess of Lovelace.",
                                company: "0", etag: contact.etag,
-                               address: {"1" => {"street" => "9 Elsewhere Lane"}}
+                               address: {lent.to_s => {"street" => "9 Elsewhere Lane"}}
 
       assert_equal 303, last_response.status
       after = store.contact("ada")
@@ -2665,12 +2680,10 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
-  # The header is the line's own, kept byte for byte — the phones'
-  # own rule, over the parameters an ADR line can carry.
-  # The label is what an edit keeps: the parameters a line carried are
-  # the card's business and the component holds none
-  # (docs/plans/2026-10-25-contacts-on-entities.md), so an edited
-  # address renders in the store's own spelling, its label beside it.
+  # An edit keeps the label and the parameters the line carried,
+  # Contacts' `pref` among them (ContactDetails::Address), rendered in
+  # the store's own spelling: the kept parameters, then the label's
+  # types, the way a relabelled phone writes them.
   def test_a_saved_address_keeps_its_label_through_the_canonical_render
     apple = ADA.sub(
       "ADR;TYPE=home:;;12 Analytical Way;London;England;NW1 1AA;United Kingdom",
@@ -2687,7 +2700,7 @@ class AdminContactsPagesTest < Minitest::Test
 
       assert_equal 303, last_response.status
       assert_includes store.contact("ada").vcard.to_s,
-        "ADR;TYPE=HOME:;;5 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
+        "ADR;type=pref;TYPE=HOME:;;5 Analytical Way;London;England;NW1 1AA;United Kingdom\r\n"
     end
   end
 

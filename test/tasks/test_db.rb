@@ -41,6 +41,30 @@ class DbTasksTest < Minitest::Test
     end
   end
 
+  # A card's addresses and note are its entity's, not lines of its
+  # bytes, so the dump writes them beside the cards, keyed by card id,
+  # with whatever the address row carries beyond its reading.
+  def test_the_dump_writes_a_cards_addresses_and_note
+    with_store do |store, root|
+      store.put("aiden", vcard(AIDEN.sub(
+        "END:VCARD\r\n",
+        "item1.ADR;type=HOME;type=pref:;;7 Calculus Close;London;;;\r\nitem1.X-ABADR:gb\r\nNOTE:Gate code 1854.\r\nEND:VCARD\r\n",
+      )))
+      store.put("bea", vcard(AIDEN.gsub("Aiden", "Bea").sub("UID:aiden", "UID:bea")))
+
+      dump(store, root)
+
+      assert_equal AIDEN, (root / "dump" / "cards" / "aiden.vcf").binread
+      assert_equal(
+        {"aiden" => [{"po_box" => "", "extended" => "", "street" => "7 Calculus Close", "locality" => "London",
+                      "region" => "", "postal_code" => "", "country" => "", "label" => "home",
+                      "parameters" => [%w[type pref]], "companions" => ["X-ABADR:gb"]}]},
+        YAML.safe_load((root / "dump" / "addresses.yml").read)
+      )
+      assert_equal({"aiden" => "Gate code 1854."}, YAML.safe_load((root / "dump" / "notes.yml").read))
+    end
+  end
+
   # A group's photo is beside its YAML, named by the type it sniffed
   # to, and leaves the dump when it leaves the store.
   def test_the_dump_writes_a_groups_photo_beside_it

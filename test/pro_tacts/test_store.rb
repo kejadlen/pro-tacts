@@ -1,4 +1,5 @@
 require_relative "../test_helper"
+require_relative "../address_generators"
 require_relative "../photo_card"
 
 require "digest"
@@ -13,8 +14,10 @@ require "pro_tacts/store"
 require "pro_tacts/vcard"
 
 class StoreTest < Minitest::Test
+  include Hegel::Syntax::Methods
   include Sentry::TestHelper
   include SentryMessages
+  include AddressGenerators
 
   AIDEN = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nEND:VCARD\r\n"
   # The no-year birthday line as macOS writes it — the shape the
@@ -1765,8 +1768,8 @@ class StoreTest < Minitest::Test
   end
 
   # Nothing a client downloads moved, so nothing is logged: a group
-  # that lends nothing composes nothing into a new member, and a name
-  # is on no card.
+  # that lends nothing composes nothing into a new member, its name
+  # included.
   def test_writes_that_move_no_served_card_log_nothing
     with_store({"aiden" => AIDEN}) do |store|
       id = FixtureData.seed_group(store, members: [], lines: [])
@@ -1777,6 +1780,26 @@ class StoreTest < Minitest::Test
 
       assert_equal ["put"], store.changes_of("aiden").map(&:action)
       assert_equal id, store.group(id).label
+    end
+  end
+
+  # A lending group's label heads its note section and names its
+  # version marker on every member's card, so a rename moves each one.
+  def test_renaming_a_lending_group_logs_every_member
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      marker = store.contact("aiden").lent.fetch(0).marker_line
+      sequence = store.latest_sequence
+
+      store.rename_group(id, name: "Booles")
+
+      assert_equal sequence + 1, store.latest_sequence
+      change = store.changes_of("aiden").first
+      assert_equal "group", change.action
+      assert_equal store.contact("aiden").etag, change.etag
+      assert_equal ["NOTE:Shared · #{id}:\\nGate code 1854.", marker], change.diff.removed
+      assert_equal ["NOTE:Shared · Booles:\\nGate code 1854.", store.contact("aiden").lent.fetch(0).marker_line],
+                   change.diff.added
     end
   end
 
@@ -1883,6 +1906,36 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # A member's PUT that rewrites what its group lends is a write to the
+  # group like the admin's, logged as #set_group_components logs one:
+  # its address and its note in one entry, the PUT being one write.
+  def test_a_members_edit_of_what_its_group_lends_is_logged
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+      served = store.contact("aiden").vcard.to_s
+
+      store.put("aiden", vcard(served.sub(RENDERED_ADDRESS, RENDERED_EDITED_ADDRESS).sub("1854", "1912")))
+
+      entries = store.group_changes_of(id)
+      assert_equal %w[lines create], entries.map(&:action)
+      assert_equal({"added" => [RENDERED_EDITED_ADDRESS, "NOTE:Gate code 1912."],
+                    "removed" => [RENDERED_ADDRESS, HOUSEHOLD_NOTE]}, entries.first.detail)
+    end
+  end
+
+  # A PUT of what the member downloaded edits nothing, and a markerless
+  # one is refused the group's rows: neither moves a line to log.
+  def test_a_members_put_that_moves_no_lent_line_logs_nothing_of_the_group
+    with_store({"aiden" => AIDEN}) do |store|
+      id = FixtureData.seed_group(store, members: ["aiden"], lines: [HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE])
+
+      store.put("aiden", vcard(store.contact("aiden").vcard.to_s))
+      store.put("aiden", vcard(AIDEN))
+
+      assert_equal %w[create], store.group_changes_of(id).map(&:action)
+    end
+  end
+
   # A group id and not a foreign key, the card log's reason: the
   # history outlives the group and ends in its tombstone.
   def test_a_deleted_groups_changes_still_read
@@ -1986,6 +2039,35 @@ class StoreTest < Minitest::Test
 
       assert_empty store.book_cards("Alpha Chen")
     end
+  end
+
+  # Everyone's book holds every card and lends nothing, so reading one
+  # contact reads nothing of it — not its row, and not its members.
+  def test_reading_a_contact_does_not_load_a_group_that_lends_nothing
+    with_store({"aiden" => AIDEN}) do |store|
+      everyone = FixtureData.seed_group(store, name: ProTacts::Group::EVERYONE, members: ["aiden"])
+      log = QueryLog.new
+      FixtureData.database(store).loggers << log
+
+      store.contact("aiden")
+
+      refute(log.queries.any? { it.include?(everyone) }, log.queries.join("\n"))
+    end
+  end
+
+  # Everything Sequel logs, which is how the reads themselves are
+  # inspected.
+  class QueryLog
+    attr_reader :queries
+
+    def initialize
+      @queries = []
+    end
+
+    def info(message)
+      @queries << message
+    end
+    alias_method :error, :info
   end
 
   # A `sync:` group can lend lines like any other, and the logged etag
@@ -2160,6 +2242,61 @@ class StoreTest < Minitest::Test
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       assert_equal [own], store.contact("aiden").addresses
       assert_equal served, store.contact("aiden").vcard.to_s
+    end
+  end
+
+  # A group's labels as the editor takes them — `other` is a word it
+  # offers (Address.label_words) — come back from a member's untouched
+  # PUT as the addresses they were lent as, however often the client
+  # syncs: nothing lands on the member, the group keeps its words, and
+  # the etag holds (Address.canonical_label).
+  def test_lent_labels_survive_repeated_untouched_puts
+    lent = [["1 Main St", "other"], ["2 Side St", "Home"]].map { |street, label|
+      ProTacts::Contact::Address.new(
+        po_box: "", extended: "", street:, locality: "", region: "", postal_code: "", country: "", label:
+      )
+    }
+
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      group = store.create_group(name: "House", members: %w[aiden znorth])
+      store.set_group_components(group, lent, nil)
+      etag = store.contact("aiden").etag
+
+      3.times do
+        after = store.put("aiden", vcard(store.contact("aiden").vcard.to_s), client: true)
+
+        assert_empty after.addresses
+        assert_equal etag, after.etag
+      end
+      assert_equal %w[Other home], store.group(group).addresses.map(&:label)
+      assert_empty sentry_messages
+    end
+  end
+
+  # The same through the rows: whatever addresses a member and its
+  # group hold, the group's come back from the store as they went in,
+  # and the served card put back untouched leaves both and the etag
+  # where they were (EditedContactTest holds the decomposition alone).
+  def test_an_untouched_put_of_any_served_card_changes_nothing
+    with_store({"aiden" => AIDEN, "znorth" => ZED}) do |store|
+      group = store.create_group(name: "House", members: %w[aiden znorth])
+      Hegel.test(test_cases: 200) do |tc|
+        own = tc.draw(arrays(addresses, max_size: 2))
+        lent = tc.draw(arrays(addresses, max_size: 3))
+        # Nothing lent while the member's own go in, or an own address
+        # equal to a lent one would be read as the group's.
+        store.set_group_components(group, [], nil)
+        store.put("aiden", ProTacts::Admin::CardForm.composed_card(vcard(AIDEN), own, nil))
+        store.set_group_components(group, lent, nil)
+        served = store.contact("aiden")
+
+        after = store.put("aiden", served.vcard, client: true)
+
+        assert_equal lent, store.group(group).addresses
+        assert_equal own, after.addresses
+        assert_equal served.etag, after.etag
+        assert_empty sentry_messages
+      end
     end
   end
 
@@ -2514,6 +2651,7 @@ class StoreTest < Minitest::Test
 
       assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
       assert_equal [HOUSEHOLD], store.contact("aiden").addresses
+      assert_equal [RENDERED_ADDRESS], lent_lines(store, group)
       assert_equal served, store.contact("aiden").vcard.to_s
     end
   end
@@ -2542,6 +2680,29 @@ class StoreTest < Minitest::Test
         change = store.changes.last
         assert_equal %w[aiden edit], [change.card_id, change.action]
         assert_equal 2, change.sequence
+      end
+    end
+  end
+
+  # The sort keys 015 writes are the ones a rebuild writes. A blank
+  # family name reads as none, so the id stands in for it just as it
+  # does for a card with no name at all.
+  def test_the_sort_key_migration_agrees_with_a_rebuild
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 14)
+        db[:cards].insert(id: "jane", vcard: "BEGIN:VCARD\r\nVERSION:3.0\r\nN:;Jane;;;\r\nUID:jane\r\nEND:VCARD\r\n")
+        db[:cards].insert(id: "nameless", vcard: "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:nameless\r\nEND:VCARD\r\n")
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        sort_keys = -> { FixtureData.database(store)[:sort_keys].order(:card_id).select_map([:card_id, :sort_key]) }
+        migrated = sort_keys.()
+        store.rebuild_index
+
+        assert_equal [["jane", "jane"], ["nameless", "nameless"]], migrated
+        assert_equal migrated, sort_keys.()
       end
     end
   end
@@ -2716,6 +2877,33 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # An Apple address moves onto the entity whole: its `pref` and the
+  # X-ABADR beside it ride on the row, no line is left behind in the
+  # stored card, and the served card carries both again.
+  def test_the_migration_carries_an_addresses_parameters_and_companions
+    apple = AIDEN.sub(
+      "END:VCARD\r\n",
+      "item1.ADR;type=HOME;type=pref:;;7 Calculus Close;London;;;\r\nitem1.X-ABADR:gb\r\nEND:VCARD\r\n",
+    )
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 17)
+        db[:entities].insert(id: "kkkkllllmmmm")
+        db[:cards].insert(id: "aiden", vcard: apple, entity_id: "kkkkllllmmmm")
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        address = store.contact("aiden").addresses.fetch(0)
+
+        assert_equal [[%w[type pref]], ["X-ABADR:gb"]], [address.parameters, address.companions]
+        assert_equal AIDEN, card_row(store, "aiden").fetch(:vcard)
+        assert_includes store.contact("aiden").vcard.to_s,
+                        "item1.ADR;type=pref;TYPE=HOME:;;7 Calculus Close;London;;;\r\nitem1.X-ABADR:gb\r\n"
+      end
+    end
+  end
+
   def test_the_migration_joins_several_notes_into_one
     two_notes = AIDEN.sub("END:VCARD\r\n", "NOTE:First.\r\nNOTE:Second.\r\nEND:VCARD\r\n")
     Dir.mktmpdir do |dir|
@@ -2747,6 +2935,127 @@ class StoreTest < Minitest::Test
           "#{marker}\r\nEND:VCARD\r\n",
         )
         assert_equal served, store.contact("znorth").vcard.to_s
+      end
+    end
+  end
+
+  # 018 changes what a client downloads for a card holding an address
+  # or a note, or lent one, so each such card is logged at the etag
+  # the store now serves — the ctag and a sync token's delta are the
+  # log — and a card holding neither serves its bytes as before and is
+  # not. Each card's history opens on the card as it served at 017,
+  # spelled out here, so a history replaying to the card served now
+  # shows the logged diff starts where the client was left.
+  def test_the_component_migration_logs_each_card_whose_served_card_moved
+    own = AIDEN.sub("UID:aiden", "ADR:;;1 Long Road;;;;\r\nUID:aiden")
+    xavi = ZED.gsub("znorth", "xavi").sub("FN:Zed", "FN:Xavi")
+    version = Digest::SHA256.hexdigest([HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE, "Booles"].join("\0"))
+    stored = {"aiden" => own, "xavi" => xavi, "znorth" => ZED}
+    served = stored.merge(
+      "xavi" => xavi.sub(
+        "END:VCARD\r\n",
+        "#{HOUSEHOLD_ADDRESS}\r\nNOTE:Shared · Booles:\\nGate code 1854.\r\nX-PT-LENT:Booles:#{version}\r\nEND:VCARD\r\n",
+      ),
+    )
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 17)
+        stored.each.with_index do |(id, card), index|
+          entity = %w[k l m].fetch(index) * 12
+          db[:entities].insert(id: entity)
+          db[:cards].insert(id:, vcard: card, entity_id: entity)
+          db[:changes].insert(
+            card_id: id,
+            action: "put",
+            etag: ProTacts::ContactDetails.etag_for(vcard(served.fetch(id))),
+            diff: ProTacts::CardDiff.between(nil, vcard(served.fetch(id))).to_json,
+          )
+        end
+        {"nnnnnnnnnnnn" => "Booles", "oooooooooooo" => "Bowls"}.each do |id, name|
+          db[:entities].insert(id:)
+          db[:groups].insert(id:, name:)
+        end
+        db[:group_properties].insert(group_id: "nnnnnnnnnnnn", position: 0, line: HOUSEHOLD_ADDRESS)
+        db[:group_properties].insert(group_id: "nnnnnnnnnnnn", position: 1, line: HOUSEHOLD_NOTE)
+        db[:group_members].insert(group_id: "nnnnnnnnnnnn", card_id: "xavi")
+        # A group lending nothing, which moves no member's card.
+        db[:group_members].insert(group_id: "oooooooooooo", card_id: "znorth")
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        logged = store.changes(after: 3)
+
+        assert_equal %w[aiden xavi], logged.map(&:card_id)
+        logged.each { assert_equal ["put", store.contact(it.card_id).etag], [it.action, it.etag] }
+        assert_equal "5", store.ctag
+        assert_equal store.changes_of("znorth").fetch(0).etag, store.contact("znorth").etag
+        stored.each_key do |id|
+          rebuilt = Hash.new(0)
+          store.changes_of(id).reverse_each do |change|
+            change.diff.removed.each { rebuilt[it] -= 1 }
+            change.diff.added.each { rebuilt[it] += 1 }
+          end
+          lines = ProTacts::CardDiff.between(nil, store.contact(id).vcard).added
+          assert_equal lines.tally, rebuilt.reject { |_, count| count.zero? }, id
+        end
+      end
+    end
+  end
+
+  # The example above over generated books: whatever each card holds
+  # of its own and whichever groups lend it what, a card whose served
+  # card the move changes — one holding an address or a note above its
+  # UID, where the composition will not put it back, or a member of a
+  # group lending either — is logged once at the etag it now serves,
+  # and any other card is not logged and serves the card stored at 017.
+  # Each case builds on a copy of one database migrated to 017, the
+  # change log test's own economy.
+  def test_the_component_migration_logs_exactly_the_cards_it_moved
+    ids = %w[ada bob cy]
+    groups = {"nnnnnnnnnnnn" => "Booles", "oooooooooooo" => nil}
+    Dir.mktmpdir do |dir|
+      template = Pathname.new(dir) / "template.db"
+      Sequel.connect("sqlite://#{template}") { Sequel::Migrator.run(it, ProTacts::Store::MIGRATIONS.to_s, target: 17) }
+      runs = 0
+      Hegel.test(test_cases: 50) do |tc|
+        path = Pathname.new(dir) / "#{runs += 1}.db"
+        FileUtils.cp(template, path)
+        lends = groups.keys.to_h { [it, tc.draw(sets(sampled_from([HOUSEHOLD_ADDRESS, HOUSEHOLD_NOTE]))).to_a] }
+        books = ids.to_h { |id|
+          own = tc.draw(sets(sampled_from(["ADR:;;1 Long Road;;;;", "NOTE:Own note."]))).map { "#{it}\r\n" }
+          card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:#{id}\r\n#{own.join}UID:#{id}\r\nEND:VCARD\r\n"
+          birthday = tc.draw(optional(just(ProTacts::Birthday.new(year: 1985, month: 4, day: 12))))
+          [id, [card, birthday, tc.draw(sets(sampled_from(groups.keys))).to_a]]
+        }
+        Sequel.connect("sqlite://#{path}") do |db|
+          groups.each do |id, name|
+            db[:entities].insert(id:)
+            db[:groups].insert(id:, name:)
+            lends.fetch(id).each.with_index { |line, position| db[:group_properties].insert(group_id: id, position:, line:) }
+          end
+          books.each.with_index do |(id, (card, birthday, member_of)), index|
+            entity = %w[k l m].fetch(index) * 12
+            db[:entities].insert(id: entity)
+            db[:cards].insert(id:, vcard: card, entity_id: entity)
+            db[:birthdays].insert(card_id: id, **birthday.to_h) if birthday
+            member_of.each { db[:group_members].insert(group_id: it, card_id: id) }
+          end
+        end
+        moved = books.select { |_, (card, _, member_of)|
+          card.match?(/^(ADR|NOTE):/) || member_of.any? { !lends.fetch(it).empty? }
+        }.keys
+
+        ProTacts::Store.connect(path) do |store|
+          assert_equal moved, store.changes.map(&:card_id)
+          store.changes.each { assert_equal store.contact(it.card_id).etag, it.etag }
+          assert_equal moved.length.to_s, store.ctag
+          (ids - moved).each do |id|
+            card, birthday, = books.fetch(id)
+            expected = birthday ? card.sub("END:VCARD\r\n", "#{birthday.to_line}\r\nEND:VCARD\r\n") : card
+            assert_equal expected, store.contact(id).vcard.to_s
+          end
+        end
       end
     end
   end
@@ -2783,6 +3092,12 @@ class StoreTest < Minitest::Test
       # first is a client that has never synced.
       @tokens = Hegel::Stateful::Pool.new(tc)
       @tokens.add([0, {}])
+      # Each group's lines and how many `lines` entries its log held at
+      # the last check, for the step that moves them to be measured by.
+      @groups = {}
+      # Every card exists from the start, so a group has members to
+      # lend to within a step or two rather than only after the puts.
+      IDS.each { @store.put(it, card(tc, it)) }
     end
 
     # A card a write might carry: any name, and a TEL or two that may
@@ -2843,8 +3158,148 @@ class StoreTest < Minitest::Test
       raise "#{id}'s history rebuilds #{rebuilt}, not #{lines}" unless rebuilt.reject { |_, count| count.zero? } == lines.tally
     end
 
+    # The groups' writes, which move cards nobody wrote to: names that
+    # collide, a book's among them, and components the member edits
+    # below can find in a served card.
+    GROUP_NAMES = [nil, "Booles", "Curies", "sync:Alpha Chen"].freeze #: Array[String?]
+    ADDRESSES = [HOUSEHOLD, HOUSEHOLD.with(street: "9 Calculus Close", label: "work")].freeze #: Array[ProTacts::Contact::Address]
+    NOTES = ["Gate code 1854.", "Gate code 1912."].freeze #: Array[String]
+
+    # A member's edits to what its groups lend, as the substitution a
+    # client makes in the served card: a street rewritten, an address
+    # deleted, a note section rewritten or emptied.
+    MEMBER_EDITS = [
+      ["7 Calculus Close", "8 Calculus Close"],
+      ["9 Calculus Close", "8 Calculus Close"],
+      ["8 Calculus Close", "7 Calculus Close"],
+      ["#{RENDERED_ADDRESS}\r\n", ""],
+      ["Gate code 1854.", "Gate code 1912."],
+      ["Gate code 1912.", ""],
+    ].freeze #: Array[[String, String]]
+
+    def a_group(tc)
+      groups = @store.all_groups
+      tc.assume(!groups.empty?)
+      tc.draw(sampled_from(groups))
+    end
+
+    def a_card(tc)
+      ids = @store.contact_ids
+      tc.assume(!ids.empty?)
+      tc.draw(sampled_from(ids))
+    end
+
+    # The names no group holds, and nameless, which any number may be.
+    def free_names = (GROUP_NAMES - @store.all_groups.map(&:name)) | [nil]
+
+    def set_components(tc, id)
+      @store.set_group_components(
+        id, tc.draw(arrays(sampled_from(ADDRESSES), max_size: 2)), tc.draw(optional(sampled_from(NOTES)))
+      )
+    end
+
+    # Created with members and components, the admin's two saves in a
+    # row, so a lending group is one step away rather than three. At
+    # least one member where there is a card: an empty group is the
+    # draw's favourite, and moves no card.
+    rule(:create_group) do |tc|
+      ids = @store.contact_ids
+      members = ids.empty? ? [] : tc.draw(sets(sampled_from(ids), min_size: 1, max_size: 3)).to_a
+      id = @store.create_group(name: tc.draw(sampled_from(free_names)), members:)
+      set_components(tc, id)
+    end
+
+    # Any rename #rename_group takes: a book's group keeps its name,
+    # and a name is one group's.
+    rule(:rename_group) do |tc|
+      group = a_group(tc)
+      tc.assume(!group.sync?)
+      @store.rename_group(group.id, name: tc.draw(sampled_from(free_names)))
+    end
+
+    rule(:set_group_components) do |tc|
+      set_components(tc, a_group(tc).id)
+    end
+
+    rule(:join) do |tc|
+      @store.add_member(a_group(tc).id, a_card(tc))
+    end
+
+    rule(:leave) do |tc|
+      @store.remove_member(a_group(tc).id, a_card(tc))
+    end
+
+    rule(:delete_group) do |tc|
+      group = a_group(tc)
+      tc.assume(group.name != ProTacts::Group::EVERYONE)
+      @store.delete_group(group.id)
+    end
+
+    # A member PUTs its served card back with one lent component
+    # edited, the marker vouching for it, so the edit reaches the group.
+    rule(:member_put) do |tc|
+      members = @store.contacts.reject { it.lent.empty? }
+      tc.assume(!members.empty?)
+      member = tc.draw(sampled_from(members))
+      served = member.vcard.to_s
+      edits = MEMBER_EDITS.select { served.include?(it.first) }
+      tc.assume(!edits.empty?)
+      from, to = tc.draw(sampled_from(edits))
+      @store.put(member.id, ProTacts::VCard.new(served.sub(from, to)))
+    end
+
     invariant(:the_ctag_is_the_last_entry) do
       raise "the ctag is #{@store.ctag}" unless @store.ctag == (@store.changes.last&.sequence || 0).to_s
+    end
+
+    # The log never misses a served change: whatever wrote a card's
+    # bytes, the card's last entry carries what it serves now.
+    invariant(:every_card_serves_its_last_entry) do
+      @store.contacts.each do |contact|
+        logged = @store.changes_of(contact.id).first&.etag
+        raise "#{contact.id} serves #{contact.etag}, but its last entry is #{logged}" unless logged == contact.etag
+      end
+    end
+
+    # The group log's counterpart: a step that moved a group's lines
+    # logged one `lines` entry for it, and a step that moved none
+    # logged none (docs/plans/2026-09-23-group-change-log.md, "One
+    # entry per primitive"). No rule writes one group's lines twice,
+    # and a group made this step started from none.
+    invariant(:a_group_logs_each_move_of_its_lines) do
+      now = @store.all_groups.to_h { |group|
+        logged = @store.group_changes_of(group.id).count { it.action == ProTacts::Store::GroupAction::LINES }
+        [group.id, [group.composed_lines, logged]]
+      }
+      now.each do |id, (lines, logged)|
+        was, was_logged = @groups.fetch(id, [[], 0])
+        moved = was == lines ? 0 : 1
+        raise "#{id}'s lines went #{was} to #{lines} over #{logged - was_logged} entries" unless logged - was_logged == moved
+      end
+      @groups = now
+    end
+
+    # And what the entries carry: a group's history, replayed oldest
+    # first, rebuilds the name it goes by and the lines it lends —
+    # #read_history's promise, in the group log's spelling.
+    invariant(:a_groups_history_rebuilds_it) do
+      @store.all_groups.each do |group|
+        name = nil
+        lines = Hash.new(0)
+        @store.group_changes_of(group.id).reverse_each do |change|
+          case change.action
+          when ProTacts::Store::GroupAction::CREATE, ProTacts::Store::GroupAction::RENAME
+            name = change.detail.fetch("name")
+          when ProTacts::Store::GroupAction::LINES
+            change.detail.fetch("removed").each { lines[it] -= 1 }
+            change.detail.fetch("added").each { lines[it] += 1 }
+          end
+        end
+        lines = lines.reject { |_, count| count.zero? }
+        unless name == group.name && lines == group.composed_lines.tally
+          raise "#{group.id}'s history rebuilds #{name.inspect} lending #{lines}, not #{group.name.inspect} lending #{group.composed_lines}"
+        end
+      end
     end
   end
 

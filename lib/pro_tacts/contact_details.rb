@@ -312,13 +312,25 @@ module ProTacts
     # An address the entity holds: ADR's seven components (RFC 2426
     # section 3.2.1 — a component the entity left blank is "", which
     # reads as absent) and its label, the one word a reader shows
-    # (#label_of's reading — an X-ABLabel's text, or the types joined),
+    # (#label_of's reading — an X-ABLabel's text, or the types joined)
+    # in the one spelling that reading gives back (.canonical_label),
     # nil where the address carries none. The component is the record:
     # #address_lines renders it into a card and #take_addresses reads
     # one back, so what moves between cards and components is the
     # reading, never the bytes. `lent_by` is the group lending the row
     # on a served contact, nil on the entity's own — provenance the
     # screens mark a row with, not a fact of the address.
+    #
+    # Two members carry what the reading would otherwise drop when an
+    # ADR moves off a card. `parameters` are the line's own less the
+    # TYPE values the label stands for (#address_of), so `type=pref`,
+    # which Contacts adds to a line it edits, stays. `companions` are
+    # the `X-` lines sharing its property group besides the label, such
+    # as Apple's `item1.X-ABADR:us`, each held without its group, since
+    # the composition numbers a group of its own (#address_lines). Neither
+    # is part of what the address says: a submission's matching reads
+    # past both, because a client adds them on its own
+    # (EditedContact#unedited_address?).
     # @rbs skip
     Address = Data.define(
       :po_box,
@@ -329,6 +341,8 @@ module ProTacts
       :postal_code,
       :country,
       :label,
+      :parameters,
+      :companions,
       :lent_by,
     )
 
@@ -336,13 +350,40 @@ module ProTacts
     # VCard::Parser::Property is: the default lives here where Steep
     # reads the signature.
     class Address
-      #: (?label: String?, ?lent_by: Group?, **untyped) -> void
-      def initialize(label: nil, lent_by: nil, **)
+      #: (?label: String?, ?parameters: Array[[String, String]], ?companions: Array[String], ?lent_by: Group?, **untyped) -> void
+      def initialize(label: nil, parameters: [], companions: [], lent_by: nil, **)
+        label = Address.canonical_label(label)
         super
       end
 
       #: () -> Array[String]
       def self.label_words = ContactDetails.typed_words("ADR")
+
+      # A label as the word it reads back as once #address_lines renders
+      # it and #take_addresses reads it again: type words as the types
+      # read (`Home,WORK` is `home, work`), Apple's Other unwrapped as
+      # #label_of unwraps it (`other` is `Other`), any other wrapping
+      # off, and a blank label nil. The constructor holds every address
+      # to it — a form's, a store row's, a card's — so one word has one
+      # spelling and a lent address served and put back matches itself
+      # (EditedContact#unedited_address?).
+      #: (String? label) -> String?
+      def self.canonical_label(label)
+        text = label.to_s.gsub(/\r\n?/, "\n").strip
+        # A reading unwraps once, so a label wrapped twice would read
+        # differently on each trip; the word that stays put is the one
+        # with no wrapping left.
+        loop do
+          unwrapped = VCard.unwrap(text).strip
+          break if unwrapped == text
+
+          text = unwrapped
+        end
+        types = ContactDetails.label_types("ADR", text)
+        return types.empty? ? nil : types.map(&:downcase).uniq.join(", ") if types
+
+        text.casecmp?("other") ? VCard.unwrap(OTHER) : text
+      end
 
       # The components as the screens show them — street, then
       # everything after it — the shape the design's own address rows
@@ -380,6 +421,11 @@ module ProTacts
           pair
         }
       end
+
+      # The text a search matches the address against: its fields, so
+      # the po box no screen shows finds nothing (ADDRESS_COMPONENTS).
+      #: () -> String
+      def search_text = fields.values.join(" ")
     end
 
     # What one group lends a contact: its addresses at their positions
@@ -495,15 +541,19 @@ module ProTacts
     # owes a lent label (docs/plans/2026-10-25-contacts-on-entities.md,
     # "Composition"). Composition calls this one address at a time over
     # the card it has composed so far, so each label takes its own
-    # group.
+    # group. The address's parameters stay on its line, and its
+    # companions share the line's group, which an address with any
+    # takes whatever its label.
     #: (VCard card, Address address) -> Array[String]
     def self.address_lines(card, address)
       value = [address.po_box, address.extended, address.street, address.locality,
                address.region, address.postal_code, address.country].map { |component|
         VCard.escape(component)
       }.join(";")
-      property = VCard::Parser::Property.new(group: nil, name: "ADR", parameters: [], value: "")
-      labeled_lines(card, property, [], value, address.label.to_s)
+      group = card.free_group unless address.companions.empty?
+      property = VCard::Parser::Property.new(group:, name: "ADR", parameters: address.parameters, value: "")
+      lines = labeled_lines(card, property, [], value, address.label.to_s)
+      [*lines, *address.companions.map { "#{group}.#{it}" }]
     end
 
     # A typed row — a phone, an email — rewritten into the card under
@@ -571,11 +621,9 @@ module ProTacts
     #: (VCard card, VCard::Parser::Property property, Array[String] shown, String value, String label) -> Array[String]
     def self.labeled_lines(card, property, shown, value, label)
       kept = property.parameters.reject { |name, type| name.casecmp?("TYPE") && shown.include?(type.downcase) }
-      words = label.split(",").map(&:strip).reject(&:empty?)
-      none = {} #: Hash[String, String]
-      types = TYPE_WORDS.fetch(property.name.upcase, none)
-      if words.all? { types.key?(it.downcase) }
-        typed = words.map { ["TYPE", types.fetch(it.downcase)] } #: Array[[String, String]]
+      types = label_types(property.name, label)
+      if types
+        typed = types.map { ["TYPE", it] } #: Array[[String, String]]
         line = VCard::Parser::Property.new(group: property.group, name: property.name, parameters: [*kept, *typed], value:)
         return ["#{VCard.header_of(line)}#{value}"]
       end
@@ -588,13 +636,27 @@ module ProTacts
 
     private_class_method :labeled_lines
 
+    # The TYPE values a label goes into a `name` line as, in Contacts'
+    # spelling (#TYPE_WORDS), where every comma-separated word of it is
+    # a type word — none for a label of no words — and nil where it is
+    # a custom label. The one rule #labeled_lines renders by and
+    # Address.canonical_label reads it back by.
+    #: (String name, String label) -> Array[String]?
+    def self.label_types(name, label)
+      words = label.split(",").map(&:strip).reject(&:empty?)
+      none = {} #: Hash[String, String]
+      types = TYPE_WORDS.fetch(name.upcase, none)
+      words.map { types.fetch(it.downcase) } if words.all? { types.key?(it.downcase) }
+    end
+
     # The card's ADRs as components, and the card without them — the
     # reading half of #address_lines, and the one walk every arrival
     # takes: a card a client submits (EditedContact), a card an import
     # composes (#of_card), and the migration that moved every ADR off
     # the stored bytes. Each address takes the `X-ABLabel` paired to
-    # its group with it, the pairing #label_of reads, so a label never
-    # names a line that stayed behind; a label no address took stays
+    # its group with it, the pairing #label_of reads, and its companions
+    # (#companions_of), so no line is left naming one that moved, nor
+    # one moved naming a line that stayed; a label no address took stays
     # in the card, naming a line of its own. An ADR that reads as no
     # address at all — blank throughout, po box included — is left in
     # the card as it lies: it holds nothing to move, and the bytes are
@@ -617,14 +679,42 @@ module ProTacts
         next if property.nil?
 
         label_line = property.group && labels[property.group.downcase]
-        address = address_of(property, label_line)
+        companions = companions_of(line, card.lines).reject { |companion| taken.any? { it.equal?(companion) } }
+        address = address_of(property, label_line, companions.map { companion_text(it) })
         next if address.nil?
 
         addresses << address
         taken << line
         taken << label_line if label_line
+        taken.concat(companions)
       end
       [addresses, VCard.new(card.lines.reject { |line| taken.any? { it.equal?(line) } }.map(&:verbatim).join)]
+    end
+
+    # The lines riding with an ADR besides its label: the `X-` lines
+    # sharing its property group, none for an ungrouped line. `X-`
+    # only, so a line of a kind the model reads elsewhere is never
+    # carried off with an address a client happened to group it with.
+    #: (VCard::Parser::Line line, Array[VCard::Parser::Line] lines) -> Array[VCard::Parser::Line]
+    def self.companions_of(line, lines)
+      group = line.property&.group
+      return [] if group.nil?
+
+      lines.select { |other|
+        property = other.property
+        !other.equal?(line) && !property.nil? && property.group&.casecmp?(group) == true &&
+          property.name.upcase.start_with?("X-") && !property.name.casecmp?("X-ABLABEL")
+      }
+    end
+
+    # A companion as the component holds it: its line unfolded, without
+    # the group in front or the terminator behind. Unfolded, because a
+    # fold inside the group would leave the prefix undeleted and the
+    # line rendered under two groups (VCard::Parser::Line#content).
+    #: (VCard::Parser::Line line) -> String
+    def self.companion_text(line)
+      group = line.property&.group.to_s
+      line.content.delete_prefix("#{group}.")
     end
 
     # The card's NOTEs as the one note the model holds, and the card
@@ -911,6 +1001,16 @@ module ProTacts
       ContactDetails.new(stored:, birthday:, addresses:, note:, lent: @lent)
     end
 
+    # The served card less its version markers: the contact as another
+    # address book should take it in. A marker names a version of this
+    # server's group rows, which means nothing anywhere else
+    # (#LENT_MARKER).
+    #: () -> VCard
+    def exported
+      _, card = vcard.extract(LENT_MARKER)
+      card
+    end
+
     #: () -> String
     def etag
       return @etag if defined?(@etag)
@@ -1081,19 +1181,34 @@ module ProTacts
     # components read unescaped, the value's reading rather than its
     # bytes; the label is #label_of's reading of the line, so a
     # component round-trips through #address_lines keeping what it
-    # says and not how it was spelled.
-    #: (VCard::Parser::Property property, VCard::Parser::Line? label_line) -> Address?
-    def self.address_of(property, label_line)
-      components = property.components
+    # says and not how it was spelled. Every parameter but the types
+    # the label stands for stays, the way #labeled_lines keeps what a
+    # relabel did not render; where an X-ABLabel wins, the types it
+    # outranks go with it, Contacts showing the label alone.
+    #: (VCard::Parser::Property property, VCard::Parser::Line? label_line, ?Array[String] companions) -> Address?
+    def self.address_of(property, label_line, companions = [])
+      components = address_components(property)
       return if components.all?(&:empty?)
 
-      components << "" while components.length < 7
+      types = property.types
       Address.new(
         po_box: components.fetch(0), extended: components.fetch(1), street: components.fetch(2),
         locality: components.fetch(3), region: components.fetch(4), postal_code: components.fetch(5),
         country: components.fetch(6),
-        label: label_of(label_line, property.types),
+        label: label_of(label_line, types),
+        parameters: property.parameters.reject { |name, value| name.casecmp?("TYPE") && types.include?(value.downcase) },
+        companions:,
       )
+    end
+
+    # The seven components an ADR says (RFC 2426 section 3.2.1),
+    # unescaped: a line that stops short leaves the rest blank, and one
+    # past the seventh is no part of the address. What #address_of
+    # holds and Import::Merge compares, so a short line and the
+    # composed one #address_lines spells in full read as one address.
+    #: (VCard::Parser::Property property) -> Array[String]
+    def self.address_components(property)
+      [*property.components, *Array.new(7, "")].first(7)
     end
   end
 end

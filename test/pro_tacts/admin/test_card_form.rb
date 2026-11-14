@@ -131,6 +131,24 @@ class CardFormTest < Minitest::Test
     end
   end
 
+  ## The address rows
+
+  # A row the post leaves out is kept where it stands, and the rows
+  # after it take their own edits rather than its neighbour's.
+  def test_an_address_row_missing_from_the_post_keeps_the_others_in_place
+    standing = %w[1 2 3].map {
+      ProTacts::ContactDetails::Address.new(po_box: "", extended: "", street: "#{it} Long Road", locality: "",
+                                            region: "", postal_code: "", country: "")
+    }
+    blank = ProTacts::ContactDetails::ADDRESS_COMPONENTS.to_h { [it, ""] }
+    fields = ->(street) { {**blank, "label" => "", "street" => street} }
+    params = {"address" => {"0" => fields.("1 Short Road"), "2" => fields.("3 Short Road")}}
+
+    addresses = ProTacts::Admin::CardForm.addresses(standing, params)
+
+    assert_equal ["1 Short Road", "2 Long Road", "3 Short Road"], addresses.map(&:street)
+  end
+
   ## The birthday row
 
   # Whatever the birthday row saves in a shape it serves — a month and

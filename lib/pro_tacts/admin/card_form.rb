@@ -102,8 +102,9 @@ module ProTacts
       # card's").
       #: (Array[ContactDetails::Address] rows, Hash[String, untyped] params) -> Array[ContactDetails::Address]
       def self.addresses(rows, params)
-        edits = hash_field(params, "address").sort_by { |key, _| key.to_i }.map { |_, fields| fields }
-        standing = rows.zip(edits).filter_map { |row, submitted|
+        edits = hash_field(params, "address")
+        standing = rows.each_with_index.filter_map { |row, index|
+          submitted = edits[index.to_s]
           next row if submitted.nil?
 
           address_of(submitted, row)
@@ -115,16 +116,18 @@ module ProTacts
       # One address row's fields, as the editor posts them, read back
       # into the component: the six components by name, the label
       # beside them — a blank label is no label, an absent one the row's
-      # own, for a form that renders no label field — and the po box
-      # preserved from the row it replaces, no field editing it.
-      # Fields that arrive blank read as absent, and a row blank
-      # throughout, po box included, is no address at all, the
-      # blank-equals-absent rule; `over` is nil for an added row,
-      # whose po box is empty.
+      # own, for a form that renders no label field — and the po box,
+      # parameters, and companions preserved from the row it replaces,
+      # no field editing them. Fields that arrive blank read as absent,
+      # and a row blank throughout, po box included, is no address at
+      # all, the blank-equals-absent rule; `over` is nil for an added
+      # row, whose po box is empty. A line break takes the one spelling
+      # a card's escape writes back, as #note's does, so the component
+      # reads back as itself (VCard.escape).
       #: (Hash[String, untyped] fields, ?ContactDetails::Address? over) -> ContactDetails::Address?
       def self.address_of(fields, over = nil)
         components = Contact::ADDRESS_COMPONENTS.to_h { |name|
-          pair = [name, fields[name].to_s.strip] #: [String, String]
+          pair = [name, fields[name].to_s.gsub(/\r\n?/, "\n").strip] #: [String, String]
           pair
         }
         label = fields.key?("label") ? fields["label"].to_s.strip : over&.label.to_s
@@ -139,7 +142,9 @@ module ProTacts
           region: components.fetch("region"),
           postal_code: components.fetch("postal_code"),
           country: components.fetch("country"),
-          label: label.empty? ? nil : label
+          label: label.empty? ? nil : label,
+          parameters: over&.parameters || [],
+          companions: over&.companions || []
         )
       end
 

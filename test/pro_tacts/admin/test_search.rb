@@ -16,15 +16,14 @@ class SearchTest < Minitest::Test
     [id, ProTacts::Admin::Search.key(contact)]
   end
 
-# A lent address as the group holds it: enough components for a key.
-def address(street, locality, country)
-  ProTacts::Contact::Address.new(
-    po_box: "", extended: "", street:, locality:, region: "", postal_code: "", country:
-  )
-end
+  # A lent address as the group holds it: enough components for a key.
+  def address(street, locality, country)
+    ProTacts::Contact::Address.new(
+      po_box: "", extended: "", street:, locality:, region: "", postal_code: "", country:
+    )
+  end
 
-def search(rows, query, groups: [])
-
+  def search(rows, query, groups: [])
     ProTacts::Admin::Search.contacts(rows.to_h, query:, groups:)
   end
 

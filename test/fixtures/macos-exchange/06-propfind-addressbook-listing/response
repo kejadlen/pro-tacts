@@ -115,7 +115,7 @@ Content-Type: text/xml
     <d:href>/dav/addressbook/emoji.vcf</d:href>
     <d:propstat>
       <d:prop>
-        <d:getetag>"1b2189a49715b9c1a3210241958db7d14d3fcee27c0e6260457c3f038881520f"</d:getetag>
+        <d:getetag>"f97f6db534c1c10faad2f33c47d85f069776abee951e84790aad79cf5d0ebda3"</d:getetag>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>

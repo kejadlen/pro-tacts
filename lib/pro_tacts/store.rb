@@ -20,26 +20,28 @@ Sequel.extension :migration
 
 module ProTacts
   # The transactional store: one SQLite database holding each contact's
-  # card exactly as it was submitted.
+  # card as it was submitted, less the birthday and the addresses and
+  # note that its entity holds beside it.
   #
-  # Eight kinds of state live here and they are not equally precious.
-  # Only the entities, the cards, the change log, the birthdays, the
-  # groups, the books, the group change log, and the group photos
-  # cannot be rebuilt, and each is argued where it was decided: the
-  # entities in db/migrations/016_entities.rb, the cards and the log in
-  # docs/plans/2026-08-25-sqlite-schema.md,
-  # "What the tables are for", the birthdays in
+  # Ten kinds of state live here and they are not equally precious.
+  # Only the entities, the cards, the addresses, the notes, the change
+  # log, the birthdays, the groups, the books, the group change log,
+  # and the group photos cannot be rebuilt, and each is argued where it
+  # was decided: the entities in db/migrations/016_entities.rb, the
+  # cards and the log in docs/plans/2026-08-25-sqlite-schema.md,
+  # "What the tables are for", the addresses and the notes in
+  # docs/plans/2026-10-25-contacts-on-entities.md, the birthdays in
   # docs/plans/2026-08-31-partial-birthdays.md, the groups in
   # docs/plans/2026-08-24-vcard-storage-and-groups.md, the books in
   # docs/plans/2026-09-19-books-in-the-dump.md, the group change log
   # in docs/plans/2026-09-23-group-change-log.md, the group photos in
-  # docs/plans/2026-10-12-group-photos.md. Everything else
-  # is an index derived from the cards, and #rebuild_index will make
-  # it again from nothing.
+  # docs/plans/2026-10-12-group-photos.md. Everything else is an index
+  # derived from the cards and the components beside them, and
+  # #rebuild_index will make it again from nothing.
   #
   # Every Contact this store hands out is composed, never the stored
-  # card alone: a birthday and the lines a contact inherits from its
-  # groups are both subtracted out of a card on the way in
+  # card alone: a birthday, the contact's own components, and what its
+  # groups lend it are all subtracted out of a card on the way in
   # (EditedContact), and Contact composes them back in on read — so
   # the vcard and the etag a caller sees, and the etag the change log
   # records, describe the card a client downloads, not the bytes on
@@ -99,11 +101,12 @@ module ProTacts
     # @rbs skip
     UpcomingBirthday = Data.define(:contact, :occurs_on)
 
-    # stored cards by id, the birthdays by card id, the groups, their
+    # What cannot be rebuilt, read whole: the stored cards by id, the
+    # birthdays, addresses, and notes by card id, the groups, their
     # photos by group id, and the books — the name each named one goes
     # by, keyed by login. What `rake db:dump` writes (tasks/db.rake).
     # @rbs skip
-    Snapshot = Data.define(:cards, :birthdays, :groups, :group_photos, :books)
+    Snapshot = Data.define(:cards, :birthdays, :addresses, :notes, :groups, :group_photos, :books)
 
     # A group as a picker names it: enough to show it and to submit it,
     # and no more. A Group carries the lines it lends and the ids of
@@ -208,11 +211,16 @@ module ProTacts
     #: () -> Snapshot
     def snapshot
       @database.transaction(mode: :deferred) do
+        own = components_by_card(nil)
         Snapshot.new(
           cards: cards.order(:id).all.to_h {
             [it.fetch(:id).to_s, it.fetch(:vcard).to_s] #: [String, String]
           },
           birthdays: birthdays_by_id,
+          addresses: own.transform_values(&:first).reject { |_, addresses| addresses.empty? },
+          notes: own.filter_map { |id, (_, note)|
+            [id, note] if note #: [String, String]?
+          }.to_h,
           groups: all_groups,
           group_photos: group_photos.order(:group_id).select_map(:group_id).to_h { |id|
             photo = group_photo(id.to_s) || raise("group #{id}'s photo went missing mid-snapshot")
@@ -497,8 +505,10 @@ module ProTacts
         unless parts.address_edits.empty? && parts.note_edits.empty?
           groups = (parts.address_edits.map(&:group_id) + parts.note_edits.map(&:group_id)).uniq
           fan_out(member_ids(groups), except: id) {
-            apply_address_edits(parts.address_edits)
-            apply_note_edits(parts.note_edits)
+            log_lines(groups) {
+              apply_address_edits(parts.address_edits)
+              apply_note_edits(parts.note_edits)
+            }
           }
           contact = Contact.new(
             id:, stored: parts.stored, birthday: parts.birthday, addresses: parts.addresses, note: parts.note,
@@ -733,30 +743,16 @@ module ProTacts
     # Replaces what a group lends, wholesale: its entity's whole
     # address list at positions from zero, and its note. Every member
     # serves the new components from here on, so every member whose
-    # served card moved is logged (#fan_out), and the group's own log
-    # carries the lines the write moved in CardDiff's spelling
-    # (Group#composed_lines). A pure reorder is an entry with an empty
-    # diff — the multiset difference cannot see it, but the lending
-    # order moved every member's composed card, so it is a real write.
-    # A rewrite that stores the same components in the same order
-    # writes no entry, this log's own bargain against the cards' (the
-    # plan's "One entry per primitive").
+    # served card moved is logged (#fan_out), and so is the group
+    # (#log_lines).
     #: (String id, Array[ContactDetails::Address] addresses, String? note) -> void
     def set_group_components(id, addresses, note)
       @database.transaction do
-        was = group_lines(id)
-        lines = Group.composed_lines(addresses, note)
-        diff = CardDiff.between_lines(was, lines)
         fan_out(member_ids([id])) do
-          write_addresses(id, addresses)
-          write_note(id, note)
-        end
-        if was != lines
-          record_group_change(
-            id,
-            action: GroupAction::LINES,
-            detail: {"added" => diff.added, "removed" => diff.removed},
-          )
+          log_lines([id]) do
+            write_addresses(id, addresses)
+            write_note(id, note)
+          end
         end
       end
     end
@@ -947,9 +943,10 @@ module ProTacts
         card_properties.delete
         search_keys.delete
         sort_keys.delete
+        own = components_by_card(nil)
         cards.order(:id).all.each do
           id = it.fetch(:id).to_s
-          addresses, note = components_by_entity(it.fetch(:entity_id).to_s)
+          addresses, note = own.fetch(id)
           reindex(id, VCard.new(it.fetch(:vcard).to_s), addresses:, note:)
         end
       end
@@ -1080,27 +1077,40 @@ module ProTacts
     end
 
     # The rename itself, with no refusal: #name_book's way of renaming
-    # the one group #rename_group will not. A name is on no card, so no
-    # member's bytes move, but a `sync:` name is what puts a card in a
-    # book: a rename into, out of, or between them moves every member
-    # between books and logs each one (#fan_out's `moved`). Logged in
-    # the group's own log only where the name moved, the log recording
-    # what happened rather than that a save was asked
-    # (docs/plans/2026-09-23-group-change-log.md, "One entry per
-    # primitive").
+    # the one group #rename_group will not. A lending group's label is
+    # on every member's card — its note section's header and its
+    # version marker (Contact::Lent#marker_line) — so a rename moves
+    # each member's bytes, and #fan_out logs them. A group that lends
+    # nothing is composed into no card (#lent_by_card), so its rename
+    # skips reading every member twice to learn that, `sync:*` holding
+    # them all. A `sync:` name is what puts a card in a book, though:
+    # a rename into, out of, or between them moves every member
+    # between books and logs each one whatever its bytes did
+    # (#fan_out's `moved`). Logged in the group's own log only where
+    # the name moved, the log recording what happened rather than
+    # that a save was asked (docs/plans/2026-09-23-group-change-log.md,
+    # "One entry per primitive").
     #: (String id, String? name) -> void
     def rename(id, name)
       name = group_name(name)
       @database.transaction do
         was = groups.where(id:).sole.fetch(:name)&.to_s
-        if was != name && (Group.sync_name?(was) || Group.sync_name?(name))
-          members = member_ids([id])
-          fan_out(members, moved: members) { groups.where(id:).update(name:) }
-        else
-          groups.where(id:).update(name:)
+        if was != name
+          books = Group.sync_name?(was) || Group.sync_name?(name)
+          members = [] #: Array[String]
+          members = member_ids([id]) if books || lends?(id)
+          fan_out(members, moved: books ? members : []) { groups.where(id:).update(name:) }
+          record_group_change(id, action: GroupAction::RENAME, detail: {"was" => was, "name" => name})
         end
-        record_group_change(id, action: GroupAction::RENAME, detail: {"was" => was, "name" => name}) if was != name
       end
+    end
+
+    # Whether a group holds a component to lend — the narrowing
+    # #lent_by_card makes before composing any member, asked of one
+    # group.
+    #: (String id) -> bool
+    def lends?(id)
+      !addresses_dataset.where(entity_id: id).empty? || !notes.where(entity_id: id).empty?
     end
 
     # A name as a group stores it: a blank is NULL, nameless's one
@@ -1108,6 +1118,34 @@ module ProTacts
     #: (String? name) -> String?
     def group_name(name)
       name unless name.to_s.strip.empty?
+    end
+
+    # The block's writes to these groups' components, bracketed by a
+    # read of each group's lines either side, and a `lines` entry in
+    # its own log wherever the two differ, carrying the lines the write
+    # moved in CardDiff's spelling (Group#composed_lines) — one entry
+    # per group however many of its components moved, whether the
+    # admin's save or a member's PUT wrote them. A pure reorder is an
+    # entry with an empty diff — the multiset difference cannot see it,
+    # but the lending order moved every member's composed card, so it
+    # is a real write. A rewrite that stores the same components in the
+    # same order writes no entry, this log's own bargain against the
+    # cards' (docs/plans/2026-09-23-group-change-log.md, "One entry per
+    # primitive").
+    #: (Array[String] group_ids) { () -> void } -> void
+    def log_lines(group_ids)
+      before = group_ids.to_h {
+        [it, group_lines(it)] #: [String, Array[String]]
+      }
+      yield
+      group_ids.each do |id|
+        was = before.fetch(id)
+        lines = group_lines(id)
+        next if was == lines
+
+        diff = CardDiff.between_lines(was, lines)
+        record_group_change(id, action: GroupAction::LINES, detail: {"added" => diff.added, "removed" => diff.removed})
+      end
     end
 
     # The block's group writes, bracketed by a read of every member
@@ -1430,15 +1468,20 @@ module ProTacts
     # is what it means. Ordered by the group's id rather than its name,
     # because a rename must not move a member's components and change
     # every etag in the group.
+    #
+    # The memberships are narrowed to groups holding a component before
+    # any group loads, because a group loads whole, members and all, and
+    # `sync:*` holds every card and lends nothing: loaded, it would make
+    # each contact's read a read of the whole book's membership.
     #: (Array[String]? ids) -> Hash[String, Array[ContactDetails::Lent]]
     def lent_by_card(ids)
-      members = (ids ? group_members.where(card_id: ids) : group_members).order(:card_id, :group_id).all
+      lending = addresses_dataset.select(:entity_id).union(notes.select(:entity_id))
+      members = (ids ? group_members.where(card_id: ids) : group_members)
+        .where(group_id: lending).order(:card_id, :group_id).all
       lenders = groups_by_id(members.map { it.fetch(:group_id).to_s })
       members.group_by { it.fetch(:card_id).to_s }.transform_values { |rows|
-        rows.filter_map { |row|
+        rows.map { |row|
           group = lenders.fetch(row.fetch(:group_id).to_s)
-          next if group.addresses.empty? && group.note.nil?
-
           Contact::Lent.new(
             group:,
             addresses: group.addresses.each_with_index.map { |address, position|
@@ -1462,8 +1505,8 @@ module ProTacts
     end
 
     # The addresses and note an entity holds, in one pair of reads —
-    # a card's own components, read beside the row by the reads that
-    # rebuild rather than compose (#rebuild_index).
+    # a card's own components, read beside the row by a write that
+    # reindexes one card rather than composing it (#reid).
     #: (String entity_id) -> [Array[ContactDetails::Address], String?]
     def components_by_entity(entity_id)
       addresses = addresses_dataset.where(entity_id:).order(:position).all.map { address_from(it) }
@@ -1473,14 +1516,15 @@ module ProTacts
 
     # #components_by_entity over cards, keyed by card id: the joins a
     # whole-collection read makes once, rather than a pair of reads per
-    # card. Only a card with an address appears in the first hash and
-    # one with a note in the second; the absent key reads as none.
+    # card. Every card in scope has a pair: no addresses read as an
+    # empty list, and no note as nil.
     #: (Array[String]? ids) -> Hash[String, [Array[ContactDetails::Address], String?]]
     def components_by_card(ids)
       scope = ids ? cards.where(id: ids) : cards
       addresses = scope.join(:addresses, entity_id: :entity_id)
         .order(Sequel[:cards][:id], :position)
-        .select(Sequel[:cards][:id], :po_box, :extended, :street, :locality, :region, :postal_code, :country, :label)
+        .select(Sequel[:cards][:id], :po_box, :extended, :street, :locality, :region, :postal_code, :country, :label,
+                :parameters, :companions)
         .all
         .group_by { it.fetch(:id).to_s }
         .transform_values { |rows| rows.map { address_from(it) } }
@@ -1511,6 +1555,8 @@ module ProTacts
         postal_code: row.fetch(:postal_code).to_s,
         country: row.fetch(:country).to_s,
         label: row[:label]&.to_s,
+        parameters: JSON.parse(row.fetch(:parameters).to_s),
+        companions: JSON.parse(row.fetch(:companions).to_s),
       )
     end
 
@@ -1549,6 +1595,8 @@ module ProTacts
           postal_code: address.postal_code,
           country: address.country,
           label: address.label,
+          parameters: address.parameters.to_json,
+          companions: address.companions.to_json,
         )
       end
     end
@@ -1572,9 +1620,8 @@ module ProTacts
     end
 
     # A group's components as the lines a member's card composes them
-    # in, read off the store's rows for the group as it stands — the
-    # `was` a #set_group_components write is measured against and a
-    # tombstone's detail carries (Group#composed_lines' own shape).
+    # in, read off the store's rows for the group as it stands — what
+    # #log_lines measures a write by (Group#composed_lines' own shape).
     #: (String id) -> Array[String]
     def group_lines(id)
       load_groups([labeled_groups.where(id:).sole]).fetch(0).composed_lines

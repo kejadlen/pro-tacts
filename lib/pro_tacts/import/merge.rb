@@ -136,14 +136,14 @@ module ProTacts
         @into.properties.any? { it.name.casecmp?(property.name) && key(it) == key }
       end
 
-      # A value as two spellings of it compare: an address by its
-      # components, the rest without case or the space around it.
-      #: (VCard::Parser::Property property) -> String
+      # A value as two spellings of it compare, each part without case
+      # or the space around it: an address by its seven components
+      # (ContactDetails.address_components), the rest by its text. The
+      # components stay apart because one can carry a `;` itself.
+      #: (VCard::Parser::Property property) -> Array[String]
       def key(property)
-        case property.name.upcase
-        when "ADR" then property.components.map { it.strip.downcase }.join(";")
-        else property.text.strip.downcase
-        end
+        parts = property.name.casecmp?("ADR") ? ContactDetails.address_components(property) : [property.text]
+        parts.map { it.strip.downcase }
       end
 
       # Two spellings of one number, the match's comparison

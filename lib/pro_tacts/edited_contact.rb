@@ -267,6 +267,10 @@ module ProTacts
     # carries current (#stale_groups for what that means): a group it
     # does not is refused, its rows stay lent, and the lines that would
     # have been attributed its edit land among the member's own.
+    #
+    # Both passes draw from #unaccounted_lines, so a member's own
+    # address that came back as it was sent is never a candidate for a
+    # lent one.
     #: (VCard vcard, Set[String] stale) -> [VCard, Array[AddressEdit]]
     def subtract_lent_addresses(vcard, stale)
       lent = (@before&.lent || []).flat_map { |row|
@@ -274,18 +278,14 @@ module ProTacts
       }
       return [vcard, []] if lent.empty?
 
-      pool = vcard.lines
+      pool = unaccounted_lines(vcard)
       taken = [] #: Array[VCard::Parser::Line]
       edits = [] #: Array[AddressEdit]
 
       moved = lent.reject { |_, row|
         candidates = pool.select { it.names?("ADR") && !it.property.nil? }
         match = candidates.find { |line| unedited_address?(line, pool, row.address) }
-        if match
-          taken << strike(pool, match)
-          label = label_of(match, pool)
-          taken << strike(pool, label) if label
-        end
+        taken.concat(strike_address(pool, match)) if match
         match
       }
 
@@ -300,11 +300,13 @@ module ProTacts
         when 1
           line = candidates.fetch(0)
           property = line.property
-          label = label_of(line, pool)
-          address = property.nil? ? nil : Contact.address_of(property, label)
+          read = property.nil? ? nil : Contact.address_of(property, label_of(line, pool))
+          # What the member edited is what the matching reads; the
+          # parameters and companions stay the group's, a client
+          # adding its own `pref` to a line it rewrote.
+          address = read&.with(parameters: row.address.parameters, companions: row.address.companions)
           edits << AddressEdit.new(group_id: group.id, position: row.position, address:)
-          taken << strike(pool, line)
-          taken << strike(pool, label) if label
+          taken.concat(strike_address(pool, line))
         else
           ambiguous += 1
         end
@@ -448,7 +450,11 @@ module ProTacts
     # card it touches") — with the types and the X-ABLabel folded into
     # the one label the way a reader shows them
     # (docs/plans/2026-10-25-contacts-on-entities.md, "Matching what
-    # comes back").
+    # comes back"), spelled as an address holds one
+    # (Address.canonical_label) so a word compares as itself. The
+    # address's parameters and companions are not read: Contacts adds a
+    # `pref` to every line it rewrites, which no member meant as an edit
+    # of the group's address.
     #: (VCard::Parser::Line line, Array[VCard::Parser::Line] pool, ContactDetails::Address address) -> bool
     def unedited_address?(line, pool, address)
       property = line.property
@@ -461,7 +467,39 @@ module ProTacts
         address.region, address.postal_code, address.country,
       ] == components
 
-      Contact.label_of(label_of(line, pool), property.types) == address.label
+      label = Contact.label_of(label_of(line, pool), property.types)
+      Contact::Address.canonical_label(label) == address.label
+    end
+
+    # The submission's lines less one ADR, and its label, for each of
+    # the member's own addresses that came back saying what it says:
+    # what the groups lent plus whatever the client wrote beside it, the
+    # pool a lent address is attributed from. One line per address, so
+    # an entity that holds one of something and submits two leaves one
+    # over. The lines set aside stay in the card, being the member's own.
+    #: (VCard vcard) -> Array[VCard::Parser::Line]
+    def unaccounted_lines(vcard)
+      pool = vcard.lines.dup
+      (@before&.addresses || []).each do |address|
+        line = pool.find { it.names?("ADR") && unedited_address?(it, pool, address) }
+        next if line.nil?
+
+        label = label_of(line, pool)
+        strike(pool, line)
+        strike(pool, label) if label
+      end
+      pool
+    end
+
+    # A lent address's lines out of the pool — the ADR, its label, and
+    # its companions (ContactDetails.companions_of) — so that none is
+    # left in the member's card naming a line that left it.
+    #: (Array[VCard::Parser::Line] pool, VCard::Parser::Line line) -> Array[VCard::Parser::Line]
+    def strike_address(pool, line)
+      label = label_of(line, pool)
+      riding = ContactDetails.companions_of(line, pool)
+      riding.unshift(label) if label
+      [strike(pool, line), *riding.map { strike(pool, it) }]
     end
 
     # The line out of the pool, so no second lent line is attributed

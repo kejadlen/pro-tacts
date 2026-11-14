@@ -97,11 +97,7 @@ module ProTacts
       # own.
       #: (Group group) -> Key
       def self.group_key(group)
-        texts = group.addresses.map { |address|
-          Format.search_key(
-            [address.extended, address.street, address.locality, address.region, address.postal_code, address.country].compact.join(" ")
-          )
-        }
+        texts = group.addresses.map { Format.search_key(it.search_text) }
         texts << Format.search_key(group.note) if group.note
         Key.new(texts: [*texts, Format.search_key(group.label)], phones: [], names: [])
       end
@@ -129,7 +125,7 @@ module ProTacts
           contact.nickname,
           contact.organization,
           *contact.emails.map(&:value),
-          *contact.addresses.map { [it.extended, it.street, it.locality, it.region, it.postal_code, it.country].compact.join(" ") },
+          *contact.addresses.map(&:search_text),
           contact.note,
         ].compact
       end

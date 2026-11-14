@@ -185,7 +185,9 @@ module FixtureData
         region: address.region,
         postal_code: address.postal_code,
         country: address.country,
-        label: address.label
+        label: address.label,
+        parameters: address.parameters.to_json,
+        companions: address.companions.to_json
       )
     end
     database(store)[:notes].insert(entity_id: group_id, text: note) if note
