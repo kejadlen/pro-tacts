@@ -230,10 +230,13 @@ module ProTacts
     #: (?Array[String]? ids) -> Array[Contact]
     def contacts(ids = nil)
       birthdays = birthdays_by_id
-      inherited = inherited_by_id
+      own = components_by_card(ids)
+      lent = lent_by_card(ids)
+      none = [[], nil] #: [Array[Contact::Address], String?]
       (ids ? cards.where(id: ids) : cards).order(:id).map {
         id = it.fetch(:id).to_s
-        contact_from(it, birthdays[id], inherited.fetch(id, []))
+        addresses, note = own.fetch(id, none)
+        contact_from(it, birthdays[id], addresses, note, lent.fetch(id, []))
       }
     end
 
@@ -343,9 +346,9 @@ module ProTacts
 
     # The groups a contact belongs to, whole — a tag names one and
     # opens it — ordered by group id: a rename must not move a tag, the
-    # same reason #inherited_rows orders by it. Membership is the whole
+    # same reason #lent_by_card orders by it. Membership is the whole
     # answer here, so a group that lends nothing appears too, where the
-    # inherited reads have nothing of it to carry. Off the contact
+    # lending reads have nothing of it to carry. Off the contact
     # rather than on it: what a group lends is in the card and belongs
     # to the model of one, and which groups a contact is in is a
     # relationship the card never carries.
@@ -469,48 +472,61 @@ module ProTacts
       # it: the edit, which reads the submission against it, and the
       # change log's diff.
       before = contact(id)
-      stored, birthday, edits = EditedContact.new(vcard, before:).decomposed
-      assert_one_note(stored)
+      parts = EditedContact.new(vcard, before:).decomposed
 
-      # The Contact this returns is the composed one — the lent lines
-      # put back, read off membership as it stands at this write — and
-      # the logged etag is its hash, so a client's token describes the
-      # card it downloads. Membership cannot move during a put, so the
-      # inheritance either side of it is the one read above.
-      inherited = before&.inherited || [] #: Array[Contact::Inherited]
+      # The Contact this returns is the composed one — the lent
+      # components put back, read off membership as it stands at this
+      # write — and the logged etag is its hash, so a client's token
+      # describes the card it downloads. Membership cannot move during
+      # a put, so the components either side of it are the one read
+      # above.
+      lent = before&.lent || [] #: Array[Contact::Lent]
       # Built before the transaction as well as inside it, because its
       # constructor is where an id that could not be served is refused
       # and a refusal from inside a transaction reaches the caller
       # wearing Sequel's own error class. Composition is lazy, so the
       # one the fan-out throws away below cost nothing to make.
-      contact = Contact.new(id:, stored:, birthday:, inherited:)
+      contact = Contact.new(
+        id:, stored: parts.stored, birthday: parts.birthday, addresses: parts.addresses, note: parts.note, lent:
+      )
       @database.transaction do
         # The groups move first, so that everything composed below is
         # the card this write leaves behind: the etag the change log
         # records is what a client downloading this member now gets,
-        # group line included. The fan-out brackets the edits with a
-        # read of every other member either side of them.
-        unless edits.empty?
-          fan_out(member_ids(edits.map(&:group_id).uniq), except: id) { apply_group_edits(edits) }
-          contact = Contact.new(id:, stored:, birthday:, inherited: inherited_of(id))
+        # group component included. The fan-out brackets the edits with
+        # a read of every other member either side of them.
+        unless parts.address_edits.empty? && parts.note_edits.empty?
+          groups = (parts.address_edits.map(&:group_id) + parts.note_edits.map(&:group_id)).uniq
+          fan_out(member_ids(groups), except: id) {
+            apply_address_edits(parts.address_edits)
+            apply_note_edits(parts.note_edits)
+          }
+          contact = Contact.new(
+            id:, stored: parts.stored, birthday: parts.birthday, addresses: parts.addresses, note: parts.note,
+            lent: lent_of(id)
+          )
         end
-        upsert_card(contact.id, stored)
+        upsert_card(contact.id, parts.stored)
         # After the card, which the membership names by foreign key, and
         # before the log entry, which records the card composed with
         # whatever the group lends. The put's entry is the card's arrival
         # in the book, so the join writes none of its own.
         if client && before.nil?
           group_members.insert(group_id: everyone_group_id, card_id: contact.id)
-          contact = Contact.new(id:, stored:, birthday:, inherited: inherited_of(contact.id))
+          contact = Contact.new(
+            id:, stored: parts.stored, birthday: parts.birthday, addresses: parts.addresses, note: parts.note,
+            lent: lent_of(contact.id)
+          )
         end
-        write_birthday(contact.id, birthday)
+        write_birthday(contact.id, parts.birthday)
+        write_components(entity_id_of(contact.id), parts.addresses, parts.note)
         record(
           contact.id,
           action: Action::PUT,
           etag: contact.etag,
           diff: CardDiff.between(before&.vcard, contact.vcard),
         )
-        reindex(contact.id, stored)
+        reindex(contact.id, parts.stored, addresses: parts.addresses, note: parts.note)
         contact
       end
     end
@@ -518,27 +534,29 @@ module ProTacts
     # Why this and #put cannot be one path is
     # docs/plans/2026-09-05-web-card-editor.md, "Two write paths
     # through the store". The card input is the stored one by
-    # definition, and `birthday:` is the model's whole new state, an
+    # definition, `birthday:` is the model's whole new state, an
     # upsert or a delete, never a splice
-    # (docs/plans/2026-09-07-web-birthday-editor.md). A card rather
-    # than its bytes, for #put's reason: the editor spliced one to
-    # make this save, and re-reading its bytes here would walk them
-    # again to reach what the caller already had.
-    #: (String id, VCard vcard, birthday: Birthday?) -> Contact
-    def save_edit(id, vcard, birthday:)
+    # (docs/plans/2026-09-07-web-birthday-editor.md), and `addresses:`
+    # and `note:` the entity's whole new components, the editor's rows
+    # read back (Admin::CardForm). A card rather than its bytes, for
+    # #put's reason: the editor spliced one to make this save, and
+    # re-reading its bytes here would walk them again to reach what the
+    # caller already had.
+    #: (String id, VCard vcard, birthday: Birthday?, addresses: Array[Contact::Address], note: String?) -> Contact
+    def save_edit(id, vcard, birthday:, addresses:, note:)
       before = contact(id)
-      assert_one_note(vcard)
-      contact = Contact.new(id:, stored: vcard, birthday:, inherited: inherited_of(id))
+      contact = Contact.new(id:, stored: vcard, birthday:, addresses:, note:, lent: lent_of(id))
       @database.transaction do
         upsert_card(contact.id, vcard)
         write_birthday(contact.id, birthday)
+        write_components(entity_id_of(contact.id), addresses, note)
         record(
           contact.id,
           action: Action::EDIT,
           etag: contact.etag,
           diff: CardDiff.between(before&.vcard, contact.vcard),
         )
-        reindex(contact.id, vcard)
+        reindex(contact.id, vcard, addresses:, note:)
       end
       contact
     end
@@ -616,14 +634,18 @@ module ProTacts
           etag: after.etag,
           diff: CardDiff.between(before.vcard, after.vcard),
         )
-        reindex(new_id, stored)
+        # The entity is the same entity — only the card's href moved —
+        # so the components read back off it re-key the search with
+        # what they already said.
+        addresses, note = components_by_entity(cards.where(id: new_id).sole.fetch(:entity_id).to_s)
+        reindex(new_id, stored, addresses:, note:)
       end
       new_id
     end
 
     # Creates a group and hands back the id it was given. The name is
     # the author's label and optional; a group without one is displayed
-    # by its id (see #inherited_rows), and the empty string is refused
+    # by its id (#group_label), and the empty string is refused
     # by the schema rather than kept as a second spelling of nameless.
     # Logged in the group's own log as every group write is, the
     # create's detail carrying the name it was created under.
@@ -709,31 +731,26 @@ module ProTacts
       rename(id, name)
     end
 
-    # Replaces what a group lends, wholesale, at positions from zero.
-    # Every member serves the new lines from here on, so every member
-    # whose served card moved is logged (#fan_out), and the group's own
-    # log carries the lines the write moved in CardDiff's spelling. A
-    # pure reorder is an entry with an empty diff — the multiset
-    # difference cannot see it, but the lending order moved every
-    # member's composed card, so it is a real write. A rewrite that
-    # stores the same lines in the same order writes no entry, this
-    # log's own bargain against the cards' (the plan's "One entry per
-    # primitive"). A line outside what a group may hold is refused by
-    # the CHECK, which is a caller's bug — the editor only builds ADR
-    # and NOTE lines — and raises.
-    #: (String id, Array[String] lines) -> void
-    def set_group_lines(id, lines)
-      notes = lines.count { it[/\A[^;:]*/].to_s.casecmp?("NOTE") == true }
-      raise "a group was given #{notes} NOTE lines" if notes > 1
-
+    # Replaces what a group lends, wholesale: its entity's whole
+    # address list at positions from zero, and its note. Every member
+    # serves the new components from here on, so every member whose
+    # served card moved is logged (#fan_out), and the group's own log
+    # carries the lines the write moved in CardDiff's spelling
+    # (Group#composed_lines). A pure reorder is an entry with an empty
+    # diff — the multiset difference cannot see it, but the lending
+    # order moved every member's composed card, so it is a real write.
+    # A rewrite that stores the same components in the same order
+    # writes no entry, this log's own bargain against the cards' (the
+    # plan's "One entry per primitive").
+    #: (String id, Array[Contact::Address] addresses, String? note) -> void
+    def set_group_components(id, addresses, note)
       @database.transaction do
-        was = group_properties.where(group_id: id).order(:position).select_map(:line)
+        was = group_lines(id)
+        lines = Group.composed_lines(addresses, note)
         diff = CardDiff.between_lines(was, lines)
         fan_out(member_ids([id])) do
-          group_properties.where(group_id: id).delete
-          lines.each.with_index do |line, position|
-            group_properties.insert(group_id: id, position:, line:)
-          end
+          write_addresses(id, addresses)
+          write_note(id, note)
         end
         if was != lines
           record_group_change(
@@ -748,12 +765,12 @@ module ProTacts
     # The editor's whole save, as one transaction: a failure part-way
     # leaves the group as it was rather than half renamed. Membership
     # is #edit_members', the members screen's own save.
-    #: (String id, name: String?, lines: Array[String]) -> void
-    def edit_group(id, name:, lines:)
+    #: (String id, name: String?, addresses: Array[Contact::Address], note: String?) -> void
+    def edit_group(id, name:, addresses:, note:)
       refuse_sync_rename(id, name)
       @database.transaction do
         rename(id, name)
-        set_group_lines(id, lines)
+        set_group_components(id, addresses, note)
       end
     end
 
@@ -858,12 +875,12 @@ module ProTacts
       raise EveryonesBookName, "#{Group::EVERYONE} is everyone's book, not a group to delete" if name == Group::EVERYONE
 
       @database.transaction do
+        group = load_groups([labeled_groups.where(id:).sole]).fetch(0)
         members = member_ids([id])
-        lines = group_properties.where(group_id: id).order(:position).select_map(:line)
         record_group_change(
           id,
           action: GroupAction::DELETE,
-          detail: {"name" => row.fetch(:name), "lines" => lines, "members" => members},
+          detail: {"name" => row.fetch(:name), "lines" => group.composed_lines, "members" => members},
         )
         fan_out(members, moved: Group.sync_name?(name) ? members : []) {
           entities.where(id:).delete
@@ -919,10 +936,11 @@ module ProTacts
       group_changes.where(group_id: id).order(Sequel.desc(:sequence)).map { group_change_from(it) }
     end
 
-    # Drops the index and derives it again from the stored cards alone.
-    # Always safe to run: nothing is authoritative here, so if the
-    # projection ever disagrees with the cards, this is the repair. Raw
-    # rows rather than #contacts, which compose: the index reflects
+    # Drops the index and derives it again from the stored cards and
+    # the components beside them. Always safe to run: nothing is
+    # authoritative here, so if the projection ever disagrees with
+    # what is stored, this is the repair. Raw rows rather than
+    # #contacts, which compose lent components too: the index reflects
     # what is stored (#reindex).
     #: () -> void
     def rebuild_index
@@ -931,7 +949,9 @@ module ProTacts
         search_keys.delete
         sort_keys.delete
         cards.order(:id).all.each do
-          reindex(it.fetch(:id).to_s, VCard.new(it.fetch(:vcard).to_s))
+          id = it.fetch(:id).to_s
+          addresses, note = components_by_entity(it.fetch(:entity_id).to_s)
+          reindex(id, VCard.new(it.fetch(:vcard).to_s), addresses:, note:)
         end
       end
     end
@@ -994,25 +1014,18 @@ module ProTacts
     end
 
     #: () -> Sequel::Dataset
-    def group_properties
-      @database[:group_properties]
+    def addresses_dataset
+      @database[:addresses]
+    end
+
+    #: () -> Sequel::Dataset
+    def notes
+      @database[:notes]
     end
 
     #: () -> Sequel::Dataset
     def group_photos
       @database[:group_photos]
-    end
-
-    # The one-note invariant's raise: a card this server built with
-    # more than one NOTE is a bug, and a raise reaches Sentry with the
-    # request (docs/plans/2026-09-25-one-note-per-contact.md, "The
-    # invariant"). Foreign input never gets here — EditedContact and
-    # Import::Merge join what arrives — so the message carries no card
-    # content because there is none it could usefully carry.
-    #: (VCard vcard) -> void
-    def assert_one_note(vcard)
-      count = vcard.lines.count { it.names?("NOTE") }
-      raise "a stored card was built with #{count} NOTE lines" if count > 1
     end
 
     #: () -> Sequel::Dataset
@@ -1129,27 +1142,46 @@ module ProTacts
       end
     end
 
-    # The group's rows as the classification asked for them: a line
-    # rewritten in place, or the row removed where a member deleted
-    # what it lent. A removal leaves a gap in the positions, which
-    # costs nothing — position orders a group's lines and is not
-    # counted.
-    #: (Array[EditedContact::GroupEdit] edits) -> void
-    def apply_group_edits(edits)
-      edits.each do |edit|
-        row = group_properties.where(group_id: edit.group_id, position: edit.position)
-        edit.line ? row.update(line: edit.line) : row.delete
+    # The group's rows as the address edits asked for them: each edit
+    # names a position in the list the member was lent (Group#addresses
+    # in order), rewrites the address there, or removes the row where
+    # the member deleted what it lent. The list is written back whole,
+    # so the positions stay contiguous and a later edit's position is
+    # always the index a member reads.
+    #: (Array[EditedContact::AddressEdit] edits) -> void
+    def apply_address_edits(edits)
+      edits.group_by(&:group_id).each do |group_id, group_edits|
+        list = addresses_of(group_id) #: Array[Contact::Address?]
+        group_edits.each { list[it.position] = it.address }
+        write_addresses(group_id, list.compact)
       end
     end
 
-    # Groups rows read whole: the lines and members of every group in
-    # `rows`, and which have a photo, three reads however many groups
-    # there are. The photo read takes ids, never bytes.
+    # The note edits' half of #apply_address_edits: one row per group,
+    # upserted or gone.
+    #: (Array[EditedContact::NoteEdit] edits) -> void
+    def apply_note_edits(edits)
+      edits.each do |edit|
+        if edit.text
+          write_note(edit.group_id, edit.text)
+        else
+          notes.where(entity_id: edit.group_id).delete
+        end
+      end
+    end
+
+    # Groups rows read whole: the components and members of every
+    # group in `rows`, and which have a photo, four reads however many
+    # groups there are. The photo read takes ids, never bytes.
     #: (Array[Hash[Symbol, untyped]] rows) -> Array[Group]
     def load_groups(rows)
       ids = rows.map { it.fetch(:id).to_s }
-      lines = group_properties.where(group_id: ids).order(:group_id, :position).all
-        .group_by { it.fetch(:group_id).to_s }
+      addresses = addresses_dataset.where(entity_id: ids).order(:entity_id, :position).all
+        .group_by { it.fetch(:entity_id).to_s }
+      group_notes = notes.where(entity_id: ids).all.to_h {
+        pair = [it.fetch(:entity_id).to_s, it.fetch(:text).to_s] #: [String, String]
+        pair
+      }
       members = group_members.where(group_id: ids).order(:card_id).all
         .group_by { it.fetch(:group_id).to_s }
       photos = group_photos.where(group_id: ids).select_map(:group_id).map(&:to_s)
@@ -1159,7 +1191,8 @@ module ProTacts
           id:,
           name: row.fetch(:name)&.to_s,
           label: row.fetch(:label).to_s,
-          lines: lines.fetch(id, []).map { it.fetch(:line).to_s },
+          addresses: addresses.fetch(id, []).map { address_from(it) },
+          note: group_notes[id],
           members: members.fetch(id, []).map { it.fetch(:card_id).to_s },
           photo: photos.include?(id),
         )
@@ -1169,7 +1202,7 @@ module ProTacts
     #: (Group group, Array[ListedContact] first_members) -> ListedGroup
     def listed_group(group, first_members)
       ListedGroup.new(
-        id: group.id, name: group.name, label: group.label, lines: group.lines,
+        id: group.id, name: group.name, label: group.label, addresses: group.addresses, note: group.note,
         members: group.members, photo: group.photo, first_members:,
       )
     end
@@ -1219,7 +1252,9 @@ module ProTacts
     # #reid is handed an id its caller says exists.
     #: (String id) -> Contact
     def contact!(id)
-      contact_from(cards.where(id:).sole, birthday_of(id), inherited_of(id))
+      none = [[], nil] #: [Array[Contact::Address], String?]
+      addresses, note = components_by_card([id]).fetch(id, none)
+      contact_from(cards.where(id:).sole, birthday_of(id), addresses, note, lent_of(id))
     end
 
     # Replaces a card's rows in the index. Rebuilt wholesale rather than
@@ -1228,10 +1263,11 @@ module ProTacts
     # the ones that did not: the card is served from its bytes either
     # way, and there is no version of this write that fixes a line the
     # parser cannot read. Takes the stored card — with the birthday
-    # already subtracted — so the index never sees a BDAY no stored
-    # card carries.
-    #: (String id, VCard vcard) -> void
-    def reindex(id, vcard)
+    # and the components already subtracted — beside the entity's own
+    # addresses and note, which the search key reads, so the index
+    # never sees a BDAY, ADR, or NOTE no stored card carries.
+    #: (String id, VCard vcard, addresses: Array[Contact::Address], note: String?) -> void
+    def reindex(id, vcard, addresses:, note:)
       # Before the parse, so that a card which has stopped parsing does
       # not keep the rows from when it did.
       card_properties.where(card_id: id).delete
@@ -1250,7 +1286,7 @@ module ProTacts
           card_parameters.insert(card_id: id, position:, name:, value:)
         end
       end
-      contact = Contact.new(id:, stored: vcard, birthday: nil, inherited: [])
+      contact = Contact.new(id:, stored: vcard, birthday: nil, addresses:, note:, lent: [])
       search_keys.insert(card_id: id, key: Admin::Search.key(contact).to_json)
       sort_keys.insert(card_id: id, sort_key: contact.sort_key)
     end
@@ -1264,13 +1300,15 @@ module ProTacts
       Sequel::Migrator.run(@database, MIGRATIONS.to_s)
     end
 
-    #: (Hash[Symbol, untyped] row, Birthday? birthday, Array[Contact::Inherited] inherited) -> Contact
-    def contact_from(row, birthday, inherited)
+    #: (Hash[Symbol, untyped] row, Birthday? birthday, Array[Contact::Address] addresses, String? note, Array[Contact::Lent] lent) -> Contact
+    def contact_from(row, birthday, addresses, note, lent)
       Contact.new(
         id: row.fetch(:id).to_s,
         stored: VCard.new(row.fetch(:vcard).to_s),
         birthday:,
-        inherited:,
+        addresses:,
+        note:,
+        lent:,
       )
     end
 
@@ -1305,6 +1343,10 @@ module ProTacts
       }
     end
 
+    # The empty half of #components_by_card's answer, for the cards a
+    # caller reads that hold neither an address nor a note.
+    NO_COMPONENTS = [[], nil] #: [Array[Contact::Address], String?]
+
     # The index's reading of these cards, or of every card, keyed by id
     # in id order: each card written back out of its indexed lines with
     # the PHOTO left out, and composed as #contacts composes the stored
@@ -1330,7 +1372,8 @@ module ProTacts
           [it.fetch(:card_id).to_s, it.fetch(:head).to_s] #: [String, String]
         }
       birthdays = birthdays_by_id
-      inherited = inherited_by_id
+      own = components_by_card(ids)
+      lent = lent_by_card(ids)
       (ids ? cards.where(id: ids) : cards).order(:id).select_map(:id).to_h { |raw|
         id = raw.to_s
         read = lines.fetch(id, []).map { |row|
@@ -1342,7 +1385,10 @@ module ProTacts
           )
           VCard::Parser::Line.new(property:, verbatim: "#{VCard.header_of(property)}#{property.value}\r\n", error: nil)
         }
-        contact = Contact.new(id:, stored: VCard.of(read), birthday: birthdays[id], inherited: inherited.fetch(id, []))
+        addresses, note = own.fetch(id, NO_COMPONENTS)
+        contact = Contact.new(
+          id:, stored: VCard.of(read), birthday: birthdays[id], addresses:, note:, lent: lent.fetch(id, [])
+        )
         head = heads[id]
         listed = ListedContact.new(contact, photo: !head.nil? && Contact.photo_head?(head))
         [id, listed] #: [String, ListedContact]
@@ -1367,40 +1413,42 @@ module ProTacts
       nil
     end
 
-    # The content lines a contact inherits, each beside the group
-    # lending it — every property of every group it belongs to,
-    # nothing of a group that holds nothing, and [] for a contact in no
-    # group at all. Ordered by group id and then position, so the
-    # composed card is the same bytes every read.
-    #: (String id) -> Array[Contact::Inherited]
-    def inherited_of(id)
-      inheritance(inherited_rows.where(card_id: id).all)
+    # The components a contact's groups lend it, each beside the group
+    # lending them — every address and note of every group it belongs
+    # to that holds either, and [] for a contact no lender reaches.
+    # Ordered by group id and then position, so the composed card is
+    # the same bytes every read. A group's addresses carry their
+    # positions as their indices, the positions the writes keep
+    # contiguous (#apply_address_edits).
+    #: (String id) -> Array[Contact::Lent]
+    def lent_of(id)
+      lent_by_card([id]).fetch(id, [])
     end
 
-    # Every contact's inheritance in one pass, keyed by card, for the
-    # listing reads that compose a whole collection — the same shape as
-    # birthdays_by_id, for the same reason. Only a contact with
-    # something to inherit appears; the absent key reads as [] at the
-    # caller, which is what it means.
-    #: () -> Hash[String, Array[Contact::Inherited]]
-    def inherited_by_id
-      rows = inherited_rows.all
-      lenders = groups_by_id(rows.map { it.fetch(:group_id).to_s })
-      rows
-        .group_by { it.fetch(:card_id).to_s }
-        .transform_values { inheritance(it, lenders) }
-    end
+    # The components every contact's groups lend it, keyed by card, for
+    # the reads that compose a whole collection — the same shape as
+    # birthdays_by_id, for the same reason. Only a contact a lender
+    # reaches appears; the absent key reads as [] at the caller, which
+    # is what it means. Ordered by the group's id rather than its name,
+    # because a rename must not move a member's components and change
+    # every etag in the group.
+    #: (Array[String]? ids) -> Hash[String, Array[Contact::Lent]]
+    def lent_by_card(ids)
+      members = (ids ? group_members.where(card_id: ids) : group_members).order(:card_id, :group_id).all
+      lenders = groups_by_id(members.map { it.fetch(:group_id).to_s })
+      members.group_by { it.fetch(:card_id).to_s }.transform_values { |rows|
+        rows.filter_map { |row|
+          group = lenders.fetch(row.fetch(:group_id).to_s)
+          next if group.addresses.empty? && group.note.nil?
 
-    # Inherited rows as the model reads them: the group lending each,
-    # whole, and the row's position and line.
-    #: (Array[Hash[Symbol, untyped]] rows, ?Hash[String, Group] lenders) -> Array[Contact::Inherited]
-    def inheritance(rows, lenders = groups_by_id(rows.map { it.fetch(:group_id).to_s }))
-      rows.map {
-        Contact::Inherited.new(
-          group: lenders.fetch(it.fetch(:group_id).to_s),
-          position: it.fetch(:position).to_i,
-          line: it.fetch(:line).to_s,
-        )
+          Contact::Lent.new(
+            group:,
+            addresses: group.addresses.each_with_index.map { |address, position|
+              Contact::LentAddress.new(position:, address:)
+            },
+            note: group.note,
+          )
+        }
       }
     end
 
@@ -1413,6 +1461,125 @@ module ProTacts
       load_groups(labeled_groups.where(id: ids.uniq).all).to_h {
         [it.id, it] #: [String, Group]
       }
+    end
+
+    # The addresses and note an entity holds, in one pair of reads —
+    # a card's own components, read beside the row by the reads that
+    # rebuild rather than compose (#rebuild_index).
+    #: (String entity_id) -> [Array[Contact::Address], String?]
+    def components_by_entity(entity_id)
+      addresses = addresses_dataset.where(entity_id:).order(:position).all.map { address_from(it) }
+      note = notes.where(entity_id:).get(:text)&.to_s
+      [addresses, note]
+    end
+
+    # #components_by_entity over cards, keyed by card id: the joins a
+    # whole-collection read makes once, rather than a pair of reads per
+    # card. Only a card with an address appears in the first hash and
+    # one with a note in the second; the absent key reads as none.
+    #: (Array[String]? ids) -> Hash[String, [Array[Contact::Address], String?]]
+    def components_by_card(ids)
+      scope = ids ? cards.where(id: ids) : cards
+      addresses = scope.join(:addresses, entity_id: :entity_id)
+        .order(Sequel[:cards][:id], :position)
+        .select(Sequel[:cards][:id], :po_box, :extended, :street, :locality, :region, :postal_code, :country, :label)
+        .all
+        .group_by { it.fetch(:id).to_s }
+        .transform_values { |rows| rows.map { address_from(it) } }
+      note_rows = notes.join(:cards, entity_id: :entity_id).select(Sequel[:cards][:id], :text)
+      note_rows = note_rows.where(Sequel[:cards][:id] => ids) if ids
+      notes_by_card = note_rows.all.to_h {
+        pair = [it.fetch(:id).to_s, it.fetch(:text).to_s] #: [String, String]
+        pair
+      }
+      scope.select_map(:id).to_h { |raw|
+        id = raw.to_s
+        [id, [addresses.fetch(id, []), notes_by_card[id]]] #: [String, [Array[Contact::Address], String?]]
+      }
+    end
+
+    # An address row as the model reads it. The columns were written
+    # through the model on the way in, so a row that no longer reads
+    # is corruption to raise on rather than quietly drop, the
+    # birthdays' rule.
+    #: (Hash[Symbol, untyped] row) -> Contact::Address
+    def address_from(row)
+      Contact::Address.new(
+        po_box: row.fetch(:po_box).to_s,
+        extended: row.fetch(:extended).to_s,
+        street: row.fetch(:street).to_s,
+        locality: row.fetch(:locality).to_s,
+        region: row.fetch(:region).to_s,
+        postal_code: row.fetch(:postal_code).to_s,
+        country: row.fetch(:country).to_s,
+        label: row[:label]&.to_s,
+      )
+    end
+
+    # The entity behind a card, read where a write needs it once the
+    # card row exists (#put, #save_edit). The entity was minted with
+    # the card (db/migrations/016_entities.rb), so a miss is the
+    # corruption `sole` exists to raise on.
+    #: (String id) -> String
+    def entity_id_of(id)
+      cards.where(id:).sole.fetch(:entity_id).to_s
+    end
+
+    # The entity's whole new address list, at positions from zero, and
+    # its note — the write half of #components_by_entity, for a card's
+    # own entity (#put, #save_edit) and a group's
+    # (#set_group_components). A nil note is the row gone: the note is
+    # one or none, never emptied.
+    #: (String entity_id, Array[Contact::Address] addresses, String? note) -> void
+    def write_components(entity_id, addresses, note)
+      write_addresses(entity_id, addresses)
+      write_note(entity_id, note)
+    end
+
+    #: (String entity_id, Array[Contact::Address] addresses) -> void
+    def write_addresses(entity_id, addresses)
+      addresses_dataset.where(entity_id:).delete
+      addresses.each.with_index do |address, position|
+        addresses_dataset.insert(
+          entity_id:,
+          position:,
+          po_box: address.po_box,
+          extended: address.extended,
+          street: address.street,
+          locality: address.locality,
+          region: address.region,
+          postal_code: address.postal_code,
+          country: address.country,
+          label: address.label,
+        )
+      end
+    end
+
+    #: (String entity_id, String? note) -> void
+    def write_note(entity_id, note)
+      if note
+        notes
+          .insert_conflict(target: :entity_id, update: {text: Sequel[:excluded][:text]})
+          .insert(entity_id:, text: note)
+      else
+        notes.where(entity_id:).delete
+      end
+    end
+
+    # An entity's addresses in order — the list an AddressEdit's
+    # positions name (#apply_address_edits).
+    #: (String entity_id) -> Array[Contact::Address]
+    def addresses_of(entity_id)
+      addresses_dataset.where(entity_id:).order(:position).all.map { address_from(it) }
+    end
+
+    # A group's components as the lines a member's card composes them
+    # in, read off the store's rows for the group as it stands — the
+    # `was` a #set_group_components write is measured against and a
+    # tombstone's detail carries (Group#composed_lines' own shape).
+    #: (String id) -> Array[String]
+    def group_lines(id)
+      load_groups([labeled_groups.where(id:).sole]).fetch(0).composed_lines
     end
 
     # What to call a group on a screen: its name, or its id where it
@@ -1430,29 +1597,6 @@ module ProTacts
     #: () -> Sequel::Dataset
     def labeled_groups
       groups.select(Sequel[:groups][:id], Sequel[:groups][:name], group_label.as(:label))
-    end
-
-    # The join both inherited reads walk: a membership to the property
-    # it inherits, qualified and ordered so the composition neither
-    # depends on what SQLite feels like returning nor trips over the
-    # group_id the tables share. Ordered by the group's id rather than
-    # its name, because a rename must not move a member's lines and
-    # change every etag in the group.
-    #: () -> Sequel::Dataset
-    def inherited_rows
-      group_members
-        .join(:group_properties, group_id: :group_id)
-        .select(
-          Sequel[:group_members][:card_id],
-          Sequel[:group_properties][:group_id],
-          Sequel[:group_properties][:position],
-          Sequel[:group_properties][:line],
-        )
-        .order(
-          Sequel[:group_members][:card_id],
-          Sequel[:group_properties][:group_id],
-          Sequel[:group_properties][:position],
-        )
     end
 
     # A birthday row read as the model. The shape was validated on the

@@ -187,10 +187,12 @@ module ProTacts
 
     # The params Admin::CardForm reads, held to the shapes the contact
     # and group editors post: each text field a string, every
-    # repeatable row — standing, keyed by its digest, or added, by its
-    # add index — a hash of its label and its kind's field strings
-    # (CardForm::ROWS), and the birthday row a hash of component
-    # strings.
+    # repeatable row — standing, keyed by its digest or its position,
+    # or added, by its add index — a hash of its label and its kind's
+    # field strings (CardForm::ROWS), the address rows — components,
+    # not card lines — a hash of their label and component strings
+    # (Contact::ADDRESS_COMPONENTS), and the birthday row a hash of
+    # component strings.
     # Any other shape is a POST made by hand, refused here as a 400
     # (the error handler) rather than read around in CardForm. An
     # absent field is a form that rendered no such rows — or a name
@@ -204,6 +206,10 @@ module ProTacts
           rows = typecast_params.Hash(key)
           rows&.each_key { typecast_params[key][it].str(fields) }
         end
+      end
+      ["address", "new_address"].each do |key|
+        rows = typecast_params.Hash(key)
+        rows&.each_key { typecast_params[key][it].str(["label", *Contact::ADDRESS_COMPONENTS]) }
       end
       typecast_params["birthday"].str(%w[year month day]) if typecast_params.Hash("birthday")
       request.params

@@ -192,6 +192,7 @@ class ImportWriteTest < Minitest::Test
 
       updated = Write.update(store, jane.id, jane.stored.insert(["TEL:555 0100"]),
                              birthday: ProTacts::Birthday.new(month: 4, day: 12),
+                             addresses: [], note: nil,
                              leaves: [school], named: ["import-20260923T000000Z"])
 
       assert_equal jane.id, updated.id
