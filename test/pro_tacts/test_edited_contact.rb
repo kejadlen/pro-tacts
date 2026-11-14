@@ -53,7 +53,7 @@ class EditedContactTest < Minitest::Test
 
   # The card a synced client submits: the composed card's marker
   # lines ride with it, naming the version of the rows it was sent
-  # (Contact#vcard composes them beside the lines they
+  # (ContactDetails#vcard composes them beside the lines they
   # version).
   def synced(card, *lent_rows)
     markers = lent_rows.map(&:marker_line).join("\r\n")
@@ -61,8 +61,8 @@ class EditedContactTest < Minitest::Test
   end
 
   def before(stored = AIDEN, birthday: nil, addresses: [], note: nil, lent: [])
-    ProTacts::Contact.new(
-      id: "aiden", stored: ProTacts::VCard.new(stored), birthday:, addresses:, note:, lent:
+    ProTacts::ContactDetails.new(
+      stored: ProTacts::VCard.new(stored), birthday:, addresses:, note:, lent:
     )
   end
 
