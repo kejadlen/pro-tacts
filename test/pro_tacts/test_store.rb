@@ -472,6 +472,25 @@ class StoreTest < Minitest::Test
     end
   end
 
+  # The card is a component of its entity: a put makes one for a new
+  # card, and a delete takes the entity and lets the cascade take
+  # the card and everything keyed by it.
+  def test_a_card_lives_and_dies_with_its_entity
+    with_store({"aiden" => "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:aiden\r\nBDAY:1985-04-12\r\nEND:VCARD\r\n"}) do |store|
+      group = store.create_group(name: "Booles")
+      store.add_member(group, "aiden")
+      entity = card_row(store, "aiden").fetch(:entity_id)
+      assert_equal [entity], database(store)[:entities].where(id: entity).select_map(:id)
+
+      store.delete("aiden")
+
+      assert_empty database(store)[:entities].where(id: entity).all
+      %i[cards birthdays group_members card_properties search_keys sort_keys].each do |table|
+        assert_empty database(store)[table].all, table
+      end
+    end
+  end
+
   def test_deleting_nothing_logs_nothing
     with_store({"aiden" => AIDEN}) do |store|
       before = store.changes.length
@@ -516,10 +535,12 @@ class StoreTest < Minitest::Test
 
   def test_a_reid_moves_the_contact_onto_a_minted_id
     with_store({UUID => UUID_CARD}) do |store|
+      entity = card_row(store, UUID).fetch(:entity_id)
       new_id = store.reid(UUID)
 
       assert ProTacts::ChangeId.minted?(new_id)
       assert_nil store.contact(UUID)
+      assert_equal entity, card_row(store, new_id).fetch(:entity_id)
       assert_equal "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Aiden\r\nUID:#{new_id}\r\nEND:VCARD\r\n",
                    store.contact(new_id).vcard.to_s
     end
@@ -1460,14 +1481,42 @@ class StoreTest < Minitest::Test
   end
 
   # An id is minted, never chosen, in the shape jj spells a change id:
-  # four letters from k to z, drawn independently, so that two creates
-  # in a row are two groups.
+  # an entity's twelve letters from k to z, drawn independently, so
+  # that two creates in a row are two groups.
   def test_a_created_group_takes_a_change_id
     with_store do |store|
       ids = Array.new(8) { store.create_group }
 
-      ids.each { assert_match(/\A[k-z]{4}\z/, it) }
+      ids.each { assert_match(/\A[k-z]{12}\z/, it) }
       assert_equal ids.size, ids.uniq.size
+    end
+  end
+
+  # The schema keeps a card and a group off one entity, whichever
+  # arrives second and whether by insert or by moving an id.
+  def test_the_schema_keeps_a_card_and_a_group_off_one_entity
+    with_store({"aiden" => AIDEN}) do |store|
+      db = database(store)
+      card = card_row(store, "aiden").fetch(:entity_id)
+      group = store.create_group(name: "Booles")
+
+      assert_raises(Sequel::DatabaseError) { db[:groups].insert(id: card) }
+      assert_raises(Sequel::DatabaseError) { db[:cards].insert(entity_id: group, id: "zed", vcard: ZED) }
+      assert_raises(Sequel::DatabaseError) { db[:groups].where(id: group).update(id: card) }
+      assert_raises(Sequel::DatabaseError) { db[:cards].where(id: "aiden").update(entity_id: group) }
+
+      assert_equal [card], db[:cards].select_map(:entity_id)
+      assert_equal [group], db[:groups].select_map(:id)
+    end
+  end
+
+  # A card's entity is its own, minted rather than copied from the href
+  # a client chose, and the schema holds every entity to that shape.
+  def test_a_cards_entity_is_minted_apart_from_its_href
+    with_store({"aiden" => AIDEN}) do |store|
+      assert_match(/\A[k-z]{12}\z/, card_row(store, "aiden").fetch(:entity_id))
+      assert_raises(Sequel::CheckConstraintViolation) { database(store)[:entities].insert(id: "aiden") }
+      assert_raises(Sequel::CheckConstraintViolation) { database(store)[:entities].insert(id: "kxsv") }
     end
   end
 
@@ -1625,9 +1674,12 @@ class StoreTest < Minitest::Test
       id = FixtureData.seed_group(store, members: %w[aiden znorth], lines: [HOUSEHOLD_ADDRESS])
       marker = store.contact("aiden").lent_markers.fetch(0)
 
+      assert_equal [id], database(store)[:entities].where(id:).select_map(:id)
+
       assert store.delete_group(id)
 
       assert_nil store.group(id)
+      assert_empty database(store)[:entities].where(id:).all
       %w[aiden znorth].each do |member|
         assert_equal [], store.groups_of(member).map(&:id)
         change = store.changes_of(member).first
@@ -2528,13 +2580,93 @@ class StoreTest < Minitest::Test
       ProTacts::Store.connect(path) do |store|
         contact = store.contact("aiden")
         assert_includes contact.vcard.to_s, HOUSEHOLD_ADDRESS
-        assert_equal "nous", contact.addresses.fetch(0).lent_by&.id
+        nous = group_named(store, "Booles").id
+        assert_equal nous, contact.addresses.fetch(0).lent_by&.id
 
         database(store)[:cards].where(id: "aiden").delete
         assert_empty database(store)[:group_members].all
 
-        database(store)[:groups].where(id: "nous").delete
+        database(store)[:groups].where(id: nous).delete
         assert_empty database(store)[:group_properties].all
+      end
+    end
+  end
+
+  # The entities rebuild carries cards and every table under them, for
+  # 005's hazard on a larger scale. Rows asserted across the upgrade,
+  # and the cascade from an entity asserted to reach each of them — a
+  # child redeclared without its foreign key would keep its row here.
+  # A client's href gets an entity of its own; a minted one is kept.
+  def test_the_migration_makes_each_card_an_entity_and_carries_its_rows
+    minted = "kkkkllllmmmm"
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 15)
+        db[:cards].insert(id: "aiden", vcard: AIDEN, created_at: "2026-01-02T03:04:05.678Z")
+        db[:cards].insert(id: minted, vcard: ZED.gsub("znorth", minted))
+        db[:card_properties].insert(card_id: "aiden", position: 0, name: "FN", value: "Aiden")
+        db[:card_parameters].insert(card_id: "aiden", position: 0, name: "TYPE", value: "HOME")
+        db[:birthdays].insert(card_id: "aiden", year: 1985, month: 4, day: 12)
+        db[:groups].insert(id: "nous", name: "Booles")
+        db[:group_members].insert(group_id: "nous", card_id: "aiden")
+        db[:search_keys].insert(card_id: "aiden", key: "{}")
+        db[:sort_keys].insert(card_id: "aiden", sort_key: "aiden")
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        db = database(store)
+        entity = card_row(store, "aiden").fetch(:entity_id)
+        assert_match(/\A[k-z]{12}\z/, entity)
+        assert_equal minted, card_row(store, minted).fetch(:entity_id)
+        assert_equal "2026-01-02T03:04:05.678Z", card_row(store, "aiden").fetch(:created_at)
+        assert_equal ProTacts::Birthday.new(year: 1985, month: 4, day: 12), store.contact("aiden").birthday
+        assert_equal %w[aiden], group_named(store, "Booles").members
+        tables = %i[card_properties card_parameters birthdays group_members search_keys sort_keys]
+        tables.each { assert_equal 1, db[it].count, it }
+
+        db[:entities].where(id: entity).delete
+        tables.each { assert_empty db[it].all, it }
+        assert_equal [minted], db[:cards].select_map(:id)
+      end
+    end
+  end
+
+  # 016's test again for the groups, which are re-minted on the way:
+  # rows across the upgrade under the new id, the log moved with them —
+  # a deleted group's tombstone too — and the cascade from a group's
+  # entity reaching each table under it.
+  def test_the_migration_makes_each_group_an_entity_and_carries_its_rows
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir) / "contacts.db"
+      Sequel.connect("sqlite://#{path}") do |db|
+        Sequel::Migrator.run(db, ProTacts::Store::MIGRATIONS.to_s, target: 16)
+        db[:entities].insert(id: "kkkkllllmmmm")
+        db[:cards].insert(entity_id: "kkkkllllmmmm", id: "aiden", vcard: AIDEN)
+        db[:groups].insert(id: "nous", name: "Booles")
+        db[:group_properties].insert(group_id: "nous", position: 0, line: HOUSEHOLD_ADDRESS)
+        db[:group_members].insert(group_id: "nous", card_id: "aiden")
+        db[:group_photos].insert(group_id: "nous", bytes: Sequel.blob("photo"))
+        db[:group_changes].insert(group_id: "nous", action: "create", detail: "{}")
+        db[:group_changes].insert(group_id: "zzzz", action: "delete", detail: "{}")
+      end
+
+      ProTacts::Store.connect(path) do |store|
+        db = database(store)
+        nous = group_named(store, "Booles").id
+        assert_match(/\A[k-z]{12}\z/, nous)
+        assert_equal [HOUSEHOLD_ADDRESS], store.group(nous).lines
+        assert_equal %w[aiden], store.group(nous).members
+        assert_equal %w[create], store.group_changes_of(nous).map(&:action)
+        moved = db[:group_changes].select_map(:group_id)
+        assert_empty moved & %w[nous zzzz]
+        assert moved.all? { it.match?(/\A[k-z]{12}\z/) }
+        tables = %i[groups group_properties group_members group_photos]
+        tables.each { assert_equal 1, db[it].count, it }
+
+        db[:entities].where(id: nous).delete
+        tables.each { assert_empty db[it].all, it }
+        assert_equal %w[aiden], db[:cards].select_map(:id)
       end
     end
   end
@@ -2616,7 +2748,7 @@ class StoreTest < Minitest::Test
 
         assert_equal(
           [HOUSEHOLD_ADDRESS, "NOTE:Gate code 1854.\\n\\nBins on Tuesday."],
-          store.group("nous").lines,
+          group_named(store, "Booles").lines,
         )
         marker = store.contact("znorth").lent_markers.fetch(0)
         served = ZED.sub(
@@ -2768,6 +2900,11 @@ class StoreTest < Minitest::Test
 
   def card_row(store, id)
     database(store)[:cards].where(id:).sole
+  end
+
+  # A group by its name, for a test whose group a migration re-minted.
+  def group_named(store, name)
+    store.all_groups.find { it.name == name } || raise("no group named #{name}")
   end
 
   def indexed_names(store, card_id)
