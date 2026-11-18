@@ -306,6 +306,18 @@ class AdminContactsPagesTest < Minitest::Test
     end
   end
 
+  # A nicknamed contact's row names them the way the other rows do
+  # (Contact#name_label), so the name they go by is on the row.
+  def test_index_names_a_nicknamed_birthday_with_the_nickname
+    red = born(Date.today + 3, name: "Sarah", id: "red").sub("UID:red", "NICKNAME:Red\r\nUID:red")
+
+    with_contacts({"red" => red}) do
+      get "/"
+
+      assert_includes last_response.body.split("upcoming birthdays").last, "Sarah (Red)"
+    end
+  end
+
   def test_index_with_no_birthdays_says_so
     with_contacts({}) { get "/" }
 
