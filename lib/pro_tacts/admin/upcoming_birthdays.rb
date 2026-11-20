@@ -6,7 +6,9 @@ require "pro_tacts/admin/format"
 module ProTacts
   module Admin
     # The dashboard's ambient column: who has a birthday soon, in the
-    # order they arrive, each row opening the contact's card. The
+    # order they arrive, each row opening the contact's card and named
+    # the way the dashboard's other rows are (Contact#name_label), so a
+    # contact known by a nickname is found by it here too. The
     # store's query has already decided the hard parts (arrival order,
     # the year wrap, which partial shapes land on a day at all); this
     # renders what it hands back, and a birthday without a year shows
@@ -43,7 +45,7 @@ module ProTacts
           a(href: "/contacts/#{contact.id}") do
             render Avatar.new(contact: contact, size: "lg")
             div(style: "flex: 1; min-width: 0;") do
-              div(style: "font-weight: 550;") { contact.name || contact.id }
+              div(style: "font-weight: 550;") { contact.name_label }
               div(class: "type-body-sm") { date_line(upcoming) }
             end
             span(class: "type-label") { Format.time_until(upcoming.occurs_on) }

@@ -741,8 +741,8 @@ module ProTacts
     # The name a listing row shows: "Name (Nickname)" when the card
     # carries a NICKNAME — the formal name, the one someone is
     # known by kept beside it — and the plain name otherwise. The
-    # card holds the two facts independently, and other screens (the
-    # detail card, the birthdays column) show the plain name.
+    # card holds the two facts independently, and the detail card shows
+    # them apart, the nickname under the name.
     #: () -> String
     def name_label
       return "#{name} (#{nickname})" if nickname && name
